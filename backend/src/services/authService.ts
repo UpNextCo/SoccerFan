@@ -41,7 +41,9 @@ export async function authenticateWithApple(
     appleSub = payload.sub;
   } catch {
     // Dev fallback when Apple credentials aren't configured
-    if (process.env.NODE_ENV === 'development' && identityToken.startsWith('dev:')) {
+    const allowDevAuth =
+      process.env.ALLOW_DEV_AUTH === 'true' || process.env.NODE_ENV === 'development';
+    if (allowDevAuth && identityToken.startsWith('dev:')) {
       appleSub = identityToken.slice(4);
     } else {
       throw new Error('Invalid Apple identity token');
