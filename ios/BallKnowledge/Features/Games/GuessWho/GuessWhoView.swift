@@ -129,6 +129,7 @@ struct GuessWhoView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: GuessWhoViewModel
+    @FocusState private var isSearchFocused: Bool
     var onComplete: () -> Void
 
     init(puzzle: GuessWhoPuzzleDTO, date: String, onComplete: @escaping () -> Void) {
@@ -143,12 +144,22 @@ struct GuessWhoView: View {
                     guessesUsed: viewModel.state.guesses.count,
                     maxGuesses: viewModel.state.puzzle.maxGuesses
                 )
+                .onTapGesture {
+                    isSearchFocused = false
+                }
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
+                        if viewModel.state.guesses.isEmpty && !viewModel.state.isComplete {
+                            GuessWhoEmptyStateView()
+                        }
+
                         ForEach(viewModel.state.guesses.reversed()) { row in
-                            GuessWhoGuessCard(row: row)
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                            GuessWhoGuessCard(
+                                row: row,
+                                animateFlip: row.id == viewModel.state.guesses.last?.id
+                            )
+                            .transition(.move(edge: .top).combined(with: .opacity))
                         }
 
                         if viewModel.state.isComplete {
@@ -158,13 +169,37 @@ struct GuessWhoView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .padding(.bottom, 24)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    isSearchFocused = false
                 }
 
                 if !viewModel.state.isComplete {
-                    GuessWhoSearchSection(viewModel: viewModel, modelContext: modelContext)
+                    GuessWhoSearchSection(
+                        viewModel: viewModel,
+                        modelContext: modelContext,
+                        isSearchFocused: $isSearchFocused
+                    )
                 }
             }
             .background(BKTheme.background)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    isSearchFocused = true
+                }
+            }
+            .onChange(of: viewModel.state.guesses.count) { oldCount, newCount in
+                if newCount > oldCount, !viewModel.state.isComplete {
+                    // Wait for badge flip sequence before refocusing search
+                    let flipFinish = GuessWhoGuessCard.flipSequenceDuration
+                    DispatchQueue.main.asyncAfter(deadline: .now() + flipFinish) {
+                        isSearchFocused = true
+                    }
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -241,10 +276,69 @@ struct GuessWhoProgressBar: View {
     }
 }
 
+// MARK: - Empty State
+
+struct GuessWhoEmptyStateView: View {
+    private let labels = ["NAT", "LGE", "TEAM", "POS", "AGE", "SHIRT"]
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "person.fill.questionmark")
+                .font(.system(size: 28))
+                .foregroundStyle(BKTheme.textMuted.opacity(0.5))
+
+            Text("YOUR FIRST GUESS")
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .tracking(1)
+                .foregroundStyle(BKTheme.textMuted)
+
+            HStack(spacing: 0) {
+                ForEach(labels, id: \.self) { label in
+                    VStack(spacing: 6) {
+                        Circle()
+                            .strokeBorder(BKTheme.cardElevated, lineWidth: 2)
+                            .background(Circle().fill(BKTheme.card.opacity(0.5)))
+                            .frame(width: 48, height: 48)
+
+                        Text(label)
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .tracking(0.3)
+                            .foregroundStyle(BKTheme.textMuted.opacity(0.6))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+
+            Text("Search for a player below")
+                .font(BKFont.body(13))
+                .foregroundStyle(BKTheme.textMuted)
+                .padding(.top, 4)
+        }
+        .padding(.vertical, 28)
+        .padding(.horizontal, 8)
+        .background(BKTheme.card.opacity(0.35))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(BKTheme.cardElevated, style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+        )
+    }
+}
+
 // MARK: - Guess Card (Who Are Ya style)
 
 struct GuessWhoGuessCard: View {
     let row: GuessWhoGuessRow
+    let animateFlip: Bool
+
+    @State private var revealedCount = 0
+    @State private var didStartFlip = false
+
+    static let flipStagger: Double = 0.18
+    static let flipSpring = Animation.spring(response: 0.42, dampingFraction: 0.82)
+    static var flipSequenceDuration: Double {
+        flipStagger * Double(GuessWhoField.allCases.count - 1) + 0.5
+    }
 
     private var fields: [GuessFeedbackFieldDTO] {
         displayFields(from: row.feedback)
@@ -261,9 +355,13 @@ struct GuessWhoGuessCard: View {
                 .minimumScaleFactor(0.85)
 
             HStack(spacing: 0) {
-                ForEach(fields, id: \.field) { field in
-                    GuessWhoAttributeBadge(field: field)
-                        .frame(maxWidth: .infinity)
+                ForEach(Array(fields.enumerated()), id: \.element.field) { index, field in
+                    GuessWhoFlipAttributeBadge(
+                        field: field,
+                        playerLeague: row.player.league,
+                        isRevealed: !animateFlip || index < revealedCount
+                    )
+                    .frame(maxWidth: .infinity)
                 }
             }
         }
@@ -271,35 +369,118 @@ struct GuessWhoGuessCard: View {
         .padding(.horizontal, 8)
         .background(BKTheme.card.opacity(0.6))
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .onAppear { startFlipSequenceIfNeeded() }
+    }
+
+    private func startFlipSequenceIfNeeded() {
+        guard animateFlip else {
+            revealedCount = fields.count
+            return
+        }
+        guard !didStartFlip else { return }
+        didStartFlip = true
+
+        for index in fields.indices {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * Self.flipStagger) {
+                withAnimation(Self.flipSpring) {
+                    revealedCount = index + 1
+                }
+            }
+        }
     }
 }
 
-struct GuessWhoAttributeBadge: View {
+struct GuessWhoFlipAttributeBadge: View {
     let field: GuessFeedbackFieldDTO
-
-    private var status: FeedbackStatus { FeedbackStatus(raw: field.status) }
+    let playerLeague: String
+    let isRevealed: Bool
 
     var body: some View {
         VStack(spacing: 6) {
             ZStack {
-                Circle()
-                    .fill(status.badgeFill)
-                    .frame(width: 48, height: 48)
+                GuessWhoBadgePlaceholder()
+                    .opacity(isRevealed ? 0 : 1)
 
-                Text(badgeContent)
-                    .font(.system(size: badgeFontSize, weight: .bold, design: .rounded))
-                    .foregroundStyle(status.badgeText)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.55)
-                    .padding(4)
+                GuessWhoBadgeFace(field: field, playerLeague: playerLeague)
+                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                    .opacity(isRevealed ? 1 : 0)
             }
+            .frame(width: 48, height: 48)
+            .rotation3DEffect(
+                .degrees(isRevealed ? 180 : 0),
+                axis: (x: 0, y: 1, z: 0),
+                perspective: 0.55
+            )
+            .animation(GuessWhoGuessCard.flipSpring, value: isRevealed)
 
             Text(fieldLabel(field.field))
                 .font(.system(size: 9, weight: .bold, design: .rounded))
                 .tracking(0.3)
                 .foregroundStyle(BKTheme.textMuted)
         }
+    }
+}
+
+struct GuessWhoBadgePlaceholder: View {
+    var body: some View {
+        Circle()
+            .fill(BKTheme.guessWrong)
+            .frame(width: 48, height: 48)
+            .overlay(
+                Circle()
+                    .strokeBorder(BKTheme.cardElevated.opacity(0.45), lineWidth: 1)
+            )
+    }
+}
+
+struct GuessWhoBadgeFace: View {
+    let field: GuessFeedbackFieldDTO
+    var playerLeague: String = ""
+
+    private var status: FeedbackStatus { FeedbackStatus(raw: field.status) }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(status.badgeFill)
+                .frame(width: 48, height: 48)
+
+            badgeInner
+        }
+    }
+
+    @ViewBuilder
+    private var badgeInner: some View {
+        if field.field == "club" {
+            TeamBadgeImage(
+                club: field.value?.display ?? "",
+                league: playerLeague,
+                size: 34
+            ) {
+                abbrevFallback
+            }
+            .padding(6)
+        } else if field.field == "league" {
+            LeagueBadgeImage(
+                league: field.value?.display ?? "",
+                size: 34
+            ) {
+                abbrevFallback
+            }
+            .padding(6)
+        } else {
+            abbrevFallback
+        }
+    }
+
+    private var abbrevFallback: some View {
+        Text(badgeContent)
+            .font(.system(size: badgeFontSize, weight: .bold, design: .rounded))
+            .foregroundStyle(status.badgeText)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .minimumScaleFactor(0.55)
+            .padding(4)
     }
 
     private var badgeFontSize: CGFloat {
@@ -340,6 +521,22 @@ struct GuessWhoAttributeBadge: View {
     }
 }
 
+struct GuessWhoAttributeBadge: View {
+    let field: GuessFeedbackFieldDTO
+    var playerLeague: String = ""
+
+    var body: some View {
+        VStack(spacing: 6) {
+            GuessWhoBadgeFace(field: field, playerLeague: playerLeague)
+
+            Text(fieldLabel(field.field))
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .tracking(0.3)
+                .foregroundStyle(BKTheme.textMuted)
+        }
+    }
+}
+
 // MARK: - Display Helpers
 
 enum GuessWhoDisplay {
@@ -366,7 +563,7 @@ enum GuessWhoDisplay {
     }
 
     private static let flags: [String: String] = [
-        "England": "ENG",
+        "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
         "France": "🇫🇷",
         "Spain": "🇪🇸",
         "Germany": "🇩🇪",
@@ -419,6 +616,7 @@ enum GuessWhoDisplay {
 struct GuessWhoSearchSection: View {
     @Bindable var viewModel: GuessWhoViewModel
     let modelContext: ModelContext
+    var isSearchFocused: FocusState<Bool>.Binding
 
     var body: some View {
         VStack(spacing: 0) {
@@ -433,6 +631,8 @@ struct GuessWhoSearchSection: View {
                     .foregroundStyle(BKTheme.background)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .focused(isSearchFocused)
+                    .submitLabel(.search)
                     .onChange(of: viewModel.searchQuery) { _, _ in
                         Task { await viewModel.search() }
                     }
@@ -455,9 +655,21 @@ struct GuessWhoSearchSection: View {
                     VStack(spacing: 0) {
                         ForEach(viewModel.searchResults) { player in
                             Button {
+                                isSearchFocused.wrappedValue = false
                                 Task { await viewModel.submitGuess(player, context: modelContext) }
                             } label: {
-                                HStack {
+                                HStack(spacing: 12) {
+                                    TeamBadgeImage(club: player.club, league: player.league, size: 28) {
+                                        Circle()
+                                            .fill(BKTheme.cardElevated)
+                                            .frame(width: 28, height: 28)
+                                            .overlay(
+                                                Text(GuessWhoDisplay.clubAbbrev(player.club))
+                                                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                                                    .foregroundStyle(BKTheme.textMuted)
+                                            )
+                                    }
+
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(player.name.uppercased())
                                             .font(.system(size: 13, weight: .bold, design: .rounded))
