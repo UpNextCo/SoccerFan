@@ -34,10 +34,22 @@ actor APIClient {
     private func request<T: Decodable>(
         _ path: String,
         method: String = "GET",
+        queryItems: [URLQueryItem]? = nil,
         body: Encodable? = nil,
         authorized: Bool = true
     ) async throws -> T {
-        var urlRequest = URLRequest(url: AppConfig.apiBaseURL.appendingPathComponent(path))
+        var components = URLComponents(
+            url: AppConfig.apiBaseURL.appendingPathComponent(path),
+            resolvingAgainstBaseURL: false
+        )!
+        if let queryItems, !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+        guard let url = components.url else {
+            throw APIError.invalidResponse
+        }
+
+        var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -99,8 +111,10 @@ actor APIClient {
     }
 
     func searchPlayers(query: String) async throws -> [PlayerSearchResultDTO] {
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        return try await request("players/search?q=\(encoded)")
+        try await request(
+            "players/search",
+            queryItems: [URLQueryItem(name: "q", value: query)]
+        )
     }
 
     func gameModes() async throws -> [GameModeMetaDTO] {

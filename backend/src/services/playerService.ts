@@ -96,7 +96,10 @@ export async function searchPlayers(query: string, limit = 10): Promise<PlayerSe
   }));
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function getPlayerById(id: string) {
+  if (!UUID_RE.test(id)) return null;
   const rows = await db.select().from(players).where(eq(players.id, id)).limit(1);
   return rows[0] ?? null;
 }
