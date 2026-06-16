@@ -49,6 +49,7 @@ export interface GuessFeedbackField {
   field: string;
   value: string | number | null;
   status: 'correct' | 'partial' | 'wrong';
+  hint?: 'higher' | 'lower';
 }
 
 export interface DailyBundle {

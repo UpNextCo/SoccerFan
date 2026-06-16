@@ -96,24 +96,48 @@ enum FeedbackStatus {
         }
     }
 
-    var color: Color {
+    var badgeFill: Color {
         switch self {
-        case .correct: return BKTheme.correct
-        case .partial: return BKTheme.partial
-        case .wrong: return BKTheme.wrong.opacity(0.35)
+        case .correct: return BKTheme.guessCorrect
+        case .partial: return BKTheme.guessPartial
+        case .wrong: return BKTheme.guessWrong
+        }
+    }
+
+    var badgeText: Color {
+        switch self {
+        case .correct: return BKTheme.background
+        case .partial, .wrong: return BKTheme.textPrimary
+        }
+    }
+}
+
+enum GuessWhoField: String, CaseIterable {
+    case nationality
+    case league
+    case club
+    case position
+    case age
+    case shirtNumber
+
+    var label: String {
+        switch self {
+        case .nationality: return "NAT"
+        case .league: return "LGE"
+        case .club: return "TEAM"
+        case .position: return "POS"
+        case .age: return "AGE"
+        case .shirtNumber: return "SHIRT"
         }
     }
 }
 
 func fieldLabel(_ field: String) -> String {
-    switch field {
-    case "nationality": return "Nation"
-    case "league": return "League"
-    case "club": return "Club"
-    case "position": return "Pos"
-    case "age": return "Age"
-    case "shirtNumber": return "#"
-    case "marketValueTier": return "Value"
-    default: return field.capitalized
+    GuessWhoField(rawValue: field)?.label ?? field.uppercased()
+}
+
+func displayFields(from feedback: [GuessFeedbackFieldDTO]) -> [GuessFeedbackFieldDTO] {
+    GuessWhoField.allCases.compactMap { gf in
+        feedback.first { $0.field == gf.rawValue }
     }
 }

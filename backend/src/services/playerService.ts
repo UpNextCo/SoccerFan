@@ -52,11 +52,24 @@ export function buildGuessFeedback(
     },
   ];
 
-  return fields.map(({ field, guess, answer }) => ({
-    field,
-    value: guess,
-    status: compareField(guess, answer, field),
-  }));
+  return fields.map(({ field, guess, answer }) => {
+    const status = compareField(guess, answer, field);
+    let hint: 'higher' | 'lower' | undefined;
+    if (
+      status !== 'correct' &&
+      (field === 'age' || field === 'shirtNumber') &&
+      typeof guess === 'number' &&
+      typeof answer === 'number'
+    ) {
+      hint = answer > guess ? 'higher' : 'lower';
+    }
+    return {
+      field,
+      value: guess,
+      status,
+      ...(hint ? { hint } : {}),
+    };
+  });
 }
 
 export function isCorrectGuess(

@@ -18,7 +18,7 @@
 |---|---|
 | `DATABASE_URL` | Auto-set by Railway PostgreSQL |
 | `JWT_SECRET` | Random 64+ char string |
-| `APPLE_CLIENT_ID` | `com.ballknowledge.app` (your bundle ID) |
+| `APPLE_CLIENT_ID` | `com.psounds.ballknowledge` (your bundle ID) |
 | `API_FOOTBALL_KEY` | Optional — for player ingestion |
 | `NODE_ENV` | `production` |
 | `PORT` | Railway sets automatically |
@@ -57,7 +57,7 @@ static let apiBaseURL = URL(string: "https://YOUR-SERVICE.up.railway.app")!
 
 ## 7. Sign in with Apple
 
-1. Enable Sign in with Apple capability in Apple Developer portal for `com.ballknowledge.app`
+1. Enable Sign in with Apple capability in Apple Developer portal for `com.psounds.ballknowledge`
 2. Set `APPLE_CLIENT_ID` to your bundle ID on Railway
 3. Configure return URLs if using web auth (not needed for native-only)
 

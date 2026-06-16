@@ -13,6 +13,11 @@ enum BKTheme {
     static let partial = Color(hex: "FFAA00")
     static let correct = Color(hex: "00FF66")
     static let streak = Color(hex: "FF6B00")
+
+    // Guess Who feedback badges (Who Are Ya style)
+    static let guessCorrect = Color(hex: "00E055")
+    static let guessWrong = Color(hex: "3D3D3D")
+    static let guessPartial = Color(hex: "5C5C5C")
 }
 
 extension Color {

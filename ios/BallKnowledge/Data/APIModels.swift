@@ -72,6 +72,7 @@ struct GuessFeedbackFieldDTO: Codable, Equatable {
     let field: String
     let value: StringOrNumber?
     let status: String
+    let hint: String?
 }
 
 enum StringOrNumber: Codable, Equatable {
