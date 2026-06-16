@@ -1,5 +1,6 @@
 import { db } from './index.js';
 import { players } from './schema.js';
+import { generateDailyPuzzle } from '../jobs/generate-daily.js';
 
 const SEED_PLAYERS = [
   { name: 'Erling Haaland', nationality: 'Norway', position: 'Attacker', age: 24, currentClub: 'Manchester City', currentLeague: 'Premier League', shirtNumber: 9, marketValueTier: 5 },
@@ -51,7 +52,7 @@ function buildAliases(name: string): string[] {
   return aliases;
 }
 
-async function seed() {
+export async function seedPlayersIfEmpty(): Promise<void> {
   const existing = await db.select().from(players).limit(1);
   if (existing.length > 0) {
     console.log('Players already seeded, skipping');
@@ -69,9 +70,9 @@ async function seed() {
   console.log(`Seeded ${SEED_PLAYERS.length} players`);
 }
 
-seed()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+export async function bootstrapDatabase(): Promise<void> {
+  await seedPlayersIfEmpty();
+  const today = new Date().toISOString().slice(0, 10);
+  await generateDailyPuzzle(today);
+  console.log('Database bootstrap complete');
+}

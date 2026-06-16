@@ -4,6 +4,7 @@ import express from 'express';
 import { authRouter } from './routes/auth.js';
 import { dailyRouter } from './routes/daily.js';
 import { gamesRouter, playersRouter } from './routes/players.js';
+import { bootstrapDatabase } from './db/seed.js';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -26,4 +27,7 @@ app.use((_req, res) => {
 
 app.listen(port, () => {
   console.log(`Ball Knowledge API listening on port ${port}`);
+  bootstrapDatabase().catch((err) => {
+    console.error('Bootstrap failed:', err);
+  });
 });

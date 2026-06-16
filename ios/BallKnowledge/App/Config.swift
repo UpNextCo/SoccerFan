@@ -1,10 +1,13 @@
 import Foundation
 
 enum AppConfig {
+    static let productionAPIURL = "https://ballknowledge-production.up.railway.app"
+
     #if DEBUG
-    static let apiBaseURL = URL(string: "http://127.0.0.1:3000")!
+    // Use production API while local backend isn't running. Switch to http://127.0.0.1:3000 for local dev.
+    static let apiBaseURL = URL(string: productionAPIURL)!
     #else
-    static let apiBaseURL = URL(string: "https://ballknowledge-api.up.railway.app")!
+    static let apiBaseURL = URL(string: productionAPIURL)!
     #endif
 
     static let privacyPolicyURL = URL(string: "https://ballknowledge.app/privacy")!
