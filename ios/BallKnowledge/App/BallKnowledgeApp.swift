@@ -1,0 +1,83 @@
+import SwiftUI
+import SwiftData
+
+@main
+struct BallKnowledgeApp: App {
+    @State private var auth = AuthManager()
+
+    var body: some Scene {
+        WindowGroup {
+            RootView()
+                .environment(auth)
+                .preferredColorScheme(.dark)
+        }
+        .modelContainer(for: [
+            CachedDailyBundle.self,
+            PendingDailyCompletion.self,
+            GuessWhoSession.self,
+        ])
+    }
+}
+
+struct RootView: View {
+    @Environment(AuthManager.self) private var auth
+
+    var body: some View {
+        Group {
+            if auth.isLoading {
+                LaunchLoadingView()
+            } else if auth.isAuthenticated {
+                MainTabView()
+            } else if UserDefaults.standard.bool(forKey: UserDefaultsKeys.hasCompletedOnboarding) {
+                SignInOnlyView()
+            } else {
+                OnboardingContainerView()
+            }
+        }
+        .task {
+            await auth.bootstrap()
+        }
+    }
+}
+
+struct LaunchLoadingView: View {
+    var body: some View {
+        ZStack {
+            BKTheme.background.ignoresSafeArea()
+            VStack(spacing: 16) {
+                Image(systemName: "soccerball.inverse")
+                    .font(.system(size: 48))
+                    .foregroundStyle(BKTheme.accent)
+                ProgressView()
+                    .tint(BKTheme.accent)
+            }
+        }
+    }
+}
+
+struct SignInOnlyView: View {
+    @Environment(AuthManager.self) private var auth
+
+    var body: some View {
+        ZStack {
+            BKTheme.background.ignoresSafeArea()
+            VStack(spacing: 24) {
+                Text("BALL KNOWLEDGE")
+                    .font(BKFont.title())
+                    .foregroundStyle(BKTheme.accent)
+
+                SignInWithAppleButtonView { token, name in
+                    Task { await auth.signIn(identityToken: token, displayName: name) }
+                }
+                .padding(.horizontal, 24)
+
+                #if DEBUG
+                Button("Dev Sign In") {
+                    Task { await auth.devSignIn() }
+                }
+                .foregroundStyle(BKTheme.textMuted)
+                #endif
+            }
+        }
+    }
+}

@@ -1,0 +1,216 @@
+import { and, eq } from 'drizzle-orm';
+import { db } from '../db/index.js';
+import { dailyCompletions, dailyPuzzles, userProgress } from '../db/schema.js';
+import { computeLevel } from './authService.js';
+import { getPlayerById } from './playerService.js';
+import type { DailyBundle, DailyCompleteResponse } from '../types.js';
+
+const GAME_MODES = [
+  { id: 'football_bingo', title: 'FOOTBALL BINGO', subtitle: 'Fill the grid', playerCount: 12400, isAvailable: false },
+  { id: 'tenaball', title: 'TENABALL', subtitle: 'Top ten guesses', playerCount: 8900, isAvailable: false },
+  { id: 'tiki_taka_toe', title: 'TIKI-TAKA-TOE', subtitle: 'Grid trivia', playerCount: 15200, isAvailable: false },
+  { id: 'guess_who', title: 'GUESS WHO?', subtitle: 'Wordle-style player guess', playerCount: 22100, isAvailable: true },
+  { id: 'where_were_ya', title: 'WHERE WERE YA?', subtitle: 'Geo football', playerCount: 7600, isAvailable: false },
+  { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: false },
+  { id: 'guess_the_goal', title: 'GUESS THE GOAL', subtitle: 'Spot the scorer', playerCount: 11300, isAvailable: false },
+  { id: 'emoji_players', title: 'EMOJI PLAYERS', subtitle: 'Decode the emoji', playerCount: 6400, isAvailable: false },
+  { id: 'career_path', title: 'CAREER PATH', subtitle: 'Follow the clubs', playerCount: 8700, isAvailable: false },
+];
+
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function yesterdayUTC(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function computeXpEarned(won: boolean, guesses: number): number {
+  if (!won) return 10;
+  const bonus = Math.max(0, (8 - guesses) * 10);
+  return 50 + bonus;
+}
+
+export function getGameModes() {
+  return GAME_MODES;
+}
+
+export async function getDailyBundle(userId: string): Promise<DailyBundle> {
+  const date = todayUTC();
+
+  let puzzleRow = await db
+    .select()
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'guess_who')))
+    .limit(1);
+
+  if (puzzleRow.length === 0) {
+    const { generateDailyPuzzle } = await import('../jobs/generate-daily.js');
+    await generateDailyPuzzle(date);
+    puzzleRow = await db
+      .select()
+      .from(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'guess_who')))
+      .limit(1);
+  }
+
+  const puzzle = puzzleRow[0]!;
+
+  const completion = await db
+    .select()
+    .from(dailyCompletions)
+    .where(
+      and(
+        eq(dailyCompletions.userId, userId),
+        eq(dailyCompletions.date, date),
+        eq(dailyCompletions.modeId, 'guess_who')
+      )
+    )
+    .limit(1);
+
+  return {
+    date,
+    alreadyPlayed: completion.length > 0,
+    games: [
+      {
+        modeId: 'guess_who',
+        title: 'GUESS WHO?',
+        puzzle: puzzle.puzzleJson as DailyBundle['games'][0]['puzzle'],
+      },
+    ],
+  };
+}
+
+export async function completeDaily(
+  userId: string,
+  input: {
+    modeId: string;
+    date: string;
+    score: number;
+    guesses: number;
+    won: boolean;
+    shareGrid: string;
+  }
+): Promise<DailyCompleteResponse> {
+  const existing = await db
+    .select()
+    .from(dailyCompletions)
+    .where(
+      and(
+        eq(dailyCompletions.userId, userId),
+        eq(dailyCompletions.date, input.date),
+        eq(dailyCompletions.modeId, input.modeId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    const progress = await db
+      .select()
+      .from(userProgress)
+      .where(eq(userProgress.userId, userId))
+      .limit(1);
+    const p = progress[0]!;
+    return {
+      xpEarned: 0,
+      newXp: p.xp,
+      newLevel: p.level,
+      streak: p.streak,
+      todayXp: p.todayXp,
+    };
+  }
+
+  const puzzle = await db
+    .select()
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, input.date), eq(dailyPuzzles.modeId, input.modeId)))
+    .limit(1);
+
+  if (!puzzle[0]) {
+    throw new Error('Daily puzzle not found');
+  }
+
+  const xpEarned = computeXpEarned(input.won, input.guesses);
+
+  await db.insert(dailyCompletions).values({
+    userId,
+    date: input.date,
+    modeId: input.modeId,
+    score: input.score,
+    guesses: input.guesses,
+    won: input.won,
+    shareGrid: input.shareGrid,
+  });
+
+  const progressRows = await db
+    .select()
+    .from(userProgress)
+    .where(eq(userProgress.userId, userId))
+    .limit(1);
+  const progress = progressRows[0]!;
+
+  const today = todayUTC();
+  const yesterday = yesterdayUTC();
+  let newStreak = progress.streak;
+  const lastPlayed = progress.lastPlayedDate;
+
+  if (lastPlayed !== today) {
+    if (lastPlayed === yesterday) {
+      newStreak = progress.streak + 1;
+    } else {
+      newStreak = 1;
+    }
+  }
+
+  const todayXp = progress.todayXpDate === today ? progress.todayXp + xpEarned : xpEarned;
+  const newXp = progress.xp + xpEarned;
+  const newLevel = computeLevel(newXp);
+
+  await db
+    .update(userProgress)
+    .set({
+      xp: newXp,
+      level: newLevel,
+      streak: newStreak,
+      lastPlayedDate: today,
+      todayXp,
+      todayXpDate: today,
+    })
+    .where(eq(userProgress.userId, userId));
+
+  return {
+    xpEarned,
+    newXp,
+    newLevel,
+    streak: newStreak,
+    todayXp,
+  };
+}
+
+export async function validateGuess(
+  date: string,
+  modeId: string,
+  playerId: string
+): Promise<{ feedback: import('../types.js').GuessFeedbackField[]; correct: boolean }> {
+  const puzzle = await db
+    .select()
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, modeId)))
+    .limit(1);
+
+  if (!puzzle[0]) throw new Error('Puzzle not found');
+
+  const answer = await getPlayerById(puzzle[0].answerPlayerId);
+  const guess = await getPlayerById(playerId);
+  if (!answer || !guess) throw new Error('Player not found');
+
+  const { buildGuessFeedback, isCorrectGuess } = await import('./playerService.js');
+  return {
+    feedback: buildGuessFeedback(guess, answer),
+    correct: isCorrectGuess(guess, answer),
+  };
+}
+
+export { todayUTC, GAME_MODES };
