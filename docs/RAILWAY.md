@@ -8,7 +8,9 @@
 
 ## 2. Configure service
 
-Set the **Root Directory** to `backend`.
+**Important:** In Railway → your GitHub service → **Settings** → **Source** → set **Root Directory** to `backend`.
+
+(Railpack needs a `package.json` in the build root. A root-level `package.json` is also included as a fallback if Root Directory is left blank.)
 
 ### Environment variables
 
