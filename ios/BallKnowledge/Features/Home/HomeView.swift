@@ -41,7 +41,7 @@ final class HomeViewModel {
                 title: mode.title,
                 subtitle: "",
                 playerCount: [12400, 8900, 15200, 22100, 7600, 9800, 11300, 6400, 8700][index],
-                isAvailable: mode == .guessWho
+                isAvailable: mode == .guessWho || mode == .footballBingo
             )
         }
     }
@@ -52,6 +52,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = HomeViewModel()
     @State private var showGuessWho = false
+    @State private var showFootballBingo = false
     @Binding var selectedTab: AppTab
 
     var body: some View {
@@ -75,8 +76,14 @@ struct HomeView: View {
                 GamesGridSection(
                     modes: viewModel.gameModes,
                     onSelect: { mode in
-                        if mode.isAvailable && mode.id == GameModeID.guessWho.rawValue {
+                        guard mode.isAvailable else { return }
+                        switch mode.id {
+                        case GameModeID.guessWho.rawValue:
                             showGuessWho = true
+                        case GameModeID.footballBingo.rawValue:
+                            showFootballBingo = true
+                        default:
+                            break
                         }
                     }
                 )
@@ -112,6 +119,11 @@ struct HomeView: View {
                     }
                 )
             }
+        }
+        .fullScreenCover(isPresented: $showFootballBingo) {
+            FootballBingoView(onComplete: {
+                showFootballBingo = false
+            })
         }
     }
 }

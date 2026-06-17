@@ -36,6 +36,7 @@ struct PlayTabView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var modes: [GameModeMetaDTO] = []
     @State private var showGuessWho = false
+    @State private var showFootballBingo = false
     @State private var dailyBundle: DailyBundleDTO?
 
     var body: some View {
@@ -44,7 +45,7 @@ struct PlayTabView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(modes) { mode in
                         GameModeTile(mode: mode) {
-                            if mode.isAvailable { showGuessWho = true }
+                            openMode(mode)
                         }
                     }
                 }
@@ -61,6 +62,23 @@ struct PlayTabView: View {
                     GuessWhoView(puzzle: game.puzzle, date: bundle.date, onComplete: {})
                 }
             }
+            .fullScreenCover(isPresented: $showFootballBingo) {
+                FootballBingoView(onComplete: {
+                    showFootballBingo = false
+                })
+            }
+        }
+    }
+
+    private func openMode(_ mode: GameModeMetaDTO) {
+        guard mode.isAvailable else { return }
+        switch mode.id {
+        case GameModeID.guessWho.rawValue:
+            showGuessWho = true
+        case GameModeID.footballBingo.rawValue:
+            showFootballBingo = true
+        default:
+            break
         }
     }
 }

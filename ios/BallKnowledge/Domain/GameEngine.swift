@@ -23,6 +23,8 @@ enum GameRegistry {
         switch modeId {
         case GameModeID.guessWho.rawValue:
             return AnyView(GuessWhoView(puzzle: puzzle, date: date, onComplete: onComplete))
+        case GameModeID.footballBingo.rawValue:
+            return AnyView(FootballBingoView(onComplete: onComplete))
         default:
             return AnyView(ComingSoonGameView(modeId: modeId))
         }

@@ -6,7 +6,7 @@ import { getPlayerById } from './playerService.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
 const GAME_MODES = [
-  { id: 'football_bingo', title: 'FOOTBALL BINGO', subtitle: 'Fill the grid', playerCount: 12400, isAvailable: false },
+  { id: 'football_bingo', title: 'FOOTBALL BINGO', subtitle: 'Fill the grid', playerCount: 12400, isAvailable: true },
   { id: 'tenaball', title: 'TENABALL', subtitle: 'Top ten guesses', playerCount: 8900, isAvailable: false },
   { id: 'tiki_taka_toe', title: 'TIKI-TAKA-TOE', subtitle: 'Grid trivia', playerCount: 15200, isAvailable: false },
   { id: 'guess_who', title: 'GUESS WHO?', subtitle: 'Wordle-style player guess', playerCount: 22100, isAvailable: true },
