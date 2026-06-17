@@ -86,4 +86,8 @@ enum FootballBingoTiming {
     static let playerSlide: Double = 0.35
     static let confettiDuration: Double = 2.4
     static let resultDelay: Double = 0.5
+    static let turnDuration: TimeInterval = 10
+    static let greenBurst: Double = 0.38
+    static let wrongFlashIn: Double = 0.1
+    static let wrongFlashOut: Double = 0.35
 }

@@ -10,6 +10,7 @@ final class FootballBingoViewModel {
     var popCategoryId: String?
     var playerPanelToken = UUID()
     var confettiBurstToken = 0
+    var wrongFlashToken = 0
     var showResult = false
 
     init(game: FootballBingoGame = FootballBingoSeed.makeGame()) {
@@ -27,13 +28,20 @@ final class FootballBingoViewModel {
         popCategoryId = nil
         playerPanelToken = UUID()
         confettiBurstToken = 0
+        wrongFlashToken = 0
         showResult = false
     }
 
     func skip() {
         guard game.isActive else { return }
         HapticManager.light()
-        advance(by: 1)
+        advanceTurn(by: 1)
+    }
+
+    func turnExpired() {
+        guard game.isActive else { return }
+        HapticManager.light()
+        advanceTurn(by: 1)
     }
 
     func tapCategory(_ category: FootballBingoCategory) {
@@ -49,7 +57,7 @@ final class FootballBingoViewModel {
             HapticManager.success()
             game.markCompleted(categoryId: category.id)
             popCategoryId = category.id
-            advance(by: 1)
+            advanceTurn(by: 1)
 
             if game.status == .won {
                 confettiBurstToken += 1
@@ -57,10 +65,10 @@ final class FootballBingoViewModel {
         } else {
             HapticManager.error()
             shakeCategoryId = category.id
-            advance(by: 2)
+            wrongFlashToken += 1
+            advanceTurn(by: 2)
         }
 
-        playerPanelToken = UUID()
         presentResultIfNeeded()
 
         Task {
@@ -71,8 +79,9 @@ final class FootballBingoViewModel {
         }
     }
 
-    private func advance(by steps: Int) {
+    private func advanceTurn(by steps: Int) {
         game.advance(by: steps)
+        playerPanelToken = UUID()
     }
 
     private func presentResultIfNeeded() {
@@ -89,37 +98,46 @@ final class FootballBingoViewModel {
 struct FootballBingoView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = FootballBingoViewModel()
+    @State private var wrongFlashOpacity: Double = 0
     var onComplete: () -> Void
 
     var body: some View {
         ZStack {
             NavigationStack {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        FootballBingoPlayerPanel(
-                            player: viewModel.game.currentPlayer,
-                            remaining: viewModel.game.remainingPlayers,
-                            onSkip: { viewModel.skip() },
-                            isActive: viewModel.game.isActive
-                        )
-                        .id(viewModel.playerPanelToken)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .leading).combined(with: .opacity)
-                        ))
+                VStack(spacing: 0) {
+                    FootballBingoTurnTimerBar(
+                        turnToken: viewModel.playerPanelToken,
+                        isActive: viewModel.game.isActive && !viewModel.showResult,
+                        onExpired: { viewModel.turnExpired() }
+                    )
 
-                        FootballBingoBoardView(
-                            categories: viewModel.game.categories,
-                            completedIds: viewModel.game.completedCategoryIds,
-                            shakeId: viewModel.shakeCategoryId,
-                            popId: viewModel.popCategoryId,
-                            isEnabled: viewModel.game.isActive,
-                            onTap: { viewModel.tapCategory($0) }
-                        )
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 20) {
+                            FootballBingoPlayerPanel(
+                                player: viewModel.game.currentPlayer,
+                                remaining: viewModel.game.remainingPlayers,
+                                onSkip: { viewModel.skip() },
+                                isActive: viewModel.game.isActive
+                            )
+                            .id(viewModel.playerPanelToken)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+
+                            FootballBingoBoardView(
+                                categories: viewModel.game.categories,
+                                completedIds: viewModel.game.completedCategoryIds,
+                                shakeId: viewModel.shakeCategoryId,
+                                popId: viewModel.popCategoryId,
+                                isEnabled: viewModel.game.isActive,
+                                onTap: { viewModel.tapCategory($0) }
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
                 }
                 .background(BKTheme.background)
                 .navigationBarTitleDisplayMode(.inline)
@@ -149,10 +167,23 @@ struct FootballBingoView: View {
                 }
             }
 
+            BKTheme.wrong
+                .opacity(wrongFlashOpacity)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
                 .zIndex(999)
         }
         .animation(.spring(response: FootballBingoTiming.playerSlide, dampingFraction: 0.82), value: viewModel.playerPanelToken)
+        .onChange(of: viewModel.wrongFlashToken) { _, _ in
+            withAnimation(.easeOut(duration: FootballBingoTiming.wrongFlashIn)) {
+                wrongFlashOpacity = 0.22
+            }
+            withAnimation(.easeOut(duration: FootballBingoTiming.wrongFlashOut).delay(FootballBingoTiming.wrongFlashIn)) {
+                wrongFlashOpacity = 0
+            }
+        }
         .fullScreenCover(isPresented: $viewModel.showResult) {
             FootballBingoResultView(
                 won: viewModel.game.status == .won,
@@ -209,22 +240,6 @@ private struct FootballBingoPlayerPanel: View {
                     .foregroundStyle(BKTheme.textPrimary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
-
-                HStack(spacing: 8) {
-                    Text(GuessWhoDisplay.nationalityFlag(player.nationality))
-                        .font(.system(size: 16))
-                    Text(player.nationality.uppercased())
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textMuted)
-                    if let club = player.clubs.first {
-                        Text("·")
-                            .foregroundStyle(BKTheme.textMuted)
-                        Text(club.uppercased())
-                            .font(BKFont.caption(10))
-                            .foregroundStyle(BKTheme.textMuted)
-                            .lineLimit(1)
-                    }
-                }
             } else {
                 Text("OUT OF PLAYERS")
                     .font(BKFont.headline())
@@ -233,12 +248,57 @@ private struct FootballBingoPlayerPanel: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(BKTheme.card.opacity(0.85))
+        .background(BKTheme.cardElevated.opacity(0.9))
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(BKTheme.accent.opacity(0.2), lineWidth: 1)
-        )
+    }
+}
+
+// MARK: - Turn Timer
+
+private struct FootballBingoTurnTimerBar: View {
+    let turnToken: UUID
+    let isActive: Bool
+    var onExpired: () -> Void
+
+    @State private var turnStart = Date()
+    @State private var didExpire = false
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+            let elapsed = timeline.date.timeIntervalSince(turnStart)
+            let remaining = max(0, 1 - elapsed / FootballBingoTiming.turnDuration)
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(BKTheme.cardElevated)
+                    Capsule()
+                        .fill(BKTheme.accent)
+                        .frame(width: max(0, geo.size.width * remaining))
+                }
+            }
+            .frame(height: 4)
+            .onChange(of: remaining) { _, value in
+                guard isActive, value <= 0, !didExpire else { return }
+                didExpire = true
+                onExpired()
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .onChange(of: turnToken) { _, _ in
+            turnStart = Date()
+            didExpire = false
+        }
+        .onChange(of: isActive) { _, active in
+            if active {
+                turnStart = Date()
+                didExpire = false
+            }
+        }
+        .onAppear {
+            turnStart = Date()
+        }
     }
 }
 
@@ -279,37 +339,38 @@ private struct FootballBingoTileView: View {
     var onTap: () -> Void
 
     @State private var shakeOffset: CGFloat = 0
+    @State private var greenBurstScale: CGFloat = 0
 
     var body: some View {
         Button(action: onTap) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isCompleted ? BKTheme.guessCorrect.opacity(0.22) : BKTheme.card)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(
-                                isCompleted ? BKTheme.accent.opacity(0.65) : Color.white.opacity(0.08),
-                                lineWidth: isCompleted ? 1.5 : 1
-                            )
-                    )
+                    .fill(BKTheme.cardElevated)
 
-                VStack(spacing: 6) {
-                    FootballBingoCategoryIcon(category: category, isCompleted: isCompleted)
+                if isCompleted {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(BKTheme.accent)
+                        .scaleEffect(greenBurstScale)
+                }
+
+                VStack(spacing: 4) {
+                    FootballBingoCategoryIcon(category: category)
                     Text(category.title.uppercased())
-                        .font(.system(size: 7, weight: .heavy, design: .rounded))
-                        .foregroundStyle(isCompleted ? BKTheme.accent : BKTheme.textPrimary)
+                        .font(.system(size: 9, weight: .heavy, design: .rounded))
+                        .foregroundStyle(isCompleted ? Color.black : BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
                         .lineLimit(3)
                         .minimumScaleFactor(0.75)
                 }
                 .padding(6)
+                .opacity(1)
 
                 if isCompleted {
                     VStack {
                         HStack {
                             Spacer()
                             Ph.checkCircle.fill
-                                .color(BKTheme.accent)
+                                .color(.black)
                                 .frame(width: 14, height: 14)
                         }
                         Spacer()
@@ -317,14 +378,24 @@ private struct FootballBingoTileView: View {
                     .padding(5)
                 }
             }
-            .frame(height: 78)
+            .frame(height: 82)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
             .scaleEffect(isPopping ? 1.06 : 1)
             .offset(x: shakeOffset)
         }
         .buttonStyle(.plain)
-        .disabled(!isEnabled)
+        .allowsHitTesting(isEnabled)
         .animation(.spring(response: FootballBingoTiming.tilePop, dampingFraction: 0.62), value: isPopping)
-        .animation(.spring(response: FootballBingoTiming.tilePop, dampingFraction: 0.62), value: isCompleted)
+        .onChange(of: isCompleted) { _, completed in
+            guard completed else {
+                greenBurstScale = 0
+                return
+            }
+            greenBurstScale = 0.15
+            withAnimation(.spring(response: FootballBingoTiming.greenBurst, dampingFraction: 0.68)) {
+                greenBurstScale = 1
+            }
+        }
         .onChange(of: isShaking) { _, shaking in
             guard shaking else {
                 shakeOffset = 0
@@ -342,62 +413,62 @@ private struct FootballBingoTileView: View {
 
 private struct FootballBingoCategoryIcon: View {
     let category: FootballBingoCategory
-    let isCompleted: Bool
 
     var body: some View {
         Group {
             switch category.iconType {
             case .flag:
                 Text(GuessWhoDisplay.nationalityFlag(category.iconValue))
-                    .font(.system(size: 18))
+                    .font(.system(size: 26))
             case .clubBadge:
                 let parts = category.iconValue.split(separator: "|").map(String.init)
                 let club = parts.first ?? category.iconValue
                 let league = parts.count > 1 ? parts[1] : "Premier League"
-                TeamBadgeImage(club: club, league: league, size: 22) {
+                TeamBadgeImage(club: club, league: league, size: 28) {
                     iconFallback(String(club.prefix(3)).uppercased())
                 }
             case .league:
-                LeagueBadgeImage(league: category.iconValue, size: 22) {
+                LeagueBadgeImage(league: category.iconValue, size: 28) {
                     iconFallback(GuessWhoDisplay.leagueAbbrev(category.iconValue))
                 }
             case .trophy:
                 Ph.trophy.fill
-                    .color(isCompleted ? BKTheme.accent : BKTheme.streak)
-                    .frame(width: 18, height: 18)
+                    .color(BKTheme.streak)
+                    .frame(width: 24, height: 24)
             case .custom:
                 customIcon
             }
         }
-        .frame(height: 22)
+        .frame(height: 28)
+        .opacity(1)
     }
 
     @ViewBuilder
     private var customIcon: some View {
         if category.matchingRule.contains("Messi") {
-            Text("🐐").font(.system(size: 16))
+            Text("🐐").font(.system(size: 24))
         } else if category.matchingRule.contains("Guardiola") {
             Ph.users.fill
                 .color(BKTheme.textSecondary)
-                .frame(width: 16, height: 16)
+                .frame(width: 22, height: 22)
         } else if category.type == .statThreshold {
             Text("100+")
-                .font(.system(size: 10, weight: .black, design: .rounded))
+                .font(.system(size: 12, weight: .black, design: .rounded))
                 .foregroundStyle(BKTheme.accent)
         } else {
             Ph.sealQuestion.fill
                 .color(BKTheme.textMuted)
-                .frame(width: 16, height: 16)
+                .frame(width: 22, height: 22)
         }
     }
 
     private func iconFallback(_ text: String) -> some View {
         Circle()
             .fill(BKTheme.cardElevated)
-            .frame(width: 22, height: 22)
+            .frame(width: 28, height: 28)
             .overlay(
                 Text(text)
-                    .font(.system(size: 7, weight: .bold, design: .rounded))
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
                     .foregroundStyle(BKTheme.textMuted)
             )
     }
