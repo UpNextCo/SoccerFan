@@ -1,5 +1,4 @@
 import SwiftUI
-import PhosphorSwift
 
 enum BKIcon {
     static func tabIcon(for tab: AppTab, selected: Bool, size: CGFloat = 32) -> some View {

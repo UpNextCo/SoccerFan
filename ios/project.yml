@@ -6,11 +6,6 @@ options:
   xcodeVersion: "16.0"
   createIntermediateGroups: true
 
-packages:
-  PhosphorSwift:
-    url: https://github.com/phosphor-icons/swift
-    from: 2.1.0
-
 settings:
   base:
     SWIFT_VERSION: "5.9"
@@ -27,7 +22,15 @@ targets:
     sources:
       - path: BallKnowledge
         excludes:
-          - Resources/*.png
+          - Resources/banner.png
+          - Resources/banner1.png
+          - Resources/banner2.png
+          - Resources/bingo.PNG
+          - Resources/tenaball.png
+          - Resources/GameTiles
+      - path: BallKnowledge/Resources/GameTiles
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.psounds.ballknowledge
@@ -41,9 +44,6 @@ targets:
       properties:
         com.apple.developer.applesignin:
           - Default
-    dependencies:
-      - package: PhosphorSwift
-        product: PhosphorSwift
 
 schemes:
   BallKnowledge:

@@ -1,5 +1,4 @@
 import SwiftUI
-import PhosphorSwift
 
 struct OnboardingContainerView: View {
     @Environment(AuthManager.self) private var auth

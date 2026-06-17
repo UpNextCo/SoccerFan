@@ -1,5 +1,4 @@
 import SwiftUI
-import PhosphorSwift
 
 enum AppTab: Hashable {
     case home, play, daily, leagues, profile

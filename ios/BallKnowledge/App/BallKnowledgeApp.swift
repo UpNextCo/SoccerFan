@@ -1,5 +1,4 @@
 import SwiftUI
-import PhosphorSwift
 import SwiftData
 
 @main

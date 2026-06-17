@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import PhosphorSwift
 
 @MainActor
 @Observable
@@ -337,55 +336,120 @@ struct GameModeTile: View {
     let mode: GameModeMetaDTO
     var onTap: () -> Void
 
+    private let cornerRadius: CGFloat = 14
+
+    private var tileArtImageName: String? {
+        GameModeTileArt.bundleImageName(for: mode.id)
+    }
+
+    private var usesImageArt: Bool { tileArtImageName != nil }
+
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(mode.title)
-                        .font(BKFont.caption(9))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Spacer()
+            ZStack(alignment: .topLeading) {
+                BKTheme.card
+
+                if usesImageArt {
+                    tileArtLayer
+                    tileBottomFade
                 }
 
-                Spacer()
-
-                HStack {
-                    HStack(spacing: 4) {
-                        Ph.users.fill
-                            .color(BKTheme.textMuted)
-                            .frame(width: 10, height: 10)
-                        Text(formatCount(mode.playerCount))
-                            .font(.system(size: 9))
-                            .foregroundStyle(BKTheme.textMuted)
-                    }
-                    Spacer()
-                    if mode.isAvailable {
-                        Ph.play.fill
-                            .color(BKTheme.background)
-                            .frame(width: 10, height: 10)
-                            .padding(6)
-                            .background(BKTheme.accent)
-                            .clipShape(Circle())
-                    } else {
-                        Text("SOON")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(BKTheme.textMuted)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(BKTheme.cardElevated)
-                            .clipShape(Capsule())
-                    }
-                }
+                tileContent
+                    .zIndex(2)
             }
-            .padding(10)
             .frame(height: 110)
-            .background(BKTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .opacity(mode.isAvailable ? 1 : 0.65)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+            }
+            .opacity(usesImageArt ? 1 : (mode.isAvailable ? 1 : 0.65))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TilePressStyle())
+    }
+
+    private var tileArtLayer: some View {
+        GeometryReader { geo in
+            if let tileArtImageName {
+                GameModeBundleImage(name: tileArtImageName)
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .opacity(mode.isAvailable ? 1 : 0.75)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var tileBottomFade: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            LinearGradient(
+                colors: [Color.clear, Color.black.opacity(0.55), Color.black.opacity(0.88)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 54)
+        }
+        .allowsHitTesting(false)
+        .zIndex(1)
+    }
+
+    private var tileContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            tileTitle
+
+            Spacer(minLength: 0)
+
+            tileFooter
+        }
+        .padding(10)
+    }
+
+    private var tileTitle: some View {
+        Text(mode.title)
+            .font(usesImageArt
+                ? .system(size: 15, weight: .black, design: .rounded)
+                : BKFont.caption(9))
+            .foregroundStyle(BKTheme.textPrimary)
+            .shadow(color: usesImageArt ? Color.black.opacity(0.45) : .clear, radius: 3, y: 1)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var tileFooter: some View {
+        HStack {
+            HStack(spacing: 4) {
+                Ph.users.fill
+                    .color(footerMetaColor)
+                    .frame(width: 10, height: 10)
+                Text(formatCount(mode.playerCount))
+                    .font(.system(size: 9, weight: usesImageArt ? .semibold : .regular))
+                    .foregroundStyle(footerMetaColor)
+            }
+            Spacer()
+            if mode.isAvailable {
+                Ph.play.fill
+                    .color(BKTheme.background)
+                    .frame(width: 10, height: 10)
+                    .padding(6)
+                    .background(BKTheme.accent)
+                    .clipShape(Circle())
+            } else {
+                Text("SOON")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(usesImageArt ? footerMetaColor : BKTheme.textMuted)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(usesImageArt ? Color.black.opacity(0.2) : BKTheme.cardElevated)
+                    .clipShape(Capsule())
+            }
+        }
+    }
+
+    private var footerMetaColor: Color {
+        usesImageArt ? Color(hex: "D4D4D4") : BKTheme.textMuted
     }
 
     private func formatCount(_ count: Int) -> String {
@@ -393,6 +457,14 @@ struct GameModeTile: View {
             return String(format: "%.1fK", Double(count) / 1000)
         }
         return "\(count)"
+    }
+}
+
+private struct TilePressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.62), value: configuration.isPressed)
     }
 }
 

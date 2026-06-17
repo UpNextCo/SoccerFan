@@ -1,5 +1,4 @@
 import SwiftUI
-import PhosphorSwift
 
 /// Full-screen confetti burst. Pass an incrementing `burstToken` each time you want a new burst.
 struct FootballConfettiView: View {

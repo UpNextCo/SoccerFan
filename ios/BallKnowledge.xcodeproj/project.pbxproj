@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		122B4C6CD985D0A176790058 /* GuessWhoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00FA2FB8FBFC91B16A7AB21C /* GuessWhoView.swift */; };
 		1CBF05E52D092BB0FC7666DD /* TeamBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DBF3219468891E23C91877 /* TeamBadge.swift */; };
+		1DE6B38A67939B16E33B77F5 /* PhIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 551C9C4FE32FA9F6DE64D92B /* PhIcons.xcassets */; };
+		25BC41EC32677FC16436E271 /* GameTiles in Resources */ = {isa = PBXBuildFile; fileRef = 3F9338EE6BEC06EBB52F7C4B /* GameTiles */; };
 		32B093D09D8FBEAC3648B7DB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B19529DDD217D25A59212833 /* Assets.xcassets */; };
 		374EADD57FF95C3F8EDAADB5 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0216980CDB8628416CC8FED2 /* KeychainHelper.swift */; };
 		5BEE19F85576BD840CBA34BD /* GameModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8014DDCB14BE89801F5278AA /* GameModels.swift */; };
@@ -20,14 +22,15 @@
 		8DFB5F6E7D036B5D0DB29D94 /* BallKnowledgeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439678CCB8A1C520BF7740D4 /* BallKnowledgeApp.swift */; };
 		8ED7355BB202C63602F03672 /* OnboardingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5237449777A4A7CE0FE9EDE /* OnboardingViews.swift */; };
 		97B7A592988DD02E168C095B /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A36DF66C77EDAE47F240AEB4 /* AuthManager.swift */; };
+		A49D0D55AE15A06620BDC53F /* GameModeTileArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D542F3A1E78B1A8DE581802 /* GameModeTileArt.swift */; };
 		ABDD48D48503674D7C41C659 /* SignInWithAppleButtonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 036F482A24B4400B6DDAC4B6 /* SignInWithAppleButtonView.swift */; };
 		B924B06F7D0D5B7D15D25C70 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CD6B099FC77A179B81960DA /* Theme.swift */; };
 		C2224733B19EFB773D885A93 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88849D75752EA27739D8CDE3 /* MainTabView.swift */; };
 		C4F799AF15D7E8C7423B5C7D /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = E62FFD919FC09C94AE3A9876 /* Config.swift */; };
+		C600591ACCD2B5B264289204 /* BKPh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33FD3A905CCD948AC33FB070 /* BKPh.swift */; };
 		C72E8932256B8B2315ADDBA4 /* GameEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28C709EF976C20D67984569C /* GameEngine.swift */; };
 		C9E7369241E3ADDCFCDBCE5E /* OfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F7AFAC6E26C393F2F557705 /* OfflineCache.swift */; };
 		D75B501F091CEFAC1224915A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 932DE25228164846B41BF22F /* HomeView.swift */; };
-		D7A2ED0D7409F65EF796DFB5 /* PhosphorSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 08F87AF2E9D7A1FB0272C90A /* PhosphorSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,8 +40,12 @@
 		036F482A24B4400B6DDAC4B6 /* SignInWithAppleButtonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithAppleButtonView.swift; sourceTree = "<group>"; };
 		1F7AFAC6E26C393F2F557705 /* OfflineCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCache.swift; sourceTree = "<group>"; };
 		28C709EF976C20D67984569C /* GameEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameEngine.swift; sourceTree = "<group>"; };
+		33FD3A905CCD948AC33FB070 /* BKPh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BKPh.swift; sourceTree = "<group>"; };
 		38AA789FF4DE956F1A855448 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		3F9338EE6BEC06EBB52F7C4B /* GameTiles */ = {isa = PBXFileReference; lastKnownFileType = folder; name = GameTiles; path = BallKnowledge/Resources/GameTiles; sourceTree = SOURCE_ROOT; };
 		439678CCB8A1C520BF7740D4 /* BallKnowledgeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BallKnowledgeApp.swift; sourceTree = "<group>"; };
+		551C9C4FE32FA9F6DE64D92B /* PhIcons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = PhIcons.xcassets; sourceTree = "<group>"; };
+		5D542F3A1E78B1A8DE581802 /* GameModeTileArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModeTileArt.swift; sourceTree = "<group>"; };
 		74DBF3219468891E23C91877 /* TeamBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamBadge.swift; sourceTree = "<group>"; };
 		7CD6B099FC77A179B81960DA /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		8014DDCB14BE89801F5278AA /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
@@ -54,17 +61,6 @@
 		DE9A8C982B1DE1F9F4938104 /* LeagueBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeagueBadge.swift; sourceTree = "<group>"; };
 		E62FFD919FC09C94AE3A9876 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		3ABE4A7AD70E38F1F17ED54C /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				D7A2ED0D7409F65EF796DFB5 /* PhosphorSwift in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0117912D8B495DD1002E5FB7 /* Data */ = {
@@ -90,7 +86,9 @@
 			isa = PBXGroup;
 			children = (
 				00D2E4A41FA0B0FA61A65D62 /* BKIcon.swift */,
+				33FD3A905CCD948AC33FB070 /* BKPh.swift */,
 				C0CE8481DD02104E19C347D4 /* FootballConfettiView.swift */,
+				5D542F3A1E78B1A8DE581802 /* GameModeTileArt.swift */,
 				DE9A8C982B1DE1F9F4938104 /* LeagueBadge.swift */,
 				74DBF3219468891E23C91877 /* TeamBadge.swift */,
 				7CD6B099FC77A179B81960DA /* Theme.swift */,
@@ -152,6 +150,14 @@
 			path = Domain;
 			sourceTree = "<group>";
 		};
+		8581FF6AD12DF6E7F4E66117 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				3F9338EE6BEC06EBB52F7C4B /* GameTiles */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		C04E79529F8D8052BD1DC7A4 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -165,11 +171,13 @@
 			children = (
 				B19529DDD217D25A59212833 /* Assets.xcassets */,
 				9475EA8DDA597CE44BCD022E /* BallKnowledge.entitlements */,
+				551C9C4FE32FA9F6DE64D92B /* PhIcons.xcassets */,
 				E0130D100147F8D722A77AAB /* App */,
 				0117912D8B495DD1002E5FB7 /* Data */,
 				13DE0354C71FA88B0F60094E /* DesignSystem */,
 				839217495DB709F2EB6251B0 /* Domain */,
 				1DB26DC72839C5053F9B18D9 /* Features */,
+				8581FF6AD12DF6E7F4E66117 /* Resources */,
 			);
 			path = BallKnowledge;
 			sourceTree = "<group>";
@@ -200,7 +208,6 @@
 			buildPhases = (
 				2EEC794CCA91532AB4917755 /* Sources */,
 				EC9E062A6E58521A5A8356F0 /* Resources */,
-				3ABE4A7AD70E38F1F17ED54C /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -208,7 +215,6 @@
 			);
 			name = BallKnowledge;
 			packageProductDependencies = (
-				08F87AF2E9D7A1FB0272C90A /* PhosphorSwift */,
 			);
 			productName = BallKnowledge;
 			productReference = B36B0A9729829ABDE08B911C /* BallKnowledge.app */;
@@ -221,7 +227,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2640;
+				LastUpgradeCheck = 1600;
 			};
 			buildConfigurationList = 476ECE76F82A3F53BBD7EB91 /* Build configuration list for PBXProject "BallKnowledge" */;
 			developmentRegion = en;
@@ -232,9 +238,6 @@
 			);
 			mainGroup = 4CEBBF234F87E6CC9FDAC385;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				633E3E14A14880E793A8524E /* XCRemoteSwiftPackageReference "swift" */,
-			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C04E79529F8D8052BD1DC7A4 /* Products */;
 			projectDirPath = "";
@@ -251,6 +254,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				32B093D09D8FBEAC3648B7DB /* Assets.xcassets in Resources */,
+				25BC41EC32677FC16436E271 /* GameTiles in Resources */,
+				1DE6B38A67939B16E33B77F5 /* PhIcons.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -265,10 +270,12 @@
 				7C5047652E40EF95CBED6746 /* APIModels.swift in Sources */,
 				97B7A592988DD02E168C095B /* AuthManager.swift in Sources */,
 				63C4BE80B9CBB9248EC82A11 /* BKIcon.swift in Sources */,
+				C600591ACCD2B5B264289204 /* BKPh.swift in Sources */,
 				8DFB5F6E7D036B5D0DB29D94 /* BallKnowledgeApp.swift in Sources */,
 				C4F799AF15D7E8C7423B5C7D /* Config.swift in Sources */,
 				88EB84ACFC9E37B94496D15C /* FootballConfettiView.swift in Sources */,
 				C72E8932256B8B2315ADDBA4 /* GameEngine.swift in Sources */,
+				A49D0D55AE15A06620BDC53F /* GameModeTileArt.swift in Sources */,
 				5BEE19F85576BD840CBA34BD /* GameModels.swift in Sources */,
 				122B4C6CD985D0A176790058 /* GuessWhoView.swift in Sources */,
 				D75B501F091CEFAC1224915A /* HomeView.swift in Sources */,
@@ -321,10 +328,8 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 68TSW4TZH4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -349,7 +354,6 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.9;
@@ -363,6 +367,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = BallKnowledge/BallKnowledge.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 68TSW4TZH4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Ball Knowledge";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -410,10 +415,8 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 68TSW4TZH4;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -431,7 +434,6 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
@@ -445,6 +447,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = BallKnowledge/BallKnowledge.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 68TSW4TZH4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Ball Knowledge";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -479,25 +482,6 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		633E3E14A14880E793A8524E /* XCRemoteSwiftPackageReference "swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/phosphor-icons/swift";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.1.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		08F87AF2E9D7A1FB0272C90A /* PhosphorSwift */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 633E3E14A14880E793A8524E /* XCRemoteSwiftPackageReference "swift" */;
-			productName = PhosphorSwift;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 202D85DC5AC88BDB8251C3F3 /* Project object */;
 }
