@@ -141,3 +141,10 @@ func displayFields(from feedback: [GuessFeedbackFieldDTO]) -> [GuessFeedbackFiel
         feedback.first { $0.field == gf.rawValue }
     }
 }
+
+enum GuessWhoTiming {
+    static let flipStagger: Double = 0.18
+    static let flipSequenceDuration: Double = flipStagger * Double(GuessWhoField.allCases.count - 1) + 0.5
+    static let confettiDuration: Double = 2.4
+    static let winShareDelay: Double = flipSequenceDuration + confettiDuration
+}

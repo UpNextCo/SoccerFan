@@ -1,4 +1,5 @@
 import SwiftUI
+import PhosphorSwift
 import SwiftData
 
 @main
@@ -45,9 +46,9 @@ struct LaunchLoadingView: View {
         ZStack {
             BKTheme.background.ignoresSafeArea()
             VStack(spacing: 16) {
-                Image(systemName: "soccerball.inverse")
-                    .font(.system(size: 48))
-                    .foregroundStyle(BKTheme.accent)
+                Ph.soccerBall.fill
+                    .color(BKTheme.accent)
+                    .frame(width: 48, height: 48)
                 ProgressView()
                     .tint(BKTheme.accent)
             }

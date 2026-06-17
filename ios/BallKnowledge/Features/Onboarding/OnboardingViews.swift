@@ -1,4 +1,5 @@
 import SwiftUI
+import PhosphorSwift
 
 struct OnboardingContainerView: View {
     @Environment(AuthManager.self) private var auth
@@ -14,16 +15,26 @@ struct OnboardingContainerView: View {
                 ValuePropPage(
                     title: "One daily challenge",
                     subtitle: "Same puzzle for everyone. Share your score card and challenge mates.",
-                    icon: "calendar",
-                    preview: DailySharePreview()
-                ) { page = 2 }
+                    icon: {
+                        Ph.calendar.fill
+                            .color(BKTheme.accent)
+                            .frame(width: 48, height: 48)
+                    },
+                    preview: DailySharePreview(),
+                    onContinue: { page = 2 }
+                )
                 .tag(1)
                 ValuePropPage(
                     title: "9 game modes",
                     subtitle: "Wordle, Bingo, Grid, Career Path and more — all football, all interactive.",
-                    icon: "gamecontroller.fill",
-                    preview: GameModesPreview()
-                ) { page = 3 }
+                    icon: {
+                        Ph.gameController.fill
+                            .color(BKTheme.accent)
+                            .frame(width: 48, height: 48)
+                    },
+                    preview: GameModesPreview(),
+                    onContinue: { page = 3 }
+                )
                 .tag(2)
                 SignInOnboardingPage()
                     .tag(3)
@@ -44,9 +55,9 @@ struct WelcomeOnboardingPage: View {
                 Circle()
                     .fill(BKTheme.accent.opacity(0.15))
                     .frame(width: 140, height: 140)
-                Image(systemName: "soccerball.inverse")
-                    .font(.system(size: 64))
-                    .foregroundStyle(BKTheme.accent)
+                Ph.soccerBall.fill
+                    .color(BKTheme.accent)
+                    .frame(width: 64, height: 64)
             }
 
             VStack(spacing: 12) {
@@ -76,20 +87,32 @@ struct WelcomeOnboardingPage: View {
     }
 }
 
-struct ValuePropPage<Preview: View>: View {
+struct ValuePropPage<Preview: View, Icon: View>: View {
     let title: String
     let subtitle: String
-    let icon: String
     let preview: Preview
     var onContinue: () -> Void
+    private let icon: Icon
+
+    init(
+        title: String,
+        subtitle: String,
+        @ViewBuilder icon: () -> Icon,
+        preview: Preview,
+        onContinue: @escaping () -> Void
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon()
+        self.preview = preview
+        self.onContinue = onContinue
+    }
 
     var body: some View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: icon)
-                .font(.system(size: 48))
-                .foregroundStyle(BKTheme.accent)
+            icon
 
             VStack(spacing: 12) {
                 Text(title)

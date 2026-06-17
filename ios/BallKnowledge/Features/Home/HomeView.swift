@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PhosphorSwift
 
 @MainActor
 @Observable
@@ -136,9 +137,14 @@ struct HomeHeaderView: View {
                     .font(BKFont.caption(11))
                     .foregroundStyle(BKTheme.accent)
                 HStack(spacing: 8) {
-                    Label("\(user?.xp ?? 0)", systemImage: "bolt.fill")
-                        .font(BKFont.caption())
-                        .foregroundStyle(BKTheme.textPrimary)
+                    HStack(spacing: 4) {
+                        Ph.lightning.fill
+                            .color(BKTheme.textPrimary)
+                            .frame(width: 12, height: 12)
+                        Text("\(user?.xp ?? 0)")
+                            .font(BKFont.caption())
+                            .foregroundStyle(BKTheme.textPrimary)
+                    }
                     Text("Level \(user?.level ?? 1)")
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.background)
@@ -152,15 +158,17 @@ struct HomeHeaderView: View {
             Spacer()
 
             Button(action: onLeagues) {
-                Image(systemName: "trophy.fill")
-                    .foregroundStyle(.yellow)
+                Ph.trophy.fill
+                    .color(.yellow)
+                    .frame(width: 20, height: 20)
                     .frame(width: 40, height: 40)
                     .background(BKTheme.card)
                     .clipShape(Circle())
             }
 
-            Image(systemName: "bell.fill")
-                .foregroundStyle(BKTheme.textSecondary)
+            Ph.bell.fill
+                .color(BKTheme.textSecondary)
+                .frame(width: 18, height: 18)
                 .frame(width: 40, height: 40)
                 .background(BKTheme.card)
                 .clipShape(Circle())
@@ -187,69 +195,69 @@ struct DailyChallengeCard: View {
     var onPlay: () -> Void
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        colors: [BKTheme.cardElevated, BKTheme.card],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("DAILY CHALLENGE")
+                    .font(BKFont.caption(11))
+                    .foregroundStyle(BKTheme.accent)
+                Spacer()
+                    HStack(spacing: 4) {
+                        Ph.fire.fill
+                            .color(BKTheme.streak)
+                            .frame(width: 14, height: 14)
+                        Text("\(streak) DAY STREAK")
+                        .font(BKFont.caption(10))
+                        .foregroundStyle(BKTheme.textPrimary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(BKTheme.background.opacity(0.6))
+                .clipShape(Capsule())
+            }
+
+            Text(game?.title ?? "GUESS WHO?")
+                .font(BKFont.title(24))
+                .foregroundStyle(BKTheme.textPrimary)
+
+            Text(alreadyPlayed ? "Completed today — play again tomorrow" : "8 guesses. Can you name today's player?")
+                .font(BKFont.body(13))
+                .foregroundStyle(BKTheme.textSecondary)
+
+            Button(action: onPlay) {
+                    HStack {
+                        Text(alreadyPlayed ? "VIEW RESULT" : "PLAY NOW")
+                            .font(BKFont.headline(14))
+                        Ph.arrowRight.bold
+                            .color(BKTheme.background)
+                            .frame(width: 16, height: 16)
+                    }
+                .foregroundStyle(BKTheme.background)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(BKTheme.accent)
+                .clipShape(Capsule())
+            }
+            .padding(.top, 4)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack(alignment: .bottomTrailing) {
+                LinearGradient(
+                    colors: [BKTheme.cardElevated, BKTheme.card],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
 
-            HStack {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("DAILY CHALLENGE")
-                            .font(BKFont.caption(11))
-                            .foregroundStyle(BKTheme.accent)
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Image(systemName: "flame.fill")
-                                .foregroundStyle(BKTheme.streak)
-                            Text("\(streak) DAY STREAK")
-                                .font(BKFont.caption(10))
-                                .foregroundStyle(BKTheme.textPrimary)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(BKTheme.background.opacity(0.6))
-                        .clipShape(Capsule())
-                    }
-
-                    Text(game?.title ?? "GUESS WHO?")
-                        .font(BKFont.title(24))
-                        .foregroundStyle(BKTheme.textPrimary)
-
-                    Text(alreadyPlayed ? "Completed today — play again tomorrow" : "8 guesses. Can you name today's player?")
-                        .font(BKFont.body(13))
-                        .foregroundStyle(BKTheme.textSecondary)
-
-                    Button(action: onPlay) {
-                        HStack {
-                            Text(alreadyPlayed ? "VIEW RESULT" : "PLAY NOW")
-                                .font(BKFont.headline(14))
-                            Image(systemName: "arrow.right")
-                        }
-                        .foregroundStyle(BKTheme.background)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(BKTheme.accent)
-                        .clipShape(Capsule())
-                    }
-                    .padding(.top, 4)
-                }
-                .padding(20)
-
-                Spacer()
-
-                Image(systemName: "figure.soccer")
-                    .font(.system(size: 80))
-                    .foregroundStyle(BKTheme.accent.opacity(0.25))
-                    .padding(.trailing, 16)
+                Image("banner1")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 130)
+                    .padding(.trailing, 6)
+                    .blendMode(.screen)
             }
         }
-        .frame(minHeight: 180)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 }
 
@@ -301,14 +309,19 @@ struct GameModeTile: View {
                 Spacer()
 
                 HStack {
-                    Label(formatCount(mode.playerCount), systemImage: "person.2.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(BKTheme.textMuted)
+                    HStack(spacing: 4) {
+                        Ph.users.fill
+                            .color(BKTheme.textMuted)
+                            .frame(width: 10, height: 10)
+                        Text(formatCount(mode.playerCount))
+                            .font(.system(size: 9))
+                            .foregroundStyle(BKTheme.textMuted)
+                    }
                     Spacer()
                     if mode.isAvailable {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(BKTheme.background)
+                        Ph.play.fill
+                            .color(BKTheme.background)
+                            .frame(width: 10, height: 10)
                             .padding(6)
                             .background(BKTheme.accent)
                             .clipShape(Circle())
@@ -357,8 +370,9 @@ struct ProgressStripView: View {
                         .stroke(BKTheme.streak, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                         .frame(width: 56, height: 56)
                         .rotationEffect(.degrees(-90))
-                    Image(systemName: "flame.fill")
-                        .foregroundStyle(BKTheme.streak)
+                    Ph.fire.fill
+                        .color(BKTheme.streak)
+                        .frame(width: 22, height: 22)
                 }
                 Text("\(streak) DAY")
                     .font(BKFont.caption(10))
@@ -383,9 +397,9 @@ struct ProgressStripView: View {
                 .frame(height: 8)
             }
 
-            Image(systemName: "gift.fill")
-                .font(.title2)
-                .foregroundStyle(BKTheme.accent)
+            Ph.gift.fill
+                .color(BKTheme.accent)
+                .frame(width: 24, height: 24)
                 .frame(width: 48, height: 48)
                 .background(BKTheme.card)
                 .clipShape(RoundedRectangle(cornerRadius: 12))

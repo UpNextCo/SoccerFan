@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PhosphorSwift
 
 // MARK: - ViewModel
 
@@ -14,6 +15,7 @@ final class GuessWhoViewModel {
     var errorMessage: String?
     var completionResult: DailyCompleteResponseDTO?
     var showShare = false
+    var confettiBurstToken = 0
 
     private let date: String
 
@@ -67,6 +69,10 @@ final class GuessWhoViewModel {
 
             if result.correct {
                 HapticManager.success()
+                Task {
+                    try await Task.sleep(for: .seconds(GuessWhoTiming.flipSequenceDuration))
+                    confettiBurstToken += 1
+                }
             } else if state.isComplete {
                 HapticManager.error()
             } else {
@@ -94,12 +100,18 @@ final class GuessWhoViewModel {
 
         do {
             completionResult = try await APIClient.shared.dailyComplete(request)
+            if state.won {
+                try await Task.sleep(for: .seconds(GuessWhoTiming.winShareDelay))
+            }
             showShare = true
         } catch {
             if let context {
                 try? OfflineCache.queueCompletion(request, context: context)
             }
             errorMessage = "Completed — will sync when online"
+            if state.won {
+                try? await Task.sleep(for: .seconds(GuessWhoTiming.winShareDelay))
+            }
             showShare = true
         }
     }
@@ -138,84 +150,87 @@ struct GuessWhoView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                GuessWhoProgressBar(
-                    guessesUsed: viewModel.state.guesses.count,
-                    maxGuesses: viewModel.state.puzzle.maxGuesses
-                )
-                .onTapGesture {
-                    isSearchFocused = false
-                }
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        if viewModel.state.guesses.isEmpty && !viewModel.state.isComplete {
-                            GuessWhoEmptyStateView()
-                        }
-
-                        ForEach(viewModel.state.guesses.reversed()) { row in
-                            GuessWhoGuessCard(
-                                row: row,
-                                animateFlip: row.id == viewModel.state.guesses.last?.id
-                            )
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-
-                        if viewModel.state.isComplete {
-                            completionSection
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 24)
-                    .frame(maxWidth: .infinity)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    isSearchFocused = false
-                }
-
-                if !viewModel.state.isComplete {
-                    GuessWhoSearchSection(
-                        viewModel: viewModel,
-                        modelContext: modelContext,
-                        isSearchFocused: $isSearchFocused
+        ZStack {
+            NavigationStack {
+                VStack(spacing: 0) {
+                    GuessWhoProgressBar(
+                        guessesUsed: viewModel.state.guesses.count,
+                        maxGuesses: viewModel.state.puzzle.maxGuesses
                     )
+                    .onTapGesture {
+                        isSearchFocused = false
+                    }
+
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 20) {
+                            if viewModel.state.guesses.isEmpty && !viewModel.state.isComplete {
+                                GuessWhoEmptyStateView()
+                            }
+
+                            ForEach(viewModel.state.guesses.reversed()) { row in
+                                GuessWhoGuessCard(
+                                    row: row,
+                                    animateFlip: row.id == viewModel.state.guesses.last?.id
+                                )
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+
+                            if viewModel.state.isComplete {
+                                completionSection
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isSearchFocused = false
+                    }
+
+                    if !viewModel.state.isComplete {
+                        GuessWhoSearchSection(
+                            viewModel: viewModel,
+                            modelContext: modelContext,
+                            isSearchFocused: $isSearchFocused
+                        )
+                    }
                 }
-            }
-            .background(BKTheme.background)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    isSearchFocused = true
-                }
-            }
-            .onChange(of: viewModel.state.guesses.count) { oldCount, newCount in
-                if newCount > oldCount, !viewModel.state.isComplete {
-                    // Wait for badge flip sequence before refocusing search
-                    let flipFinish = GuessWhoGuessCard.flipSequenceDuration
-                    DispatchQueue.main.asyncAfter(deadline: .now() + flipFinish) {
+                .background(BKTheme.background)
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         isSearchFocused = true
                     }
                 }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(BKTheme.textPrimary)
+                .onChange(of: viewModel.state.guesses.count) { oldCount, newCount in
+                    if newCount > oldCount, !viewModel.state.isComplete {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + GuessWhoTiming.flipSequenceDuration) {
+                            isSearchFocused = true
+                        }
                     }
                 }
-                ToolbarItem(placement: .principal) {
-                    Text("GUESS WHO?")
-                        .font(BKFont.caption(13))
-                        .tracking(1)
-                        .foregroundStyle(BKTheme.accent)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: {
+                        Ph.x.bold
+                            .color(BKTheme.textPrimary)
+                            .frame(width: 15, height: 15)
+                    }
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Text("GUESS WHO?")
+                            .font(BKFont.caption(13))
+                            .tracking(1)
+                            .foregroundStyle(BKTheme.accent)
+                    }
                 }
             }
+
+            FootballConfettiView(burstToken: viewModel.confettiBurstToken)
+                .zIndex(999)
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: viewModel.state.guesses.count)
         .sheet(isPresented: $viewModel.showShare) {
@@ -229,9 +244,16 @@ struct GuessWhoView: View {
 
     private var completionSection: some View {
         VStack(spacing: 16) {
-            Image(systemName: viewModel.state.won ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(viewModel.state.won ? BKTheme.accent : BKTheme.wrong)
+            Group {
+                if viewModel.state.won {
+                    Ph.checkCircle.fill
+                        .color(BKTheme.accent)
+                } else {
+                    Ph.xCircle.fill
+                        .color(BKTheme.wrong)
+                }
+            }
+            .frame(width: 56, height: 56)
 
             Text(viewModel.state.won ? "Got it!" : "Better luck tomorrow")
                 .font(BKFont.title(22))
@@ -283,9 +305,9 @@ struct GuessWhoEmptyStateView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: "person.fill.questionmark")
-                .font(.system(size: 28))
-                .foregroundStyle(BKTheme.textMuted.opacity(0.5))
+            Ph.sealQuestion.fill
+                .color(BKTheme.textMuted.opacity(0.5))
+                .frame(width: 28, height: 28)
 
             Text("YOUR FIRST GUESS")
                 .font(.system(size: 13, weight: .heavy, design: .rounded))
@@ -334,11 +356,9 @@ struct GuessWhoGuessCard: View {
     @State private var revealedCount = 0
     @State private var didStartFlip = false
 
-    static let flipStagger: Double = 0.18
+    static let flipStagger = GuessWhoTiming.flipStagger
     static let flipSpring = Animation.spring(response: 0.42, dampingFraction: 0.82)
-    static var flipSequenceDuration: Double {
-        flipStagger * Double(GuessWhoField.allCases.count - 1) + 0.5
-    }
+    static var flipSequenceDuration: Double { GuessWhoTiming.flipSequenceDuration }
 
     private var fields: [GuessFeedbackFieldDTO] {
         displayFields(from: row.feedback)
@@ -679,9 +699,9 @@ struct GuessWhoSearchSection: View {
                                             .foregroundStyle(BKTheme.textMuted)
                                     }
                                     Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(BKTheme.textMuted)
+                                    Ph.caretRight.bold
+                                        .color(BKTheme.textMuted)
+                                        .frame(width: 12, height: 12)
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 12)

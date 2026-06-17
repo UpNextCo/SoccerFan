@@ -6,6 +6,11 @@ options:
   xcodeVersion: "16.0"
   createIntermediateGroups: true
 
+packages:
+  PhosphorSwift:
+    url: https://github.com/phosphor-icons/swift
+    from: 2.1.0
+
 settings:
   base:
     SWIFT_VERSION: "5.9"
@@ -20,7 +25,9 @@ targets:
     type: application
     platform: iOS
     sources:
-      - BallKnowledge
+      - path: BallKnowledge
+        excludes:
+          - Resources/*.png
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.psounds.ballknowledge
@@ -34,6 +41,9 @@ targets:
       properties:
         com.apple.developer.applesignin:
           - Default
+    dependencies:
+      - package: PhosphorSwift
+        product: PhosphorSwift
 
 schemes:
   BallKnowledge:

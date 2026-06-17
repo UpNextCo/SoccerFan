@@ -1,4 +1,5 @@
 import SwiftUI
+import PhosphorSwift
 
 enum AppTab: Hashable {
     case home, play, daily, leagues, profile
@@ -8,38 +9,26 @@ struct MainTabView: View {
     @State private var selectedTab: AppTab = .home
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView(selectedTab: $selectedTab)
-                .tabItem {
-                    Label("Home", systemImage: "house.fill")
+        VStack(spacing: 0) {
+            Group {
+                switch selectedTab {
+                case .home:
+                    HomeView(selectedTab: $selectedTab)
+                case .play:
+                    PlayTabView()
+                case .daily:
+                    DailyTabView()
+                case .leagues:
+                    LeaguesTabView()
+                case .profile:
+                    ProfileTabView()
                 }
-                .tag(AppTab.home)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            PlayTabView()
-                .tabItem {
-                    Label("Play", systemImage: "soccerball")
-                }
-                .tag(AppTab.play)
-
-            DailyTabView()
-                .tabItem {
-                    Label("Daily", systemImage: "calendar")
-                }
-                .tag(AppTab.daily)
-
-            LeaguesTabView()
-                .tabItem {
-                    Label("Leagues", systemImage: "chart.bar.fill")
-                }
-                .tag(AppTab.leagues)
-
-            ProfileTabView()
-                .tabItem {
-                    Label("Profile", systemImage: "person.fill")
-                }
-                .tag(AppTab.profile)
+            BKTabBar(selection: $selectedTab)
         }
-        .tint(BKTheme.accent)
+        .background(BKTheme.background)
     }
 }
 
@@ -124,9 +113,9 @@ struct LeaguesTabView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
-                Image(systemName: "trophy.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.yellow)
+                Ph.trophy.fill
+                    .color(.yellow)
+                    .frame(width: 48, height: 48)
                 Text("Weekly Leagues")
                     .font(BKFont.title())
                     .foregroundStyle(BKTheme.textPrimary)
