@@ -219,9 +219,27 @@ struct DailyChallengeCard: View {
                 .font(BKFont.title(24))
                 .foregroundStyle(BKTheme.textPrimary)
 
-            Text(alreadyPlayed ? "Completed today — play again tomorrow" : "8 guesses. Can you name today's player?")
-                .font(BKFont.body(13))
-                .foregroundStyle(BKTheme.textSecondary)
+            if alreadyPlayed {
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Ph.checkCircle.fill
+                                .color(BKTheme.accent)
+                                .frame(width: 16, height: 16)
+                            Text("Completed")
+                                .font(BKFont.headline(13))
+                                .foregroundStyle(BKTheme.textPrimary)
+                        }
+                        Text("Play again in \(Self.timeUntilMidnight(from: context.date))")
+                            .font(BKFont.body(13))
+                            .foregroundStyle(BKTheme.textSecondary)
+                    }
+                }
+            } else {
+                Text("8 guesses. Can you name today's player?")
+                    .font(BKFont.body(13))
+                    .foregroundStyle(BKTheme.textSecondary)
+            }
 
             Button(action: onPlay) {
                     HStack {
@@ -242,22 +260,47 @@ struct DailyChallengeCard: View {
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            ZStack(alignment: .bottomTrailing) {
-                LinearGradient(
-                    colors: [BKTheme.cardElevated, BKTheme.card],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+            GeometryReader { geo in
+                ZStack(alignment: .trailing) {
+                    LinearGradient(
+                        colors: [BKTheme.cardElevated, BKTheme.card],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
 
-                Image("banner1")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 130)
-                    .padding(.trailing, 6)
-                    .blendMode(.screen)
+                    Image("banner2")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width * 0.55, height: geo.size.height, alignment: .trailing)
+                        .clipped()
+
+                    LinearGradient(
+                        colors: [BKTheme.card.opacity(0.92), BKTheme.card.opacity(0.55), .clear],
+                        startPoint: .leading,
+                        endPoint: UnitPoint(x: 0.65, y: 0.5)
+                    )
+                }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+
+    private static func timeUntilMidnight(from date: Date, calendar: Calendar = .current) -> String {
+        let startOfToday = calendar.startOfDay(for: date)
+        guard let midnight = calendar.date(byAdding: .day, value: 1, to: startOfToday) else {
+            return "tomorrow"
+        }
+
+        let seconds = max(0, midnight.timeIntervalSince(date))
+        let totalMinutes = Int(seconds / 60)
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+
+        if hours >= 1 {
+            return hours == 1 ? "1 hour" : "\(hours) hours"
+        }
+        if minutes <= 1 { return "1 minute" }
+        return "\(minutes) minutes"
     }
 }
 

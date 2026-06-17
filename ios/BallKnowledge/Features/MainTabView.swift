@@ -9,7 +9,7 @@ struct MainTabView: View {
     @State private var selectedTab: AppTab = .home
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             Group {
                 switch selectedTab {
                 case .home:
@@ -25,6 +25,7 @@ struct MainTabView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, 72)
 
             BKTabBar(selection: $selectedTab)
         }
