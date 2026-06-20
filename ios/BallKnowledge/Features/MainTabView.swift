@@ -38,6 +38,7 @@ struct PlayTabView: View {
     @State private var showGuessWho = false
     @State private var showFootballBingo = false
     @State private var showTargetMan = false
+    @State private var showFootballGolf = false
     @State private var dailyBundle: DailyBundleDTO?
 
     var body: some View {
@@ -74,6 +75,11 @@ struct PlayTabView: View {
                     showTargetMan = false
                 })
             }
+            .fullScreenCover(isPresented: $showFootballGolf) {
+                FootballGolfView(onComplete: {
+                    showFootballGolf = false
+                })
+            }
         }
     }
 
@@ -86,6 +92,8 @@ struct PlayTabView: View {
             showFootballBingo = true
         case GameModeID.targetMan.rawValue:
             showTargetMan = true
+        case GameModeID.footballGolf.rawValue:
+            showFootballGolf = true
         default:
             break
         }

@@ -186,7 +186,6 @@ enum TargetManScoring {
 
 enum TargetManTiming {
     static let revealStagger: Double = 0.22
-    static let revealSummaryDelay: Double = 0.35
     static let confettiDuration: Double = 2.4
     static let resultStepDelay: Double = 0.55
 }

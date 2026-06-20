@@ -27,6 +27,8 @@ enum GameRegistry {
             return AnyView(FootballBingoView(onComplete: onComplete))
         case GameModeID.targetMan.rawValue:
             return AnyView(TargetManView(onComplete: onComplete))
+        case GameModeID.footballGolf.rawValue:
+            return AnyView(FootballGolfView(onComplete: onComplete))
         default:
             return AnyView(ComingSoonGameView(modeId: modeId))
         }

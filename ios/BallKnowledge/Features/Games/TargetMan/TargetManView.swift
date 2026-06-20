@@ -100,8 +100,6 @@ final class TargetManViewModel {
                 HapticManager.light()
             }
 
-            try? await Task.sleep(for: .seconds(TargetManTiming.revealSummaryDelay))
-
             let combined = state.selections.compactMap(\.statValue).reduce(0, +)
             let difference = combined - state.challenge.target
             let score = TargetManScoring.points(forDifference: difference)
@@ -118,7 +116,6 @@ final class TargetManViewModel {
                 HapticManager.light()
             }
 
-            try? await Task.sleep(for: .seconds(0.45))
             showResult = true
         }
     }
@@ -152,25 +149,10 @@ struct TargetManView: View {
                                 category: viewModel.state.challenge.category,
                                 onRemove: { viewModel.removePlayer(at: $0) }
                             )
-
-                            if viewModel.state.phase == .complete,
-                               let total = viewModel.state.combinedTotal,
-                               let difference = viewModel.state.difference,
-                               let score = viewModel.state.score {
-                                TargetManSummaryCard(
-                                    total: total,
-                                    target: viewModel.state.challenge.target,
-                                    difference: difference,
-                                    score: score,
-                                    category: viewModel.state.challenge.category
-                                )
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
                         .padding(.bottom, 24)
-                        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: viewModel.state.phase)
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .onTapGesture { isSearchFocused = false }
@@ -427,56 +409,6 @@ private struct TargetManFilledSlotRow: View {
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .animation(.spring(response: 0.32, dampingFraction: 0.78), value: isRevealed)
-    }
-}
-
-// MARK: - Summary
-
-private struct TargetManSummaryCard: View {
-    let total: Int
-    let target: Int
-    let difference: Int
-    let score: Int
-    let category: TargetManStatCategory
-
-    private var differenceLabel: String {
-        if difference == 0 { return "EXACT MATCH" }
-        return difference > 0 ? "+\(difference)" : "\(difference)"
-    }
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Text("RESULT")
-                .font(BKFont.caption(11))
-                .tracking(1)
-                .foregroundStyle(BKTheme.textMuted)
-
-            HStack(spacing: 16) {
-                summaryColumn("COMBINED", value: "\(total)")
-                summaryColumn("TARGET", value: "\(target)")
-                summaryColumn("DIFF", value: differenceLabel, accent: abs(difference) <= 10)
-            }
-
-            Text("\(score) POINTS")
-                .font(BKFont.headline(22))
-                .foregroundStyle(BKTheme.accent)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity)
-        .background(BKTheme.cardElevated.opacity(0.9))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-
-    private func summaryColumn(_ label: String, value: String, accent: Bool = false) -> some View {
-        VStack(spacing: 4) {
-            Text(label)
-                .font(BKFont.caption(9))
-                .foregroundStyle(BKTheme.textMuted)
-            Text(value)
-                .font(BKFont.headline(16))
-                .foregroundStyle(accent ? BKTheme.accent : BKTheme.textPrimary)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
