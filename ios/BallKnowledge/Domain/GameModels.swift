@@ -3,7 +3,7 @@ import SwiftUI
 enum GameModeID: String, CaseIterable {
     case footballBingo = "football_bingo"
     case tenaball = "tenaball"
-    case tikiTakaToe = "tiki_taka_toe"
+    case targetMan = "target_man"
     case guessWho = "guess_who"
     case whereWereYa = "where_were_ya"
     case blindRank = "blind_rank"
@@ -15,7 +15,7 @@ enum GameModeID: String, CaseIterable {
         switch self {
         case .footballBingo: return "FOOTBALL BINGO"
         case .tenaball: return "TENABALL"
-        case .tikiTakaToe: return "TIKI-TAKA-TOE"
+        case .targetMan: return "TARGET MAN"
         case .guessWho: return "GUESS WHO?"
         case .whereWereYa: return "WHERE WERE YA?"
         case .blindRank: return "BLIND RANK"
@@ -29,7 +29,7 @@ enum GameModeID: String, CaseIterable {
         switch self {
         case .footballBingo: return "square.grid.3x3.fill"
         case .tenaball: return "target"
-        case .tikiTakaToe: return "grid"
+        case .targetMan: return "scope"
         case .guessWho: return "person.fill.questionmark"
         case .whereWereYa: return "globe.europe.africa.fill"
         case .blindRank: return "list.number"

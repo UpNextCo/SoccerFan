@@ -19,31 +19,20 @@ final class HomeViewModel {
             if let bundle = dailyBundle {
                 try OfflineCache.saveDailyBundle(bundle, context: context)
             }
-            gameModes = try await APIClient.shared.gameModes()
+            let apiModes = try await APIClient.shared.gameModes()
+            gameModes = GameModeCatalog.resolve(from: apiModes)
         } catch {
             let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
             if let cached = try? OfflineCache.loadDailyBundle(date: String(today), context: context) {
                 dailyBundle = cached
             }
             if gameModes.isEmpty {
-                gameModes = fallbackGameModes()
+                gameModes = GameModeCatalog.resolve(from: nil)
             }
             errorMessage = error.localizedDescription
         }
 
         await OfflineCache.syncPendingCompletions(context: context)
-    }
-
-    private func fallbackGameModes() -> [GameModeMetaDTO] {
-        GameModeID.allCases.enumerated().map { index, mode in
-            GameModeMetaDTO(
-                id: mode.rawValue,
-                title: mode.title,
-                subtitle: "",
-                playerCount: [12400, 8900, 15200, 22100, 7600, 9800, 11300, 6400, 8700][index],
-                isAvailable: mode == .guessWho || mode == .footballBingo
-            )
-        }
     }
 }
 
@@ -53,6 +42,7 @@ struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showGuessWho = false
     @State private var showFootballBingo = false
+    @State private var showTargetMan = false
     @Binding var selectedTab: AppTab
 
     var body: some View {
@@ -77,11 +67,13 @@ struct HomeView: View {
                     modes: viewModel.gameModes,
                     onSelect: { mode in
                         guard mode.isAvailable else { return }
-                        switch mode.id {
+                        switch GameModeCatalog.normalizedModeId(mode.id) {
                         case GameModeID.guessWho.rawValue:
                             showGuessWho = true
                         case GameModeID.footballBingo.rawValue:
                             showFootballBingo = true
+                        case GameModeID.targetMan.rawValue:
+                            showTargetMan = true
                         default:
                             break
                         }
@@ -123,6 +115,11 @@ struct HomeView: View {
         .fullScreenCover(isPresented: $showFootballBingo) {
             FootballBingoView(onComplete: {
                 showFootballBingo = false
+            })
+        }
+        .fullScreenCover(isPresented: $showTargetMan) {
+            TargetManView(onComplete: {
+                showTargetMan = false
             })
         }
     }
@@ -372,10 +369,6 @@ struct GameModeTile: View {
             .frame(height: 110)
             .frame(maxWidth: .infinity, alignment: .leading)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-            }
             .opacity(usesImageArt ? 1 : (mode.isAvailable ? 1 : 0.65))
         }
         .buttonStyle(TilePressStyle())

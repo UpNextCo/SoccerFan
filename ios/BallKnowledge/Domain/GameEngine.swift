@@ -25,6 +25,8 @@ enum GameRegistry {
             return AnyView(GuessWhoView(puzzle: puzzle, date: date, onComplete: onComplete))
         case GameModeID.footballBingo.rawValue:
             return AnyView(FootballBingoView(onComplete: onComplete))
+        case GameModeID.targetMan.rawValue:
+            return AnyView(TargetManView(onComplete: onComplete))
         default:
             return AnyView(ComingSoonGameView(modeId: modeId))
         }

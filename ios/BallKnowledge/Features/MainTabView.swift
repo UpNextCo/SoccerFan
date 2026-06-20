@@ -37,6 +37,7 @@ struct PlayTabView: View {
     @State private var modes: [GameModeMetaDTO] = []
     @State private var showGuessWho = false
     @State private var showFootballBingo = false
+    @State private var showTargetMan = false
     @State private var dailyBundle: DailyBundleDTO?
 
     var body: some View {
@@ -54,7 +55,8 @@ struct PlayTabView: View {
             .background(BKTheme.background)
             .navigationTitle("Play")
             .task {
-                modes = (try? await APIClient.shared.gameModes()) ?? []
+                let apiModes = try? await APIClient.shared.gameModes()
+                modes = GameModeCatalog.resolve(from: apiModes)
                 dailyBundle = try? await APIClient.shared.dailyToday()
             }
             .fullScreenCover(isPresented: $showGuessWho) {
@@ -67,16 +69,23 @@ struct PlayTabView: View {
                     showFootballBingo = false
                 })
             }
+            .fullScreenCover(isPresented: $showTargetMan) {
+                TargetManView(onComplete: {
+                    showTargetMan = false
+                })
+            }
         }
     }
 
     private func openMode(_ mode: GameModeMetaDTO) {
         guard mode.isAvailable else { return }
-        switch mode.id {
+        switch GameModeCatalog.normalizedModeId(mode.id) {
         case GameModeID.guessWho.rawValue:
             showGuessWho = true
         case GameModeID.footballBingo.rawValue:
             showFootballBingo = true
+        case GameModeID.targetMan.rawValue:
+            showTargetMan = true
         default:
             break
         }
