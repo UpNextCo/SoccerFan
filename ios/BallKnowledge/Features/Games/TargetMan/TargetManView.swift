@@ -224,9 +224,12 @@ struct TargetManView: View {
         }
         .fullScreenCover(isPresented: $viewModel.showResult) {
             TargetManResultView(
+                challenge: viewModel.state.challenge,
+                selections: viewModel.state.selections,
+                combinedTotal: viewModel.state.combinedTotal ?? 0,
+                difference: viewModel.state.difference ?? 0,
                 score: viewModel.state.score ?? 0,
                 xpEarned: viewModel.xpEarned,
-                difference: viewModel.state.difference ?? 0,
                 onPlayAgain: {
                     viewModel.showResult = false
                     viewModel.restart()
@@ -601,68 +604,340 @@ private struct TargetManLockButton: View {
 
 // MARK: - Result
 
+private enum TargetManResultStep: Int, CaseIterable {
+    case target = 1
+    case guessed = 2
+    case offBy = 3
+    case points = 4
+    case breakdown = 5
+    case xp = 6
+    case actions = 7
+}
+
 private struct TargetManResultView: View {
+    let challenge: TargetManChallenge
+    let selections: [TargetManSelection]
+    let combinedTotal: Int
+    let difference: Int
     let score: Int
     let xpEarned: Int
-    let difference: Int
     var onPlayAgain: () -> Void
     var onHome: () -> Void
 
-    private var headline: String {
-        if difference == 0 { return "BULLSEYE" }
-        if abs(difference) <= 10 { return "SO CLOSE" }
-        if abs(difference) <= 50 { return "SOLID EFFORT" }
-        return "KEEP SHOOTING"
-    }
+    @State private var step: Int = 0
+    @State private var animatedTotal = 0
+    @State private var animatedScore = 0
+
+    private var distance: Int { abs(difference) }
 
     var body: some View {
         ZStack {
             BKTheme.background.ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                Spacer()
+            VStack(spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        VStack(spacing: 6) {
+                            Text("RESULT")
+                                .font(BKFont.caption(11))
+                                .tracking(1.2)
+                                .foregroundStyle(BKTheme.textMuted)
+                            Text(challenge.title.uppercased())
+                                .font(BKFont.caption(10))
+                                .tracking(0.6)
+                                .foregroundStyle(BKTheme.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.top, 16)
 
-                Ph.chartBar.fill
-                    .color(BKTheme.accent)
-                    .frame(width: 64, height: 64)
+                        VStack(spacing: 10) {
+                            if step >= TargetManResultStep.target.rawValue {
+                                resultRevealRow(
+                                    label: "TARGET \(challenge.category.valueNoun.uppercased())",
+                                    value: formattedStat(challenge.target),
+                                    subtitle: challenge.category.label,
+                                    accent: false
+                                )
+                                .transition(resultTransition)
+                            }
 
-                Text(headline)
-                    .font(BKFont.title(26))
-                    .foregroundStyle(BKTheme.textPrimary)
+                            if step >= TargetManResultStep.guessed.rawValue {
+                                resultRevealRow(
+                                    label: "YOUR \(challenge.category.valueNoun.uppercased())",
+                                    value: formattedStat(animatedTotal),
+                                    subtitle: "Combined from your 5 picks",
+                                    accent: true
+                                )
+                                .transition(resultTransition)
+                            }
 
-                Text("\(score) POINTS")
-                    .font(BKFont.headline(22))
-                    .foregroundStyle(BKTheme.accent)
+                            if step >= TargetManResultStep.offBy.rawValue {
+                                resultRevealRow(
+                                    label: distance == 0 ? "ON TARGET" : "OFF BY",
+                                    value: offByValue,
+                                    subtitle: offBySubtitle,
+                                    accent: distance <= 10,
+                                    warning: distance > 100
+                                )
+                                .transition(resultTransition)
+                            }
 
-                Text("+\(xpEarned) XP")
-                    .font(BKFont.body())
-                    .foregroundStyle(BKTheme.textSecondary)
+                            if step >= TargetManResultStep.points.rawValue {
+                                VStack(spacing: 8) {
+                                    resultRevealRow(
+                                        label: "POINTS",
+                                        value: "\(animatedScore)",
+                                        subtitle: TargetManScoring.tierExplanation(forDifference: difference),
+                                        accent: true,
+                                        large: true
+                                    )
 
-                Spacer()
+                                    Text(scoreBreakdownHint)
+                                        .font(BKFont.caption(10))
+                                        .foregroundStyle(BKTheme.textMuted)
+                                        .multilineTextAlignment(.center)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.horizontal, 8)
+                                }
+                                .transition(resultTransition)
+                            }
+                        }
+                        .padding(16)
+                        .background(BKTheme.cardElevated.opacity(0.9))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal, 20)
 
-                VStack(spacing: 12) {
-                    Button(action: onPlayAgain) {
-                        Text("PLAY AGAIN")
-                            .font(BKFont.headline())
-                            .foregroundStyle(BKTheme.background)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(BKTheme.accent)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                        if step >= TargetManResultStep.breakdown.rawValue {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("PLAYER BREAKDOWN")
+                                    .font(BKFont.caption(11))
+                                    .tracking(0.8)
+                                    .foregroundStyle(BKTheme.textMuted)
+
+                                ForEach(Array(selections.enumerated()), id: \.element.id) { index, selection in
+                                    TargetManResultPlayerRow(
+                                        index: index + 1,
+                                        selection: selection,
+                                        category: challenge.category,
+                                        appearDelay: Double(index) * 0.08
+                                    )
+                                }
+
+                                HStack {
+                                    Text("COMBINED")
+                                        .font(BKFont.caption(10))
+                                        .foregroundStyle(BKTheme.textMuted)
+                                    Spacer()
+                                    Text(formattedStat(combinedTotal))
+                                        .font(BKFont.headline(16))
+                                        .foregroundStyle(BKTheme.accent)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .background(BKTheme.cardElevated)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .padding(.horizontal, 20)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+
+                        if step >= TargetManResultStep.xp.rawValue {
+                            Text("+\(xpEarned) XP")
+                                .font(BKFont.headline(18))
+                                .foregroundStyle(BKTheme.accent)
+                                .transition(.scale.combined(with: .opacity))
+                        }
                     }
-
-                    Button(action: onHome) {
-                        Text("BACK HOME")
-                            .font(BKFont.headline())
-                            .foregroundStyle(BKTheme.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(BKTheme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                    }
+                    .padding(.bottom, 24)
+                    .animation(.spring(response: 0.38, dampingFraction: 0.78), value: step)
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 32)
+
+                if step >= TargetManResultStep.actions.rawValue {
+                    VStack(spacing: 12) {
+                        Button(action: onPlayAgain) {
+                            Text("PLAY AGAIN")
+                                .font(BKFont.headline())
+                                .foregroundStyle(BKTheme.background)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(BKTheme.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        }
+
+                        Button(action: onHome) {
+                            Text("BACK HOME")
+                                .font(BKFont.headline())
+                                .foregroundStyle(BKTheme.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(BKTheme.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 32)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+        }
+        .onAppear {
+            runRevealSequence()
+        }
+    }
+
+    private var offByValue: String {
+        if distance == 0 { return "0" }
+        return "\(distance)"
+    }
+
+    private var offBySubtitle: String {
+        if distance == 0 {
+            return "You nailed the target exactly"
+        }
+        let direction = difference > 0 ? "over" : "under"
+        return "\(distance) \(challenge.category.offLabel) · \(direction) target of \(formattedStat(challenge.target))"
+    }
+
+    private var scoreBreakdownHint: String {
+        "Scoring: exact 1,000 · within 5 → 900 · within 10 → 800 · within 25 → 600 · within 50 → 400 · within 100 → 200 · 100+ away → 50"
+    }
+
+    private var resultTransition: AnyTransition {
+        .asymmetric(
+            insertion: .scale(scale: 0.92).combined(with: .opacity).combined(with: .move(edge: .top)),
+            removal: .opacity
+        )
+    }
+
+    private func formattedStat(_ value: Int) -> String {
+        if challenge.category == .minutesPlayed {
+            return value.formatted(.number.grouping(.automatic))
+        }
+        return "\(value)"
+    }
+
+    private func resultRevealRow(
+        label: String,
+        value: String,
+        subtitle: String,
+        accent: Bool,
+        large: Bool = false,
+        warning: Bool = false
+    ) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(BKFont.caption(10))
+                    .tracking(0.8)
+                    .foregroundStyle(BKTheme.textMuted)
+                Text(subtitle)
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(warning ? BKTheme.wrong.opacity(0.85) : BKTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(value)
+                .font(large ? BKFont.title(34) : BKFont.headline(22))
+                .foregroundStyle(accent ? BKTheme.accent : BKTheme.textPrimary)
+                .contentTransition(.numericText())
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(BKTheme.card.opacity(0.85))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func runRevealSequence() {
+        step = 0
+        animatedTotal = 0
+        animatedScore = 0
+
+        Task {
+            for targetStep in TargetManResultStep.allCases {
+                try? await Task.sleep(for: .seconds(step == 0 ? 0.2 : TargetManTiming.resultStepDelay))
+                step = targetStep.rawValue
+
+                switch targetStep {
+                case .guessed:
+                    HapticManager.light()
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                        animatedTotal = combinedTotal
+                    }
+                case .offBy:
+                    HapticManager.light()
+                case .points:
+                    if score >= 900 {
+                        HapticManager.success()
+                    } else {
+                        HapticManager.light()
+                    }
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
+                        animatedScore = score
+                    }
+                case .breakdown, .xp:
+                    HapticManager.light()
+                case .actions:
+                    break
+                default:
+                    break
+                }
+            }
+        }
+    }
+}
+
+private struct TargetManResultPlayerRow: View {
+    let index: Int
+    let selection: TargetManSelection
+    let category: TargetManStatCategory
+    let appearDelay: Double
+
+    @State private var appeared = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(index)")
+                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                .foregroundStyle(BKTheme.background)
+                .frame(width: 22, height: 22)
+                .background(BKTheme.accent.opacity(0.85))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selection.player.name.uppercased())
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .lineLimit(1)
+                Text(selection.player.club)
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(BKTheme.textMuted)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if let stat = selection.statValue {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(stat)")
+                        .font(BKFont.headline(16))
+                        .foregroundStyle(BKTheme.accent)
+                    Text(category.label)
+                        .font(BKFont.caption(9))
+                        .foregroundStyle(BKTheme.textMuted)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 10)
+        .onAppear {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8).delay(appearDelay)) {
+                appeared = true
             }
         }
     }

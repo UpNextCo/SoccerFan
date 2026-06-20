@@ -49,6 +49,36 @@ enum TargetManStatCategory: String, CaseIterable, Codable {
         case .tacklesWon: return 20...420
         }
     }
+
+    var offLabel: String {
+        switch self {
+        case .minutesPlayed: return "minutes off"
+        case .goals: return "goals off"
+        case .assists: return "assists off"
+        case .yellowCards: return "yellow cards off"
+        case .redCards: return "red cards off"
+        case .appearances: return "appearances off"
+        case .cleanSheets: return "clean sheets off"
+        case .saves: return "saves off"
+        case .foulsCommitted: return "fouls off"
+        case .tacklesWon: return "tackles off"
+        }
+    }
+
+    var valueNoun: String {
+        switch self {
+        case .minutesPlayed: return "minutes"
+        case .goals: return "goals"
+        case .assists: return "assists"
+        case .yellowCards: return "yellow cards"
+        case .redCards: return "red cards"
+        case .appearances: return "appearances"
+        case .cleanSheets: return "clean sheets"
+        case .saves: return "saves"
+        case .foulsCommitted: return "fouls"
+        case .tacklesWon: return "tackles"
+        }
+    }
 }
 
 struct TargetManChallenge: Equatable {
@@ -124,10 +154,39 @@ enum TargetManScoring {
     static func xp(from score: Int) -> Int {
         max(10, score / 5)
     }
+
+    static func tierExplanation(forDifference difference: Int) -> String {
+        let distance = abs(difference)
+        switch distance {
+        case 0:
+            return "Exact match — 1,000 point bullseye"
+        case 1...5:
+            return "Within 5 of target — 900 point tier"
+        case 6...10:
+            return "Within 10 of target — 800 point tier"
+        case 11...25:
+            return "Within 25 of target — 600 point tier"
+        case 26...50:
+            return "Within 50 of target — 400 point tier"
+        case 51...100:
+            return "Within 100 of target — 200 point tier"
+        default:
+            return "More than 100 away — 50 point base score"
+        }
+    }
+
+    static func differenceDescription(target: Int, total: Int, difference: Int) -> String {
+        if difference == 0 {
+            return "Perfect — you hit the target exactly"
+        }
+        let direction = difference > 0 ? "over" : "under"
+        return "\(abs(difference)) \(direction) the target of \(target)"
+    }
 }
 
 enum TargetManTiming {
     static let revealStagger: Double = 0.22
     static let revealSummaryDelay: Double = 0.35
     static let confettiDuration: Double = 2.4
+    static let resultStepDelay: Double = 0.55
 }
