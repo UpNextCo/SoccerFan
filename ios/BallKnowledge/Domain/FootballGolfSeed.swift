@@ -176,4 +176,75 @@ enum FootballGolfSeed {
             ]
         ),
     ]
+
+    static let localCatalog: [FootballGolfLocalEntry] = buildLocalCatalog()
+
+    private static func buildLocalCatalog() -> [FootballGolfLocalEntry] {
+        var entries: [FootballGolfLocalEntry] = []
+
+        func add(
+            _ name: String,
+            type: FootballGolfAnswerType,
+            league: String? = nil,
+            club: String? = nil,
+            country: String? = nil,
+            subtitle: String? = nil,
+            extraTerms: [String] = []
+        ) {
+            let id = "\(type.rawValue)_\(name.lowercased().replacingOccurrences(of: " ", with: "_"))"
+            var terms = [name.lowercased()] + extraTerms.map { $0.lowercased() }
+            for hole in holes where hole.answerType == type {
+                if hole.correctAnswers.contains(name), let aliases = hole.aliases[name] {
+                    terms.append(contentsOf: aliases)
+                }
+            }
+            entries.append(
+                FootballGolfLocalEntry(
+                    id: id,
+                    name: name,
+                    answerType: type,
+                    league: league,
+                    club: club,
+                    country: country,
+                    subtitle: subtitle,
+                    searchTerms: Array(Set(terms))
+                )
+            )
+        }
+
+        for hole in holes {
+            for answer in hole.correctAnswers {
+                let aliases = hole.aliases[answer] ?? []
+                switch hole.answerType {
+                case .team:
+                    add(answer, type: .team, league: "Premier League", club: answer, subtitle: "Club", extraTerms: aliases)
+                case .country:
+                    add(answer, type: .country, country: answer, subtitle: "Country", extraTerms: aliases)
+                case .manager:
+                    add(answer, type: .manager, subtitle: "Manager", extraTerms: aliases)
+                case .stadium:
+                    add(answer, type: .stadium, subtitle: "Stadium", extraTerms: aliases)
+                case .player:
+                    add(answer, type: .player, league: "Premier League", subtitle: "Player", extraTerms: aliases)
+                }
+            }
+        }
+
+        let extraTeams = [
+            ("Arsenal", "Premier League"), ("Tottenham", "Premier League"), ("Newcastle United", "Premier League"),
+            ("Aston Villa", "Premier League"), ("West Ham", "Premier League"), ("Brighton", "Premier League"),
+            ("Real Madrid", "La Liga"), ("Barcelona", "La Liga"), ("Bayern Munich", "Bundesliga"),
+            ("Juventus", "Serie A"), ("AC Milan", "Serie A"), ("Paris Saint Germain", "Ligue 1"),
+        ]
+        for (team, league) in extraTeams where !entries.contains(where: { $0.name == team }) {
+            add(team, type: .team, league: league, club: team, subtitle: league)
+        }
+
+        let extraCountries = ["Uruguay", "England", "Spain", "Italy", "Netherlands", "Portugal", "Croatia"]
+        for country in extraCountries where !entries.contains(where: { $0.name == country }) {
+            add(country, type: .country, country: country, subtitle: "Country")
+        }
+
+        return entries
+    }
 }
