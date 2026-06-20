@@ -8,8 +8,10 @@ final class FootballGolfViewModel {
     var state: FootballGolfGameState
     var showResult = false
     var confettiBurstToken = 0
+    var searchQuery = ""
     var searchResults: [FootballGolfAnswerSuggestion] = []
     var isSearching = false
+    var activeSlotIndex = 0
 
     init(course: FootballGolfCourse = FootballGolfSeed.weeklyCourse()) {
         self.state = FootballGolfGameState(course: course)
@@ -21,6 +23,11 @@ final class FootballGolfViewModel {
 
     var leaderboard: [FootballGolfLeaderboardEntry] {
         FootballGolfSeed.mockLeaderboard(userScore: state.totalScore)
+    }
+
+    var searchPlaceholder: String {
+        guard let hole = state.currentHole else { return "SEARCH" }
+        return "ANSWER \(activeSlotIndex + 1) OF \(hole.par)"
     }
 
     var canSubmitHole: Bool {
@@ -35,23 +42,41 @@ final class FootballGolfViewModel {
         state = FootballGolfGameState(course: FootballGolfSeed.weeklyCourse())
         showResult = false
         confettiBurstToken = 0
+        resetSearch(for: state.currentHole)
+    }
+
+    func resetSearch(for hole: FootballGolfHole?) {
+        searchQuery = ""
+        searchResults = []
+        activeSlotIndex = 0
+        if let hole {
+            if state.draftAnswers.count != hole.par {
+                state.draftAnswers = Array(repeating: "", count: hole.par)
+            }
+        }
+    }
+
+    func activateSlot(_ index: Int) {
+        activeSlotIndex = index
+        searchQuery = ""
         searchResults = []
     }
 
-    func clearSearch() {
-        searchResults = []
+    func clearSlot(_ index: Int) {
+        while state.draftAnswers.count <= index {
+            state.draftAnswers.append("")
+        }
+        state.draftAnswers[index] = ""
+        activateSlot(index)
     }
 
-    func search(for fieldIndex: Int) async {
-        guard state.phase == .playing, let hole = state.currentHole else {
+    func search() async {
+        guard state.phase == .playing, state.currentHole != nil else {
             searchResults = []
             return
         }
 
-        let query = state.draftAnswers.indices.contains(fieldIndex)
-            ? state.draftAnswers[fieldIndex].trimmingCharacters(in: .whitespacesAndNewlines)
-            : ""
-
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard query.count >= 2 else {
             searchResults = []
             return
@@ -60,32 +85,36 @@ final class FootballGolfViewModel {
         isSearching = true
         defer { isSearching = false }
 
+        guard let hole = state.currentHole else { return }
         let results = await FootballGolfAnswerSearch.search(query: query, answerType: hole.answerType)
-        let used = usedAnswerNames(excluding: fieldIndex)
-        searchResults = results.filter { !used.contains(normalizedToken($0.name)) }
+        let used = usedAnswerNames(excluding: activeSlotIndex)
+        searchResults = results
+            .filter { !used.contains(normalizedToken($0.name)) }
+            .prefix(5)
+            .map { $0 }
     }
 
-    func selectSuggestion(
-        _ suggestion: FootballGolfAnswerSuggestion,
-        for fieldIndex: Int,
-        focusNext: (Int?) -> Void
-    ) {
-        while state.draftAnswers.count <= fieldIndex {
+    /// Returns true when search focus should remain open for the next slot.
+    func selectSuggestion(_ suggestion: FootballGolfAnswerSuggestion) -> Bool {
+        let slotIndex = activeSlotIndex
+        while state.draftAnswers.count <= slotIndex {
             state.draftAnswers.append("")
         }
-        state.draftAnswers[fieldIndex] = suggestion.name
+        state.draftAnswers[slotIndex] = suggestion.name
+        searchQuery = ""
         searchResults = []
         HapticManager.light()
 
-        if let next = nextEmptyField(after: fieldIndex) {
-            focusNext(next)
-        } else {
-            focusNext(nil)
+        if let next = nextEmptyField(after: slotIndex) {
+            activeSlotIndex = next
+            return true
         }
+        return false
     }
 
     func submitHole() {
         guard canSubmitHole, let hole = state.currentHole else { return }
+        searchQuery = ""
         searchResults = []
 
         let grading = FootballGolfMatcher.grade(hole: hole, submittedAnswers: state.draftAnswers)
@@ -135,12 +164,9 @@ final class FootballGolfViewModel {
         }
 
         state.currentHoleIndex += 1
-        if let hole = state.currentHole {
-            state.draftAnswers = Array(repeating: "", count: hole.par)
-        }
+        resetSearch(for: state.currentHole)
         state.lastHoleResult = nil
         state.phase = .playing
-        searchResults = []
     }
 
     private func usedAnswerNames(excluding index: Int) -> Set<String> {
@@ -189,10 +215,8 @@ final class FootballGolfViewModel {
 struct FootballGolfView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = FootballGolfViewModel()
-    @FocusState private var focusedField: Int?
+    @FocusState private var isSearchFocused: Bool
     var onComplete: () -> Void
-
-    private var isKeyboardActive: Bool { focusedField != nil }
 
     var body: some View {
         ZStack {
@@ -203,6 +227,7 @@ struct FootballGolfView: View {
                         completedResults: viewModel.state.holeResults,
                         currentHoleIndex: viewModel.state.currentHoleIndex
                     )
+                    .onTapGesture { isSearchFocused = false }
 
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 20) {
@@ -211,10 +236,15 @@ struct FootballGolfView: View {
                             if let hole = viewModel.state.currentHole, viewModel.state.phase == .playing {
                                 FootballGolfHoleCard(
                                     hole: hole,
-                                    answers: $viewModel.state.draftAnswers,
-                                    focusedField: $focusedField,
-                                    onFieldChange: { fieldIndex in
-                                        Task { await viewModel.search(for: fieldIndex) }
+                                    answers: viewModel.state.draftAnswers,
+                                    activeSlotIndex: viewModel.activeSlotIndex,
+                                    onActivateSlot: { index in
+                                        viewModel.activateSlot(index)
+                                        isSearchFocused = true
+                                    },
+                                    onClearSlot: { index in
+                                        viewModel.clearSlot(index)
+                                        isSearchFocused = true
                                     }
                                 )
                             }
@@ -225,44 +255,36 @@ struct FootballGolfView: View {
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        focusedField = nil
-                        viewModel.clearSearch()
-                    }
+                    .onTapGesture { isSearchFocused = false }
 
                     if viewModel.state.phase == .playing {
-                        if isKeyboardActive {
-                            FootballGolfSearchDock(
-                                viewModel: viewModel,
-                                focusedField: focusedField,
-                                onSelect: { suggestion in
-                                    guard let fieldIndex = focusedField else { return }
-                                    viewModel.selectSuggestion(suggestion, for: fieldIndex) { next in
-                                        focusedField = next
-                                    }
-                                }
-                            )
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                        } else {
+                        if viewModel.canSubmitHole {
                             FootballGolfSubmitButton(
-                                enabled: viewModel.canSubmitHole,
+                                enabled: true,
                                 label: "SUBMIT HOLE"
                             ) {
+                                isSearchFocused = false
                                 viewModel.submitHole()
                             }
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        } else {
+                            FootballGolfSearchSection(
+                                viewModel: viewModel,
+                                isSearchFocused: $isSearchFocused
+                            )
                         }
                     }
                 }
-                .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isKeyboardActive)
-                .onChange(of: focusedField) { _, fieldIndex in
-                    if let fieldIndex {
-                        Task { await viewModel.search(for: fieldIndex) }
-                    } else {
-                        viewModel.clearSearch()
+                .background(BKTheme.background)
+                .onAppear {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        isSearchFocused = true
                     }
                 }
-                .background(BKTheme.background)
+                .onChange(of: viewModel.state.currentHoleIndex) { _, _ in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        isSearchFocused = true
+                    }
+                }
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -393,9 +415,10 @@ private struct FootballGolfCourseHeader: View {
 
 private struct FootballGolfHoleCard: View {
     let hole: FootballGolfHole
-    @Binding var answers: [String]
-    var focusedField: FocusState<Int?>.Binding
-    var onFieldChange: (Int) -> Void
+    let answers: [String]
+    let activeSlotIndex: Int
+    var onActivateSlot: (Int) -> Void
+    var onClearSlot: (Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -418,48 +441,12 @@ private struct FootballGolfHoleCard: View {
 
             VStack(spacing: 10) {
                 ForEach(0..<hole.par, id: \.self) { index in
-                    HStack(spacing: 10) {
-                        Text("\(index + 1)")
-                            .font(.system(size: 11, weight: .heavy, design: .rounded))
-                            .foregroundStyle(BKTheme.background)
-                            .frame(width: 22, height: 22)
-                            .background(BKTheme.accent.opacity(0.85))
-                            .clipShape(Circle())
-
-                        TextField("", text: binding(for: index), prompt:
-                            Text("Search answer \(index + 1)")
-                                .foregroundStyle(BKTheme.textMuted)
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        )
-                        .textFieldStyle(.plain)
-                        .foregroundStyle(BKTheme.background)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.words)
-                        .focused(focusedField, equals: index)
-                        .submitLabel(index == hole.par - 1 ? .done : .next)
-                        .onSubmit {
-                            if index < hole.par - 1 {
-                                focusedField.wrappedValue = index + 1
-                            } else {
-                                focusedField.wrappedValue = nil
-                            }
-                        }
-                        .onChange(of: binding(for: index).wrappedValue) { _, _ in
-                            onFieldChange(index)
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(
-                                focusedField.wrappedValue == index
-                                    ? BKTheme.accent.opacity(0.65)
-                                    : BKTheme.accent.opacity(0.2),
-                                lineWidth: 1.5
-                            )
+                    FootballGolfSlotRow(
+                        index: index,
+                        answer: answers.indices.contains(index) ? answers[index] : "",
+                        isActive: activeSlotIndex == index,
+                        onActivate: { onActivateSlot(index) },
+                        onClear: { onClearSlot(index) }
                     )
                 }
             }
@@ -468,57 +455,111 @@ private struct FootballGolfHoleCard: View {
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
+}
 
-    private func binding(for index: Int) -> Binding<String> {
-        Binding(
-            get: {
-                guard answers.indices.contains(index) else { return "" }
-                return answers[index]
-            },
-            set: { newValue in
-                while answers.count <= index {
-                    answers.append("")
+private struct FootballGolfSlotRow: View {
+    let index: Int
+    let answer: String
+    let isActive: Bool
+    var onActivate: () -> Void
+    var onClear: () -> Void
+
+    private var isFilled: Bool {
+        !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onActivate) {
+                HStack(spacing: 10) {
+                    Text("\(index + 1)")
+                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .foregroundStyle(BKTheme.background)
+                        .frame(width: 22, height: 22)
+                        .background(isActive ? BKTheme.accent : BKTheme.accent.opacity(0.55))
+                        .clipShape(Circle())
+
+                    Text(isFilled ? answer.uppercased() : "SELECT ANSWER \(index + 1)")
+                        .font(.system(size: isFilled ? 13 : 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(isFilled ? BKTheme.textPrimary : BKTheme.textMuted)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    if isActive && !isFilled {
+                        Text("ACTIVE")
+                            .font(BKFont.caption(9))
+                            .foregroundStyle(BKTheme.accent)
+                    }
                 }
-                answers[index] = newValue
             }
+            .buttonStyle(.plain)
+
+            if isFilled {
+                Button(action: onClear) {
+                    Ph.x.bold
+                        .color(BKTheme.textMuted)
+                        .frame(width: 10, height: 10)
+                        .padding(8)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(isActive ? BKTheme.cardElevated : BKTheme.card.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(isActive ? BKTheme.accent.opacity(0.45) : Color.clear, lineWidth: 1)
         )
     }
 }
 
-// MARK: - Search Dock
+// MARK: - Search (Guess Who layout)
 
-private struct FootballGolfSearchDock: View {
+private struct FootballGolfSearchSection: View {
     @Bindable var viewModel: FootballGolfViewModel
-    let focusedField: Int?
-    var onSelect: (FootballGolfAnswerSuggestion) -> Void
+    var isSearchFocused: FocusState<Bool>.Binding
 
     var body: some View {
         VStack(spacing: 0) {
-            if viewModel.isSearching {
-                HStack {
-                    ProgressView().tint(BKTheme.accent)
-                    Text("SEARCHING...")
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textMuted)
-                    Spacer()
+            VStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    TextField("", text: $viewModel.searchQuery, prompt:
+                        Text(viewModel.searchPlaceholder)
+                            .foregroundStyle(BKTheme.textMuted)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    )
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(BKTheme.background)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.words)
+                    .focused(isSearchFocused)
+                    .submitLabel(.search)
+                    .onChange(of: viewModel.searchQuery) { _, _ in
+                        Task { await viewModel.search() }
+                    }
+
+                    if viewModel.isSearching {
+                        ProgressView()
+                            .tint(BKTheme.accent)
+                    }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-            }
+                .padding(.vertical, 14)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5)
+                )
 
-            if viewModel.searchResults.isEmpty && !viewModel.isSearching {
-                Text("TYPE TO SEARCH PLAYERS, CLUBS & MORE")
-                    .font(BKFont.caption(10))
-                    .tracking(0.5)
-                    .foregroundStyle(BKTheme.textMuted)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            } else {
-                ScrollView(showsIndicators: false) {
+                if !viewModel.searchResults.isEmpty {
                     VStack(spacing: 0) {
                         ForEach(viewModel.searchResults) { suggestion in
                             Button {
-                                onSelect(suggestion)
+                                let keepFocus = viewModel.selectSuggestion(suggestion)
+                                isSearchFocused.wrappedValue = keepFocus
                             } label: {
                                 HStack(spacing: 12) {
                                     FootballGolfSuggestionIcon(suggestion: suggestion)
@@ -527,12 +568,10 @@ private struct FootballGolfSearchDock: View {
                                         Text(suggestion.name.uppercased())
                                             .font(.system(size: 13, weight: .bold, design: .rounded))
                                             .foregroundStyle(BKTheme.textPrimary)
-                                            .lineLimit(1)
                                         if let subtitle = suggestion.subtitle {
                                             Text(subtitle)
                                                 .font(BKFont.caption(11))
                                                 .foregroundStyle(BKTheme.textMuted)
-                                                .lineLimit(1)
                                         }
                                     }
 
@@ -551,15 +590,13 @@ private struct FootballGolfSearchDock: View {
                             }
                         }
                     }
+                    .background(BKTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .frame(maxHeight: 220)
-                .background(BKTheme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .padding(.horizontal, 16)
             }
+            .padding(16)
+            .background(BKTheme.background)
         }
-        .padding(.bottom, 8)
-        .background(BKTheme.background)
     }
 }
 
