@@ -11,7 +11,7 @@ const GAME_MODES = [
   { id: 'target_man', title: 'TARGET MAN', subtitle: 'Hit the stat target', playerCount: 15200, isAvailable: true },
   { id: 'guess_who', title: 'GUESS WHO?', subtitle: 'Wordle-style player guess', playerCount: 22100, isAvailable: true },
   { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9-hole trivia par', playerCount: 7600, isAvailable: true },
-  { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: false },
+  { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
   { id: 'guess_the_goal', title: 'GUESS THE GOAL', subtitle: 'Spot the scorer', playerCount: 11300, isAvailable: false },
   { id: 'emoji_players', title: 'EMOJI PLAYERS', subtitle: 'Decode the emoji', playerCount: 6400, isAvailable: false },
   { id: 'career_path', title: 'CAREER PATH', subtitle: 'Follow the clubs', playerCount: 8700, isAvailable: false },

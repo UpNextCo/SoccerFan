@@ -39,6 +39,7 @@ struct PlayTabView: View {
     @State private var showFootballBingo = false
     @State private var showTargetMan = false
     @State private var showFootballGolf = false
+    @State private var showBlindRank = false
     @State private var dailyBundle: DailyBundleDTO?
 
     var body: some View {
@@ -80,6 +81,11 @@ struct PlayTabView: View {
                     showFootballGolf = false
                 })
             }
+            .fullScreenCover(isPresented: $showBlindRank) {
+                BlindRankView(onComplete: {
+                    showBlindRank = false
+                })
+            }
         }
     }
 
@@ -94,6 +100,8 @@ struct PlayTabView: View {
             showTargetMan = true
         case GameModeID.footballGolf.rawValue:
             showFootballGolf = true
+        case GameModeID.blindRank.rawValue:
+            showBlindRank = true
         default:
             break
         }
