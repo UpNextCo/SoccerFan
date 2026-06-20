@@ -255,6 +255,13 @@ struct FootballGolfView: View {
                     }
                 }
                 .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isKeyboardActive)
+                .onChange(of: focusedField) { _, fieldIndex in
+                    if let fieldIndex {
+                        Task { await viewModel.search(for: fieldIndex) }
+                    } else {
+                        viewModel.clearSearch()
+                    }
+                }
                 .background(BKTheme.background)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
