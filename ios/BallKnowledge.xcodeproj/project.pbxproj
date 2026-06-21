@@ -7,7 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		040D6FB3EB3E1986507CCB23 /* FootballTowerCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E7509E1EA4A2B6D31BBC41 /* FootballTowerCatalog.swift */; };
+		0B5B987AADC8C8AA3EA9A987 /* FootballTowerSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A9E509577D15428C9E65AC /* FootballTowerSeed.swift */; };
 		103F601D22506BC51A66051D /* BlindRankSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87C971975D4210521A905564 /* BlindRankSeed.swift */; };
+		11D7E72212B439B712EE3A58 /* FootballTowerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1D794DAC4294F9E4AD39D4 /* FootballTowerModels.swift */; };
 		122B4C6CD985D0A176790058 /* GuessWhoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00FA2FB8FBFC91B16A7AB21C /* GuessWhoView.swift */; };
 		17A34A02185961789C1749C0 /* FootballGolfSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4807D15DBF77303C84FFD495 /* FootballGolfSeed.swift */; };
 		1CBF05E52D092BB0FC7666DD /* TeamBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DBF3219468891E23C91877 /* TeamBadge.swift */; };
@@ -19,6 +22,7 @@
 		36DE29FAF75E3A3B151A4F11 /* OneMoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC1277434BC7792C1AA4BC5 /* OneMoreView.swift */; };
 		374EADD57FF95C3F8EDAADB5 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0216980CDB8628416CC8FED2 /* KeychainHelper.swift */; };
 		3A5E3F293E64A3CD52F3267A /* OneMoreModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87D4683B0C6574234A9A73DF /* OneMoreModels.swift */; };
+		460647B5081D7FA601FE9917 /* FootballTowerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19BE49785C49F03DC8047026 /* FootballTowerView.swift */; };
 		563F83312F83D02738FBF404 /* FootballBingoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BE7B82FFB93547E2C0D73E /* FootballBingoView.swift */; };
 		5BEE19F85576BD840CBA34BD /* GameModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8014DDCB14BE89801F5278AA /* GameModels.swift */; };
 		5EC83A87135A943A90837588 /* DraftMasterModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9497FB431AA5C1D5BBB301C /* DraftMasterModels.swift */; };
@@ -63,6 +67,7 @@
 		037F594EC5D10F8641A796B6 /* FootballBingoModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballBingoModels.swift; sourceTree = "<group>"; };
 		063C23B3175425CDD31C5B43 /* FootballGolfAnswerSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballGolfAnswerSearch.swift; sourceTree = "<group>"; };
 		0B6E7E17C6B4D8DA0E8EF2DF /* FootballGolfMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballGolfMatcher.swift; sourceTree = "<group>"; };
+		19BE49785C49F03DC8047026 /* FootballTowerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballTowerView.swift; sourceTree = "<group>"; };
 		1D508783416F037C0979FF52 /* TargetManModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetManModels.swift; sourceTree = "<group>"; };
 		1F7AFAC6E26C393F2F557705 /* OfflineCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCache.swift; sourceTree = "<group>"; };
 		2788D368A9154DB9D526DD10 /* FootballGolfView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballGolfView.swift; sourceTree = "<group>"; };
@@ -90,12 +95,15 @@
 		8AFBA05CCBDE605C50036267 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
 		932DE25228164846B41BF22F /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9475EA8DDA597CE44BCD022E /* BallKnowledge.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BallKnowledge.entitlements; sourceTree = "<group>"; };
+		98E7509E1EA4A2B6D31BBC41 /* FootballTowerCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballTowerCatalog.swift; sourceTree = "<group>"; };
 		A36DF66C77EDAE47F240AEB4 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		AB1D794DAC4294F9E4AD39D4 /* FootballTowerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballTowerModels.swift; sourceTree = "<group>"; };
 		AB7B4131BDF1A75A567731AA /* FootballBingoMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballBingoMatcher.swift; sourceTree = "<group>"; };
 		ACE83C9658DC7D466269FFDB /* DraftMasterSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftMasterSeed.swift; sourceTree = "<group>"; };
 		B19529DDD217D25A59212833 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		B36B0A9729829ABDE08B911C /* BallKnowledge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BallKnowledge.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B36B0A9729829ABDE08B911C /* BallKnowledge.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BallKnowledge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5237449777A4A7CE0FE9EDE /* OnboardingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViews.swift; sourceTree = "<group>"; };
+		B6A9E509577D15428C9E65AC /* FootballTowerSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballTowerSeed.swift; sourceTree = "<group>"; };
 		B9497FB431AA5C1D5BBB301C /* DraftMasterModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftMasterModels.swift; sourceTree = "<group>"; };
 		C0CE8481DD02104E19C347D4 /* FootballConfettiView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballConfettiView.swift; sourceTree = "<group>"; };
 		DE9A8C982B1DE1F9F4938104 /* LeagueBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeagueBadge.swift; sourceTree = "<group>"; };
@@ -125,6 +133,7 @@
 				E4129D0FF790D09F713B2014 /* DraftMaster */,
 				8B0F3EA650B4B306DA2C5004 /* FootballBingo */,
 				FECFF22A9C377B341202B169 /* FootballGolf */,
+				60FE72FDA7CB548FDA73A4E6 /* FootballTower */,
 				77CDD48544B639D55774D533 /* GuessWho */,
 				5A31844CDE5F944A1D13D7C9 /* OneMore */,
 				8B3FBBBC289051A5FC63EFF8 /* TargetMan */,
@@ -182,6 +191,14 @@
 			path = Onboarding;
 			sourceTree = "<group>";
 		};
+		60FE72FDA7CB548FDA73A4E6 /* FootballTower */ = {
+			isa = PBXGroup;
+			children = (
+				19BE49785C49F03DC8047026 /* FootballTowerView.swift */,
+			);
+			path = FootballTower;
+			sourceTree = "<group>";
+		};
 		640B05B6A43051CF7B08ACF7 /* Auth */ = {
 			isa = PBXGroup;
 			children = (
@@ -213,6 +230,9 @@
 				0B6E7E17C6B4D8DA0E8EF2DF /* FootballGolfMatcher.swift */,
 				7F6C9BA15F9200256CCE247F /* FootballGolfModels.swift */,
 				4807D15DBF77303C84FFD495 /* FootballGolfSeed.swift */,
+				98E7509E1EA4A2B6D31BBC41 /* FootballTowerCatalog.swift */,
+				AB1D794DAC4294F9E4AD39D4 /* FootballTowerModels.swift */,
+				B6A9E509577D15428C9E65AC /* FootballTowerSeed.swift */,
 				28C709EF976C20D67984569C /* GameEngine.swift */,
 				ECF087E8BC4A2736630E7F1C /* GameModeCatalog.swift */,
 				8014DDCB14BE89801F5278AA /* GameModels.swift */,
@@ -342,6 +362,11 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					9608E09CD83F57BFB3D46AE3 = {
+						DevelopmentTeam = "";
+					};
+				};
 			};
 			buildConfigurationList = 476ECE76F82A3F53BBD7EB91 /* Build configuration list for PBXProject "BallKnowledge" */;
 			developmentRegion = en;
@@ -403,6 +428,10 @@
 				6168F1E7E609660A0F9C2D57 /* FootballGolfModels.swift in Sources */,
 				17A34A02185961789C1749C0 /* FootballGolfSeed.swift in Sources */,
 				611DE24E9AB1CE22F13BACEA /* FootballGolfView.swift in Sources */,
+				040D6FB3EB3E1986507CCB23 /* FootballTowerCatalog.swift in Sources */,
+				11D7E72212B439B712EE3A58 /* FootballTowerModels.swift in Sources */,
+				0B5B987AADC8C8AA3EA9A987 /* FootballTowerSeed.swift in Sources */,
+				460647B5081D7FA601FE9917 /* FootballTowerView.swift in Sources */,
 				C72E8932256B8B2315ADDBA4 /* GameEngine.swift in Sources */,
 				988F464045F91747F79679EB /* GameModeCatalog.swift in Sources */,
 				A49D0D55AE15A06620BDC53F /* GameModeTileArt.swift in Sources */,
@@ -503,7 +532,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = BallKnowledge/BallKnowledge.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 68TSW4TZH4;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Ball Knowledge";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -583,7 +612,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = BallKnowledge/BallKnowledge.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 68TSW4TZH4;
+				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Ball Knowledge";
 				LD_RUNPATH_SEARCH_PATHS = (

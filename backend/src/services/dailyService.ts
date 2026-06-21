@@ -14,7 +14,7 @@ const GAME_MODES = [
   { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
   { id: 'draft_master', title: 'DRAFT MASTER', subtitle: 'Build the best XI', playerCount: 11300, isAvailable: true },
   { id: 'one_more', title: 'ONE MORE', subtitle: 'Risk it for points', playerCount: 6400, isAvailable: true },
-  { id: 'career_path', title: 'CAREER PATH', subtitle: 'Follow the clubs', playerCount: 8700, isAvailable: false },
+  { id: 'football_tower', title: 'FOOTBALL TOWER', subtitle: 'Climb the tower', playerCount: 8700, isAvailable: true },
 ];
 
 function todayUTC(): string {

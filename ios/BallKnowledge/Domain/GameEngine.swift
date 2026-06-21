@@ -35,6 +35,8 @@ enum GameRegistry {
             return AnyView(OneMoreView(onComplete: onComplete))
         case GameModeID.draftMaster.rawValue:
             return AnyView(DraftMasterView(onComplete: onComplete))
+        case GameModeID.footballTower.rawValue:
+            return AnyView(FootballTowerView(onComplete: onComplete))
         default:
             return AnyView(ComingSoonGameView(modeId: modeId))
         }

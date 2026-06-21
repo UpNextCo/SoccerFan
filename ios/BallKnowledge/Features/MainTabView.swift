@@ -42,6 +42,7 @@ struct PlayTabView: View {
     @State private var showBlindRank = false
     @State private var showOneMore = false
     @State private var showDraftMaster = false
+    @State private var showFootballTower = false
     @State private var dailyBundle: DailyBundleDTO?
 
     var body: some View {
@@ -98,6 +99,11 @@ struct PlayTabView: View {
                     showDraftMaster = false
                 })
             }
+            .fullScreenCover(isPresented: $showFootballTower) {
+                FootballTowerView(onComplete: {
+                    showFootballTower = false
+                })
+            }
         }
     }
 
@@ -118,6 +124,8 @@ struct PlayTabView: View {
             showOneMore = true
         case GameModeID.draftMaster.rawValue:
             showDraftMaster = true
+        case GameModeID.footballTower.rawValue:
+            showFootballTower = true
         default:
             break
         }

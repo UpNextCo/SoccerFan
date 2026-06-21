@@ -9,7 +9,7 @@ enum GameModeID: String, CaseIterable {
     case blindRank = "blind_rank"
     case draftMaster = "draft_master"
     case oneMore = "one_more"
-    case careerPath = "career_path"
+    case footballTower = "football_tower"
 
     var title: String {
         switch self {
@@ -21,7 +21,7 @@ enum GameModeID: String, CaseIterable {
         case .blindRank: return "BLIND RANK"
         case .draftMaster: return "DRAFT MASTER"
         case .oneMore: return "ONE MORE"
-        case .careerPath: return "CAREER PATH"
+        case .footballTower: return "FOOTBALL TOWER"
         }
     }
 
@@ -35,7 +35,7 @@ enum GameModeID: String, CaseIterable {
         case .blindRank: return "list.number"
         case .draftMaster: return "person.3.fill"
         case .oneMore: return "flame.fill"
-        case .careerPath: return "point.topleft.down.curvedto.point.bottomright.up"
+        case .footballTower: return "building.2.fill"
         }
     }
 }
