@@ -7,7 +7,7 @@ enum GameModeID: String, CaseIterable {
     case guessWho = "guess_who"
     case footballGolf = "football_golf"
     case blindRank = "blind_rank"
-    case guessTheGoal = "guess_the_goal"
+    case draftMaster = "draft_master"
     case oneMore = "one_more"
     case careerPath = "career_path"
 
@@ -19,7 +19,7 @@ enum GameModeID: String, CaseIterable {
         case .guessWho: return "GUESS WHO?"
         case .footballGolf: return "FOOTBALL GOLF"
         case .blindRank: return "BLIND RANK"
-        case .guessTheGoal: return "GUESS THE GOAL"
+        case .draftMaster: return "DRAFT MASTER"
         case .oneMore: return "ONE MORE"
         case .careerPath: return "CAREER PATH"
         }
@@ -33,7 +33,7 @@ enum GameModeID: String, CaseIterable {
         case .guessWho: return "person.fill.questionmark"
         case .footballGolf: return "flag.fill"
         case .blindRank: return "list.number"
-        case .guessTheGoal: return "soccerball"
+        case .draftMaster: return "person.3.fill"
         case .oneMore: return "flame.fill"
         case .careerPath: return "point.topleft.down.curvedto.point.bottomright.up"
         }

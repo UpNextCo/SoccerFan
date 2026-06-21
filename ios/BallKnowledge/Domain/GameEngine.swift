@@ -33,6 +33,8 @@ enum GameRegistry {
             return AnyView(BlindRankView(onComplete: onComplete))
         case GameModeID.oneMore.rawValue:
             return AnyView(OneMoreView(onComplete: onComplete))
+        case GameModeID.draftMaster.rawValue:
+            return AnyView(DraftMasterView(onComplete: onComplete))
         default:
             return AnyView(ComingSoonGameView(modeId: modeId))
         }

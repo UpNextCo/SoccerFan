@@ -13,6 +13,7 @@
 		1CBF05E52D092BB0FC7666DD /* TeamBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DBF3219468891E23C91877 /* TeamBadge.swift */; };
 		1DE6B38A67939B16E33B77F5 /* PhIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 551C9C4FE32FA9F6DE64D92B /* PhIcons.xcassets */; };
 		25BC41EC32677FC16436E271 /* GameTiles in Resources */ = {isa = PBXBuildFile; fileRef = 3F9338EE6BEC06EBB52F7C4B /* GameTiles */; };
+		2C2E4FD3C28ADA654EB3A632 /* DraftMasterSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACE83C9658DC7D466269FFDB /* DraftMasterSeed.swift */; };
 		300BDF850D4652DB4197EAB4 /* FootballGolfAnswerSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 063C23B3175425CDD31C5B43 /* FootballGolfAnswerSearch.swift */; };
 		32B093D09D8FBEAC3648B7DB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B19529DDD217D25A59212833 /* Assets.xcassets */; };
 		36DE29FAF75E3A3B151A4F11 /* OneMoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC1277434BC7792C1AA4BC5 /* OneMoreView.swift */; };
@@ -20,6 +21,7 @@
 		3A5E3F293E64A3CD52F3267A /* OneMoreModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87D4683B0C6574234A9A73DF /* OneMoreModels.swift */; };
 		563F83312F83D02738FBF404 /* FootballBingoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BE7B82FFB93547E2C0D73E /* FootballBingoView.swift */; };
 		5BEE19F85576BD840CBA34BD /* GameModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8014DDCB14BE89801F5278AA /* GameModels.swift */; };
+		5EC83A87135A943A90837588 /* DraftMasterModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9497FB431AA5C1D5BBB301C /* DraftMasterModels.swift */; };
 		611DE24E9AB1CE22F13BACEA /* FootballGolfView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2788D368A9154DB9D526DD10 /* FootballGolfView.swift */; };
 		6168F1E7E609660A0F9C2D57 /* FootballGolfModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F6C9BA15F9200256CCE247F /* FootballGolfModels.swift */; };
 		63C4BE80B9CBB9248EC82A11 /* BKIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D2E4A41FA0B0FA61A65D62 /* BKIcon.swift */; };
@@ -43,6 +45,7 @@
 		C4F799AF15D7E8C7423B5C7D /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = E62FFD919FC09C94AE3A9876 /* Config.swift */; };
 		C600591ACCD2B5B264289204 /* BKPh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33FD3A905CCD948AC33FB070 /* BKPh.swift */; };
 		C72E8932256B8B2315ADDBA4 /* GameEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28C709EF976C20D67984569C /* GameEngine.swift */; };
+		C927815C9E77FFA83343967F /* DraftMasterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1F2FB4327F0A5F5EDB1112 /* DraftMasterView.swift */; };
 		C9E7369241E3ADDCFCDBCE5E /* OfflineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F7AFAC6E26C393F2F557705 /* OfflineCache.swift */; };
 		D75B501F091CEFAC1224915A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 932DE25228164846B41BF22F /* HomeView.swift */; };
 		D8CDBBA6E930D2F41717C04E /* TargetManModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D508783416F037C0979FF52 /* TargetManModels.swift */; };
@@ -76,6 +79,7 @@
 		5D542F3A1E78B1A8DE581802 /* GameModeTileArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModeTileArt.swift; sourceTree = "<group>"; };
 		68FA75A0F34C332CA2C9D571 /* TargetManView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetManView.swift; sourceTree = "<group>"; };
 		6B42BB208E7E01B1BD110962 /* FootballBingoSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballBingoSeed.swift; sourceTree = "<group>"; };
+		6C1F2FB4327F0A5F5EDB1112 /* DraftMasterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftMasterView.swift; sourceTree = "<group>"; };
 		74DBF3219468891E23C91877 /* TeamBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamBadge.swift; sourceTree = "<group>"; };
 		7CD6B099FC77A179B81960DA /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		7F6C9BA15F9200256CCE247F /* FootballGolfModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballGolfModels.swift; sourceTree = "<group>"; };
@@ -88,9 +92,11 @@
 		9475EA8DDA597CE44BCD022E /* BallKnowledge.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BallKnowledge.entitlements; sourceTree = "<group>"; };
 		A36DF66C77EDAE47F240AEB4 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		AB7B4131BDF1A75A567731AA /* FootballBingoMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballBingoMatcher.swift; sourceTree = "<group>"; };
+		ACE83C9658DC7D466269FFDB /* DraftMasterSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftMasterSeed.swift; sourceTree = "<group>"; };
 		B19529DDD217D25A59212833 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B36B0A9729829ABDE08B911C /* BallKnowledge.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BallKnowledge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5237449777A4A7CE0FE9EDE /* OnboardingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViews.swift; sourceTree = "<group>"; };
+		B9497FB431AA5C1D5BBB301C /* DraftMasterModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftMasterModels.swift; sourceTree = "<group>"; };
 		C0CE8481DD02104E19C347D4 /* FootballConfettiView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballConfettiView.swift; sourceTree = "<group>"; };
 		DE9A8C982B1DE1F9F4938104 /* LeagueBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeagueBadge.swift; sourceTree = "<group>"; };
 		E36181E830587EC21B5EC0E7 /* OneMoreSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneMoreSeed.swift; sourceTree = "<group>"; };
@@ -116,6 +122,7 @@
 			isa = PBXGroup;
 			children = (
 				EFFB69CC923F7C592BB79AD8 /* BlindRank */,
+				E4129D0FF790D09F713B2014 /* DraftMaster */,
 				8B0F3EA650B4B306DA2C5004 /* FootballBingo */,
 				FECFF22A9C377B341202B169 /* FootballGolf */,
 				77CDD48544B639D55774D533 /* GuessWho */,
@@ -197,6 +204,8 @@
 			children = (
 				367D84D89C2E593BFB8289AF /* BlindRankModels.swift */,
 				87C971975D4210521A905564 /* BlindRankSeed.swift */,
+				B9497FB431AA5C1D5BBB301C /* DraftMasterModels.swift */,
+				ACE83C9658DC7D466269FFDB /* DraftMasterSeed.swift */,
 				AB7B4131BDF1A75A567731AA /* FootballBingoMatcher.swift */,
 				037F594EC5D10F8641A796B6 /* FootballBingoModels.swift */,
 				6B42BB208E7E01B1BD110962 /* FootballBingoSeed.swift */,
@@ -278,6 +287,14 @@
 				932DE25228164846B41BF22F /* HomeView.swift */,
 			);
 			path = Home;
+			sourceTree = "<group>";
+		};
+		E4129D0FF790D09F713B2014 /* DraftMaster */ = {
+			isa = PBXGroup;
+			children = (
+				6C1F2FB4327F0A5F5EDB1112 /* DraftMasterView.swift */,
+			);
+			path = DraftMaster;
 			sourceTree = "<group>";
 		};
 		EFFB69CC923F7C592BB79AD8 /* BlindRank */ = {
@@ -378,6 +395,9 @@
 				103F601D22506BC51A66051D /* BlindRankSeed.swift in Sources */,
 				EE6672A880D715EB249E491C /* BlindRankView.swift in Sources */,
 				C4F799AF15D7E8C7423B5C7D /* Config.swift in Sources */,
+				5EC83A87135A943A90837588 /* DraftMasterModels.swift in Sources */,
+				2C2E4FD3C28ADA654EB3A632 /* DraftMasterSeed.swift in Sources */,
+				C927815C9E77FFA83343967F /* DraftMasterView.swift in Sources */,
 				BB89EF3C12F7ECD4664288E9 /* FootballBingoMatcher.swift in Sources */,
 				A0DE9140F90AC3DC171E6D59 /* FootballBingoModels.swift in Sources */,
 				FEEF00D3BDD7648A935B071D /* FootballBingoSeed.swift in Sources */,

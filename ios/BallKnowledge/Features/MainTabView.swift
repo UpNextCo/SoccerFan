@@ -41,6 +41,7 @@ struct PlayTabView: View {
     @State private var showFootballGolf = false
     @State private var showBlindRank = false
     @State private var showOneMore = false
+    @State private var showDraftMaster = false
     @State private var dailyBundle: DailyBundleDTO?
 
     var body: some View {
@@ -92,6 +93,11 @@ struct PlayTabView: View {
                     showOneMore = false
                 })
             }
+            .fullScreenCover(isPresented: $showDraftMaster) {
+                DraftMasterView(onComplete: {
+                    showDraftMaster = false
+                })
+            }
         }
     }
 
@@ -110,6 +116,8 @@ struct PlayTabView: View {
             showBlindRank = true
         case GameModeID.oneMore.rawValue:
             showOneMore = true
+        case GameModeID.draftMaster.rawValue:
+            showDraftMaster = true
         default:
             break
         }
