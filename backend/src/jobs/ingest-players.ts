@@ -28,6 +28,17 @@ type ApiPlayerEntry = {
   }>;
 };
 
+type SquadPlayer = {
+  id: number;
+  name: string;
+  age: number | null;
+  number: number | null;
+  position: string | null;
+  nationality: string | null;
+};
+
+const profileCache = new Map<number, { nationality: string | null; age: number | null }>();
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -95,7 +106,35 @@ function pickStatistics(entry: ApiPlayerEntry, teamId: number, leagueId: number)
   );
 }
 
-async function fetchTeamPlayers(teamId: number, season: number): Promise<ApiPlayerEntry[]> {
+async function fetchPlayerProfile(
+  playerId: number,
+  seasonsToTry: number[]
+): Promise<{ nationality: string | null; age: number | null }> {
+  const cached = profileCache.get(playerId);
+  if (cached) return cached;
+
+  for (const season of seasonsToTry) {
+    const data = (await fetchJson(
+      `https://v3.football.api-sports.io/players?id=${playerId}&season=${season}`
+    )) as { response: ApiPlayerEntry[] };
+
+    const entry = data.response?.[0];
+    if (entry?.player) {
+      const profile = {
+        nationality: entry.player.nationality,
+        age: entry.player.age,
+      };
+      profileCache.set(playerId, profile);
+      return profile;
+    }
+  }
+
+  const empty = { nationality: null, age: null };
+  profileCache.set(playerId, empty);
+  return empty;
+}
+
+async function fetchTeamPlayersFromStats(teamId: number, season: number): Promise<ApiPlayerEntry[]> {
   const all: ApiPlayerEntry[] = [];
   let page = 1;
   let totalPages = 1;
@@ -111,6 +150,66 @@ async function fetchTeamPlayers(teamId: number, season: number): Promise<ApiPlay
   }
 
   return all;
+}
+
+async function fetchTeamPlayersFromSquads(
+  teamId: number,
+  seasonsToTry: number[]
+): Promise<SquadPlayer[]> {
+  const data = (await fetchJson(
+    `https://v3.football.api-sports.io/players/squads?team=${teamId}`
+  )) as { response: Array<{ players: SquadPlayer[] }> };
+
+  const squad = data.response?.[0]?.players ?? [];
+  const enriched: SquadPlayer[] = [];
+
+  for (const player of squad) {
+    if (normalizeNationality(player.nationality) !== 'Unknown') {
+      enriched.push(player);
+      continue;
+    }
+
+    const profile = await fetchPlayerProfile(player.id, seasonsToTry);
+    enriched.push({
+      ...player,
+      nationality: profile.nationality ?? player.nationality,
+      age: profile.age ?? player.age,
+    });
+  }
+
+  return enriched;
+}
+
+async function fetchTeamRoster(
+  teamId: number,
+  season: number
+): Promise<{ entries: ApiPlayerEntry[]; source: 'stats' | 'squads' }> {
+  const fromStats = await fetchTeamPlayersFromStats(teamId, season);
+  if (fromStats.length > 0) {
+    return { entries: fromStats, source: 'stats' };
+  }
+
+  const squad = await fetchTeamPlayersFromSquads(teamId, [season, season - 1]);
+  const entries: ApiPlayerEntry[] = squad.map((p) => ({
+    player: {
+      id: p.id,
+      name: p.name,
+      age: p.age,
+      nationality: p.nationality,
+    },
+    statistics: [
+      {
+        league: { id: 0, name: '' },
+        team: { id: teamId, name: '' },
+        games: {
+          number: p.number,
+          position: p.position,
+        },
+      },
+    ],
+  }));
+
+  return { entries, source: 'squads' };
 }
 
 async function upsertPlayer(values: {
@@ -155,15 +254,29 @@ async function upsertPlayer(values: {
   });
 }
 
-async function ingestLeague(leagueId: number, leagueName: string, season: number) {
+async function ingestLeague(leagueId: number, leagueName: string, season: number): Promise<number> {
   const teamsData = (await fetchJson(
     `https://v3.football.api-sports.io/teams?league=${leagueId}&season=${season}`
   )) as { response: Array<{ team: { id: number; name: string } }> };
 
-  for (const { team } of teamsData.response ?? []) {
-    const roster = await fetchTeamPlayers(team.id, season);
+  const teams = teamsData.response ?? [];
+  console.log(`  ${teams.length} teams found`);
 
-    for (const entry of roster) {
+  if (teams.length === 0) {
+    console.warn(`  ⚠ No teams for ${leagueName} in season ${season} — API may not have this season yet`);
+    return 0;
+  }
+
+  let playerCount = 0;
+  let squadFallbackTeams = 0;
+
+  for (const { team } of teams) {
+    const { entries, source } = await fetchTeamRoster(team.id, season);
+    if (source === 'squads') {
+      squadFallbackTeams += 1;
+    }
+
+    for (const entry of entries) {
       const stats = pickStatistics(entry, team.id, leagueId);
       const nationality = normalizeNationality(entry.player.nationality);
 
@@ -185,8 +298,31 @@ async function ingestLeague(leagueId: number, leagueName: string, season: number
       });
 
       console.log(`  + ${entry.player.name} (${team.name})`);
+      playerCount += 1;
     }
   }
+
+  if (squadFallbackTeams > 0) {
+    console.log(`  ℹ ${squadFallbackTeams} teams used squad fallback (season ${season} stats not available yet)`);
+  }
+
+  console.log(`  → ${playerCount} players ingested for ${leagueName}`);
+  return playerCount;
+}
+
+async function runIngest(season: number): Promise<number> {
+  profileCache.clear();
+  let total = 0;
+  for (const league of INGEST_LEAGUES) {
+    console.log(`Ingesting ${league.name}...`);
+    total += await ingestLeague(league.id, league.name, season);
+  }
+  return total;
+}
+
+async function countPlayers(): Promise<number> {
+  const rows = await db.select({ id: players.id }).from(players);
+  return rows.length;
 }
 
 async function main() {
@@ -198,12 +334,21 @@ async function main() {
   const season = resolveIngestSeason();
   console.log(`Using API-Football season ${season} (${season}/${String(season + 1).slice(-2)} campaign)`);
 
-  for (const league of INGEST_LEAGUES) {
-    console.log(`Ingesting ${league.name}...`);
-    await ingestLeague(league.id, league.name, season);
+  let ingested = await runIngest(season);
+
+  if (ingested === 0 && !process.env.INGEST_SEASON) {
+    const fallbackSeason = season - 1;
+    console.warn('');
+    console.warn(`⚠ Season ${season} returned 0 players — falling back to ${fallbackSeason}/${String(fallbackSeason + 1).slice(-2)}`);
+    console.warn('  Set INGEST_SEASON=2026 to force upcoming season, or INGEST_SEASON=2025 for last completed season');
+    console.warn('');
+    ingested = await runIngest(fallbackSeason);
   }
 
-  console.log('Ingestion complete');
+  const totalInDb = await countPlayers();
+  console.log('');
+  console.log(`Ingestion complete — ${ingested} players processed this run`);
+  console.log(`Database total: ${totalInDb} players`);
   process.exit(0);
 }
 
