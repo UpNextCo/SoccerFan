@@ -32,11 +32,22 @@ function buildAliases(name: string): string[] {
   return aliases;
 }
 
-function mapPosition(pos: string): string {
+function mapPosition(pos: string | null | undefined): string {
+  if (!pos) return 'Midfielder';
   if (pos === 'Goalkeeper') return 'Goalkeeper';
   if (pos === 'Defender') return 'Defender';
   if (pos === 'Midfielder') return 'Midfielder';
   return 'Attacker';
+}
+
+function normalizeNationality(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : 'Unknown';
+}
+
+function normalizeAge(value: number | null | undefined): number {
+  if (typeof value === 'number' && value > 0) return value;
+  return 25;
 }
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -71,25 +82,30 @@ async function ingestLeague(leagueId: number, leagueName: string, season: number
         players: Array<{
           id: number;
           name: string;
-          age: number;
+          age: number | null;
           number: number | null;
-          position: string;
-          nationality: string;
+          position: string | null;
+          nationality: string | null;
         }>;
       }>;
     };
 
     const squad = squadData.response?.[0]?.players ?? [];
     for (const p of squad) {
+      const nationality = normalizeNationality(p.nationality);
+      if (nationality === 'Unknown') {
+        console.warn(`  ! ${p.name} (${team.name}) — nationality missing, using Unknown`);
+      }
+
       await db
         .insert(players)
         .values({
           externalId: String(p.id),
           name: p.name,
           aliases: buildAliases(p.name),
-          nationality: p.nationality,
+          nationality,
           position: mapPosition(p.position),
-          age: p.age,
+          age: normalizeAge(p.age),
           currentClub: team.name,
           currentLeague: leagueName,
           shirtNumber: p.number,
