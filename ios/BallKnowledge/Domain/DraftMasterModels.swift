@@ -107,8 +107,8 @@ struct DraftMasterPick: Identifiable, Equatable {
 
 enum DraftMasterPhase: Equatable {
     case intro
+    case spinningPrompt(index: Int)
     case drafting
-    case assigningPlayer(promptIndex: Int)
     case complete
 }
 
@@ -117,7 +117,6 @@ struct DraftMasterGameState: Equatable {
     var phase: DraftMasterPhase
     var currentPromptIndex: Int
     var picks: [DraftMasterPick]
-    var pendingPlayer: PlayerSearchResultDTO?
     var teamScore: Int?
     var rank: Int?
     var percentile: Int?
@@ -128,7 +127,6 @@ struct DraftMasterGameState: Equatable {
         phase = .intro
         currentPromptIndex = 0
         picks = []
-        pendingPlayer = nil
         teamScore = nil
         rank = nil
         percentile = nil
@@ -141,10 +139,6 @@ struct DraftMasterGameState: Equatable {
 
     var filledPositions: Set<DraftMasterPosition> {
         Set(picks.map(\.position))
-    }
-
-    var availablePositions: [DraftMasterPosition] {
-        DraftMasterPosition.allCases.filter { !filledPositions.contains($0) }
     }
 
     var currentPrompt: DraftMasterPrompt? {
@@ -223,4 +217,128 @@ enum DraftMasterTiming {
     static let pickAdvance: Double = 0.25
     static let resultReveal: Double = 0.45
     static let confettiThreshold = 1500
+    static let spinCountryTicks = 10
+    static let spinLeagueTicks = 8
+    static let spinTickFast: Double = 0.06
+    static let spinTickSlow: Double = 0.11
+}
+
+enum DraftMasterRole: String, CaseIterable, Hashable {
+    case gk
+    case lb
+    case cb
+    case rb
+    case cm
+    case lw
+    case st
+    case rw
+
+    var label: String {
+        switch self {
+        case .gk: return "GK"
+        case .lb: return "LB"
+        case .cb: return "CB"
+        case .rb: return "RB"
+        case .cm: return "CM"
+        case .lw: return "LW"
+        case .st: return "ST"
+        case .rw: return "RW"
+        }
+    }
+}
+
+enum DraftMasterPositionMapper {
+    static func role(for position: DraftMasterPosition) -> DraftMasterRole {
+        switch position {
+        case .gk: return .gk
+        case .lb: return .lb
+        case .cb1, .cb2: return .cb
+        case .rb: return .rb
+        case .cm1, .cm2, .cm3: return .cm
+        case .lw: return .lw
+        case .st: return .st
+        case .rw: return .rw
+        }
+    }
+
+    static func roles(for playerPosition: String) -> [DraftMasterRole] {
+        let p = playerPosition.lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
+
+        if p.contains("goal") || p == "gk" { return [.gk] }
+        if p == "lb" || p.contains("left back") || p.contains("lwb") { return [.lb] }
+        if p == "rb" || p.contains("right back") || p.contains("rwb") { return [.rb] }
+        if p == "cb" || p.contains("centre-back") || p.contains("center back") || p.contains("centre back") {
+            return [.cb]
+        }
+        if p == "lw" || p.contains("left wing") || p.contains("left winger") { return [.lw] }
+        if p == "rw" || p.contains("right wing") || p.contains("right winger") { return [.rw] }
+        if p == "st" || p.contains("striker") || p.contains("centre forward") || p.contains("center forward") {
+            return [.st]
+        }
+        if p == "cm" || p == "dm" || p == "cdm" || p == "am" || p == "cam"
+            || p.contains("midfield") || p.contains("midfielder") {
+            return [.cm]
+        }
+        if p.contains("defender") || p.contains("defence") || p.contains("defense") {
+            return [.cb, .lb, .rb]
+        }
+        if p.contains("forward") || p.contains("attacker") || p.contains("winger") {
+            return [.st, .lw, .rw]
+        }
+        if p == "lm" { return [.lw, .cm] }
+        if p == "rm" { return [.rw, .cm] }
+
+        return [.cm, .st]
+    }
+
+    static func canFit(_ player: PlayerSearchResultDTO, filled: Set<DraftMasterPosition>) -> Bool {
+        resolvePosition(for: player, filled: filled) != nil
+    }
+
+    static func resolvePosition(
+        for player: PlayerSearchResultDTO,
+        filled: Set<DraftMasterPosition>
+    ) -> DraftMasterPosition? {
+        for role in roles(for: player.position) {
+            if let slot = firstAvailableSlot(for: role, filled: filled) {
+                return slot
+            }
+        }
+        return nil
+    }
+
+    static func positionConflictMessage(for player: PlayerSearchResultDTO) -> String {
+        let roles = roles(for: player.position).map(\.label).joined(separator: "/")
+        return "\(roles) slot already filled"
+    }
+
+    private static func firstAvailableSlot(
+        for role: DraftMasterRole,
+        filled: Set<DraftMasterPosition>
+    ) -> DraftMasterPosition? {
+        switch role {
+        case .gk:
+            return filled.contains(.gk) ? nil : .gk
+        case .lb:
+            return filled.contains(.lb) ? nil : .lb
+        case .rb:
+            return filled.contains(.rb) ? nil : .rb
+        case .cb:
+            if !filled.contains(.cb1) { return .cb1 }
+            if !filled.contains(.cb2) { return .cb2 }
+            return nil
+        case .cm:
+            if !filled.contains(.cm1) { return .cm1 }
+            if !filled.contains(.cm2) { return .cm2 }
+            if !filled.contains(.cm3) { return .cm3 }
+            return nil
+        case .lw:
+            return filled.contains(.lw) ? nil : .lw
+        case .st:
+            return filled.contains(.st) ? nil : .st
+        case .rw:
+            return filled.contains(.rw) ? nil : .rw
+        }
+    }
 }

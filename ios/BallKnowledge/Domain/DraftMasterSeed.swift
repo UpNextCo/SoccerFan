@@ -43,6 +43,17 @@ enum DraftMasterSeed {
         )
     }
 
+    static let spinDecoyNations: [String] = [
+        "England", "France", "Brazil", "Argentina", "Spain", "Portugal",
+        "Germany", "Belgium", "Netherlands", "Italy", "Senegal", "Uruguay",
+        "Croatia", "Poland", "Mexico", "USA", "Japan", "Morocco",
+    ]
+
+    static let spinDecoyLeagues: [String] = [
+        "Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1",
+        "Primeira Liga", "Eredivisie", "MLS", "Saudi Pro League",
+    ]
+
     static func shareText(
         challenge: DraftMasterChallenge,
         picks: [DraftMasterPick],

@@ -15,6 +15,7 @@ final class DraftMasterViewModel {
     var confettiBurstToken = 0
     var resultSummary: DraftMasterResultSummary?
     var animatedScore = 0
+    var selectionError: String?
 
     private let practice: Bool
 
@@ -26,12 +27,16 @@ final class DraftMasterViewModel {
 
     func startDraft() {
         HapticManager.light()
+        state.phase = .spinningPrompt(index: 0)
+    }
+
+    func finishSpin(index: Int) {
+        state.currentPromptIndex = index
         state.phase = .drafting
-        state.currentPromptIndex = 0
     }
 
     func search() async {
-        guard let prompt = state.currentPrompt else {
+        guard state.phase == .drafting, let prompt = state.currentPrompt else {
             searchResults = []
             return
         }
@@ -50,6 +55,7 @@ final class DraftMasterViewModel {
             searchResults = results.filter { player in
                 DraftMasterMatcher.matches(player, prompt: prompt)
                     && !state.usedPlayerIds.contains(player.id)
+                    && DraftMasterPositionMapper.canFit(player, filled: state.filledPositions)
             }
         } catch {
             searchResults = []
@@ -57,29 +63,29 @@ final class DraftMasterViewModel {
     }
 
     func selectPlayer(_ player: PlayerSearchResultDTO) {
-        guard let prompt = state.currentPrompt else { return }
+        guard state.phase == .drafting, let prompt = state.currentPrompt else { return }
+
         if let error = DraftMasterMatcher.validationError(
             for: player,
             prompt: prompt,
             usedIds: state.usedPlayerIds
         ) {
+            selectionError = error
             HapticManager.error()
             return
         }
 
-        HapticManager.light()
-        state.pendingPlayer = player
-        state.phase = .assigningPlayer(promptIndex: state.currentPromptIndex)
-        searchQuery = ""
-        searchResults = []
-    }
+        guard let league = DraftMasterMatcher.league(from: prompt),
+              let position = DraftMasterPositionMapper.resolvePosition(
+                  for: player,
+                  filled: state.filledPositions
+              ) else {
+            selectionError = DraftMasterPositionMapper.positionConflictMessage(for: player)
+            HapticManager.error()
+            return
+        }
 
-    func assignPosition(_ position: DraftMasterPosition) {
-        guard let player = state.pendingPlayer,
-              let prompt = state.currentPrompt,
-              let league = DraftMasterMatcher.league(from: prompt),
-              !state.filledPositions.contains(position) else { return }
-
+        selectionError = nil
         let contribution = DraftMasterScoring.contribution(
             for: player,
             league: league,
@@ -94,20 +100,15 @@ final class DraftMasterViewModel {
                 contribution: contribution
             )
         )
-        state.pendingPlayer = nil
+        searchQuery = ""
+        searchResults = []
         HapticManager.success()
 
         if state.picks.count >= DraftMasterChallenge.promptCount {
             finishDraft()
         } else {
-            state.currentPromptIndex += 1
-            state.phase = .drafting
+            state.phase = .spinningPrompt(index: state.currentPromptIndex + 1)
         }
-    }
-
-    func cancelAssignment() {
-        state.pendingPlayer = nil
-        state.phase = .drafting
     }
 
     func restart() {
@@ -121,6 +122,7 @@ final class DraftMasterViewModel {
         confettiBurstToken = 0
         resultSummary = nil
         animatedScore = 0
+        selectionError = nil
     }
 
     func newPracticeDraft() {
@@ -130,6 +132,7 @@ final class DraftMasterViewModel {
         showResult = false
         resultSummary = nil
         animatedScore = 0
+        selectionError = nil
     }
 
     private func finishDraft() {
@@ -178,9 +181,7 @@ struct DraftMasterView: View {
                             onStart: viewModel.startDraft,
                             onNewPractice: viewModel.newPracticeDraft
                         )
-                    case .drafting, .assigningPlayer:
-                        draftScreen
-                    case .complete:
+                    case .spinningPrompt, .drafting, .complete:
                         draftScreen
                     }
                 }
@@ -210,18 +211,6 @@ struct DraftMasterView: View {
                         }
                     }
                 }
-            }
-
-            if case .assigningPlayer = viewModel.state.phase,
-               let player = viewModel.state.pendingPlayer {
-                DraftMasterPositionPicker(
-                    player: player,
-                    availablePositions: viewModel.state.availablePositions,
-                    onSelect: viewModel.assignPosition,
-                    onCancel: viewModel.cancelAssignment
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(20)
             }
 
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
@@ -276,19 +265,24 @@ struct DraftMasterView: View {
                 VStack(spacing: 14) {
                     DraftMasterCategoryStrip(challenge: viewModel.state.challenge)
 
-                    if let prompt = viewModel.state.currentPrompt,
-                       viewModel.state.phase != .complete {
+                    if case .spinningPrompt(let index) = viewModel.state.phase,
+                       viewModel.state.challenge.prompts.indices.contains(index) {
+                        DraftMasterPromptSpinner(
+                            target: viewModel.state.challenge.prompts[index],
+                            pickNumber: index + 1,
+                            onComplete: { viewModel.finishSpin(index: index) }
+                        )
+                    } else if let prompt = viewModel.state.currentPrompt,
+                              viewModel.state.phase == .drafting {
                         DraftMasterPromptCard(
                             prompt: prompt,
                             index: viewModel.state.currentPromptIndex + 1,
                             total: DraftMasterChallenge.promptCount
                         )
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
                     }
 
-                    DraftMasterPitchView(
-                        picks: viewModel.state.picks,
-                        highlightAvailable: isAssigningPosition
-                    )
+                    DraftMasterPitchView(picks: viewModel.state.picks)
 
                     if !viewModel.state.picks.isEmpty {
                         DraftMasterPickList(
@@ -309,11 +303,6 @@ struct DraftMasterView: View {
                 )
             }
         }
-    }
-
-    private var isAssigningPosition: Bool {
-        if case .assigningPlayer = viewModel.state.phase { return true }
-        return false
     }
 }
 
@@ -349,29 +338,17 @@ private struct DraftMasterIntroView: View {
                 .background(BKTheme.cardElevated.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("TODAY'S 11 PROMPTS")
+                VStack(spacing: 8) {
+                    Text("11 MYSTERY COMBOS")
                         .font(BKFont.caption(11))
                         .tracking(0.8)
                         .foregroundStyle(BKTheme.textMuted)
-
-                    ForEach(Array(challenge.prompts.enumerated()), id: \.element.id) { index, prompt in
-                        HStack(spacing: 10) {
-                            Text("\(index + 1)")
-                                .font(BKFont.caption(10))
-                                .foregroundStyle(BKTheme.accent)
-                                .frame(width: 18)
-                            Text(prompt.label)
-                                .font(BKFont.body(13))
-                                .foregroundStyle(BKTheme.textPrimary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(BKTheme.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                    }
+                    Text("Nation + league prompts reveal one at a time after each pick. Players auto-fill their position — once RW is taken, no more wingers there.")
+                        .font(BKFont.body(13))
+                        .foregroundStyle(BKTheme.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
+                .padding(.horizontal, 8)
 
                 Button(action: onStart) {
                     HStack(spacing: 8) {
@@ -440,6 +417,114 @@ private struct DraftMasterCategoryStrip: View {
     }
 }
 
+// MARK: - Prompt Spinner
+
+private struct DraftMasterPromptSpinner: View {
+    let target: DraftMasterPrompt
+    let pickNumber: Int
+    var onComplete: () -> Void
+
+    @State private var displayNation = "???"
+    @State private var displayLeague = "???"
+    @State private var spinPhase: SpinPhase = .country
+    @State private var offset: CGFloat = 0
+
+    private enum SpinPhase {
+        case country, league, locked
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("NEXT PICK · \(pickNumber)/\(DraftMasterChallenge.promptCount)")
+                .font(BKFont.caption(10))
+                .tracking(0.8)
+                .foregroundStyle(BKTheme.textMuted)
+
+            VStack(spacing: 14) {
+                spinRow(label: "NATION", value: displayNation, active: spinPhase == .country)
+                spinRow(label: "LEAGUE", value: displayLeague, active: spinPhase == .league)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity)
+            .background(BKTheme.cardElevated.opacity(0.95))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(BKTheme.accent.opacity(spinPhase == .locked ? 0.5 : 0.2), lineWidth: 1.5)
+            }
+            .offset(y: offset)
+        }
+        .task(id: target.id) {
+            await runSpin()
+        }
+    }
+
+    private func spinRow(label: String, value: String, active: Bool) -> some View {
+        VStack(spacing: 6) {
+            Text(label)
+                .font(BKFont.caption(10))
+                .tracking(0.6)
+                .foregroundStyle(BKTheme.textMuted)
+            Text(value.uppercased())
+                .font(BKFont.headline(active ? 22 : 18))
+                .foregroundStyle(active ? BKTheme.accent : BKTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.08), value: value)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @MainActor
+    private func runSpin() async {
+        spinPhase = .country
+        displayNation = "???"
+        displayLeague = "???"
+
+        let nations = DraftMasterSeed.spinDecoyNations.filter { $0 != target.nationality }.shuffled()
+        let leagues = DraftMasterSeed.spinDecoyLeagues.filter { $0 != target.league }.shuffled()
+
+        for tick in 0..<DraftMasterTiming.spinCountryTicks {
+            let delay = tick < DraftMasterTiming.spinCountryTicks - 3
+                ? DraftMasterTiming.spinTickFast
+                : DraftMasterTiming.spinTickSlow
+            try? await Task.sleep(for: .seconds(delay))
+            displayNation = nations[tick % nations.count]
+            if tick % 2 == 0 { HapticManager.light() }
+        }
+
+        displayNation = target.nationality
+        spinPhase = .league
+        HapticManager.light()
+
+        try? await Task.sleep(for: .seconds(0.12))
+
+        for tick in 0..<DraftMasterTiming.spinLeagueTicks {
+            let delay = tick < DraftMasterTiming.spinLeagueTicks - 2
+                ? DraftMasterTiming.spinTickFast
+                : DraftMasterTiming.spinTickSlow
+            try? await Task.sleep(for: .seconds(delay))
+            displayLeague = leagues[tick % leagues.count]
+            if tick % 2 == 0 { HapticManager.light() }
+        }
+
+        displayLeague = target.league
+        spinPhase = .locked
+        HapticManager.success()
+
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.62)) {
+            offset = -4
+        }
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.72).delay(0.08)) {
+            offset = 0
+        }
+
+        try? await Task.sleep(for: .seconds(0.35))
+        onComplete()
+    }
+}
+
 // MARK: - Prompt Card
 
 private struct DraftMasterPromptCard: View {
@@ -489,7 +574,6 @@ private struct DraftMasterPromptCard: View {
 
 private struct DraftMasterPitchView: View {
     let picks: [DraftMasterPick]
-    var highlightAvailable = false
 
     var body: some View {
         GeometryReader { geo in
@@ -519,7 +603,6 @@ private struct DraftMasterPitchView: View {
                     DraftMasterPitchSlot(
                         position: position,
                         pick: pick,
-                        highlight: highlightAvailable && pick == nil,
                         size: geo.size
                     )
                 }
@@ -532,7 +615,6 @@ private struct DraftMasterPitchView: View {
 private struct DraftMasterPitchSlot: View {
     let position: DraftMasterPosition
     let pick: DraftMasterPick?
-    let highlight: Bool
     let size: CGSize
 
     var body: some View {
@@ -544,7 +626,7 @@ private struct DraftMasterPitchSlot: View {
                     .frame(width: pick == nil ? 34 : 40, height: pick == nil ? 34 : 40)
                     .overlay {
                         Circle()
-                            .stroke(highlight ? BKTheme.accent : Color.white.opacity(0.25), lineWidth: highlight ? 2 : 1)
+                            .stroke(Color.white.opacity(0.25), lineWidth: 1)
                     }
 
                 if pick == nil {
@@ -646,6 +728,7 @@ private struct DraftMasterSearchSection: View {
                 .focused(isSearchFocused)
                 .submitLabel(.search)
                 .onChange(of: viewModel.searchQuery) { _, _ in
+                    viewModel.selectionError = nil
                     Task { await viewModel.search() }
                 }
 
@@ -661,6 +744,12 @@ private struct DraftMasterSearchSection: View {
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5)
             )
+
+            if let error = viewModel.selectionError {
+                Text(error.uppercased())
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(BKTheme.wrong)
+            }
 
             if !viewModel.searchResults.isEmpty {
                 VStack(spacing: 0) {
@@ -688,6 +777,14 @@ private struct DraftMasterSearchSection: View {
                                     Text("\(player.nationality) · \(player.league)")
                                         .font(BKFont.caption(11))
                                         .foregroundStyle(BKTheme.textMuted)
+                                    if let slot = DraftMasterPositionMapper.resolvePosition(
+                                        for: player,
+                                        filled: viewModel.state.filledPositions
+                                    ) {
+                                        Text("→ \(slot.label)")
+                                            .font(BKFont.caption(9))
+                                            .foregroundStyle(BKTheme.accent)
+                                    }
                                 }
                                 Spacer()
                                 Ph.caretRight.bold
@@ -710,68 +807,6 @@ private struct DraftMasterSearchSection: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(BKTheme.background)
-    }
-}
-
-// MARK: - Position Picker
-
-private struct DraftMasterPositionPicker: View {
-    let player: PlayerSearchResultDTO
-    let availablePositions: [DraftMasterPosition]
-    var onSelect: (DraftMasterPosition) -> Void
-    var onCancel: () -> Void
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.opacity(0.55).ignoresSafeArea()
-                .onTapGesture { onCancel() }
-
-            VStack(spacing: 16) {
-                Capsule()
-                    .fill(BKTheme.textMuted.opacity(0.5))
-                    .frame(width: 36, height: 4)
-
-                VStack(spacing: 6) {
-                    Text("ASSIGN POSITION")
-                        .font(BKFont.caption(10))
-                        .tracking(0.8)
-                        .foregroundStyle(BKTheme.textMuted)
-                    Text(player.name)
-                        .font(BKFont.headline(18))
-                        .foregroundStyle(BKTheme.textPrimary)
-                    Text("Pick where they play in your XI")
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.textSecondary)
-                }
-
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                    ForEach(DraftMasterPosition.allCases) { position in
-                        let isAvailable = availablePositions.contains(position)
-                        Button {
-                            if isAvailable { onSelect(position) }
-                        } label: {
-                            Text(position.label)
-                                .font(BKFont.headline(13))
-                                .foregroundStyle(isAvailable ? BKTheme.background : BKTheme.textMuted)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(isAvailable ? BKTheme.accent : BKTheme.cardElevated)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                        .disabled(!isAvailable)
-                    }
-                }
-
-                Button("Cancel", action: onCancel)
-                    .font(BKFont.body(13))
-                    .foregroundStyle(BKTheme.textMuted)
-            }
-            .padding(20)
-            .background(BKTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
-        }
     }
 }
 
