@@ -20,6 +20,7 @@
 | `JWT_SECRET` | Random 64+ char string |
 | `APPLE_CLIENT_ID` | `com.psounds.ballknowledge` (your bundle ID) |
 | `API_FOOTBALL_KEY` | Optional — for player ingestion |
+| `INGEST_SEASON` | Optional — API-Football season start year (e.g. `2026` for 2026/27). Auto-detected if unset. |
 | `NODE_ENV` | `production` |
 | `PORT` | Railway sets automatically |
 

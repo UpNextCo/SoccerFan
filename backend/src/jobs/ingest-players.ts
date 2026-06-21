@@ -4,16 +4,9 @@
  */
 import 'dotenv/config';
 import { eq } from 'drizzle-orm';
+import { INGEST_LEAGUES, resolveIngestSeason } from './ingest-config.js';
 import { players } from '../db/schema.js';
 import { db } from '../db/index.js';
-
-const LEAGUES = [
-  { id: 39, name: 'Premier League', season: 2025 },
-  { id: 140, name: 'La Liga', season: 2025 },
-  { id: 135, name: 'Serie A', season: 2025 },
-  { id: 78, name: 'Bundesliga', season: 2025 },
-  { id: 61, name: 'Ligue 1', season: 2025 },
-];
 
 const API_KEY = process.env.API_FOOTBALL_KEY;
 const REQUEST_DELAY_MS = 250;
@@ -202,9 +195,12 @@ async function main() {
     process.exit(0);
   }
 
-  for (const league of LEAGUES) {
+  const season = resolveIngestSeason();
+  console.log(`Using API-Football season ${season} (${season}/${String(season + 1).slice(-2)} campaign)`);
+
+  for (const league of INGEST_LEAGUES) {
     console.log(`Ingesting ${league.name}...`);
-    await ingestLeague(league.id, league.name, league.season);
+    await ingestLeague(league.id, league.name, season);
   }
 
   console.log('Ingestion complete');
