@@ -1,29 +1,20 @@
 /**
  * Ingest players from API-Football into PostgreSQL.
- * Usage: API_FOOTBALL_KEY=xxx DATABASE_URL=xxx npx tsx scripts/ingest-players.ts
+ * Usage: API_FOOTBALL_KEY=xxx DATABASE_URL=xxx npm run job:ingest-players
  */
 import 'dotenv/config';
-import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { players } from '../backend/src/db/schema.js';
+import { players } from '../db/schema.js';
+import { db } from '../db/index.js';
 
 const LEAGUES = [
-  { id: 39, name: 'Premier League', season: 2024 },
-  { id: 140, name: 'La Liga', season: 2024 },
-  { id: 135, name: 'Serie A', season: 2024 },
-  { id: 61, name: 'Ligue 1', season: 2024 },
+  { id: 39, name: 'Premier League', season: 2025 },
+  { id: 140, name: 'La Liga', season: 2025 },
+  { id: 135, name: 'Serie A', season: 2025 },
+  { id: 78, name: 'Bundesliga', season: 2025 },
+  { id: 61, name: 'Ligue 1', season: 2025 },
 ];
 
 const API_KEY = process.env.API_FOOTBALL_KEY;
-const DATABASE_URL = process.env.DATABASE_URL;
-
-if (!DATABASE_URL) {
-  console.error('DATABASE_URL required');
-  process.exit(1);
-}
-
-const client = postgres(DATABASE_URL, { max: 1 });
-const db = drizzle(client);
 
 function normalizeSearchText(name: string): string {
   return name
@@ -117,8 +108,7 @@ async function ingestLeague(leagueId: number, leagueName: string, season: number
 async function main() {
   if (!API_KEY) {
     console.log('Set API_FOOTBALL_KEY to ingest from API-Football. Use db:seed for local dev.');
-    await client.end();
-    return;
+    process.exit(0);
   }
 
   for (const league of LEAGUES) {
@@ -127,10 +117,12 @@ async function main() {
   }
 
   console.log('Ingestion complete');
-  await client.end();
+  process.exit(0);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

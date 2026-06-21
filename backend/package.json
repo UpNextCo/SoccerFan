@@ -14,7 +14,7 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed-cli.ts",
     "job:generate-daily": "tsx src/jobs/generate-daily.ts",
-    "job:ingest-players": "tsx ../scripts/ingest-players.ts"
+    "job:ingest-players": "tsx src/jobs/ingest-players.ts"
   },
   "dependencies": {
     "apple-signin-auth": "^1.7.6",
