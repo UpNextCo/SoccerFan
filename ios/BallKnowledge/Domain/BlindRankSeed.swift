@@ -133,7 +133,7 @@ enum BlindRankSeed {
         )
     }
 
-    static func statValue(for entry: RosterEntry, category: BlindRankCategory) -> Int {
+    private static func statValue(for entry: RosterEntry, category: BlindRankCategory) -> Int {
         let dto = PlayerSearchResultDTO(
             id: entry.id,
             name: entry.name,

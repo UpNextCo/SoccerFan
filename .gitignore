@@ -12,3 +12,4 @@ backend/.env
 
 ios/*.xcodeproj/xcuserdata/
 ios/DerivedData/
+ios/.derivedData/
