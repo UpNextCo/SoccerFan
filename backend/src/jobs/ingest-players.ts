@@ -3,6 +3,7 @@
  * Usage: API_FOOTBALL_KEY=xxx DATABASE_URL=xxx npm run job:ingest-players
  */
 import 'dotenv/config';
+import { eq } from 'drizzle-orm';
 import { players } from '../db/schema.js';
 import { db } from '../db/index.js';
 
@@ -15,6 +16,28 @@ const LEAGUES = [
 ];
 
 const API_KEY = process.env.API_FOOTBALL_KEY;
+const REQUEST_DELAY_MS = 250;
+
+type ApiPlayerEntry = {
+  player: {
+    id: number;
+    name: string;
+    age: number | null;
+    nationality: string | null;
+  };
+  statistics: Array<{
+    league: { id: number; name: string };
+    team: { id: number; name: string };
+    games: {
+      number: number | null;
+      position: string | null;
+    };
+  }>;
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function normalizeSearchText(name: string): string {
   return name
@@ -34,9 +57,10 @@ function buildAliases(name: string): string[] {
 
 function mapPosition(pos: string | null | undefined): string {
   if (!pos) return 'Midfielder';
-  if (pos === 'Goalkeeper') return 'Goalkeeper';
-  if (pos === 'Defender') return 'Defender';
-  if (pos === 'Midfielder') return 'Midfielder';
+  const normalized = pos.toLowerCase();
+  if (normalized.includes('goalkeeper')) return 'Goalkeeper';
+  if (normalized.includes('defender')) return 'Defender';
+  if (normalized.includes('midfielder')) return 'Midfielder';
   return 'Attacker';
 }
 
@@ -66,7 +90,76 @@ async function fetchJson(url: string): Promise<unknown> {
     throw new Error(`API error ${res.status}: ${await res.text()}`);
   }
 
+  await sleep(REQUEST_DELAY_MS);
   return res.json();
+}
+
+function pickStatistics(entry: ApiPlayerEntry, teamId: number, leagueId: number) {
+  return (
+    entry.statistics.find((s) => s.team.id === teamId && s.league.id === leagueId) ??
+    entry.statistics.find((s) => s.team.id === teamId) ??
+    entry.statistics[0]
+  );
+}
+
+async function fetchTeamPlayers(teamId: number, season: number): Promise<ApiPlayerEntry[]> {
+  const all: ApiPlayerEntry[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    const data = (await fetchJson(
+      `https://v3.football.api-sports.io/players?team=${teamId}&season=${season}&page=${page}`
+    )) as { response: ApiPlayerEntry[]; paging?: { current: number; total: number } };
+
+    all.push(...(data.response ?? []));
+    totalPages = data.paging?.total ?? 1;
+    page += 1;
+  }
+
+  return all;
+}
+
+async function upsertPlayer(values: {
+  externalId: string;
+  name: string;
+  aliases: string[];
+  nationality: string;
+  position: string;
+  age: number;
+  currentClub: string;
+  currentLeague: string;
+  shirtNumber: number | null;
+  searchText: string;
+}) {
+  const existing = await db
+    .select({ id: players.id })
+    .from(players)
+    .where(eq(players.externalId, values.externalId))
+    .limit(1);
+
+  if (existing[0]) {
+    await db
+      .update(players)
+      .set({
+        name: values.name,
+        aliases: values.aliases,
+        nationality: values.nationality,
+        position: values.position,
+        age: values.age,
+        currentClub: values.currentClub,
+        currentLeague: values.currentLeague,
+        shirtNumber: values.shirtNumber,
+        searchText: values.searchText,
+      })
+      .where(eq(players.id, existing[0].id));
+    return;
+  }
+
+  await db.insert(players).values({
+    ...values,
+    marketValueTier: 3,
+  });
 }
 
 async function ingestLeague(leagueId: number, leagueName: string, season: number) {
@@ -75,49 +168,31 @@ async function ingestLeague(leagueId: number, leagueName: string, season: number
   )) as { response: Array<{ team: { id: number; name: string } }> };
 
   for (const { team } of teamsData.response ?? []) {
-    const squadData = (await fetchJson(
-      `https://v3.football.api-sports.io/players/squads?team=${team.id}`
-    )) as {
-      response: Array<{
-        players: Array<{
-          id: number;
-          name: string;
-          age: number | null;
-          number: number | null;
-          position: string | null;
-          nationality: string | null;
-        }>;
-      }>;
-    };
+    const roster = await fetchTeamPlayers(team.id, season);
 
-    const squad = squadData.response?.[0]?.players ?? [];
-    for (const p of squad) {
-      const nationality = normalizeNationality(p.nationality);
+    for (const entry of roster) {
+      const stats = pickStatistics(entry, team.id, leagueId);
+      const nationality = normalizeNationality(entry.player.nationality);
+
       if (nationality === 'Unknown') {
-        console.warn(`  ! ${p.name} (${team.name}) — nationality missing, using Unknown`);
+        console.warn(`  ! ${entry.player.name} (${team.name}) — nationality still missing`);
       }
 
-      await db
-        .insert(players)
-        .values({
-          externalId: String(p.id),
-          name: p.name,
-          aliases: buildAliases(p.name),
-          nationality,
-          position: mapPosition(p.position),
-          age: normalizeAge(p.age),
-          currentClub: team.name,
-          currentLeague: leagueName,
-          shirtNumber: p.number,
-          marketValueTier: 3,
-          searchText: normalizeSearchText(p.name),
-        })
-        .onConflictDoNothing();
+      await upsertPlayer({
+        externalId: String(entry.player.id),
+        name: entry.player.name,
+        aliases: buildAliases(entry.player.name),
+        nationality,
+        position: mapPosition(stats?.games.position),
+        age: normalizeAge(entry.player.age),
+        currentClub: team.name,
+        currentLeague: leagueName,
+        shirtNumber: stats?.games.number ?? null,
+        searchText: normalizeSearchText(entry.player.name),
+      });
 
-      console.log(`  + ${p.name} (${team.name})`);
+      console.log(`  + ${entry.player.name} (${team.name})`);
     }
-
-    await new Promise((r) => setTimeout(r, 200));
   }
 }
 
