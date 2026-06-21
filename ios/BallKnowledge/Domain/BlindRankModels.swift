@@ -21,22 +21,66 @@ struct BlindRankPlayer: Identifiable, Equatable {
     }
 }
 
+enum BlindRankCategory: String, CaseIterable, Codable {
+    case premierLeagueGoals
+    case premierLeagueAppearances
+    case premierLeagueAssists
+    case transferFees
+    case marketValue
+    case careerTrophies
+    case championsLeagueGoals
+
+    var title: String {
+        switch self {
+        case .premierLeagueGoals: return "Premier League Goals"
+        case .premierLeagueAppearances: return "Premier League Appearances"
+        case .premierLeagueAssists: return "Premier League Assists"
+        case .transferFees: return "Transfer Fees"
+        case .marketValue: return "Market Value"
+        case .careerTrophies: return "Career Trophies"
+        case .championsLeagueGoals: return "Champions League Goals"
+        }
+    }
+
+    var valueNoun: String {
+        switch self {
+        case .premierLeagueGoals: return "goals"
+        case .premierLeagueAppearances: return "apps"
+        case .premierLeagueAssists: return "assists"
+        case .transferFees: return "€m"
+        case .marketValue: return "€m"
+        case .careerTrophies: return "trophies"
+        case .championsLeagueGoals: return "UCL goals"
+        }
+    }
+
+    var rankHint: String {
+        switch self {
+        case .transferFees, .marketValue:
+            return "Highest → lowest"
+        default:
+            return "Most → least"
+        }
+    }
+
+    var valuePrefix: String {
+        switch self {
+        case .transferFees, .marketValue: return "€"
+        default: return ""
+        }
+    }
+}
+
 struct BlindRankChallenge: Equatable {
     let id: String
-    let league: TargetManLeague
-    let category: TargetManStatCategory
+    let category: BlindRankCategory
     let presentationOrder: [BlindRankPlayer]
     let correctRanking: [String]
     let isDaily: Bool
     let date: String?
 
-    var categoryTitle: String {
-        "\(league.rawValue) \(category.label)"
-    }
-
-    var rankHint: String {
-        "Most \(category.label.lowercased()) → least"
-    }
+    var categoryTitle: String { category.title }
+    var rankHint: String { category.rankHint }
 }
 
 enum BlindRankPhase: Equatable {
@@ -45,12 +89,21 @@ enum BlindRankPhase: Equatable {
     case complete
 }
 
+struct BlindRankRevealStep: Identifiable, Equatable {
+    let id: Int
+    let rank: Int
+    let player: BlindRankPlayer
+    let userRank: Int?
+    let isCorrect: Bool
+}
+
 struct BlindRankGameState: Equatable {
     let challenge: BlindRankChallenge
     var phase: BlindRankPhase
     var currentPlayerIndex: Int
     var slots: [BlindRankPlayer?]
-    var revealedSlotCount: Int
+    var revealSteps: [BlindRankRevealStep]
+    var revealedStepCount: Int
     var score: Int?
     var exactMatches: Int?
 
@@ -61,7 +114,8 @@ struct BlindRankGameState: Equatable {
         phase = .ranking
         currentPlayerIndex = 0
         slots = Array(repeating: nil, count: Self.slotCount)
-        revealedSlotCount = 0
+        revealSteps = []
+        revealedStepCount = 0
         score = nil
         exactMatches = nil
     }
@@ -74,14 +128,6 @@ struct BlindRankGameState: Equatable {
         guard phase == .ranking,
               challenge.presentationOrder.indices.contains(currentPlayerIndex) else { return nil }
         return challenge.presentationOrder[currentPlayerIndex]
-    }
-
-    var playersRemaining: Int {
-        max(0, challenge.presentationOrder.count - currentPlayerIndex)
-    }
-
-    var categoryRevealed: Bool {
-        phase != .ranking
     }
 }
 
@@ -117,10 +163,32 @@ enum BlindRankScoring {
         default: return "Better luck next time"
         }
     }
+
+    static func buildRevealSteps(
+        slots: [BlindRankPlayer?],
+        challenge: BlindRankChallenge
+    ) -> [BlindRankRevealStep] {
+        challenge.correctRanking.enumerated().map { index, playerId in
+            let rank = index + 1
+            let player = challenge.presentationOrder.first { $0.id == playerId }
+                ?? slots.compactMap { $0 }.first { $0.id == playerId }
+            let userRank = slots.firstIndex { $0?.id == playerId }.map { $0 + 1 }
+            return BlindRankRevealStep(
+                id: rank,
+                rank: rank,
+                player: player ?? BlindRankPlayer(
+                    id: playerId, name: "Unknown", club: "", league: "",
+                    nationality: "", position: "", statValue: 0
+                ),
+                userRank: userRank,
+                isCorrect: userRank == rank
+            )
+        }
+    }
 }
 
 enum BlindRankTiming {
-    static let revealStagger: Double = 0.18
-    static let categoryRevealDelay: Double = 0.35
-    static let resultDelay: Double = 2.2
+    static let revealStagger: Double = 0.72
+    static let revealSlide: Double = 0.45
+    static let resultDelay: Double = 1.8
 }

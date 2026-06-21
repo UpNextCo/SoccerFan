@@ -62,33 +62,51 @@ enum BlindRankSeed {
         RosterEntry(id: "br_eriksen", name: "Christian Eriksen", club: "Manchester United", nationality: "Denmark", position: "CM"),
     ]
 
+    private static let transferFees: [String: Int] = [
+        "br_kane": 100, "br_salah": 41, "br_bruno": 47, "br_kdb": 76, "br_haaland": 60,
+        "br_son": 22, "br_sterling": 49, "br_casemiro": 70, "br_rodri": 63, "br_isak": 63,
+        "br_nunez": 75, "br_rice": 105, "br_vvd": 75, "br_grealish": 100, "br_martial": 36,
+        "br_pogba": 89, "br_lukaku": 97, "br_giroud": 18, "br_palmer": 0, "br_rashford": 0,
+    ]
+
+    private static let marketValue: [String: Int] = [
+        "br_haaland": 180, "br_salah": 120, "br_kane": 110, "br_kdb": 85, "br_vvd": 65,
+        "br_saka": 130, "br_rice": 105, "br_palmer": 90, "br_isak": 80, "br_bruno": 70,
+        "br_rodri": 110, "br_son": 75, "br_nunez": 55, "br_rashford": 50, "br_grealish": 45,
+        "br_alisson": 60, "br_ederson": 55, "br_dias": 80, "br_saliba": 75, "br_odegaard": 85,
+    ]
+
+    private static let careerTrophies: [String: Int] = [
+        "br_milner": 14, "br_kdb": 18, "br_gundogan": 16, "br_silva": 15, "br_walker": 14,
+        "br_salah": 12, "br_vvd": 11, "br_alisson": 11, "br_ederson": 12, "br_rodri": 10,
+        "br_kane": 8, "br_son": 7, "br_casemiro": 12, "br_grealish": 9, "br_sterling": 10,
+        "br_robertson": 10, "br_taa": 9, "br_dias": 11, "br_bruno": 6, "br_rashford": 6,
+    ]
+
+    private static let uclGoals: [String: Int] = [
+        "br_salah": 24, "br_benzema": 78, "br_lewa": 42, "br_muller": 28, "br_kane": 14,
+        "br_haaland": 18, "br_sterling": 12, "br_grealish": 2, "br_kdb": 6, "br_bruno": 8,
+        "br_son": 8, "br_mane": 22, "br_casemiro": 12, "br_vvd": 4, "br_giroud": 18,
+        "br_firmino": 12, "br_martial": 4, "br_rashford": 4, "br_nunez": 6, "br_isak": 2,
+    ]
+
     private static func makeChallenge(
         seed: Int,
         id: String,
         isDaily: Bool,
         date: String?
     ) -> BlindRankChallenge {
-        let league = TargetManLeague.allCases[seed % TargetManLeague.allCases.count]
-        let category = TargetManStatCategory.allCases[(seed / 7) % TargetManStatCategory.allCases.count]
+        let category = BlindRankCategory.allCases[seed % BlindRankCategory.allCases.count]
 
-        let valued = roster.compactMap { entry -> BlindRankPlayer? in
-            let dto = PlayerSearchResultDTO(
+        let valued = roster.map { entry -> BlindRankPlayer in
+            BlindRankPlayer(
                 id: entry.id,
                 name: entry.name,
                 club: entry.club,
-                league: league.rawValue,
-                nationality: entry.nationality,
-                position: entry.position
-            )
-            let value = TargetManSeed.statValue(for: dto, league: league, category: category)
-            return BlindRankPlayer(
-                id: entry.id,
-                name: entry.name,
-                club: entry.club,
-                league: league.rawValue,
+                league: "Premier League",
                 nationality: entry.nationality,
                 position: entry.position,
-                statValue: value
+                statValue: statValue(for: entry, category: category)
             )
         }
 
@@ -107,7 +125,6 @@ enum BlindRankSeed {
 
         return BlindRankChallenge(
             id: id,
-            league: league,
             category: category,
             presentationOrder: presentationOrder,
             correctRanking: correctRanking,
@@ -116,16 +133,44 @@ enum BlindRankSeed {
         )
     }
 
+    static func statValue(for entry: RosterEntry, category: BlindRankCategory) -> Int {
+        let dto = PlayerSearchResultDTO(
+            id: entry.id,
+            name: entry.name,
+            club: entry.club,
+            league: "Premier League",
+            nationality: entry.nationality,
+            position: entry.position
+        )
+
+        switch category {
+        case .premierLeagueGoals:
+            return TargetManSeed.statValue(for: dto, league: .premierLeague, category: .goals)
+        case .premierLeagueAppearances:
+            return TargetManSeed.statValue(for: dto, league: .premierLeague, category: .appearances)
+        case .premierLeagueAssists:
+            return TargetManSeed.statValue(for: dto, league: .premierLeague, category: .assists)
+        case .transferFees:
+            return transferFees[entry.id] ?? fallbackStat(entry.id, range: 15...120)
+        case .marketValue:
+            return marketValue[entry.id] ?? fallbackStat(entry.id, range: 20...150)
+        case .careerTrophies:
+            return careerTrophies[entry.id] ?? fallbackStat(entry.id, range: 2...12)
+        case .championsLeagueGoals:
+            return uclGoals[entry.id] ?? fallbackStat(entry.id, range: 0...30)
+        }
+    }
+
     private static func pickPlayers(
         from sorted: [BlindRankPlayer],
         seed: Int,
-        category: TargetManStatCategory
+        category: BlindRankCategory
     ) -> [BlindRankPlayer] {
         guard sorted.count >= BlindRankGameState.slotCount else {
             return Array(sorted.prefix(BlindRankGameState.slotCount))
         }
 
-        let minSpread = max(8, category.fallbackRange.lowerBound / 4)
+        let minSpread = category == .transferFees || category == .marketValue ? 25 : 8
         let windowSize = 14
         var bestStart = 0
         var bestSpread = 0
@@ -142,12 +187,9 @@ enum BlindRankSeed {
             }
         }
 
-        let poolStart: Int
-        if bestSpread >= minSpread {
-            poolStart = bestStart
-        } else {
-            poolStart = (seed / 13) % max(sorted.count - BlindRankGameState.slotCount, 1)
-        }
+        let poolStart = bestSpread >= minSpread
+            ? bestStart
+            : (seed / 13) % max(sorted.count - BlindRankGameState.slotCount, 1)
 
         let poolEnd = min(poolStart + windowSize, sorted.count)
         let pool = Array(sorted[poolStart..<poolEnd])
@@ -172,6 +214,11 @@ enum BlindRankSeed {
         }
 
         return Array(picks.prefix(BlindRankGameState.slotCount))
+    }
+
+    private static func fallbackStat(_ id: String, range: ClosedRange<Int>) -> Int {
+        let hash = stableHash(id)
+        return range.lowerBound + (hash % (range.upperBound - range.lowerBound + 1))
     }
 
     private static func seededShuffle<T>(_ array: [T], seed: Int) -> [T] {
