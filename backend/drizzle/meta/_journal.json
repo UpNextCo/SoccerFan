@@ -15,6 +15,13 @@
       "when": 1781641351796,
       "tag": "0001_players_external_id_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781641351797,
+      "tag": "0002_player_stats",
+      "breakpoints": true
     }
   ]
 }

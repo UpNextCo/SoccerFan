@@ -9,6 +9,7 @@ import {
   date,
   index,
   uniqueIndex,
+  numeric,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -52,6 +53,121 @@ export const players = pgTable(
   ]
 );
 
+export const playerStats = pgTable(
+  'player_stats',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    playerId: uuid('player_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    externalPlayerId: text('external_player_id'),
+    leagueId: integer('league_id').notNull(),
+    leagueName: text('league_name').notNull(),
+    season: integer('season').notNull(),
+    teamId: integer('team_id').notNull().default(0),
+    teamName: text('team_name'),
+    appearances: integer('appearances').notNull().default(0),
+    minutes: integer('minutes').notNull().default(0),
+    goals: integer('goals').notNull().default(0),
+    assists: integer('assists').notNull().default(0),
+    yellowCards: integer('yellow_cards').notNull().default(0),
+    redCards: integer('red_cards').notNull().default(0),
+    cleanSheets: integer('clean_sheets'),
+    saves: integer('saves'),
+    foulsCommitted: integer('fouls_committed'),
+    tackles: integer('tackles'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('player_stats_unique').on(
+      table.playerId,
+      table.leagueId,
+      table.season,
+      table.teamId
+    ),
+    index('player_stats_league_metric_idx').on(table.leagueId, table.season),
+  ]
+);
+
+export const playerTransfers = pgTable(
+  'player_transfers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    playerId: uuid('player_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    transferDate: date('transfer_date'),
+    fromTeamId: integer('from_team_id').notNull().default(0),
+    fromTeamName: text('from_team_name'),
+    toTeamId: integer('to_team_id').notNull().default(0),
+    toTeamName: text('to_team_name'),
+    feeRaw: text('fee_raw'),
+    feeEurM: numeric('fee_eur_m', { precision: 10, scale: 2 }),
+    transferType: text('transfer_type').notNull().default('unknown'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('player_transfers_unique').on(
+      table.playerId,
+      table.transferDate,
+      table.fromTeamId,
+      table.toTeamId
+    ),
+  ]
+);
+
+export const playerHonours = pgTable(
+  'player_honours',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    playerId: uuid('player_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    competition: text('competition').notNull(),
+    country: text('country'),
+    season: text('season').notNull(),
+    placement: text('placement').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('player_honours_unique').on(
+      table.playerId,
+      table.competition,
+      table.season,
+      table.placement
+    ),
+  ]
+);
+
+export const playerCareer = pgTable(
+  'player_career',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    playerId: uuid('player_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    teamId: integer('team_id').notNull(),
+    teamName: text('team_name').notNull(),
+    seasonFrom: integer('season_from').notNull(),
+    seasonTo: integer('season_to'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('player_career_unique').on(table.playerId, table.teamId, table.seasonFrom),
+  ]
+);
+
+export const ingestRuns = pgTable('ingest_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  jobName: text('job_name').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  status: text('status').notNull().default('running'),
+  rowsUpserted: integer('rows_upserted').notNull().default(0),
+  apiCallsUsed: integer('api_calls_used').notNull().default(0),
+  errorMessage: text('error_message'),
+});
+
 export const dailyPuzzles = pgTable(
   'daily_puzzles',
   {
@@ -87,4 +203,8 @@ export const dailyCompletions = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type Player = typeof players.$inferSelect;
+export type PlayerStat = typeof playerStats.$inferSelect;
+export type PlayerTransfer = typeof playerTransfers.$inferSelect;
+export type PlayerHonour = typeof playerHonours.$inferSelect;
+export type PlayerCareerEntry = typeof playerCareer.$inferSelect;
 export type DailyPuzzle = typeof dailyPuzzles.$inferSelect;

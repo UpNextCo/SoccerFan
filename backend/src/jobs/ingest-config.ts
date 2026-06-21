@@ -32,7 +32,6 @@ export const INGEST_LEAGUES = [
 
 export type IngestLeague = (typeof INGEST_LEAGUES)[number];
 
-/** Comma-separated API league ids or names, e.g. `140,78` or `La Liga,Bundesliga` */
 export function resolveIngestLeagues(): IngestLeague[] {
   const raw = process.env.INGEST_LEAGUE_IDS?.trim();
   if (!raw) return [...INGEST_LEAGUES];
@@ -54,3 +53,15 @@ export function resolveIngestLeagues(): IngestLeague[] {
 
   return [...picked];
 }
+
+/** How many past seasons of stats to pull (default 2 = ~2024 + 2025). */
+export function resolveIngestSeasonsBack(): number[] {
+  const back = Number(process.env.INGEST_SEASONS_BACK ?? 2);
+  const count = Number.isFinite(back) && back > 0 ? Math.min(back, 8) : 2;
+  const current = resolveIngestSeason();
+  return Array.from({ length: count }, (_, i) => current - i).filter((s) => s >= 2000);
+}
+
+export const LEAGUE_ID_BY_NAME: Record<string, number> = Object.fromEntries(
+  INGEST_LEAGUES.map((l) => [l.name, l.id])
+);

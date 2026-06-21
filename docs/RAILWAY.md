@@ -22,6 +22,7 @@
 | `API_FOOTBALL_KEY` | Optional — for player ingestion |
 | `INGEST_SEASON` | Optional — API-Football season start year (e.g. `2026` for 2026/27). Auto-detected if unset. |
 | `INGEST_LEAGUE_IDS` | Optional — comma-separated league ids or names to limit ingest (e.g. `140,78` for La Liga + Bundesliga only) |
+| `INGEST_SEASONS_BACK` | Optional — seasons of stats history to pull (default `2`) |
 | `NODE_ENV` | `production` |
 | `PORT` | Railway sets automatically |
 
