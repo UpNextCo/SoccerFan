@@ -8,6 +8,7 @@ import {
   jsonb,
   date,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -45,7 +46,10 @@ export const players = pgTable(
     marketValueTier: integer('market_value_tier').notNull().default(3),
     searchText: text('search_text').notNull(),
   },
-  (table) => [index('players_search_idx').on(table.searchText)]
+  (table) => [
+    index('players_search_idx').on(table.searchText),
+    uniqueIndex('players_external_id_unique').on(table.externalId),
+  ]
 );
 
 export const dailyPuzzles = pgTable(

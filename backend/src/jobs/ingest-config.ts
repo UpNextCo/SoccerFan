@@ -29,3 +29,28 @@ export const INGEST_LEAGUES = [
   { id: 78, name: 'Bundesliga' },
   { id: 61, name: 'Ligue 1' },
 ] as const;
+
+export type IngestLeague = (typeof INGEST_LEAGUES)[number];
+
+/** Comma-separated API league ids or names, e.g. `140,78` or `La Liga,Bundesliga` */
+export function resolveIngestLeagues(): IngestLeague[] {
+  const raw = process.env.INGEST_LEAGUE_IDS?.trim();
+  if (!raw) return [...INGEST_LEAGUES];
+
+  const tokens = raw.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+  const picked = INGEST_LEAGUES.filter((league) =>
+    tokens.some(
+      (token) =>
+        token === String(league.id) ||
+        league.name.toLowerCase() === token ||
+        league.name.toLowerCase().includes(token)
+    )
+  );
+
+  if (picked.length === 0) {
+    const available = INGEST_LEAGUES.map((l) => `${l.id}=${l.name}`).join(', ');
+    throw new Error(`INGEST_LEAGUE_IDS matched no leagues. Available: ${available}`);
+  }
+
+  return [...picked];
+}

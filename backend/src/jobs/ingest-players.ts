@@ -3,8 +3,8 @@
  * Usage: API_FOOTBALL_KEY=xxx DATABASE_URL=xxx npm run job:ingest-players
  */
 import 'dotenv/config';
-import { eq } from 'drizzle-orm';
-import { INGEST_LEAGUES, resolveIngestSeason } from './ingest-config.js';
+import { sql } from 'drizzle-orm';
+import { resolveIngestLeagues, resolveIngestSeason } from './ingest-config.js';
 import { players } from '../db/schema.js';
 import { db } from '../db/index.js';
 
@@ -212,6 +212,29 @@ async function fetchTeamRoster(
   return { entries, source: 'squads' };
 }
 
+async function fetchLeagueTeams(
+  leagueId: number,
+  leagueName: string,
+  season: number
+): Promise<{ teams: Array<{ team: { id: number; name: string } }>; teamsSeason: number }> {
+  for (const trySeason of [season, season - 1]) {
+    const teamsData = (await fetchJson(
+      `https://v3.football.api-sports.io/teams?league=${leagueId}&season=${trySeason}`
+    )) as { response: Array<{ team: { id: number; name: string } }> };
+
+    const teams = teamsData.response ?? [];
+    if (teams.length > 0) {
+      if (trySeason !== season) {
+        console.log(`  ℹ Using ${trySeason}/${String(trySeason + 1).slice(-2)} team list (${season}/${String(season + 1).slice(-2)} not in API yet)`);
+      }
+      return { teams, teamsSeason: trySeason };
+    }
+  }
+
+  console.warn(`  ⚠ No teams for ${leagueName} in seasons ${season} or ${season - 1}`);
+  return { teams: [], teamsSeason: season };
+}
+
 async function upsertPlayer(values: {
   externalId: string;
   name: string;
@@ -224,16 +247,15 @@ async function upsertPlayer(values: {
   shirtNumber: number | null;
   searchText: string;
 }) {
-  const existing = await db
-    .select({ id: players.id })
-    .from(players)
-    .where(eq(players.externalId, values.externalId))
-    .limit(1);
-
-  if (existing[0]) {
-    await db
-      .update(players)
-      .set({
+  await db
+    .insert(players)
+    .values({
+      ...values,
+      marketValueTier: 3,
+    })
+    .onConflictDoUpdate({
+      target: players.externalId,
+      set: {
         name: values.name,
         aliases: values.aliases,
         nationality: values.nationality,
@@ -243,27 +265,15 @@ async function upsertPlayer(values: {
         currentLeague: values.currentLeague,
         shirtNumber: values.shirtNumber,
         searchText: values.searchText,
-      })
-      .where(eq(players.id, existing[0].id));
-    return;
-  }
-
-  await db.insert(players).values({
-    ...values,
-    marketValueTier: 3,
-  });
+      },
+    });
 }
 
 async function ingestLeague(leagueId: number, leagueName: string, season: number): Promise<number> {
-  const teamsData = (await fetchJson(
-    `https://v3.football.api-sports.io/teams?league=${leagueId}&season=${season}`
-  )) as { response: Array<{ team: { id: number; name: string } }> };
-
-  const teams = teamsData.response ?? [];
+  const { teams } = await fetchLeagueTeams(leagueId, leagueName, season);
   console.log(`  ${teams.length} teams found`);
 
   if (teams.length === 0) {
-    console.warn(`  ⚠ No teams for ${leagueName} in season ${season} — API may not have this season yet`);
     return 0;
   }
 
@@ -310,10 +320,10 @@ async function ingestLeague(leagueId: number, leagueName: string, season: number
   return playerCount;
 }
 
-async function runIngest(season: number): Promise<number> {
+async function runIngest(season: number, leagues = resolveIngestLeagues()): Promise<number> {
   profileCache.clear();
   let total = 0;
-  for (const league of INGEST_LEAGUES) {
+  for (const league of leagues) {
     console.log(`Ingesting ${league.name}...`);
     total += await ingestLeague(league.id, league.name, season);
   }
@@ -325,6 +335,31 @@ async function countPlayers(): Promise<number> {
   return rows.length;
 }
 
+async function countDuplicateExternalIds(): Promise<number> {
+  const rows = await db.execute<{ count: string }>(sql`
+    SELECT COUNT(*)::text AS count FROM (
+      SELECT external_id FROM players
+      WHERE external_id IS NOT NULL
+      GROUP BY external_id HAVING COUNT(*) > 1
+    ) dupes
+  `);
+  return Number(rows[0]?.count ?? 0);
+}
+
+async function printLeagueBreakdown(): Promise<void> {
+  const rows = await db.execute<{ league: string; count: string }>(sql`
+    SELECT current_league AS league, COUNT(*)::text AS count
+    FROM players
+    GROUP BY current_league
+    ORDER BY COUNT(*) DESC
+  `);
+
+  console.log('Players by league:');
+  for (const row of rows) {
+    console.log(`  ${row.league}: ${row.count}`);
+  }
+}
+
 async function main() {
   if (!API_KEY) {
     console.log('Set API_FOOTBALL_KEY to ingest from API-Football. Use db:seed for local dev.');
@@ -332,9 +367,11 @@ async function main() {
   }
 
   const season = resolveIngestSeason();
+  const leagues = resolveIngestLeagues();
   console.log(`Using API-Football season ${season} (${season}/${String(season + 1).slice(-2)} campaign)`);
+  console.log(`Leagues: ${leagues.map((l) => l.name).join(', ')}`);
 
-  let ingested = await runIngest(season);
+  let ingested = await runIngest(season, leagues);
 
   if (ingested === 0 && !process.env.INGEST_SEASON) {
     const fallbackSeason = season - 1;
@@ -342,13 +379,18 @@ async function main() {
     console.warn(`⚠ Season ${season} returned 0 players — falling back to ${fallbackSeason}/${String(fallbackSeason + 1).slice(-2)}`);
     console.warn('  Set INGEST_SEASON=2026 to force upcoming season, or INGEST_SEASON=2025 for last completed season');
     console.warn('');
-    ingested = await runIngest(fallbackSeason);
+    ingested = await runIngest(fallbackSeason, leagues);
   }
 
   const totalInDb = await countPlayers();
+  const duplicateIds = await countDuplicateExternalIds();
   console.log('');
   console.log(`Ingestion complete — ${ingested} players processed this run`);
-  console.log(`Database total: ${totalInDb} players`);
+  console.log(`Database total: ${totalInDb} unique players`);
+  if (duplicateIds > 0) {
+    console.warn(`⚠ ${duplicateIds} duplicate external_ids remain — run: npm run db:migrate`);
+  }
+  await printLeagueBreakdown();
   process.exit(0);
 }
 

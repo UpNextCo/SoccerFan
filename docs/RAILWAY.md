@@ -21,6 +21,7 @@
 | `APPLE_CLIENT_ID` | `com.psounds.ballknowledge` (your bundle ID) |
 | `API_FOOTBALL_KEY` | Optional — for player ingestion |
 | `INGEST_SEASON` | Optional — API-Football season start year (e.g. `2026` for 2026/27). Auto-detected if unset. |
+| `INGEST_LEAGUE_IDS` | Optional — comma-separated league ids or names to limit ingest (e.g. `140,78` for La Liga + Bundesliga only) |
 | `NODE_ENV` | `production` |
 | `PORT` | Railway sets automatically |
 
