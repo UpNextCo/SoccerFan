@@ -45,6 +45,7 @@ struct HomeView: View {
     @State private var showTargetMan = false
     @State private var showFootballGolf = false
     @State private var showBlindRank = false
+    @State private var showOneMore = false
     @Binding var selectedTab: AppTab
 
     var body: some View {
@@ -80,6 +81,8 @@ struct HomeView: View {
                             showFootballGolf = true
                         case GameModeID.blindRank.rawValue:
                             showBlindRank = true
+                        case GameModeID.oneMore.rawValue:
+                            showOneMore = true
                         default:
                             break
                         }
@@ -136,6 +139,11 @@ struct HomeView: View {
         .fullScreenCover(isPresented: $showBlindRank) {
             BlindRankView(onComplete: {
                 showBlindRank = false
+            })
+        }
+        .fullScreenCover(isPresented: $showOneMore) {
+            OneMoreView(onComplete: {
+                showOneMore = false
             })
         }
     }

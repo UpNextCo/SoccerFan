@@ -8,7 +8,7 @@ enum GameModeID: String, CaseIterable {
     case footballGolf = "football_golf"
     case blindRank = "blind_rank"
     case guessTheGoal = "guess_the_goal"
-    case emojiPlayers = "emoji_players"
+    case oneMore = "one_more"
     case careerPath = "career_path"
 
     var title: String {
@@ -20,7 +20,7 @@ enum GameModeID: String, CaseIterable {
         case .footballGolf: return "FOOTBALL GOLF"
         case .blindRank: return "BLIND RANK"
         case .guessTheGoal: return "GUESS THE GOAL"
-        case .emojiPlayers: return "EMOJI PLAYERS"
+        case .oneMore: return "ONE MORE"
         case .careerPath: return "CAREER PATH"
         }
     }
@@ -34,7 +34,7 @@ enum GameModeID: String, CaseIterable {
         case .footballGolf: return "flag.fill"
         case .blindRank: return "list.number"
         case .guessTheGoal: return "soccerball"
-        case .emojiPlayers: return "face.smiling"
+        case .oneMore: return "flame.fill"
         case .careerPath: return "point.topleft.down.curvedto.point.bottomright.up"
         }
     }

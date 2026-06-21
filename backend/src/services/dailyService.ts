@@ -13,7 +13,7 @@ const GAME_MODES = [
   { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9-hole trivia par', playerCount: 7600, isAvailable: true },
   { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
   { id: 'guess_the_goal', title: 'GUESS THE GOAL', subtitle: 'Spot the scorer', playerCount: 11300, isAvailable: false },
-  { id: 'emoji_players', title: 'EMOJI PLAYERS', subtitle: 'Decode the emoji', playerCount: 6400, isAvailable: false },
+  { id: 'one_more', title: 'ONE MORE', subtitle: 'Risk it for points', playerCount: 6400, isAvailable: true },
   { id: 'career_path', title: 'CAREER PATH', subtitle: 'Follow the clubs', playerCount: 8700, isAvailable: false },
 ];
 

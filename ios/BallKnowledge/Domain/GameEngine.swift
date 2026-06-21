@@ -31,6 +31,8 @@ enum GameRegistry {
             return AnyView(FootballGolfView(onComplete: onComplete))
         case GameModeID.blindRank.rawValue:
             return AnyView(BlindRankView(onComplete: onComplete))
+        case GameModeID.oneMore.rawValue:
+            return AnyView(OneMoreView(onComplete: onComplete))
         default:
             return AnyView(ComingSoonGameView(modeId: modeId))
         }
