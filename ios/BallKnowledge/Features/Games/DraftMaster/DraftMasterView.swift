@@ -180,44 +180,20 @@ struct DraftMasterView: View {
     var body: some View {
         ZStack {
             NavigationStack {
-                Group {
-                    switch viewModel.state.phase {
-                    case .intro:
+                ZStack {
+                    if case .intro = viewModel.state.phase {
                         DraftMasterIntroView(
                             challenge: viewModel.state.challenge,
                             onStart: viewModel.startDraft,
                             onNewPractice: allowReplay ? viewModel.newPracticeDraft : nil
                         )
-                    case .spinningPrompt, .drafting, .complete:
+                    } else {
                         draftScreen
                     }
                 }
                 .background(BKTheme.background)
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button { dismiss() } label: {
-                            Ph.x.bold
-                                .color(BKTheme.textPrimary)
-                                .frame(width: 15, height: 15)
-                        }
-                    }
-                    ToolbarItem(placement: .principal) {
-                        Text("DRAFT MASTER")
-                            .font(BKFont.caption(13))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.accent)
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        if viewModel.state.phase == .intro {
-                            Button { viewModel.newPracticeDraft() } label: {
-                                Text("NEW")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textMuted)
-                            }
-                        }
-                    }
-                }
+                .toolbar(content: draftMasterToolbar)
             }
 
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
@@ -274,6 +250,32 @@ struct DraftMasterView: View {
                     picks: viewModel.state.picks,
                     summary: summary
                 )
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private func draftMasterToolbar() -> some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button { dismiss() } label: {
+                Ph.x.bold
+                    .color(BKTheme.textPrimary)
+                    .frame(width: 15, height: 15)
+            }
+        }
+        ToolbarItem(placement: .principal) {
+            Text("DRAFT MASTER")
+                .font(BKFont.caption(13))
+                .tracking(1)
+                .foregroundStyle(BKTheme.accent)
+        }
+        if allowReplay, case .intro = viewModel.state.phase {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { viewModel.newPracticeDraft() } label: {
+                    Text("NEW")
+                        .font(BKFont.caption(10))
+                        .foregroundStyle(BKTheme.textMuted)
+                }
             }
         }
     }
