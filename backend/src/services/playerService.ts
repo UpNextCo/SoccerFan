@@ -1,7 +1,8 @@
-import { and, eq, ilike, or } from 'drizzle-orm';
+import { and, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { players } from '../db/schema.js';
 import type { GuessFeedbackField, PlayerSearchResult } from '../types.js';
+import { normalizeSearchText } from '../utils/playerSearch.js';
 
 export type FeedbackStatus = 'correct' | 'partial' | 'wrong';
 
@@ -80,21 +81,23 @@ export function isCorrectGuess(
 }
 
 export async function searchPlayers(query: string, limit = 10): Promise<PlayerSearchResult[]> {
-  const normalized = query
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+  const normalized = normalizeSearchText(query);
 
   if (normalized.length < 2) return [];
+
+  const pattern = `%${normalized}%`;
 
   const rows = await db
     .select()
     .from(players)
     .where(
       or(
-        ilike(players.searchText, `%${normalized}%`),
-        ilike(players.name, `%${query}%`)
+        ilike(players.searchText, pattern),
+        ilike(players.name, pattern),
+        sql`EXISTS (
+          SELECT 1 FROM jsonb_array_elements_text(${players.aliases}) AS alias
+          WHERE lower(alias) LIKE ${pattern}
+        )`
       )
     )
     .limit(limit);

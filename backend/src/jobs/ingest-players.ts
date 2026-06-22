@@ -7,6 +7,10 @@ import { sql } from 'drizzle-orm';
 import { resolveIngestLeagues, resolveIngestSeason } from './ingest-config.js';
 import { players } from '../db/schema.js';
 import { db } from '../db/index.js';
+import {
+  buildPlayerSearchFields,
+  isAbbreviatedName,
+} from '../utils/playerSearch.js';
 
 const API_KEY = process.env.API_FOOTBALL_KEY;
 const REQUEST_DELAY_MS = 250;
@@ -15,6 +19,8 @@ type ApiPlayerEntry = {
   player: {
     id: number;
     name: string;
+    firstname?: string | null;
+    lastname?: string | null;
     age: number | null;
     nationality: string | null;
   };
@@ -37,26 +43,18 @@ type SquadPlayer = {
   nationality: string | null;
 };
 
-const profileCache = new Map<number, { nationality: string | null; age: number | null }>();
+const profileCache = new Map<
+  number,
+  {
+    nationality: string | null;
+    age: number | null;
+    firstname: string | null;
+    lastname: string | null;
+  }
+>();
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function normalizeSearchText(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
-
-function buildAliases(name: string): string[] {
-  const parts = name.split(' ');
-  const aliases = [name];
-  if (parts.length > 1) {
-    aliases.push(parts[parts.length - 1]!);
-  }
-  return aliases;
 }
 
 function mapPosition(pos: string | null | undefined): string {
@@ -109,7 +107,12 @@ function pickStatistics(entry: ApiPlayerEntry, teamId: number, leagueId: number)
 async function fetchPlayerProfile(
   playerId: number,
   seasonsToTry: number[]
-): Promise<{ nationality: string | null; age: number | null }> {
+): Promise<{
+  nationality: string | null;
+  age: number | null;
+  firstname: string | null;
+  lastname: string | null;
+}> {
   const cached = profileCache.get(playerId);
   if (cached) return cached;
 
@@ -123,15 +126,52 @@ async function fetchPlayerProfile(
       const profile = {
         nationality: entry.player.nationality,
         age: entry.player.age,
+        firstname: entry.player.firstname?.trim() || null,
+        lastname: entry.player.lastname?.trim() || null,
       };
       profileCache.set(playerId, profile);
       return profile;
     }
   }
 
-  const empty = { nationality: null, age: null };
+  const empty = { nationality: null, age: null, firstname: null, lastname: null };
   profileCache.set(playerId, empty);
   return empty;
+}
+
+async function resolvePlayerIdentity(
+  entry: ApiPlayerEntry,
+  season: number
+): Promise<{
+  name: string;
+  aliases: string[];
+  searchText: string;
+  nationality: string;
+  age: number;
+}> {
+  let firstname = entry.player.firstname?.trim() || null;
+  let lastname = entry.player.lastname?.trim() || null;
+  let nationality = entry.player.nationality;
+  let age = entry.player.age;
+
+  const needsProfile =
+    !firstname || !lastname || isAbbreviatedName(entry.player.name) || !nationality;
+
+  if (needsProfile) {
+    const profile = await fetchPlayerProfile(entry.player.id, [season, season - 1]);
+    firstname = firstname || profile.firstname;
+    lastname = lastname || profile.lastname;
+    nationality = nationality ?? profile.nationality;
+    age = age ?? profile.age;
+  }
+
+  const searchFields = buildPlayerSearchFields(entry.player.name, firstname, lastname);
+
+  return {
+    ...searchFields,
+    nationality: normalizeNationality(nationality),
+    age: normalizeAge(age),
+  };
 }
 
 async function fetchTeamPlayersFromStats(teamId: number, season: number): Promise<ApiPlayerEntry[]> {
@@ -288,26 +328,26 @@ async function ingestLeague(leagueId: number, leagueName: string, season: number
 
     for (const entry of entries) {
       const stats = pickStatistics(entry, team.id, leagueId);
-      const nationality = normalizeNationality(entry.player.nationality);
+      const identity = await resolvePlayerIdentity(entry, season);
 
-      if (nationality === 'Unknown') {
+      if (identity.nationality === 'Unknown') {
         console.warn(`  ! ${entry.player.name} (${team.name}) — nationality still missing`);
       }
 
       await upsertPlayer({
         externalId: String(entry.player.id),
-        name: entry.player.name,
-        aliases: buildAliases(entry.player.name),
-        nationality,
+        name: identity.name,
+        aliases: identity.aliases,
+        nationality: identity.nationality,
         position: mapPosition(stats?.games.position),
-        age: normalizeAge(entry.player.age),
+        age: identity.age,
         currentClub: team.name,
         currentLeague: leagueName,
         shirtNumber: stats?.games.number ?? null,
-        searchText: normalizeSearchText(entry.player.name),
+        searchText: identity.searchText,
       });
 
-      console.log(`  + ${entry.player.name} (${team.name})`);
+      console.log(`  + ${identity.name} (${team.name})`);
       playerCount += 1;
     }
   }

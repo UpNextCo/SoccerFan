@@ -1,6 +1,7 @@
 import { db } from './index.js';
 import { players } from './schema.js';
 import { generateDailyPuzzle } from '../jobs/generate-daily.js';
+import { buildPlayerSearchFields } from '../utils/playerSearch.js';
 
 const SEED_PLAYERS = [
   { name: 'Erling Haaland', nationality: 'Norway', position: 'Attacker', age: 24, currentClub: 'Manchester City', currentLeague: 'Premier League', shirtNumber: 9, marketValueTier: 5 },
@@ -35,21 +36,12 @@ const SEED_PLAYERS = [
   { name: 'Antoine Griezmann', nationality: 'France', position: 'Attacker', age: 33, currentClub: 'Atletico Madrid', currentLeague: 'La Liga', shirtNumber: 7, marketValueTier: 3 },
 ];
 
-function normalizeSearchText(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
+function buildAliases(name: string): string[] {
+  return buildPlayerSearchFields(name).aliases;
 }
 
-function buildAliases(name: string): string[] {
-  const parts = name.split(' ');
-  const aliases = [name];
-  if (parts.length > 1) {
-    aliases.push(parts[parts.length - 1]!);
-    aliases.push(`${parts[0]![0]}. ${parts[parts.length - 1]}`);
-  }
-  return aliases;
+function normalizeSearchText(name: string): string {
+  return buildPlayerSearchFields(name).searchText;
 }
 
 export async function seedPlayersIfEmpty(): Promise<void> {
