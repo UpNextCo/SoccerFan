@@ -48,6 +48,13 @@ struct GuessWhoPuzzleDTO: Codable, Equatable {
 }
 
 struct GuessFeedbackFieldDTO: Codable, Equatable {
+    let field: String
+    let value: StringOrNumber?
+    let status: String
+    let hint: String?
+}
+
+struct PlayerSearchResultDTO: Codable, Identifiable, Equatable {
     let id: String
     let name: String
     let club: String
@@ -75,13 +82,6 @@ struct PlayerCareerStatsDTO: Codable, Equatable {
     let totals: PlayerCareerStatsTotalsDTO
     let trophyCount: Int
     let latestTransferFeeEurM: Double?
-}
-
-struct GuessFeedbackFieldDTO: Codable, Equatable {
-    let field: String
-    let value: StringOrNumber?
-    let status: String
-    let hint: String?
 }
 
 enum StringOrNumber: Codable, Equatable {
