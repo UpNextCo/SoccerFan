@@ -24,7 +24,6 @@ targets:
         excludes:
           - Resources/banner.png
           - Resources/banner1.png
-          - Resources/banner2.png
           - Resources/bingo.PNG
           - Resources/tenaball.png
           - Resources/GameTiles

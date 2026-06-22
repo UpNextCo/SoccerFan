@@ -309,17 +309,16 @@ struct DailyChallengeCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             GeometryReader { geo in
-                ZStack(alignment: .trailing) {
+                ZStack {
                     LinearGradient(
                         colors: [BKTheme.cardElevated, BKTheme.card],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
 
-                    Image("banner2")
-                        .resizable()
+                    BundleResourceImage(name: "banner2")
                         .scaledToFill()
-                        .frame(width: geo.size.width * 0.55, height: geo.size.height, alignment: .trailing)
+                        .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
 
                     LinearGradient(
@@ -388,7 +387,7 @@ struct GameModeTile: View {
     private let cornerRadius: CGFloat = 14
 
     private var tileArtImageName: String? {
-        GameModeTileArt.bundleImageName(for: mode.id)
+        GameModeTileArt.bundleImageName(for: GameModeCatalog.normalizedModeId(mode.id))
     }
 
     private var usesImageArt: Bool { tileArtImageName != nil }
@@ -442,66 +441,21 @@ struct GameModeTile: View {
 
     private var tileContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            tileTitle
-
             Spacer(minLength: 0)
-
-            tileFooter
+            tileTitle
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .padding(10)
     }
 
     private var tileTitle: some View {
         Text(mode.title)
-            .font(usesImageArt
-                ? .system(size: 15, weight: .black, design: .rounded)
-                : BKFont.caption(9))
+            .font(.system(size: 15, weight: .black, design: .rounded))
             .foregroundStyle(BKTheme.textPrimary)
             .shadow(color: usesImageArt ? Color.black.opacity(0.45) : .clear, radius: 3, y: 1)
             .lineLimit(2)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var tileFooter: some View {
-        HStack {
-            HStack(spacing: 4) {
-                Ph.users.fill
-                    .color(footerMetaColor)
-                    .frame(width: 10, height: 10)
-                Text(formatCount(mode.playerCount))
-                    .font(.system(size: 9, weight: usesImageArt ? .semibold : .regular))
-                    .foregroundStyle(footerMetaColor)
-            }
-            Spacer()
-            if mode.isAvailable {
-                Ph.play.fill
-                    .color(BKTheme.background)
-                    .frame(width: 10, height: 10)
-                    .padding(6)
-                    .background(BKTheme.accent)
-                    .clipShape(Circle())
-            } else {
-                Text("SOON")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(usesImageArt ? footerMetaColor : BKTheme.textMuted)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(usesImageArt ? Color.black.opacity(0.2) : BKTheme.cardElevated)
-                    .clipShape(Capsule())
-            }
-        }
-    }
-
-    private var footerMetaColor: Color {
-        usesImageArt ? Color(hex: "D4D4D4") : BKTheme.textMuted
-    }
-
-    private func formatCount(_ count: Int) -> String {
-        if count >= 1000 {
-            return String(format: "%.1fK", Double(count) / 1000)
-        }
-        return "\(count)"
     }
 }
 

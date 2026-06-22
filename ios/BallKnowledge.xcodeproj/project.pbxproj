@@ -13,6 +13,7 @@
 		11D7E72212B439B712EE3A58 /* FootballTowerModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1D794DAC4294F9E4AD39D4 /* FootballTowerModels.swift */; };
 		122B4C6CD985D0A176790058 /* GuessWhoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00FA2FB8FBFC91B16A7AB21C /* GuessWhoView.swift */; };
 		17A34A02185961789C1749C0 /* FootballGolfSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4807D15DBF77303C84FFD495 /* FootballGolfSeed.swift */; };
+		1A06B39256CCB7071BE56B76 /* banner2.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 751C96BCA37B06929361B291 /* banner2.jpg */; };
 		1CBF05E52D092BB0FC7666DD /* TeamBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DBF3219468891E23C91877 /* TeamBadge.swift */; };
 		1DE6B38A67939B16E33B77F5 /* PhIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 551C9C4FE32FA9F6DE64D92B /* PhIcons.xcassets */; };
 		25BC41EC32677FC16436E271 /* GameTiles in Resources */ = {isa = PBXBuildFile; fileRef = 3F9338EE6BEC06EBB52F7C4B /* GameTiles */; };
@@ -86,6 +87,7 @@
 		6B42BB208E7E01B1BD110962 /* FootballBingoSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballBingoSeed.swift; sourceTree = "<group>"; };
 		6C1F2FB4327F0A5F5EDB1112 /* DraftMasterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftMasterView.swift; sourceTree = "<group>"; };
 		74DBF3219468891E23C91877 /* TeamBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamBadge.swift; sourceTree = "<group>"; };
+		751C96BCA37B06929361B291 /* banner2.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = banner2.jpg; sourceTree = "<group>"; };
 		7CD6B099FC77A179B81960DA /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		7F6C9BA15F9200256CCE247F /* FootballGolfModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballGolfModels.swift; sourceTree = "<group>"; };
 		8014DDCB14BE89801F5278AA /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
@@ -247,6 +249,7 @@
 		8581FF6AD12DF6E7F4E66117 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				751C96BCA37B06929361B291 /* banner2.jpg */,
 				3F9338EE6BEC06EBB52F7C4B /* GameTiles */,
 			);
 			path = Resources;
@@ -390,6 +393,7 @@
 				32B093D09D8FBEAC3648B7DB /* Assets.xcassets in Resources */,
 				25BC41EC32677FC16436E271 /* GameTiles in Resources */,
 				1DE6B38A67939B16E33B77F5 /* PhIcons.xcassets in Resources */,
+				1A06B39256CCB7071BE56B76 /* banner2.jpg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -9,13 +9,14 @@ import { loadIngestPlayers } from './ingest-player-map.js';
 import { classifyTransferType, parseTransferFeeEurM } from './parse-fee.js';
 import { db } from '../db/index.js';
 import { playerTransfers } from '../db/schema.js';
+import { toTeamId } from './ingest-parse.js';
 
 type TransferEntry = {
   date: string | null;
   type: string | null;
   teams: {
-    in: { id: number | null; name: string | null };
-    out: { id: number | null; name: string | null };
+    in: { id: number | string | null; name: string | null };
+    out: { id: number | string | null; name: string | null };
   };
 };
 
@@ -40,9 +41,9 @@ export async function runIngestTransfers(): Promise<number> {
           .values({
             playerId: player.id,
             transferDate: transfer.date ?? null,
-            fromTeamId: transfer.teams.out.id ?? 0,
+            fromTeamId: toTeamId(transfer.teams.out.id),
             fromTeamName: transfer.teams.out.name,
-            toTeamId: transfer.teams.in.id ?? 0,
+            toTeamId: toTeamId(transfer.teams.in.id),
             toTeamName: transfer.teams.in.name,
             feeRaw,
             feeEurM: parseTransferFeeEurM(feeRaw)?.toString() ?? null,

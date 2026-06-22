@@ -2,13 +2,13 @@ import SwiftUI
 
 enum GameModeID: String, CaseIterable {
     case footballBingo = "football_bingo"
-    case tenaball = "tenaball"
+    case oneMore = "one_more"
     case targetMan = "target_man"
     case guessWho = "guess_who"
     case footballGolf = "football_golf"
     case blindRank = "blind_rank"
     case draftMaster = "draft_master"
-    case oneMore = "one_more"
+    case tenaball = "tenaball"
     case footballTower = "football_tower"
 
     var title: String {

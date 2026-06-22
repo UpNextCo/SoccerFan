@@ -8,10 +8,11 @@ import { beginIngestRun, finishIngestRun } from './ingest-run.js';
 import { loadIngestPlayers } from './ingest-player-map.js';
 import { db } from '../db/index.js';
 import { playerCareer } from '../db/schema.js';
+import { parseSeasons, toPositiveInt } from './ingest-parse.js';
 
 type CareerTeamEntry = {
-  team: { id: number; name: string };
-  seasons: number[];
+  team: { id: number | string | null; name: string | null };
+  seasons: unknown[];
 };
 
 export async function runIngestCareer(): Promise<number> {
@@ -28,18 +29,22 @@ export async function runIngestCareer(): Promise<number> {
       )) as { response: CareerTeamEntry[] };
 
       for (const entry of data.response ?? []) {
-        const seasons = [...(entry.seasons ?? [])].sort((a, b) => a - b);
+        const teamId = toPositiveInt(entry.team?.id);
+        const teamName = entry.team?.name?.trim();
+        if (!teamId || !teamName) continue;
+
+        const seasons = parseSeasons(entry.seasons);
         if (seasons.length === 0) continue;
 
         const seasonFrom = seasons[0]!;
-        const seasonTo = seasons[seasons.length - 1];
+        const seasonTo = seasons[seasons.length - 1]!;
 
         await db
           .insert(playerCareer)
           .values({
             playerId: player.id,
-            teamId: entry.team.id,
-            teamName: entry.team.name,
+            teamId,
+            teamName,
             seasonFrom,
             seasonTo: seasonTo >= seasonFrom ? seasonTo : seasonFrom,
             updatedAt: new Date(),
@@ -47,7 +52,7 @@ export async function runIngestCareer(): Promise<number> {
           .onConflictDoUpdate({
             target: [playerCareer.playerId, playerCareer.teamId, playerCareer.seasonFrom],
             set: {
-              teamName: entry.team.name,
+              teamName,
               seasonTo: seasonTo >= seasonFrom ? seasonTo : seasonFrom,
               updatedAt: new Date(),
             },
