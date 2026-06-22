@@ -65,8 +65,10 @@ struct PlayTabView: View {
                 dailyBundle = try? await APIClient.shared.dailyToday()
             }
             .fullScreenCover(isPresented: $showGuessWho) {
-                if let bundle = dailyBundle, let game = bundle.games.first {
-                    GuessWhoView(puzzle: game.puzzle, date: bundle.date, onComplete: {})
+                if let bundle = dailyBundle, let puzzle = bundle.guessWhoPuzzle {
+                    GuessWhoView(puzzle: puzzle, date: bundle.date, onComplete: {
+                        showGuessWho = false
+                    })
                 }
             }
             .fullScreenCover(isPresented: $showFootballBingo) {
@@ -75,7 +77,7 @@ struct PlayTabView: View {
                 })
             }
             .fullScreenCover(isPresented: $showTargetMan) {
-                TargetManView(onComplete: {
+                TargetManView(dailyBundle: dailyBundle, onComplete: {
                     showTargetMan = false
                 })
             }
@@ -85,7 +87,7 @@ struct PlayTabView: View {
                 })
             }
             .fullScreenCover(isPresented: $showBlindRank) {
-                BlindRankView(onComplete: {
+                BlindRankView(dailyBundle: dailyBundle, onComplete: {
                     showBlindRank = false
                 })
             }
@@ -134,6 +136,9 @@ struct PlayTabView: View {
 
 struct DailyTabView: View {
     @State private var bundle: DailyBundleDTO?
+    @State private var showGuessWho = false
+    @State private var showTargetMan = false
+    @State private var showBlindRank = false
 
     var body: some View {
         NavigationStack {
@@ -143,19 +148,22 @@ struct DailyTabView: View {
                         .font(BKFont.caption())
                         .foregroundStyle(BKTheme.textMuted)
 
-                    ForEach(bundle.games, id: \.modeId) { game in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(game.title)
-                                .font(BKFont.headline())
-                                .foregroundStyle(BKTheme.textPrimary)
-                            Text(bundle.alreadyPlayed ? "Completed" : "Not played yet")
-                                .font(BKFont.body())
-                                .foregroundStyle(bundle.alreadyPlayed ? BKTheme.accent : BKTheme.textSecondary)
+                    ForEach(bundle.games) { game in
+                        Button {
+                            openDailyGame(game, bundle: bundle)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(game.title)
+                                    .font(BKFont.headline())
+                                    .foregroundStyle(BKTheme.textPrimary)
+                                dailySubtitle(for: game, bundle: bundle)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(20)
+                            .background(BKTheme.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(20)
-                        .background(BKTheme.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .buttonStyle(.plain)
                     }
 
                     Text("Archive coming soon")
@@ -172,6 +180,54 @@ struct DailyTabView: View {
             .task {
                 bundle = try? await APIClient.shared.dailyToday()
             }
+            .fullScreenCover(isPresented: $showGuessWho) {
+                if let bundle, let puzzle = bundle.guessWhoPuzzle {
+                    GuessWhoView(puzzle: puzzle, date: bundle.date, onComplete: {
+                        showGuessWho = false
+                    })
+                }
+            }
+            .fullScreenCover(isPresented: $showTargetMan) {
+                TargetManView(dailyBundle: bundle, onComplete: {
+                    showTargetMan = false
+                })
+            }
+            .fullScreenCover(isPresented: $showBlindRank) {
+                BlindRankView(dailyBundle: bundle, onComplete: {
+                    showBlindRank = false
+                })
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func dailySubtitle(for game: DailyGameDTO, bundle: DailyBundleDTO) -> some View {
+        switch game.puzzle {
+        case .guessWho:
+            Text(bundle.alreadyPlayed ? "Completed" : "8 guesses · Wordle-style player guess")
+                .font(BKFont.body())
+                .foregroundStyle(bundle.alreadyPlayed ? BKTheme.accent : BKTheme.textSecondary)
+        case .targetMan(let puzzle):
+            Text("\(puzzle.title) · target \(puzzle.target)")
+                .font(BKFont.body())
+                .foregroundStyle(BKTheme.textSecondary)
+        case .blindRank(let puzzle):
+            Text("\(puzzle.categoryTitle) · \(puzzle.presentationOrder.count) players")
+                .font(BKFont.body())
+                .foregroundStyle(BKTheme.textSecondary)
+        }
+    }
+
+    private func openDailyGame(_ game: DailyGameDTO, bundle: DailyBundleDTO) {
+        switch GameModeCatalog.normalizedModeId(game.modeId) {
+        case GameModeID.guessWho.rawValue:
+            showGuessWho = true
+        case GameModeID.targetMan.rawValue:
+            showTargetMan = true
+        case GameModeID.blindRank.rawValue:
+            showBlindRank = true
+        default:
+            break
         }
     }
 }

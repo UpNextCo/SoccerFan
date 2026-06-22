@@ -47,25 +47,34 @@ struct GuessWhoPuzzleDTO: Codable, Equatable {
     let maxScore: Int
 }
 
-struct DailyGameDTO: Codable {
-    let modeId: String
-    let title: String
-    let puzzle: GuessWhoPuzzleDTO
-}
-
-struct DailyBundleDTO: Codable {
-    let date: String
-    let alreadyPlayed: Bool
-    let games: [DailyGameDTO]
-}
-
-struct PlayerSearchResultDTO: Codable, Identifiable, Equatable {
+struct GuessFeedbackFieldDTO: Codable, Equatable {
     let id: String
     let name: String
     let club: String
     let league: String
     let nationality: String
     let position: String
+}
+
+struct PlayerCareerStatsTotalsDTO: Codable, Equatable {
+    let goals: Int
+    let assists: Int
+    let appearances: Int
+    let yellowCards: Int
+    let redCards: Int
+    let minutes: Int
+    let cleanSheets: Int
+    let saves: Int
+    let foulsCommitted: Int
+    let tackles: Int
+}
+
+struct PlayerCareerStatsDTO: Codable, Equatable {
+    let playerId: String
+    let leagueId: Int
+    let totals: PlayerCareerStatsTotalsDTO
+    let trophyCount: Int
+    let latestTransferFeeEurM: Double?
 }
 
 struct GuessFeedbackFieldDTO: Codable, Equatable {

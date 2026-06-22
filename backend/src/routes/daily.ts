@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
-import { completeDaily, getDailyBundle, validateGuess } from '../services/dailyService.js';
+import { completeDaily, getDailyBundle, getDailyPuzzle, validateGuess } from '../services/dailyService.js';
 
 export const dailyRouter = Router();
 
@@ -11,6 +11,16 @@ dailyRouter.get('/today', requireAuth, async (req, res) => {
     sendSuccess(res, bundle);
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load daily', 500);
+  }
+});
+
+dailyRouter.get('/puzzle/:modeId', requireAuth, async (req, res) => {
+  try {
+    const date = typeof req.query.date === 'string' ? req.query.date : new Date().toISOString().slice(0, 10);
+    const puzzle = await getDailyPuzzle(date, String(req.params.modeId));
+    sendSuccess(res, puzzle);
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to load puzzle', 404);
   }
 });
 

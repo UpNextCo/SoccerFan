@@ -58,7 +58,7 @@ struct HomeView: View {
                 if let bundle = viewModel.dailyBundle {
                     DailyChallengeCard(
                         streak: auth.user?.streak ?? 0,
-                        game: bundle.games.first,
+                        game: bundle.game(for: .guessWho),
                         alreadyPlayed: bundle.alreadyPlayed,
                         onPlay: { showGuessWho = true }
                     )
@@ -113,9 +113,9 @@ struct HomeView: View {
             await viewModel.load(context: modelContext)
         }
         .fullScreenCover(isPresented: $showGuessWho) {
-            if let bundle = viewModel.dailyBundle, let game = bundle.games.first {
+            if let bundle = viewModel.dailyBundle, let puzzle = bundle.guessWhoPuzzle {
                 GuessWhoView(
-                    puzzle: game.puzzle,
+                    puzzle: puzzle,
                     date: bundle.date,
                     onComplete: {
                         showGuessWho = false
@@ -133,7 +133,7 @@ struct HomeView: View {
             })
         }
         .fullScreenCover(isPresented: $showTargetMan) {
-            TargetManView(onComplete: {
+            TargetManView(dailyBundle: viewModel.dailyBundle, onComplete: {
                 showTargetMan = false
             })
         }
@@ -143,7 +143,7 @@ struct HomeView: View {
             })
         }
         .fullScreenCover(isPresented: $showBlindRank) {
-            BlindRankView(onComplete: {
+            BlindRankView(dailyBundle: viewModel.dailyBundle, onComplete: {
                 showBlindRank = false
             })
         }

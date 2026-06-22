@@ -117,6 +117,48 @@ actor APIClient {
         )
     }
 
+    func getPlayerCareerStats(playerId: String, league: TargetManLeague) async throws -> PlayerCareerStatsDTO {
+        try await getPlayerCareerStats(playerId: playerId, leagueId: league.apiLeagueId)
+    }
+
+    func getPlayerCareerStats(playerId: String, leagueId: Int) async throws -> PlayerCareerStatsDTO {
+        try await request(
+            "players/\(playerId)/stats/career",
+            queryItems: [URLQueryItem(name: "leagueId", value: String(leagueId))]
+        )
+    }
+
+    func getTopStats(
+        leagueId: Int,
+        metric: CareerStatMetric,
+        min: Int,
+        limit: Int = 50
+    ) async throws -> [TopStatPlayerDTO] {
+        try await request(
+            "stats/top",
+            queryItems: [
+                URLQueryItem(name: "leagueId", value: String(leagueId)),
+                URLQueryItem(name: "metric", value: metric.rawValue),
+                URLQueryItem(name: "min", value: String(min)),
+                URLQueryItem(name: "limit", value: String(limit)),
+            ]
+        )
+    }
+
+    func getTopStats(
+        league: TargetManLeague,
+        metric: CareerStatMetric,
+        min: Int,
+        limit: Int = 50
+    ) async throws -> [TopStatPlayerDTO] {
+        try await getTopStats(leagueId: league.apiLeagueId, metric: metric, min: min, limit: limit)
+    }
+
+    /// Kept for existing call sites; prefer `getPlayerCareerStats`.
+    func playerCareerStats(playerId: String, league: TargetManLeague) async throws -> PlayerCareerStatsDTO {
+        try await getPlayerCareerStats(playerId: playerId, league: league)
+    }
+
     func gameModes() async throws -> [GameModeMetaDTO] {
         try await request("games")
     }

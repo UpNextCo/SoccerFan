@@ -1,6 +1,6 @@
 import { db } from './index.js';
 import { players } from './schema.js';
-import { generateDailyPuzzle } from '../jobs/generate-daily.js';
+import { generateAllDailyPuzzles } from '../jobs/generate-daily.js';
 import { buildPlayerSearchFields } from '../utils/playerSearch.js';
 
 const SEED_PLAYERS = [
@@ -65,6 +65,6 @@ export async function seedPlayersIfEmpty(): Promise<void> {
 export async function bootstrapDatabase(): Promise<void> {
   await seedPlayersIfEmpty();
   const today = new Date().toISOString().slice(0, 10);
-  await generateDailyPuzzle(today);
+  await generateAllDailyPuzzles(today);
   console.log('Database bootstrap complete');
 }

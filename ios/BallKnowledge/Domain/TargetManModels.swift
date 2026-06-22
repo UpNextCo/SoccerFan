@@ -6,6 +6,17 @@ enum TargetManLeague: String, CaseIterable, Codable {
     case bundesliga = "Bundesliga"
     case serieA = "Serie A"
     case ligue1 = "Ligue 1"
+
+    /// API-Football league id (matches backend ingest config).
+    var apiLeagueId: Int {
+        switch self {
+        case .premierLeague: return 39
+        case .laLiga: return 140
+        case .serieA: return 135
+        case .bundesliga: return 78
+        case .ligue1: return 61
+        }
+    }
 }
 
 enum TargetManStatCategory: String, CaseIterable, Codable {
@@ -77,6 +88,21 @@ enum TargetManStatCategory: String, CaseIterable, Codable {
         case .saves: return "saves"
         case .foulsCommitted: return "fouls"
         case .tacklesWon: return "tackles"
+        }
+    }
+
+    var careerStatMetric: CareerStatMetric {
+        switch self {
+        case .goals: return .goals
+        case .assists: return .assists
+        case .appearances: return .appearances
+        case .yellowCards: return .yellowCards
+        case .redCards: return .redCards
+        case .cleanSheets: return .cleanSheets
+        case .minutesPlayed: return .minutes
+        case .saves: return .saves
+        case .foulsCommitted: return .foulsCommitted
+        case .tacklesWon: return .tackles
         }
     }
 }

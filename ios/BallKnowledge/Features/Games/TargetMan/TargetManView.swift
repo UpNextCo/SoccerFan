@@ -10,16 +10,27 @@ final class TargetManViewModel {
     var searchQuery = ""
     var searchResults: [PlayerSearchResultDTO] = []
     var isSearching = false
+    var isResolvingStats = false
     var errorMessage: String?
     var confettiBurstToken = 0
     var showResult = false
 
     private let practice: Bool
+    private let dailyBundle: DailyBundleDTO?
 
-    init(practice: Bool = false) {
+    init(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false, challenge: TargetManChallenge? = nil) {
         self.practice = practice
-        let challenge = practice ? TargetManSeed.makePracticeChallenge() : TargetManSeed.makeDailyChallenge()
-        self.state = TargetManGameState(challenge: challenge)
+        self.dailyBundle = dailyBundle
+        let resolved = challenge ?? {
+            if practice {
+                return TargetManSeed.makePracticeChallenge()
+            }
+            if let dailyBundle {
+                return DailyChallengeResolver.targetManChallenge(from: dailyBundle)
+            }
+            return TargetManSeed.makeDailyChallenge()
+        }()
+        self.state = TargetManGameState(challenge: resolved)
     }
 
     var xpEarned: Int {
@@ -64,16 +75,36 @@ final class TargetManViewModel {
         state.selections.remove(at: index)
     }
 
-    func lockAnswers() {
-        guard state.canLock else { return }
+    func lockAnswers() async {
+        guard state.canLock, !isResolvingStats else { return }
         HapticManager.success()
+        isResolvingStats = true
+        errorMessage = nil
+        defer { isResolvingStats = false }
+
+        do {
+            state.selections = try await TargetManStats.resolveStats(
+                for: state.selections,
+                challenge: state.challenge
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+
         state.phase = .revealing
-        state.selections = TargetManSeed.resolveStats(for: state.selections, challenge: state.challenge)
         revealResults()
     }
 
     func restart() {
-        let challenge = practice ? TargetManSeed.makePracticeChallenge() : TargetManSeed.makeDailyChallenge()
+        let challenge: TargetManChallenge
+        if practice {
+            challenge = TargetManSeed.makePracticeChallenge()
+        } else if let dailyBundle {
+            challenge = DailyChallengeResolver.targetManChallenge(from: dailyBundle)
+        } else {
+            challenge = TargetManSeed.makeDailyChallenge()
+        }
         state = TargetManGameState(challenge: challenge)
         searchQuery = ""
         searchResults = []
@@ -129,8 +160,8 @@ struct TargetManView: View {
     @FocusState private var isSearchFocused: Bool
     var onComplete: () -> Void
 
-    init(practice: Bool = false, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: TargetManViewModel(practice: practice))
+    init(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false, onComplete: @escaping () -> Void) {
+        _viewModel = State(initialValue: TargetManViewModel(dailyBundle: dailyBundle, practice: practice))
         self.onComplete = onComplete
     }
 
@@ -165,9 +196,17 @@ struct TargetManView: View {
                     }
 
                     if viewModel.state.canLock {
-                        TargetManLockButton {
+                        if let error = viewModel.errorMessage {
+                            Text(error)
+                                .font(BKFont.caption())
+                                .foregroundStyle(BKTheme.wrong)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 16)
+                        }
+
+                        TargetManLockButton(isLoading: viewModel.isResolvingStats) {
                             isSearchFocused = false
-                            viewModel.lockAnswers()
+                            Task { await viewModel.lockAnswers() }
                         }
                     }
                 }
@@ -516,18 +555,27 @@ private struct TargetManSearchSection: View {
 }
 
 private struct TargetManLockButton: View {
+    var isLoading = false
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text("LOCK ANSWERS")
-                .font(BKFont.headline())
-                .foregroundStyle(BKTheme.background)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(BKTheme.accent)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+            Group {
+                if isLoading {
+                    ProgressView()
+                        .tint(BKTheme.background)
+                } else {
+                    Text("LOCK ANSWERS")
+                        .font(BKFont.headline())
+                }
+            }
+            .foregroundStyle(BKTheme.background)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(BKTheme.accent.opacity(isLoading ? 0.75 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
         }
+        .disabled(isLoading)
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
         .background(BKTheme.background)

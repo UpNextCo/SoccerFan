@@ -34,6 +34,40 @@ export interface GuessWhoPuzzlePublic {
   maxScore: number;
 }
 
+export interface TargetManPuzzlePublic {
+  modeId: 'target_man';
+  puzzleId: string;
+  date: string;
+  league: string;
+  leagueId: number;
+  category: string;
+  categoryLabel: string;
+  target: number;
+  title: string;
+}
+
+export interface BlindRankPuzzlePublic {
+  modeId: 'blind_rank';
+  puzzleId: string;
+  date: string;
+  category: string;
+  categoryTitle: string;
+  rankHint: string;
+  presentationOrder: Array<{
+    id: string;
+    name: string;
+    club: string;
+    league: string;
+    nationality: string;
+    position: string;
+  }>;
+}
+
+export type DailyPuzzlePublic =
+  | GuessWhoPuzzlePublic
+  | TargetManPuzzlePublic
+  | BlindRankPuzzlePublic;
+
 export interface GuessFeedbackField {
   field: string;
   value: string | number | null;
@@ -47,7 +81,7 @@ export interface DailyBundle {
   games: Array<{
     modeId: string;
     title: string;
-    puzzle: GuessWhoPuzzlePublic;
+    puzzle: DailyPuzzlePublic;
   }>;
 }
 

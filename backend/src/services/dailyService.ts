@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { dailyCompletions, dailyPuzzles, userProgress } from '../db/schema.js';
 import { computeLevel } from './authService.js';
 import { getPlayerById } from './playerService.js';
+import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
 const GAME_MODES = [
@@ -16,6 +17,12 @@ const GAME_MODES = [
   { id: 'tenaball', title: 'TENABALL', subtitle: 'Top ten guesses', playerCount: 8900, isAvailable: false },
   { id: 'football_tower', title: 'FOOTBALL TOWER', subtitle: 'Climb the tower', playerCount: 8700, isAvailable: true },
 ];
+
+const DAILY_PUZZLE_MODES = [
+  { modeId: 'guess_who', title: 'GUESS WHO?' },
+  { modeId: 'target_man', title: 'TARGET MAN' },
+  { modeId: 'blind_rank', title: 'BLIND RANK' },
+] as const;
 
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
@@ -37,26 +44,59 @@ export function getGameModes() {
   return GAME_MODES;
 }
 
-export async function getDailyBundle(userId: string): Promise<DailyBundle> {
-  const date = todayUTC();
+async function ensureDailyPuzzles(date: string): Promise<void> {
+  const rows = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(eq(dailyPuzzles.date, date));
 
-  let puzzleRow = await db
+  const existing = new Set(rows.map((row) => row.modeId));
+  const missing = DAILY_PUZZLE_MODES.some((mode) => !existing.has(mode.modeId));
+
+  if (missing) {
+    await generateAllDailyPuzzles(date);
+  }
+}
+
+export async function getDailyPuzzle(date: string, modeId: string) {
+  await ensureDailyPuzzles(date);
+
+  const rows = await db
     .select()
     .from(dailyPuzzles)
-    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'guess_who')))
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, modeId)))
     .limit(1);
 
-  if (puzzleRow.length === 0) {
-    const { generateDailyPuzzle } = await import('../jobs/generate-daily.js');
-    await generateDailyPuzzle(date);
-    puzzleRow = await db
-      .select()
-      .from(dailyPuzzles)
-      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'guess_who')))
-      .limit(1);
+  const puzzle = rows[0];
+  if (!puzzle) {
+    throw new Error(`Daily puzzle not found for ${modeId}`);
   }
 
-  const puzzle = puzzleRow[0]!;
+  const meta = DAILY_PUZZLE_MODES.find((mode) => mode.modeId === modeId);
+  return {
+    modeId,
+    title: meta?.title ?? modeId.toUpperCase(),
+    puzzle: puzzle.puzzleJson,
+  };
+}
+
+export async function getDailyBundle(userId: string): Promise<DailyBundle> {
+  const date = todayUTC();
+  await ensureDailyPuzzles(date);
+
+  const puzzles = await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.date, date));
+
+  const games = DAILY_PUZZLE_MODES.flatMap((mode) => {
+    const row = puzzles.find((puzzle) => puzzle.modeId === mode.modeId);
+    if (!row) return [];
+    return [
+      {
+        modeId: mode.modeId,
+        title: mode.title,
+        puzzle: row.puzzleJson as DailyBundle['games'][0]['puzzle'],
+      },
+    ];
+  });
 
   const completion = await db
     .select()
@@ -73,13 +113,7 @@ export async function getDailyBundle(userId: string): Promise<DailyBundle> {
   return {
     date,
     alreadyPlayed: completion.length > 0,
-    games: [
-      {
-        modeId: 'guess_who',
-        title: 'GUESS WHO?',
-        puzzle: puzzle.puzzleJson as DailyBundle['games'][0]['puzzle'],
-      },
-    ],
+    games,
   };
 }
 
@@ -202,7 +236,7 @@ export async function validateGuess(
 
   if (!puzzle[0]) throw new Error('Puzzle not found');
 
-  const answer = await getPlayerById(puzzle[0].answerPlayerId);
+  const answer = await getPlayerById(puzzle[0].answerPlayerId ?? '');
   const guess = await getPlayerById(playerId);
   if (!answer || !guess) throw new Error('Player not found');
 
@@ -213,4 +247,4 @@ export async function validateGuess(
   };
 }
 
-export { todayUTC, GAME_MODES };
+export { todayUTC, GAME_MODES, generateDailyPuzzleForMode };

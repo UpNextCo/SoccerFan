@@ -107,13 +107,13 @@ struct BlindRankGameState: Equatable {
     var score: Int?
     var exactMatches: Int?
 
-    static let slotCount = 10
+    var slotCount: Int { challenge.presentationOrder.count }
 
     init(challenge: BlindRankChallenge) {
         self.challenge = challenge
         phase = .ranking
         currentPlayerIndex = 0
-        slots = Array(repeating: nil, count: Self.slotCount)
+        slots = Array(repeating: nil, count: challenge.presentationOrder.count)
         revealSteps = []
         revealedStepCount = 0
         score = nil
@@ -138,13 +138,25 @@ enum BlindRankScoring {
         }
     }
 
-    static func points(forExactMatches matches: Int) -> Int {
-        switch matches {
-        case 10: return 1000
-        case 8...9: return 800
-        case 6...7: return 600
-        case 4...5: return 400
-        case 2...3: return 200
+    static func points(forExactMatches matches: Int, slotCount: Int) -> Int {
+        if slotCount == 10 {
+            switch matches {
+            case 10: return 1000
+            case 8...9: return 800
+            case 6...7: return 600
+            case 4...5: return 400
+            case 2...3: return 200
+            default: return 50
+            }
+        }
+
+        let ratio = Double(matches) / Double(max(slotCount, 1))
+        switch ratio {
+        case 1.0: return 1000
+        case 0.8...: return 800
+        case 0.6...: return 600
+        case 0.4...: return 400
+        case 0.2...: return 200
         default: return 50
         }
     }
@@ -153,13 +165,14 @@ enum BlindRankScoring {
         max(10, score / 5)
     }
 
-    static func tierLabel(forExactMatches matches: Int) -> String {
-        switch matches {
-        case 10: return "Perfect ranking"
-        case 8...9: return "Elite knowledge"
-        case 6...7: return "Solid effort"
-        case 4...5: return "Room to improve"
-        case 2...3: return "Tough category"
+    static func tierLabel(forExactMatches matches: Int, slotCount: Int) -> String {
+        let score = points(forExactMatches: matches, slotCount: slotCount)
+        switch score {
+        case 1000: return "Perfect ranking"
+        case 800...: return "Elite knowledge"
+        case 600...: return "Solid effort"
+        case 400...: return "Room to improve"
+        case 200...: return "Tough category"
         default: return "Better luck next time"
         }
     }

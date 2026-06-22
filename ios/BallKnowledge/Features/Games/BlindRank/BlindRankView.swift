@@ -11,11 +11,35 @@ final class BlindRankViewModel {
     var activeRevealSlide: Int?
 
     private let practice: Bool
+    private let dailyBundle: DailyBundleDTO?
 
-    init(practice: Bool = false) {
+    init(challenge: BlindRankChallenge, practice: Bool = false) {
         self.practice = practice
-        let challenge = practice ? BlindRankSeed.makePracticeChallenge() : BlindRankSeed.makeDailyChallenge()
+        self.dailyBundle = nil
         self.state = BlindRankGameState(challenge: challenge)
+    }
+
+    private init(dailyBundle: DailyBundleDTO?, practice: Bool, challenge: BlindRankChallenge) {
+        self.practice = practice
+        self.dailyBundle = dailyBundle
+        self.state = BlindRankGameState(challenge: challenge)
+    }
+
+    init(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false) {
+        self.practice = practice
+        self.dailyBundle = dailyBundle
+        let challenge = practice
+            ? BlindRankSeed.makePracticeChallenge()
+            : BlindRankSeed.makeDailyChallenge(date: dailyBundle?.date)
+        self.state = BlindRankGameState(challenge: challenge)
+    }
+
+    static func make(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false) async -> BlindRankViewModel {
+        if practice {
+            return BlindRankViewModel(challenge: BlindRankSeed.makePracticeChallenge(), practice: true)
+        }
+        let challenge = await DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
+        return BlindRankViewModel(dailyBundle: dailyBundle, practice: false, challenge: challenge)
     }
 
     var xpEarned: Int {
@@ -38,11 +62,16 @@ final class BlindRankViewModel {
     }
 
     func restart() {
-        let challenge = practice ? BlindRankSeed.makePracticeChallenge() : BlindRankSeed.makeDailyChallenge()
-        state = BlindRankGameState(challenge: challenge)
-        showResult = false
-        confettiBurstToken = 0
-        activeRevealSlide = nil
+        Task {
+            state = BlindRankGameState(
+                challenge: practice
+                    ? BlindRankSeed.makePracticeChallenge()
+                    : await DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
+            )
+            showResult = false
+            confettiBurstToken = 0
+            activeRevealSlide = nil
+        }
     }
 
     func newPracticeRound() {
@@ -68,7 +97,8 @@ final class BlindRankViewModel {
         HapticManager.success()
 
         Task {
-            for step in 1...BlindRankGameState.slotCount {
+            let slotCount = state.slotCount
+            for step in 1...slotCount {
                 try? await Task.sleep(for: .seconds(BlindRankTiming.revealStagger * 0.35))
                 state.revealedStepCount = step
 
@@ -87,10 +117,10 @@ final class BlindRankViewModel {
                 correctRanking: state.challenge.correctRanking
             )
             state.exactMatches = matches
-            state.score = BlindRankScoring.points(forExactMatches: matches)
+            state.score = BlindRankScoring.points(forExactMatches: matches, slotCount: slotCount)
             state.phase = .complete
 
-            if matches >= 8 {
+            if matches >= max(slotCount - 2, 1) {
                 HapticManager.success()
                 confettiBurstToken += 1
             }
@@ -105,16 +135,37 @@ final class BlindRankViewModel {
 
 struct BlindRankView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var viewModel: BlindRankViewModel
+    @State private var viewModel: BlindRankViewModel?
     @State private var targetedSlot: Int?
+    let dailyBundle: DailyBundleDTO?
+    let practice: Bool
     var onComplete: () -> Void
 
-    init(practice: Bool = false, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: BlindRankViewModel(practice: practice))
+    init(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false, onComplete: @escaping () -> Void) {
+        self.dailyBundle = dailyBundle
+        self.practice = practice
         self.onComplete = onComplete
     }
 
     var body: some View {
+        Group {
+            if let viewModel {
+                blindRankContent(viewModel: viewModel)
+            } else {
+                ProgressView()
+                    .tint(BKTheme.accent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(BKTheme.background)
+            }
+        }
+        .task(id: "\(dailyBundle?.date ?? "none")-\(practice)") {
+            viewModel = await BlindRankViewModel.make(dailyBundle: dailyBundle, practice: practice)
+        }
+    }
+
+    @ViewBuilder
+    private func blindRankContent(viewModel: BlindRankViewModel) -> some View {
+        @Bindable var viewModel = viewModel
         ZStack {
             NavigationStack {
                 VStack(spacing: 0) {
@@ -124,9 +175,9 @@ struct BlindRankView: View {
                         .padding(.bottom, 12)
 
                     if viewModel.state.phase == .ranking {
-                        rankingContent
+                        rankingContent(viewModel: viewModel)
                     } else {
-                        revealContent
+                        revealContent(viewModel: viewModel)
                     }
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.82), value: viewModel.state.currentPlayerIndex)
@@ -148,7 +199,7 @@ struct BlindRankView: View {
                                 .tracking(1)
                                 .foregroundStyle(BKTheme.accent)
                             if viewModel.state.phase == .ranking {
-                                Text("PLAYER \(min(viewModel.state.currentPlayerIndex + 1, BlindRankGameState.slotCount)) OF \(BlindRankGameState.slotCount)")
+                                Text("PLAYER \(min(viewModel.state.currentPlayerIndex + 1, viewModel.state.slotCount)) OF \(viewModel.state.slotCount)")
                                     .font(BKFont.caption(9))
                                     .foregroundStyle(BKTheme.textMuted)
                             } else {
@@ -193,7 +244,7 @@ struct BlindRankView: View {
         }
     }
 
-    private var rankingContent: some View {
+    private func rankingContent(viewModel: BlindRankViewModel) -> some View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 BlindRankSlotsBoard(
@@ -214,20 +265,21 @@ struct BlindRankView: View {
         }
     }
 
-    private var revealContent: some View {
+    private func revealContent(viewModel: BlindRankViewModel) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
                 BlindRankOrderRevealView(
                     steps: viewModel.state.revealSteps,
                     revealedCount: viewModel.state.revealedStepCount,
                     category: viewModel.state.challenge.category,
-                    activeSlideStep: viewModel.activeRevealSlide
+                    activeSlideStep: viewModel.activeRevealSlide,
+                    slotCount: viewModel.state.slotCount
                 )
 
                 if viewModel.state.phase == .complete, let exact = viewModel.state.exactMatches {
-                    BlindRankRevealFooter(exactMatches: exact, slotCount: BlindRankGameState.slotCount)
+                    BlindRankRevealFooter(exactMatches: exact, slotCount: viewModel.state.slotCount)
                 } else {
-                    BlindRankRevealFooter(exactMatches: nil, slotCount: BlindRankGameState.slotCount)
+                    BlindRankRevealFooter(exactMatches: nil, slotCount: viewModel.state.slotCount)
                 }
             }
             .padding(.horizontal, 16)
@@ -256,7 +308,7 @@ private struct BlindRankCategoryBanner: View {
                         .foregroundStyle(BKTheme.textMuted)
                 }
                 Spacer()
-                Text("RANK #1 → #10")
+                Text("RANK #1 → #\(challenge.presentationOrder.count)")
                     .font(BKFont.caption(9))
                     .foregroundStyle(BKTheme.textMuted)
             }
@@ -290,6 +342,7 @@ private struct BlindRankOrderRevealView: View {
     let revealedCount: Int
     let category: BlindRankCategory
     let activeSlideStep: Int?
+    let slotCount: Int
 
     var body: some View {
         VStack(spacing: 8) {
@@ -299,7 +352,7 @@ private struct BlindRankOrderRevealView: View {
                     .tracking(0.8)
                     .foregroundStyle(BKTheme.textMuted)
                 Spacer()
-                Text("\(min(revealedCount, BlindRankGameState.slotCount))/\(BlindRankGameState.slotCount)")
+                Text("\(min(revealedCount, slotCount))/\(slotCount)")
                     .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.accent)
             }
@@ -449,12 +502,12 @@ private struct BlindRankSlotsBoard: View {
                     .tracking(0.8)
                     .foregroundStyle(BKTheme.textMuted)
                 Spacer()
-                Text("\(filledCount)/\(BlindRankGameState.slotCount)")
+                Text("\(filledCount)/\(viewModel.state.slotCount)")
                     .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.accent)
             }
 
-            ForEach(0..<BlindRankGameState.slotCount, id: \.self) { index in
+            ForEach(0..<viewModel.state.slotCount, id: \.self) { index in
                 BlindRankSlotRow(
                     rank: index + 1,
                     player: viewModel.state.slots[index],
@@ -596,7 +649,7 @@ private struct BlindRankRevealFooter: View {
                 Text("\(exactMatches)/\(slotCount) EXACT")
                     .font(BKFont.headline(16))
                     .foregroundStyle(BKTheme.accent)
-                Text(BlindRankScoring.tierLabel(forExactMatches: exactMatches))
+                Text(BlindRankScoring.tierLabel(forExactMatches: exactMatches, slotCount: slotCount))
                     .font(BKFont.caption(11))
                     .foregroundStyle(BKTheme.textSecondary)
             } else {
@@ -625,6 +678,8 @@ private struct BlindRankResultView: View {
     var onPlayAgain: () -> Void
     var onHome: () -> Void
 
+    var slotCount: Int { challenge.presentationOrder.count }
+
     var body: some View {
         ZStack {
             BKTheme.background.ignoresSafeArea()
@@ -640,7 +695,7 @@ private struct BlindRankResultView: View {
                             .font(BKFont.headline(18))
                             .foregroundStyle(BKTheme.textPrimary)
                             .multilineTextAlignment(.center)
-                        Text("\(exactMatches)/\(BlindRankGameState.slotCount) exact positions")
+                        Text("\(exactMatches)/\(slotCount) exact positions")
                             .font(BKFont.body(14))
                             .foregroundStyle(BKTheme.textSecondary)
                     }
@@ -650,7 +705,7 @@ private struct BlindRankResultView: View {
                         .font(BKFont.title(48))
                         .foregroundStyle(BKTheme.accent)
 
-                    Text(BlindRankScoring.tierLabel(forExactMatches: exactMatches).uppercased())
+                    Text(BlindRankScoring.tierLabel(forExactMatches: exactMatches, slotCount: slotCount).uppercased())
                         .font(BKFont.caption(11))
                         .tracking(0.6)
                         .foregroundStyle(BKTheme.textMuted)

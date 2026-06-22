@@ -175,12 +175,14 @@ export const dailyPuzzles = pgTable(
     date: date('date').notNull(),
     modeId: text('mode_id').notNull(),
     puzzleJson: jsonb('puzzle_json').notNull(),
-    answerPlayerId: uuid('answer_player_id')
-      .notNull()
-      .references(() => players.id),
+    answerPlayerId: uuid('answer_player_id').references(() => players.id),
+    answerJson: jsonb('answer_json'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('daily_puzzles_date_mode_idx').on(table.date, table.modeId)]
+  (table) => [
+    index('daily_puzzles_date_mode_idx').on(table.date, table.modeId),
+    uniqueIndex('daily_puzzles_date_mode_unique').on(table.date, table.modeId),
+  ]
 );
 
 export const dailyCompletions = pgTable(
