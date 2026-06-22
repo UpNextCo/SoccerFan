@@ -332,11 +332,11 @@ struct FootballGolfView: View {
                 totalScore: viewModel.state.totalScore,
                 xpEarned: viewModel.xpEarned,
                 leaderboard: viewModel.leaderboard,
+                showPlayAgain: allowReplay,
                 onPlayAgain: {
                     viewModel.showResult = false
                     viewModel.restart()
                 },
-                showPlayAgain: allowReplay,
                 onHome: {
                     if !allowReplay, let dailyDate {
                         Task {

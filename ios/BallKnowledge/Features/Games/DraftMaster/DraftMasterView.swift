@@ -180,20 +180,43 @@ struct DraftMasterView: View {
     var body: some View {
         ZStack {
             NavigationStack {
-                ZStack {
-                    if case .intro = viewModel.state.phase {
-                        DraftMasterIntroView(
+                VStack(spacing: 0) {
+                    if viewModel.state.phase == .intro {
+                        AnyView(DraftMasterIntroView(
                             challenge: viewModel.state.challenge,
                             onStart: viewModel.startDraft,
-                            onNewPractice: allowReplay ? viewModel.newPracticeDraft : nil
-                        )
+                            onNewPractice: allowReplay ? { viewModel.newPracticeDraft() } : nil
+                        ))
                     } else {
-                        draftScreen
+                        AnyView(draftScreen)
                     }
                 }
                 .background(BKTheme.background)
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar(content: draftMasterToolbar)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { dismiss() } label: {
+                            Ph.x.bold
+                                .color(BKTheme.textPrimary)
+                                .frame(width: 15, height: 15)
+                        }
+                    }
+                    ToolbarItem(placement: .principal) {
+                        Text("DRAFT MASTER")
+                            .font(BKFont.caption(13))
+                            .tracking(1)
+                            .foregroundStyle(BKTheme.accent)
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        if allowReplay, viewModel.state.phase == .intro {
+                            Button { viewModel.newPracticeDraft() } label: {
+                                Text("NEW")
+                                    .font(BKFont.caption(10))
+                                    .foregroundStyle(BKTheme.textMuted)
+                            }
+                        }
+                    }
+                }
             }
 
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
@@ -250,32 +273,6 @@ struct DraftMasterView: View {
                     picks: viewModel.state.picks,
                     summary: summary
                 )
-            }
-        }
-    }
-
-    @ToolbarContentBuilder
-    private func draftMasterToolbar() -> some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            Button { dismiss() } label: {
-                Ph.x.bold
-                    .color(BKTheme.textPrimary)
-                    .frame(width: 15, height: 15)
-            }
-        }
-        ToolbarItem(placement: .principal) {
-            Text("DRAFT MASTER")
-                .font(BKFont.caption(13))
-                .tracking(1)
-                .foregroundStyle(BKTheme.accent)
-        }
-        if allowReplay, case .intro = viewModel.state.phase {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { viewModel.newPracticeDraft() } label: {
-                    Text("NEW")
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textMuted)
-                }
             }
         }
     }
