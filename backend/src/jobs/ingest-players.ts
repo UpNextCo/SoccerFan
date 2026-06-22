@@ -50,6 +50,7 @@ const profileCache = new Map<
     age: number | null;
     firstname: string | null;
     lastname: string | null;
+    abbreviatedName: string | null;
   }
 >();
 
@@ -112,6 +113,7 @@ async function fetchPlayerProfile(
   age: number | null;
   firstname: string | null;
   lastname: string | null;
+  abbreviatedName: string | null;
 }> {
   const cached = profileCache.get(playerId);
   if (cached) return cached;
@@ -128,13 +130,20 @@ async function fetchPlayerProfile(
         age: entry.player.age,
         firstname: entry.player.firstname?.trim() || null,
         lastname: entry.player.lastname?.trim() || null,
+        abbreviatedName: entry.player.name?.trim() || null,
       };
       profileCache.set(playerId, profile);
       return profile;
     }
   }
 
-  const empty = { nationality: null, age: null, firstname: null, lastname: null };
+  const empty = {
+    nationality: null,
+    age: null,
+    firstname: null,
+    lastname: null,
+    abbreviatedName: null,
+  };
   profileCache.set(playerId, empty);
   return empty;
 }
@@ -153,9 +162,14 @@ async function resolvePlayerIdentity(
   let lastname = entry.player.lastname?.trim() || null;
   let nationality = entry.player.nationality;
   let age = entry.player.age;
+  let abbreviatedName: string | null = null;
 
   const needsProfile =
-    !firstname || !lastname || isAbbreviatedName(entry.player.name) || !nationality;
+    !firstname ||
+    !lastname ||
+    isAbbreviatedName(entry.player.name) ||
+    !nationality ||
+    entry.player.name.trim().split(/\s+/).length >= 3;
 
   if (needsProfile) {
     const profile = await fetchPlayerProfile(entry.player.id, [season, season - 1]);
@@ -163,9 +177,19 @@ async function resolvePlayerIdentity(
     lastname = lastname || profile.lastname;
     nationality = nationality ?? profile.nationality;
     age = age ?? profile.age;
+    abbreviatedName = profile.abbreviatedName;
   }
 
-  const searchFields = buildPlayerSearchFields(entry.player.name, firstname, lastname);
+  if (!abbreviatedName && isAbbreviatedName(entry.player.name)) {
+    abbreviatedName = entry.player.name;
+  }
+
+  const searchFields = buildPlayerSearchFields(
+    entry.player.name,
+    firstname,
+    lastname,
+    abbreviatedName
+  );
 
   return {
     ...searchFields,
