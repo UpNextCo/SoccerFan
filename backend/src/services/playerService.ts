@@ -100,16 +100,36 @@ export async function searchPlayers(query: string, limit = 10): Promise<PlayerSe
         )`
       )
     )
-    .limit(limit);
+    .orderBy(
+      sql`CASE WHEN ${players.externalId} IS NOT NULL THEN 0 ELSE 1 END`,
+      players.name
+    )
+    .limit(Math.min(limit * 5, 50));
 
-  return rows.map((p) => ({
-    id: p.id,
-    name: p.name,
-    club: p.currentClub,
-    league: p.currentLeague,
-    nationality: p.nationality,
-    position: p.position,
-  }));
+  const apiRows = rows.filter((row) => row.externalId != null);
+  const pool = apiRows.length > 0 ? apiRows : rows;
+
+  const deduped: PlayerSearchResult[] = [];
+  const seen = new Set<string>();
+
+  for (const player of pool) {
+    const key = normalizeSearchText(player.name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    deduped.push({
+      id: player.id,
+      name: player.name,
+      club: player.currentClub,
+      league: player.currentLeague,
+      nationality: player.nationality,
+      position: player.position,
+    });
+
+    if (deduped.length >= limit) break;
+  }
+
+  return deduped;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
