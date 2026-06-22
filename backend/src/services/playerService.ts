@@ -3,6 +3,17 @@ import { db } from '../db/index.js';
 import { players } from '../db/schema.js';
 import type { GuessFeedbackField, PlayerSearchResult } from '../types.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
+import { resolveSearchLimit } from '../utils/playerSearchRank.js';
+
+type SearchRow = {
+  id: string;
+  external_id: string | null;
+  name: string;
+  nationality: string;
+  position: string;
+  current_club: string;
+  current_league: string;
+};
 
 export type FeedbackStatus = 'correct' | 'partial' | 'wrong';
 
@@ -80,39 +91,68 @@ export function isCorrectGuess(
   return guessPlayer.id === answerPlayer.id;
 }
 
-export async function searchPlayers(query: string, limit = 10): Promise<PlayerSearchResult[]> {
+export async function searchPlayers(query: string, limit?: number): Promise<PlayerSearchResult[]> {
   const normalized = normalizeSearchText(query);
 
   if (normalized.length < 2) return [];
 
-  const pattern = `%${normalized}%`;
+  const resultLimit = limit ?? resolveSearchLimit(normalized);
+  const fetchLimit = Math.min(resultLimit * 4, 48);
+  const prefixPattern = `${normalized}%`;
+  const wordPattern = `% ${normalized}%`;
+  const containsPattern = `%${normalized}%`;
 
-  const rows = await db
-    .select()
-    .from(players)
-    .where(
-      or(
-        ilike(players.searchText, pattern),
-        ilike(players.name, pattern),
-        sql`EXISTS (
-          SELECT 1 FROM jsonb_array_elements_text(${players.aliases}) AS alias
-          WHERE lower(alias) LIKE ${pattern}
-        )`
+  const rows = (await db.execute(sql`
+    SELECT
+      p.id,
+      p.external_id,
+      p.name,
+      p.nationality,
+      p.position,
+      p.current_club,
+      p.current_league,
+      (
+        CASE
+          WHEN lower(p.name) = ${normalized} THEN 200
+          WHEN lower(p.name) LIKE ${prefixPattern} THEN 150
+          WHEN lower(p.name) LIKE ${wordPattern} THEN 120
+          WHEN lower(p.search_text) LIKE ${prefixPattern} THEN 90
+          WHEN lower(p.search_text) LIKE ${containsPattern} THEN 50
+          ELSE 20
+        END
+        + CASE WHEN recent.player_id IS NOT NULL THEN 50 ELSE 0 END
+        + LEAST(COALESCE(stats.stat_seasons, 0), 12) * 3
+        + COALESCE(p.market_value_tier, 3) * 5
+        + CASE WHEN p.external_id IS NOT NULL THEN 5 ELSE 0 END
+      )::int AS search_score
+    FROM players p
+    LEFT JOIN (
+      SELECT DISTINCT player_id
+      FROM player_stats
+      WHERE season >= 2024 AND appearances > 0
+    ) recent ON recent.player_id = p.id
+    LEFT JOIN (
+      SELECT player_id, COUNT(DISTINCT season)::int AS stat_seasons
+      FROM player_stats
+      WHERE appearances > 0
+      GROUP BY player_id
+    ) stats ON stats.player_id = p.id
+    WHERE (
+      lower(p.search_text) LIKE ${containsPattern}
+      OR lower(p.name) LIKE ${containsPattern}
+      OR EXISTS (
+        SELECT 1 FROM jsonb_array_elements_text(p.aliases) AS alias
+        WHERE lower(alias) LIKE ${containsPattern}
       )
     )
-    .orderBy(
-      sql`CASE WHEN ${players.externalId} IS NOT NULL THEN 0 ELSE 1 END`,
-      players.name
-    )
-    .limit(Math.min(limit * 5, 50));
-
-  const apiRows = rows.filter((row) => row.externalId != null);
-  const pool = apiRows.length > 0 ? apiRows : rows;
+    ORDER BY search_score DESC, lower(p.name) ASC
+    LIMIT ${fetchLimit}
+  `)) as SearchRow[];
 
   const deduped: PlayerSearchResult[] = [];
   const seen = new Set<string>();
 
-  for (const player of pool) {
+  for (const player of rows) {
     const key = normalizeSearchText(player.name);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -120,13 +160,13 @@ export async function searchPlayers(query: string, limit = 10): Promise<PlayerSe
     deduped.push({
       id: player.id,
       name: player.name,
-      club: player.currentClub,
-      league: player.currentLeague,
+      club: player.current_club,
+      league: player.current_league,
       nationality: player.nationality,
       position: player.position,
     });
 
-    if (deduped.length >= limit) break;
+    if (deduped.length >= resultLimit) break;
   }
 
   return deduped;

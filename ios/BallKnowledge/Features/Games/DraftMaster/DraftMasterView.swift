@@ -770,7 +770,12 @@ private struct DraftMasterSearchSection: View {
             }
 
             if !viewModel.searchResults.isEmpty {
-                VStack(spacing: 0) {
+                CappedSearchResultsContainer(
+                    showsNarrowHint: PlayerSearchUI.showsNarrowHint(
+                        resultCount: viewModel.searchResults.count,
+                        query: viewModel.searchQuery
+                    )
+                ) {
                     ForEach(viewModel.searchResults) { player in
                         Button {
                             isSearchFocused.wrappedValue = false
@@ -804,7 +809,7 @@ private struct DraftMasterSearchSection: View {
                                             .foregroundStyle(BKTheme.accent)
                                     }
                                 }
-                                Spacer()
+                                Spacer(minLength: 0)
                                 Ph.caretRight.bold
                                     .color(BKTheme.textMuted)
                                     .frame(width: 12, height: 12)
@@ -818,8 +823,6 @@ private struct DraftMasterSearchSection: View {
                         }
                     }
                 }
-                .background(BKTheme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
         .padding(.horizontal, 16)

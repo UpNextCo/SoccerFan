@@ -193,7 +193,7 @@ enum FootballTowerSearch {
         case .player:
             do {
                 let players = try await APIClient.shared.searchPlayers(query: trimmed)
-                return players.prefix(6).map { player in
+            return players.map { player in
                     FootballTowerSuggestion(
                         id: FootballTowerValidator.answerId(for: player.name, type: .player),
                         name: player.name,
@@ -206,7 +206,7 @@ enum FootballTowerSearch {
             } catch {
                 return FootballTowerCatalog.players
                     .filter { FootballTowerCatalog.normalized($0.name).contains(FootballTowerCatalog.normalized(trimmed)) }
-                    .prefix(6)
+                    .prefix(PlayerSearchUI.localResultLimit(for: trimmed))
                     .map {
                         FootballTowerSuggestion(
                             id: $0.id,

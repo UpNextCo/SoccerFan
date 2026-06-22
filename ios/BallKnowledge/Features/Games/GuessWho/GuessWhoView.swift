@@ -674,47 +674,17 @@ struct GuessWhoSearchSection: View {
                 )
 
                 if !viewModel.searchResults.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(viewModel.searchResults) { player in
-                            Button {
-                                isSearchFocused.wrappedValue = false
-                                Task { await viewModel.submitGuess(player, context: modelContext) }
-                            } label: {
-                                HStack(spacing: 12) {
-                                    TeamBadgeImage(club: player.club, league: player.league, size: 28) {
-                                        Circle()
-                                            .fill(BKTheme.cardElevated)
-                                            .frame(width: 28, height: 28)
-                                            .overlay(
-                                                Text(GuessWhoDisplay.clubAbbrev(player.club))
-                                                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                                                    .foregroundStyle(BKTheme.textMuted)
-                                            )
-                                    }
-
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(player.name.uppercased())
-                                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                                            .foregroundStyle(BKTheme.textPrimary)
-                                        Text("\(player.club) · \(player.league)")
-                                            .font(BKFont.caption(11))
-                                            .foregroundStyle(BKTheme.textMuted)
-                                    }
-                                    Spacer()
-                                    Ph.caretRight.bold
-                                        .color(BKTheme.textMuted)
-                                        .frame(width: 12, height: 12)
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
-                            }
-                            if player.id != viewModel.searchResults.last?.id {
-                                Divider().background(BKTheme.cardElevated)
-                            }
+                    PlayerSearchResultsList(
+                        players: viewModel.searchResults,
+                        showsNarrowHint: PlayerSearchUI.showsNarrowHint(
+                            resultCount: viewModel.searchResults.count,
+                            query: viewModel.searchQuery
+                        ),
+                        onSelect: { player in
+                            isSearchFocused.wrappedValue = false
+                            Task { await viewModel.submitGuess(player, context: modelContext) }
                         }
-                    }
-                    .background(BKTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    )
                 }
 
                 if let error = viewModel.errorMessage {

@@ -39,7 +39,9 @@ async function fetchNameParts(
         apiName: entry.player.name,
         firstname: entry.player.firstname?.trim() || null,
         lastname: entry.player.lastname?.trim() || null,
-        abbreviatedName: entry.player.name?.trim() || null,
+        abbreviatedName: isAbbreviatedName(entry.player.name)
+          ? entry.player.name.trim()
+          : null,
       };
     }
   }

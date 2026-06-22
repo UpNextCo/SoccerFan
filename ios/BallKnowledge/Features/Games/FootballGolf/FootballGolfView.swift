@@ -577,7 +577,12 @@ private struct FootballGolfSearchSection: View {
                 )
 
                 if !viewModel.searchResults.isEmpty {
-                    VStack(spacing: 0) {
+                    CappedSearchResultsContainer(
+                        showsNarrowHint: PlayerSearchUI.showsNarrowHint(
+                            resultCount: viewModel.searchResults.count,
+                            query: viewModel.searchQuery
+                        )
+                    ) {
                         ForEach(viewModel.searchResults) { suggestion in
                             Button {
                                 let keepFocus = viewModel.selectSuggestion(suggestion)
@@ -597,7 +602,7 @@ private struct FootballGolfSearchSection: View {
                                         }
                                     }
 
-                                    Spacer()
+                                    Spacer(minLength: 0)
 
                                     Ph.caretRight.bold
                                         .color(BKTheme.textMuted)
@@ -612,8 +617,6 @@ private struct FootballGolfSearchSection: View {
                             }
                         }
                     }
-                    .background(BKTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
             .padding(16)

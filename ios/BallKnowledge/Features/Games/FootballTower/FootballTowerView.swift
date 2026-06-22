@@ -588,28 +588,21 @@ private struct FootballTowerSearchSection: View {
             )
 
             if !viewModel.searchResults.isEmpty {
-                VStack(spacing: 0) {
+                CappedSearchResultsContainer(
+                    showsNarrowHint: PlayerSearchUI.showsNarrowHint(
+                        resultCount: viewModel.searchResults.count,
+                        query: viewModel.searchQuery
+                    )
+                ) {
                     ForEach(viewModel.searchResults) { suggestion in
                         Button {
                             isSearchFocused.wrappedValue = false
                             viewModel.submit(suggestion)
                         } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(suggestion.name.uppercased())
-                                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                                        .foregroundStyle(BKTheme.textPrimary)
-                                    Text(suggestion.subtitle)
-                                        .font(BKFont.caption(11))
-                                        .foregroundStyle(BKTheme.textMuted)
-                                }
-                                Spacer()
-                                Ph.caretRight.bold
-                                    .color(BKTheme.textMuted)
-                                    .frame(width: 12, height: 12)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
+                            SearchSuggestionRow(
+                                title: suggestion.name,
+                                subtitle: suggestion.subtitle
+                            )
                         }
                         .disabled(viewModel.state?.usedAnswerIds.contains(suggestion.id) == true)
 
@@ -618,8 +611,6 @@ private struct FootballTowerSearchSection: View {
                         }
                     }
                 }
-                .background(BKTheme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
         .padding(.horizontal, 16)

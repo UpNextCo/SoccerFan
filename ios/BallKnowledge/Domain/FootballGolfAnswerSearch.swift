@@ -70,7 +70,7 @@ enum FootballGolfAnswerSearch {
     private static func searchPlayers(_ query: String) async -> [FootballGolfAnswerSuggestion] {
         do {
             let players = try await APIClient.shared.searchPlayers(query: query)
-            return players.prefix(8).map { FootballGolfAnswerSuggestion.fromPlayer($0) }
+            return players.map { FootballGolfAnswerSuggestion.fromPlayer($0) }
         } catch {
             return filterLocal(query, types: [.player])
         }
@@ -84,7 +84,7 @@ enum FootballGolfAnswerSearch {
                 entry.searchTerms.contains { normalize($0).contains(normalizedQuery) }
                     || normalize(entry.name).contains(normalizedQuery)
             }
-            .prefix(8)
+            .prefix(PlayerSearchUI.localResultLimit(for: query))
             .map { FootballGolfAnswerSuggestion.fromLocal($0) }
     }
 
