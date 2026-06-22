@@ -15,23 +15,57 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isRetryableFetchError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'EAI_AGAIN') return true;
+  return error.message === 'fetch failed';
+}
+
 export async function fetchFootballApi(url: string): Promise<unknown> {
   if (!API_KEY) {
     throw new Error('API_FOOTBALL_KEY is not set');
   }
 
-  const res = await fetch(url, {
-    headers: { 'x-apisports-key': API_KEY },
-  });
+  const maxAttempts = Number(process.env.INGEST_MAX_RETRIES ?? 5);
 
-  apiCallsUsed += 1;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'x-apisports-key': API_KEY },
+      });
 
-  if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${await res.text()}`);
+      apiCallsUsed += 1;
+
+      if (res.status === 429 || res.status >= 500) {
+        const body = await res.text();
+        if (attempt < maxAttempts) {
+          const backoff = REQUEST_DELAY_MS * attempt * 2;
+          console.warn(`  API ${res.status} — retry ${attempt}/${maxAttempts} in ${backoff}ms`);
+          await sleep(backoff);
+          continue;
+        }
+        throw new Error(`API error ${res.status}: ${body}`);
+      }
+
+      if (!res.ok) {
+        throw new Error(`API error ${res.status}: ${await res.text()}`);
+      }
+
+      await sleep(REQUEST_DELAY_MS);
+      return res.json();
+    } catch (error) {
+      if (attempt < maxAttempts && isRetryableFetchError(error)) {
+        const backoff = REQUEST_DELAY_MS * attempt * 2;
+        console.warn(`  Network error — retry ${attempt}/${maxAttempts} in ${backoff}ms`);
+        await sleep(backoff);
+        continue;
+      }
+      throw error;
+    }
   }
 
-  await sleep(REQUEST_DELAY_MS);
-  return res.json();
+  throw new Error('fetchFootballApi: exhausted retries');
 }
 
 export function footballApiUrl(path: string): string {
