@@ -214,9 +214,19 @@ final class FootballGolfViewModel {
 
 struct FootballGolfView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var viewModel = FootballGolfViewModel()
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel: FootballGolfViewModel
     @FocusState private var isSearchFocused: Bool
+    private let allowReplay: Bool
+    private let dailyDate: String?
     var onComplete: () -> Void
+
+    init(dailyDate: String? = nil, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
+        _viewModel = State(initialValue: FootballGolfViewModel())
+        self.dailyDate = dailyDate
+        self.allowReplay = allowReplay
+        self.onComplete = onComplete
+    }
 
     var body: some View {
         ZStack {
@@ -326,7 +336,19 @@ struct FootballGolfView: View {
                     viewModel.showResult = false
                     viewModel.restart()
                 },
+                showPlayAgain: allowReplay,
                 onHome: {
+                    if !allowReplay, let dailyDate {
+                        Task {
+                            await DailyCompletionService.recordCompletion(
+                                modeId: GameModeID.footballGolf.rawValue,
+                                date: dailyDate,
+                                score: max(0, 72 - viewModel.state.totalScore),
+                                won: viewModel.state.totalScore <= viewModel.state.course.totalPar,
+                                context: modelContext
+                            )
+                        }
+                    }
                     viewModel.showResult = false
                     onComplete()
                     dismiss()
@@ -771,6 +793,7 @@ private struct FootballGolfScorecardView: View {
     let totalScore: Int
     let xpEarned: Int
     let leaderboard: [FootballGolfLeaderboardEntry]
+    var showPlayAgain = true
     var onPlayAgain: () -> Void
     var onHome: () -> Void
 
@@ -858,18 +881,20 @@ private struct FootballGolfScorecardView: View {
                     .padding(.horizontal, 20)
 
                     VStack(spacing: 12) {
-                        Button(action: onPlayAgain) {
-                            Text("PLAY AGAIN")
-                                .font(BKFont.headline())
-                                .foregroundStyle(BKTheme.background)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(BKTheme.accent)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        if showPlayAgain {
+                            Button(action: onPlayAgain) {
+                                Text("PLAY AGAIN")
+                                    .font(BKFont.headline())
+                                    .foregroundStyle(BKTheme.background)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(BKTheme.accent)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            }
                         }
 
                         Button(action: onHome) {
-                            Text("BACK HOME")
+                            Text(showPlayAgain ? "BACK HOME" : "DONE")
                                 .font(BKFont.headline())
                                 .foregroundStyle(BKTheme.textPrimary)
                                 .frame(maxWidth: .infinity)

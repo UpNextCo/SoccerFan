@@ -1,6 +1,21 @@
 import Foundation
 
 enum FootballBingoSeed {
+    static func makeDailyGame(date: String) -> FootballBingoGame {
+        var game = makeGame()
+        game = FootballBingoGame(
+            id: "football_bingo_\(date)",
+            title: "Daily Football Bingo",
+            categories: game.categories,
+            playerQueue: seededShuffle(game.playerQueue, seed: stableSeed(date)),
+            currentPlayerIndex: 0,
+            completedCategoryIds: [],
+            remainingPlayers: game.playerQueue.count,
+            status: .active
+        )
+        return game
+    }
+
     static func makeGame() -> FootballBingoGame {
         let categories = defaultCategories
         let queue = defaultPlayers.shuffled()
@@ -105,5 +120,21 @@ enum FootballBingoSeed {
             managers: managers,
             premierLeagueApps: plApps
         )
+    }
+
+    private static func stableSeed(_ date: String) -> Int {
+        date.utf8.reduce(5381) { ($0 &* 33) &+ Int($1) }
+    }
+
+    private static func seededShuffle<T>(_ items: [T], seed: Int) -> [T] {
+        var result = items
+        var state = UInt64(bitPattern: Int64(seed))
+        guard result.count > 1 else { return result }
+        for index in stride(from: result.count - 1, through: 1, by: -1) {
+            state = state &* 6364136223846793005 &+ 1
+            let swapIndex = Int(state % UInt64(index + 1))
+            result.swapAt(index, swapIndex)
+        }
+        return result
     }
 }

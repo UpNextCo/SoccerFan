@@ -90,7 +90,35 @@ struct DailyGameDTO: Codable, Identifiable, Equatable {
 struct DailyBundleDTO: Codable, Equatable {
     let date: String
     let alreadyPlayed: Bool
+    let completedModeIds: [String]
     let games: [DailyGameDTO]
+
+    init(
+        date: String,
+        alreadyPlayed: Bool,
+        completedModeIds: [String] = [],
+        games: [DailyGameDTO]
+    ) {
+        self.date = date
+        self.alreadyPlayed = alreadyPlayed
+        self.completedModeIds = completedModeIds
+        self.games = games
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        date = try container.decode(String.self, forKey: .date)
+        alreadyPlayed = try container.decode(Bool.self, forKey: .alreadyPlayed)
+        completedModeIds = try container.decodeIfPresent([String].self, forKey: .completedModeIds) ?? []
+        games = try container.decode([DailyGameDTO].self, forKey: .games)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case date
+        case alreadyPlayed
+        case completedModeIds
+        case games
+    }
 }
 
 extension DailyBundleDTO {

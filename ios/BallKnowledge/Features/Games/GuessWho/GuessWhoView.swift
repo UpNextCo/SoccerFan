@@ -99,6 +99,7 @@ final class GuessWhoViewModel {
 
         do {
             completionResult = try await APIClient.shared.dailyComplete(request)
+            DailyCompletionService.markLocallyCompleted(.guessWho, date: date)
             if state.won {
                 try await Task.sleep(for: .seconds(GuessWhoTiming.winShareDelay))
             }
@@ -141,10 +142,12 @@ struct GuessWhoView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: GuessWhoViewModel
     @FocusState private var isSearchFocused: Bool
+    var allowReplay: Bool
     var onComplete: () -> Void
 
-    init(puzzle: GuessWhoPuzzleDTO, date: String, onComplete: @escaping () -> Void) {
+    init(puzzle: GuessWhoPuzzleDTO, date: String, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
         _viewModel = State(initialValue: GuessWhoViewModel(puzzle: puzzle, date: date))
+        self.allowReplay = allowReplay
         self.onComplete = onComplete
     }
 

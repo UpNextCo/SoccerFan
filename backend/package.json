@@ -20,7 +20,8 @@
     "job:ingest-trophies": "tsx src/jobs/ingest-trophies.ts",
     "job:ingest-career": "tsx src/jobs/ingest-career.ts",
     "job:ingest-stats-all": "tsx src/jobs/ingest-stats-all.ts",
-    "job:refresh-player-search": "tsx src/jobs/refresh-player-search.ts"
+    "job:refresh-player-search": "tsx src/jobs/refresh-player-search.ts",
+    "job:audit-coverage": "tsx src/jobs/audit-coverage.ts"
   },
   "dependencies": {
     "apple-signin-auth": "^1.7.6",

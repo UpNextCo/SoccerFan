@@ -97,9 +97,23 @@ final class FootballBingoViewModel {
 
 struct FootballBingoView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var viewModel = FootballBingoViewModel()
+    @Environment(\.modelContext) private var modelContext
+    @State private var viewModel: FootballBingoViewModel
     @State private var wrongFlashOpacity: Double = 0
+    private let allowReplay: Bool
+    private let dailyDate: String?
     var onComplete: () -> Void
+
+    init(dailyDate: String? = nil, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
+        if let dailyDate {
+            _viewModel = State(initialValue: FootballBingoViewModel(game: FootballBingoSeed.makeDailyGame(date: dailyDate)))
+        } else {
+            _viewModel = State(initialValue: FootballBingoViewModel())
+        }
+        self.dailyDate = dailyDate
+        self.allowReplay = allowReplay
+        self.onComplete = onComplete
+    }
 
     var body: some View {
         ZStack {
@@ -191,11 +205,23 @@ struct FootballBingoView: View {
                 completedCount: viewModel.game.completedCount,
                 totalCategories: viewModel.game.categories.count,
                 xpEarned: viewModel.xpEarned,
+                showPlayAgain: allowReplay,
                 onPlayAgain: {
                     viewModel.showResult = false
                     viewModel.restart()
                 },
                 onHome: {
+                    if !allowReplay, let dailyDate {
+                        Task {
+                            await DailyCompletionService.recordCompletion(
+                                modeId: GameModeID.footballBingo.rawValue,
+                                date: dailyDate,
+                                score: viewModel.xpEarned,
+                                won: viewModel.game.status == .won,
+                                context: modelContext
+                            )
+                        }
+                    }
                     viewModel.showResult = false
                     onComplete()
                     dismiss()
@@ -482,6 +508,7 @@ private struct FootballBingoResultView: View {
     let completedCount: Int
     let totalCategories: Int
     let xpEarned: Int
+    var showPlayAgain = true
     var onPlayAgain: () -> Void
     var onHome: () -> Void
 
@@ -520,18 +547,20 @@ private struct FootballBingoResultView: View {
                 Spacer()
 
                 VStack(spacing: 12) {
-                    Button(action: onPlayAgain) {
-                        Text(won ? "PLAY AGAIN" : "TRY AGAIN")
-                            .font(BKFont.headline())
-                            .foregroundStyle(BKTheme.background)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(BKTheme.accent)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                    if showPlayAgain {
+                        Button(action: onPlayAgain) {
+                            Text(won ? "PLAY AGAIN" : "TRY AGAIN")
+                                .font(BKFont.headline())
+                                .foregroundStyle(BKTheme.background)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(BKTheme.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        }
                     }
 
                     Button(action: onHome) {
-                        Text("BACK HOME")
+                        Text(showPlayAgain ? "BACK HOME" : "DONE")
                             .font(BKFont.headline())
                             .foregroundStyle(BKTheme.textPrimary)
                             .frame(maxWidth: .infinity)

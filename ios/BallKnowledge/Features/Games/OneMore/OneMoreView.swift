@@ -17,9 +17,11 @@ final class OneMoreViewModel {
 
     private let practice: Bool
 
-    init(practice: Bool = false) {
+    init(practice: Bool = false, dailyDate: String? = nil) {
         self.practice = practice
-        let prompt = practice ? OneMoreSeed.makePracticePrompt() : OneMoreSeed.makeDailyPrompt()
+        let prompt = practice
+            ? OneMoreSeed.makePracticePrompt()
+            : OneMoreSeed.makeDailyPrompt(date: dailyDate)
         self.state = OneMoreGameState(prompt: prompt)
     }
 
@@ -146,12 +148,17 @@ final class OneMoreViewModel {
 
 struct OneMoreView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var viewModel: OneMoreViewModel
     @FocusState private var isSearchFocused: Bool
+    private let allowReplay: Bool
+    private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(practice: Bool = false, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: OneMoreViewModel(practice: practice))
+    init(dailyDate: String? = nil, practice: Bool = false, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
+        _viewModel = State(initialValue: OneMoreViewModel(practice: practice, dailyDate: dailyDate))
+        self.allowReplay = allowReplay
+        self.dailyDate = dailyDate
         self.onComplete = onComplete
     }
 
@@ -219,7 +226,7 @@ struct OneMoreView: View {
                             .foregroundStyle(BKTheme.accent)
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        if viewModel.state.phase == .playing {
+                        if allowReplay, viewModel.state.phase == .playing {
                             Button { viewModel.newPracticeRound() } label: {
                                 Text("NEW")
                                     .font(BKFont.caption(10))
@@ -251,11 +258,23 @@ struct OneMoreView: View {
                 finalScore: viewModel.state.phase == .busted ? 0 : viewModel.state.bankedScore,
                 streak: viewModel.state.picks.count,
                 xpEarned: viewModel.xpEarned,
+                showPlayAgain: allowReplay,
                 onPlayAgain: {
                     viewModel.showResult = false
                     viewModel.restart()
                 },
                 onHome: {
+                    if !allowReplay, let dailyDate {
+                        Task {
+                            await DailyCompletionService.recordCompletion(
+                                modeId: GameModeID.oneMore.rawValue,
+                                date: dailyDate,
+                                score: viewModel.state.phase == .busted ? 0 : viewModel.state.bankedScore,
+                                won: viewModel.state.phase == .cashedOut,
+                                context: modelContext
+                            )
+                        }
+                    }
                     viewModel.showResult = false
                     onComplete()
                     dismiss()
@@ -625,6 +644,7 @@ private struct OneMoreResultView: View {
     let finalScore: Int
     let streak: Int
     let xpEarned: Int
+    var showPlayAgain = true
     var onPlayAgain: () -> Void
     var onHome: () -> Void
 
@@ -706,18 +726,20 @@ private struct OneMoreResultView: View {
                         .foregroundStyle(BKTheme.accent)
 
                     VStack(spacing: 10) {
-                        Button(action: onPlayAgain) {
-                            Text("PLAY AGAIN")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.background)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.accent)
-                                .clipShape(Capsule())
+                        if showPlayAgain {
+                            Button(action: onPlayAgain) {
+                                Text("PLAY AGAIN")
+                                    .font(BKFont.headline(14))
+                                    .foregroundStyle(BKTheme.background)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(BKTheme.accent)
+                                    .clipShape(Capsule())
+                            }
                         }
 
                         Button(action: onHome) {
-                            Text("BACK TO GAMES")
+                            Text(showPlayAgain ? "BACK TO GAMES" : "DONE")
                                 .font(BKFont.headline(14))
                                 .foregroundStyle(BKTheme.textPrimary)
                                 .frame(maxWidth: .infinity)

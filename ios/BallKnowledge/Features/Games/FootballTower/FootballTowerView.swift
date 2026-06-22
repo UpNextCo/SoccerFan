@@ -164,8 +164,11 @@ final class FootballTowerViewModel {
 
 struct FootballTowerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var viewModel = FootballTowerViewModel()
     @FocusState private var isSearchFocused: Bool
+    var dailyOnly: Bool = false
+    var allowReplay: Bool = true
     var onComplete: () -> Void
 
     var body: some View {
@@ -220,14 +223,25 @@ struct FootballTowerView: View {
                         viewModel.showLeaderboard = true
                     },
                     onShare: { viewModel.showShare = true },
-                    onFreePlay: {
+                    onFreePlay: allowReplay ? {
                         viewModel.showResult = false
                         viewModel.startFreePlay()
-                    },
+                    } : nil,
                     onMenu: {
                         viewModel.returnToMenu()
                     },
                     onHome: {
+                        if !allowReplay, let date = viewModel.state?.date {
+                            Task {
+                                await DailyCompletionService.recordCompletion(
+                                    modeId: GameModeID.footballTower.rawValue,
+                                    date: date,
+                                    score: summary.correctCount,
+                                    won: summary.correctCount >= 5,
+                                    context: modelContext
+                                )
+                            }
+                        }
                         viewModel.returnToMenu()
                         onComplete()
                         dismiss()
@@ -243,6 +257,11 @@ struct FootballTowerView: View {
         .sheet(isPresented: $viewModel.showShare) {
             if let summary = viewModel.resultSummary, let run = viewModel.state {
                 FootballTowerShareSheet(summary: summary, mode: run.mode)
+            }
+        }
+        .onAppear {
+            if dailyOnly, viewModel.state == nil {
+                viewModel.startDaily()
             }
         }
     }
@@ -617,7 +636,7 @@ private struct FootballTowerResultView: View {
     let failedAnswer: String?
     var onLeaderboard: () -> Void
     var onShare: () -> Void
-    var onFreePlay: () -> Void
+    var onFreePlay: (() -> Void)?
     var onMenu: () -> Void
     var onHome: () -> Void
 
@@ -665,16 +684,20 @@ private struct FootballTowerResultView: View {
                         Button(action: onShare) {
                             secondaryButton("SHARE RESULT")
                         }
-                        Button(action: onFreePlay) {
-                            secondaryButton("FREE PLAY")
+                        if let onFreePlay {
+                            Button(action: onFreePlay) {
+                                secondaryButton("FREE PLAY")
+                            }
                         }
-                        Button(action: onMenu) {
-                            Text("BACK TO MENU")
-                                .font(BKFont.caption(11))
-                                .foregroundStyle(BKTheme.textMuted)
+                        if onFreePlay != nil {
+                            Button(action: onMenu) {
+                                Text("BACK TO MENU")
+                                    .font(BKFont.caption(11))
+                                    .foregroundStyle(BKTheme.textMuted)
+                            }
                         }
                         Button(action: onHome) {
-                            Text("BACK TO GAMES")
+                            Text(onFreePlay == nil ? "DONE" : "BACK TO GAMES")
                                 .font(BKFont.caption(11))
                                 .foregroundStyle(BKTheme.textMuted)
                         }

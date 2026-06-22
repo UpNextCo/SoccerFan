@@ -135,15 +135,25 @@ final class BlindRankViewModel {
 
 struct BlindRankView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var viewModel: BlindRankViewModel?
     @State private var targetedSlot: Int?
     let dailyBundle: DailyBundleDTO?
     let practice: Bool
+    let allowReplay: Bool
+    private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false, onComplete: @escaping () -> Void) {
+    init(
+        dailyBundle: DailyBundleDTO? = nil,
+        practice: Bool = false,
+        allowReplay: Bool = true,
+        onComplete: @escaping () -> Void
+    ) {
         self.dailyBundle = dailyBundle
         self.practice = practice
+        self.allowReplay = allowReplay
+        self.dailyDate = dailyBundle?.date
         self.onComplete = onComplete
     }
 
@@ -210,7 +220,7 @@ struct BlindRankView: View {
                         }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        if viewModel.state.phase == .ranking {
+                        if allowReplay, viewModel.state.phase == .ranking {
                             Button { viewModel.newPracticeRound() } label: {
                                 Text("NEW")
                                     .font(BKFont.caption(10))
@@ -231,11 +241,23 @@ struct BlindRankView: View {
                 exactMatches: viewModel.state.exactMatches ?? 0,
                 score: viewModel.state.score ?? 0,
                 xpEarned: viewModel.xpEarned,
+                showPlayAgain: allowReplay,
                 onPlayAgain: {
                     viewModel.showResult = false
                     viewModel.restart()
                 },
                 onHome: {
+                    if !allowReplay, let dailyDate {
+                        Task {
+                            await DailyCompletionService.recordCompletion(
+                                modeId: GameModeID.blindRank.rawValue,
+                                date: dailyDate,
+                                score: viewModel.state.score ?? 0,
+                                won: (viewModel.state.score ?? 0) >= 500,
+                                context: modelContext
+                            )
+                        }
+                    }
                     viewModel.showResult = false
                     onComplete()
                     dismiss()
@@ -675,6 +697,7 @@ private struct BlindRankResultView: View {
     let exactMatches: Int
     let score: Int
     let xpEarned: Int
+    var showPlayAgain = true
     var onPlayAgain: () -> Void
     var onHome: () -> Void
 
@@ -753,18 +776,20 @@ private struct BlindRankResultView: View {
                     .clipShape(Capsule())
 
                     VStack(spacing: 10) {
-                        Button(action: onPlayAgain) {
-                            Text("PLAY AGAIN")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.background)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.accent)
-                                .clipShape(Capsule())
+                        if showPlayAgain {
+                            Button(action: onPlayAgain) {
+                                Text("PLAY AGAIN")
+                                    .font(BKFont.headline(14))
+                                    .foregroundStyle(BKTheme.background)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(BKTheme.accent)
+                                    .clipShape(Capsule())
+                            }
                         }
 
                         Button(action: onHome) {
-                            Text("BACK TO GAMES")
+                            Text(showPlayAgain ? "BACK TO GAMES" : "DONE")
                                 .font(BKFont.headline(14))
                                 .foregroundStyle(BKTheme.textPrimary)
                                 .frame(maxWidth: .infinity)

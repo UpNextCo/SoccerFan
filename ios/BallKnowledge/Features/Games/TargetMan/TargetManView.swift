@@ -156,12 +156,22 @@ final class TargetManViewModel {
 
 struct TargetManView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var viewModel: TargetManViewModel
     @FocusState private var isSearchFocused: Bool
+    private let allowReplay: Bool
+    private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false, onComplete: @escaping () -> Void) {
+    init(
+        dailyBundle: DailyBundleDTO? = nil,
+        practice: Bool = false,
+        allowReplay: Bool = true,
+        onComplete: @escaping () -> Void
+    ) {
         _viewModel = State(initialValue: TargetManViewModel(dailyBundle: dailyBundle, practice: practice))
+        self.allowReplay = allowReplay
+        self.dailyDate = dailyBundle?.date
         self.onComplete = onComplete
     }
 
@@ -227,7 +237,7 @@ struct TargetManView: View {
                             .foregroundStyle(BKTheme.accent)
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        if viewModel.state.phase == .selecting {
+                        if allowReplay, viewModel.state.phase == .selecting {
                             Button {
                                 viewModel.newPracticeRound()
                             } label: {
@@ -251,11 +261,23 @@ struct TargetManView: View {
                 difference: viewModel.state.difference ?? 0,
                 score: viewModel.state.score ?? 0,
                 xpEarned: viewModel.xpEarned,
+                showPlayAgain: allowReplay,
                 onPlayAgain: {
                     viewModel.showResult = false
                     viewModel.restart()
                 },
                 onHome: {
+                    if !allowReplay, let dailyDate {
+                        Task {
+                            await DailyCompletionService.recordCompletion(
+                                modeId: GameModeID.targetMan.rawValue,
+                                date: dailyDate,
+                                score: viewModel.state.score ?? 0,
+                                won: (viewModel.state.score ?? 0) >= 400,
+                                context: modelContext
+                            )
+                        }
+                    }
                     viewModel.showResult = false
                     onComplete()
                     dismiss()
@@ -601,6 +623,7 @@ private struct TargetManResultView: View {
     let difference: Int
     let score: Int
     let xpEarned: Int
+    var showPlayAgain = true
     var onPlayAgain: () -> Void
     var onHome: () -> Void
 
@@ -734,18 +757,20 @@ private struct TargetManResultView: View {
 
                 if step >= TargetManResultStep.actions.rawValue {
                     VStack(spacing: 12) {
-                        Button(action: onPlayAgain) {
-                            Text("PLAY AGAIN")
-                                .font(BKFont.headline())
-                                .foregroundStyle(BKTheme.background)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(BKTheme.accent)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        if showPlayAgain {
+                            Button(action: onPlayAgain) {
+                                Text("PLAY AGAIN")
+                                    .font(BKFont.headline())
+                                    .foregroundStyle(BKTheme.background)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(BKTheme.accent)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            }
                         }
 
                         Button(action: onHome) {
-                            Text("BACK HOME")
+                            Text(showPlayAgain ? "BACK HOME" : "DONE")
                                 .font(BKFont.headline())
                                 .foregroundStyle(BKTheme.textPrimary)
                                 .frame(maxWidth: .infinity)

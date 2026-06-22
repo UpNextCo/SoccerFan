@@ -78,6 +78,7 @@ export interface GuessFeedbackField {
 export interface DailyBundle {
   date: string;
   alreadyPlayed: boolean;
+  completedModeIds: string[];
   games: Array<{
     modeId: string;
     title: string;

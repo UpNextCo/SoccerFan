@@ -99,3 +99,64 @@ enum OfflineCache {
         try? context.save()
     }
 }
+
+enum DailyCompletionService {
+    private static let storageKey = "daily_completed_mode_ids"
+
+    static func completedSet(for bundle: DailyBundleDTO) -> Set<String> {
+        var ids = Set(bundle.completedModeIds.map { GameModeCatalog.normalizedModeId($0) })
+        ids.formUnion(localCompleted(for: bundle.date))
+        return ids
+    }
+
+    static func isCompleted(_ mode: GameModeID, for bundle: DailyBundleDTO) -> Bool {
+        completedSet(for: bundle).contains(mode.rawValue)
+    }
+
+    static func isLocallyCompleted(_ mode: GameModeID, date: String) -> Bool {
+        localCompleted(for: date).contains(mode.rawValue)
+    }
+
+    static func markLocallyCompleted(_ mode: GameModeID, date: String) {
+        var store = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: [String]] ?? [:]
+        var modes = Set(store[date] ?? [])
+        modes.insert(mode.rawValue)
+        store[date] = Array(modes)
+        UserDefaults.standard.set(store, forKey: storageKey)
+    }
+
+    static func recordCompletion(
+        modeId: String,
+        date: String,
+        score: Int,
+        guesses: Int = 1,
+        won: Bool,
+        shareGrid: String = "",
+        context: ModelContext
+    ) async {
+        let normalized = GameModeCatalog.normalizedModeId(modeId)
+        if let mode = GameModeID(rawValue: normalized) {
+            markLocallyCompleted(mode, date: date)
+        }
+
+        let request = DailyCompleteRequestDTO(
+            modeId: normalized,
+            date: date,
+            score: score,
+            guesses: guesses,
+            won: won,
+            shareGrid: shareGrid
+        )
+
+        do {
+            _ = try await APIClient.shared.dailyComplete(request)
+        } catch {
+            try? queueCompletion(request, context: context)
+        }
+    }
+
+    private static func localCompleted(for date: String) -> Set<String> {
+        let store = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: [String]] ?? [:]
+        return Set((store[date] ?? []).map { GameModeCatalog.normalizedModeId($0) })
+    }
+}

@@ -40,14 +40,10 @@ struct HomeView: View {
     @Environment(AuthManager.self) private var auth
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = HomeViewModel()
-    @State private var showGuessWho = false
-    @State private var showFootballBingo = false
-    @State private var showTargetMan = false
-    @State private var showFootballGolf = false
-    @State private var showBlindRank = false
-    @State private var showOneMore = false
-    @State private var showDraftMaster = false
-    @State private var showFootballTower = false
+    @State private var presentedMode: GameModeID?
+    @State private var isSequentialDaily = false
+    @State private var showAlreadyPlayedAlert = false
+    @State private var alreadyPlayedTitle = ""
     @Binding var selectedTab: AppTab
 
     var body: some View {
@@ -56,11 +52,10 @@ struct HomeView: View {
                 HomeHeaderView(user: auth.user, onLeagues: { selectedTab = .leagues })
 
                 if let bundle = viewModel.dailyBundle {
-                    DailyChallengeCard(
+                    DailyRunCard(
                         streak: auth.user?.streak ?? 0,
-                        game: bundle.game(for: .guessWho),
-                        alreadyPlayed: bundle.alreadyPlayed,
-                        onPlay: { showGuessWho = true }
+                        bundle: bundle,
+                        onStart: { startDailyRun(with: bundle) }
                     )
                 } else if viewModel.isLoading {
                     ProgressView()
@@ -68,32 +63,21 @@ struct HomeView: View {
                         .frame(height: 200)
                 }
 
-                GamesGridSection(
-                    modes: viewModel.gameModes,
-                    onSelect: { mode in
-                        guard mode.isAvailable else { return }
-                        switch GameModeCatalog.normalizedModeId(mode.id) {
-                        case GameModeID.guessWho.rawValue:
-                            showGuessWho = true
-                        case GameModeID.footballBingo.rawValue:
-                            showFootballBingo = true
-                        case GameModeID.targetMan.rawValue:
-                            showTargetMan = true
-                        case GameModeID.footballGolf.rawValue:
-                            showFootballGolf = true
-                        case GameModeID.blindRank.rawValue:
-                            showBlindRank = true
-                        case GameModeID.oneMore.rawValue:
-                            showOneMore = true
-                        case GameModeID.draftMaster.rawValue:
-                            showDraftMaster = true
-                        case GameModeID.footballTower.rawValue:
-                            showFootballTower = true
-                        default:
-                            break
+                if let bundle = viewModel.dailyBundle {
+                    GamesGridSection(
+                        modes: viewModel.gameModes,
+                        completedModeIds: DailyCompletionService.completedSet(for: bundle),
+                        onSelect: { mode in
+                            openMode(mode, bundle: bundle)
                         }
-                    }
-                )
+                    )
+                } else {
+                    GamesGridSection(
+                        modes: viewModel.gameModes,
+                        completedModeIds: [],
+                        onSelect: { _ in }
+                    )
+                }
 
                 ProgressStripView(
                     streak: auth.user?.streak ?? 0,
@@ -112,55 +96,59 @@ struct HomeView: View {
         .task {
             await viewModel.load(context: modelContext)
         }
-        .fullScreenCover(isPresented: $showGuessWho) {
-            if let bundle = viewModel.dailyBundle, let puzzle = bundle.guessWhoPuzzle {
-                GuessWhoView(
-                    puzzle: puzzle,
-                    date: bundle.date,
-                    onComplete: {
-                        showGuessWho = false
-                        Task {
-                            await auth.refreshProfile()
-                            await viewModel.load(context: modelContext)
-                        }
-                    }
-                )
+        .fullScreenCover(item: $presentedMode) { mode in
+            DailyGameHost(
+                mode: mode,
+                dailyBundle: viewModel.dailyBundle,
+                allowReplay: false,
+                onFinished: { handleModeFinished(mode) }
+            )
+        }
+        .alert("Already played today", isPresented: $showAlreadyPlayedAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("You've finished \(alreadyPlayedTitle) for today. Come back tomorrow for a new daily.")
+        }
+    }
+
+    private func openMode(_ mode: GameModeMetaDTO, bundle: DailyBundleDTO) {
+        guard mode.isAvailable else { return }
+        guard let modeId = GameModeID(rawValue: GameModeCatalog.normalizedModeId(mode.id)) else { return }
+        guard DailyPlayOrder.playableModes.contains(modeId) else { return }
+
+        if bundle.isCompleted(modeId) {
+            alreadyPlayedTitle = mode.title
+            showAlreadyPlayedAlert = true
+            return
+        }
+
+        isSequentialDaily = false
+        presentedMode = modeId
+    }
+
+    private func startDailyRun(with bundle: DailyBundleDTO) {
+        guard let next = DailyPlayOrder.firstIncomplete(in: bundle) else { return }
+        isSequentialDaily = true
+        presentedMode = next
+    }
+
+    private func handleModeFinished(_ mode: GameModeID) {
+        presentedMode = nil
+        Task {
+            await auth.refreshProfile()
+            await viewModel.load(context: modelContext)
+
+            guard isSequentialDaily, let bundle = viewModel.dailyBundle else {
+                isSequentialDaily = false
+                return
             }
-        }
-        .fullScreenCover(isPresented: $showFootballBingo) {
-            FootballBingoView(onComplete: {
-                showFootballBingo = false
-            })
-        }
-        .fullScreenCover(isPresented: $showTargetMan) {
-            TargetManView(dailyBundle: viewModel.dailyBundle, onComplete: {
-                showTargetMan = false
-            })
-        }
-        .fullScreenCover(isPresented: $showFootballGolf) {
-            FootballGolfView(onComplete: {
-                showFootballGolf = false
-            })
-        }
-        .fullScreenCover(isPresented: $showBlindRank) {
-            BlindRankView(dailyBundle: viewModel.dailyBundle, onComplete: {
-                showBlindRank = false
-            })
-        }
-        .fullScreenCover(isPresented: $showOneMore) {
-            OneMoreView(onComplete: {
-                showOneMore = false
-            })
-        }
-        .fullScreenCover(isPresented: $showDraftMaster) {
-            DraftMasterView(onComplete: {
-                showDraftMaster = false
-            })
-        }
-        .fullScreenCover(isPresented: $showFootballTower) {
-            FootballTowerView(onComplete: {
-                showFootballTower = false
-            })
+
+            if let next = DailyPlayOrder.nextIncomplete(after: mode, in: bundle) {
+                try? await Task.sleep(for: .milliseconds(450))
+                presentedMode = next
+            } else {
+                isSequentialDaily = false
+            }
         }
     }
 }
@@ -236,24 +224,28 @@ struct HomeHeaderView: View {
     }
 }
 
-struct DailyChallengeCard: View {
+struct DailyRunCard: View {
     let streak: Int
-    let game: DailyGameDTO?
-    let alreadyPlayed: Bool
-    var onPlay: () -> Void
+    let bundle: DailyBundleDTO
+    var onStart: () -> Void
+
+    private var completedCount: Int { DailyPlayOrder.completedCount(in: bundle) }
+    private var totalCount: Int { DailyPlayOrder.playableModes.count }
+    private var allComplete: Bool { DailyPlayOrder.allComplete(in: bundle) }
+    private var nextMode: GameModeID? { DailyPlayOrder.firstIncomplete(in: bundle) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("DAILY CHALLENGE")
+                Text("TODAY'S RUN")
                     .font(BKFont.caption(11))
                     .foregroundStyle(BKTheme.accent)
                 Spacer()
-                    HStack(spacing: 4) {
-                        Ph.fire.fill
-                            .color(BKTheme.streak)
-                            .frame(width: 14, height: 14)
-                        Text("\(streak) DAY STREAK")
+                HStack(spacing: 4) {
+                    Ph.fire.fill
+                        .color(BKTheme.streak)
+                        .frame(width: 14, height: 14)
+                    Text("\(streak) DAY STREAK")
                         .font(BKFont.caption(10))
                         .foregroundStyle(BKTheme.textPrimary)
                 }
@@ -263,47 +255,53 @@ struct DailyChallengeCard: View {
                 .clipShape(Capsule())
             }
 
-            Text(game?.title ?? "GUESS WHO?")
+            Text(allComplete ? "ALL DAILIES DONE" : "DAILY RUN")
                 .font(BKFont.title(24))
                 .foregroundStyle(BKTheme.textPrimary)
 
-            if alreadyPlayed {
+            Text(progressSubtitle)
+                .font(BKFont.body(13))
+                .foregroundStyle(BKTheme.textSecondary)
+
+            HStack(spacing: 6) {
+                ForEach(0..<totalCount, id: \.self) { index in
+                    Capsule()
+                        .fill(index < completedCount ? BKTheme.accent : BKTheme.cardElevated)
+                        .frame(height: 4)
+                }
+            }
+            .padding(.top, 2)
+
+            if allComplete {
                 TimelineView(.periodic(from: .now, by: 60)) { context in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Ph.checkCircle.fill
-                                .color(BKTheme.accent)
-                                .frame(width: 16, height: 16)
-                            Text("Completed")
-                                .font(BKFont.headline(13))
-                                .foregroundStyle(BKTheme.textPrimary)
-                        }
-                        Text("Play again in \(Self.timeUntilMidnight(from: context.date))")
+                    HStack(spacing: 6) {
+                        Ph.checkCircle.fill
+                            .color(BKTheme.accent)
+                            .frame(width: 16, height: 16)
+                        Text("New dailies in \(DailyRunCard.timeUntilMidnight(from: context.date))")
                             .font(BKFont.body(13))
                             .foregroundStyle(BKTheme.textSecondary)
                     }
                 }
-            } else {
-                Text("8 guesses. Can you name today's player?")
-                    .font(BKFont.body(13))
-                    .foregroundStyle(BKTheme.textSecondary)
             }
 
-            Button(action: onPlay) {
+            if !allComplete {
+                Button(action: onStart) {
                     HStack {
-                        Text(alreadyPlayed ? "VIEW RESULT" : "PLAY NOW")
+                        Text(nextMode == DailyPlayOrder.playableModes.first ? "START DAILY" : "CONTINUE DAILY")
                             .font(BKFont.headline(14))
                         Ph.arrowRight.bold
                             .color(BKTheme.background)
                             .frame(width: 16, height: 16)
                     }
-                .foregroundStyle(BKTheme.background)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(BKTheme.accent)
-                .clipShape(Capsule())
+                    .foregroundStyle(BKTheme.background)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(BKTheme.accent)
+                    .clipShape(Capsule())
+                }
+                .padding(.top, 4)
             }
-            .padding(.top, 4)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -332,7 +330,17 @@ struct DailyChallengeCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    private static func timeUntilMidnight(from date: Date, calendar: Calendar = .current) -> String {
+    private var progressSubtitle: String {
+        if allComplete {
+            return "\(completedCount)/\(totalCount) games completed today"
+        }
+        if let nextMode {
+            return "Game \(completedCount + 1) of \(totalCount) · \(nextMode.title)"
+        }
+        return "\(completedCount)/\(totalCount) completed"
+    }
+
+    static func timeUntilMidnight(from date: Date, calendar: Calendar = .current) -> String {
         let startOfToday = calendar.startOfDay(for: date)
         guard let midnight = calendar.date(byAdding: .day, value: 1, to: startOfToday) else {
             return "tomorrow"
@@ -353,6 +361,7 @@ struct DailyChallengeCard: View {
 
 struct GamesGridSection: View {
     let modes: [GameModeMetaDTO]
+    let completedModeIds: Set<String>
     var onSelect: (GameModeMetaDTO) -> Void
 
     let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
@@ -364,24 +373,32 @@ struct GamesGridSection: View {
                     .font(BKFont.headline(18))
                     .foregroundStyle(BKTheme.textPrimary)
                 Spacer()
-                Text("View all >")
+                Text("Daily only")
                     .font(BKFont.caption())
-                    .foregroundStyle(BKTheme.accent)
+                    .foregroundStyle(BKTheme.textMuted)
             }
 
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(modes) { mode in
-                    GameModeTile(mode: mode) {
+                    GameModeTile(
+                        mode: mode,
+                        isCompletedToday: isCompleted(mode)
+                    ) {
                         onSelect(mode)
                     }
                 }
             }
         }
     }
+
+    private func isCompleted(_ mode: GameModeMetaDTO) -> Bool {
+        completedModeIds.contains(GameModeCatalog.normalizedModeId(mode.id))
+    }
 }
 
 struct GameModeTile: View {
     let mode: GameModeMetaDTO
+    var isCompletedToday = false
     var onTap: () -> Void
 
     private let cornerRadius: CGFloat = 14
@@ -404,13 +421,34 @@ struct GameModeTile: View {
 
                 tileContent
                     .zIndex(2)
+
+                if isCompletedToday {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Ph.checkCircle.fill
+                                .color(BKTheme.accent)
+                                .frame(width: 22, height: 22)
+                                .background(Circle().fill(BKTheme.background.opacity(0.85)))
+                                .padding(8)
+                        }
+                        Spacer()
+                    }
+                    .zIndex(3)
+                }
             }
             .frame(height: 110)
             .frame(maxWidth: .infinity, alignment: .leading)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .opacity(usesImageArt ? 1 : (mode.isAvailable ? 1 : 0.65))
+            .opacity(tileOpacity)
         }
         .buttonStyle(TilePressStyle())
+    }
+
+    private var tileOpacity: Double {
+        if !mode.isAvailable { return usesImageArt ? 0.65 : 0.65 }
+        if isCompletedToday { return usesImageArt ? 0.82 : 0.82 }
+        return 1
     }
 
     private var tileArtLayer: some View {
@@ -521,5 +559,71 @@ struct ProgressStripView: View {
         .padding(16)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+struct DailyGameHost: View {
+    let mode: GameModeID
+    let dailyBundle: DailyBundleDTO?
+    let allowReplay: Bool
+    let onFinished: () -> Void
+
+    var body: some View {
+        Group {
+            switch mode {
+            case .guessWho:
+                if let bundle = dailyBundle, let puzzle = bundle.guessWhoPuzzle {
+                    GuessWhoView(
+                        puzzle: puzzle,
+                        date: bundle.date,
+                        allowReplay: allowReplay,
+                        onComplete: onFinished
+                    )
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
+            case .targetMan:
+                TargetManView(dailyBundle: dailyBundle, allowReplay: allowReplay, onComplete: onFinished)
+            case .blindRank:
+                BlindRankView(dailyBundle: dailyBundle, allowReplay: allowReplay, onComplete: onFinished)
+            case .footballBingo:
+                FootballBingoView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
+            case .oneMore:
+                OneMoreView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
+            case .draftMaster:
+                DraftMasterView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
+            case .footballGolf:
+                FootballGolfView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
+            case .footballTower:
+                FootballTowerView(dailyOnly: true, allowReplay: allowReplay, onComplete: onFinished)
+            case .tenaball:
+                DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+            }
+        }
+    }
+}
+
+private struct DailyUnavailablePlaceholder: View {
+    let modeTitle: String
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(modeTitle)
+                .font(BKFont.headline())
+                .foregroundStyle(BKTheme.textPrimary)
+            Text("Today's daily isn't available yet.")
+                .font(BKFont.body())
+                .foregroundStyle(BKTheme.textSecondary)
+            Button("Close", action: onClose)
+                .font(BKFont.headline())
+                .foregroundStyle(BKTheme.background)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .background(BKTheme.accent)
+                .clipShape(Capsule())
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(BKTheme.background)
     }
 }

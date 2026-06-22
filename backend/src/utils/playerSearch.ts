@@ -70,11 +70,14 @@ export function formatDisplayName(
     .filter(([, , aliasLast]) => aliasLast.toLowerCase() === lastNorm);
 
   if (isAbbreviatedName(trimmedApi)) {
-    initialAliases.unshift(trimmedApi.match(INITIAL_ALIAS_RE)!);
+    const apiMatch = trimmedApi.match(INITIAL_ALIAS_RE);
+    if (apiMatch) initialAliases.unshift(apiMatch);
   }
 
   for (const match of initialAliases) {
-    const initial = match[1]!.toLowerCase();
+    if (!match) continue;
+    const initial = match[1]?.toLowerCase();
+    if (!initial) continue;
     const hits = parts.filter((part) => part[0]?.toLowerCase() === initial);
     if (hits.length === 1) {
       return `${hits[0]} ${last}`;

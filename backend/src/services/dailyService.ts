@@ -24,6 +24,26 @@ const DAILY_PUZZLE_MODES = [
   { modeId: 'blind_rank', title: 'BLIND RANK' },
 ] as const;
 
+/** All modes that count as one daily play on iOS (order matches client flow). */
+export const DAILY_PLAYABLE_MODES = [
+  'guess_who',
+  'target_man',
+  'blind_rank',
+  'football_bingo',
+  'one_more',
+  'draft_master',
+  'football_golf',
+  'football_tower',
+] as const;
+
+const CLIENT_SEED_MODES = new Set<string>([
+  'football_bingo',
+  'one_more',
+  'draft_master',
+  'football_golf',
+  'football_tower',
+]);
+
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -38,6 +58,21 @@ function computeXpEarned(won: boolean, guesses: number): number {
   if (!won) return 10;
   const bonus = Math.max(0, (8 - guesses) * 10);
   return 50 + bonus;
+}
+
+function computeClientModeXp(modeId: string, score: number, won: boolean): number {
+  if (!won) return 10;
+  const base: Record<string, number> = {
+    football_bingo: 50,
+    one_more: 40,
+    draft_master: 45,
+    football_golf: 55,
+    football_tower: 40,
+    target_man: 50,
+    blind_rank: 50,
+  };
+  const floor = base[modeId] ?? 30;
+  return floor + Math.min(50, Math.max(0, score));
 }
 
 export function getGameModes() {
@@ -98,21 +133,18 @@ export async function getDailyBundle(userId: string): Promise<DailyBundle> {
     ];
   });
 
-  const completion = await db
-    .select()
+  const completions = await db
+    .select({ modeId: dailyCompletions.modeId })
     .from(dailyCompletions)
-    .where(
-      and(
-        eq(dailyCompletions.userId, userId),
-        eq(dailyCompletions.date, date),
-        eq(dailyCompletions.modeId, 'guess_who')
-      )
-    )
-    .limit(1);
+    .where(and(eq(dailyCompletions.userId, userId), eq(dailyCompletions.date, date)));
+
+  const completedModeIds = completions.map((row) => row.modeId);
+  const allComplete = DAILY_PLAYABLE_MODES.every((modeId) => completedModeIds.includes(modeId));
 
   return {
     date,
-    alreadyPlayed: completion.length > 0,
+    alreadyPlayed: allComplete,
+    completedModeIds,
     games,
   };
 }
@@ -162,11 +194,14 @@ export async function completeDaily(
     .where(and(eq(dailyPuzzles.date, input.date), eq(dailyPuzzles.modeId, input.modeId)))
     .limit(1);
 
-  if (!puzzle[0]) {
+  if (!puzzle[0] && !CLIENT_SEED_MODES.has(input.modeId)) {
     throw new Error('Daily puzzle not found');
   }
 
-  const xpEarned = computeXpEarned(input.won, input.guesses);
+  const xpEarned =
+    input.modeId === 'guess_who'
+      ? computeXpEarned(input.won, input.guesses)
+      : computeClientModeXp(input.modeId, input.score, input.won);
 
   await db.insert(dailyCompletions).values({
     userId,

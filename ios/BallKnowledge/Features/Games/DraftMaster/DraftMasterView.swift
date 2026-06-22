@@ -19,9 +19,11 @@ final class DraftMasterViewModel {
 
     private let practice: Bool
 
-    init(practice: Bool = false) {
+    init(practice: Bool = false, dailyDate: String? = nil) {
         self.practice = practice
-        let challenge = practice ? DraftMasterSeed.makePracticeChallenge() : DraftMasterSeed.makeDailyChallenge()
+        let challenge = practice
+            ? DraftMasterSeed.makePracticeChallenge()
+            : DraftMasterSeed.makeDailyChallenge(date: dailyDate)
         self.state = DraftMasterGameState(challenge: challenge)
     }
 
@@ -161,12 +163,17 @@ final class DraftMasterViewModel {
 
 struct DraftMasterView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var viewModel: DraftMasterViewModel
     @FocusState private var isSearchFocused: Bool
+    private let allowReplay: Bool
+    private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(practice: Bool = false, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: DraftMasterViewModel(practice: practice))
+    init(dailyDate: String? = nil, practice: Bool = false, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
+        _viewModel = State(initialValue: DraftMasterViewModel(practice: practice, dailyDate: dailyDate))
+        self.allowReplay = allowReplay
+        self.dailyDate = dailyDate
         self.onComplete = onComplete
     }
 
@@ -179,7 +186,7 @@ struct DraftMasterView: View {
                         DraftMasterIntroView(
                             challenge: viewModel.state.challenge,
                             onStart: viewModel.startDraft,
-                            onNewPractice: viewModel.newPracticeDraft
+                            onNewPractice: allowReplay ? viewModel.newPracticeDraft : nil
                         )
                     case .spinningPrompt, .drafting, .complete:
                         draftScreen
@@ -228,11 +235,23 @@ struct DraftMasterView: View {
                         viewModel.showLeaderboard = true
                     },
                     onShare: { viewModel.showShare = true },
+                    showPlayAgain: allowReplay,
                     onPlayAgain: {
                         viewModel.showResult = false
                         viewModel.restart()
                     },
                     onHome: {
+                        if !allowReplay, let dailyDate {
+                            Task {
+                                await DailyCompletionService.recordCompletion(
+                                    modeId: GameModeID.draftMaster.rawValue,
+                                    date: dailyDate,
+                                    score: summary.teamScore,
+                                    won: summary.teamScore >= 60,
+                                    context: modelContext
+                                )
+                            }
+                        }
                         viewModel.showResult = false
                         onComplete()
                         dismiss()
@@ -311,7 +330,7 @@ struct DraftMasterView: View {
 private struct DraftMasterIntroView: View {
     let challenge: DraftMasterChallenge
     var onStart: () -> Void
-    var onNewPractice: () -> Void
+    var onNewPractice: (() -> Void)?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -818,6 +837,7 @@ private struct DraftMasterResultView: View {
     let summary: DraftMasterResultSummary
     var onLeaderboard: () -> Void
     var onShare: () -> Void
+    var showPlayAgain = true
     var onPlayAgain: () -> Void
     var onHome: () -> Void
 
@@ -891,15 +911,17 @@ private struct DraftMasterResultView: View {
                                 .clipShape(Capsule())
                         }
 
-                        Button(action: onPlayAgain) {
-                            Text("PLAY AGAIN")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.textMuted)
+                        if showPlayAgain {
+                            Button(action: onPlayAgain) {
+                                Text("PLAY AGAIN")
+                                    .font(BKFont.headline(14))
+                                    .foregroundStyle(BKTheme.textMuted)
+                            }
+                            .padding(.top, 4)
                         }
-                        .padding(.top, 4)
 
                         Button(action: onHome) {
-                            Text("BACK TO GAMES")
+                            Text(showPlayAgain ? "BACK TO GAMES" : "DONE")
                                 .font(BKFont.caption(11))
                                 .foregroundStyle(BKTheme.textMuted)
                         }

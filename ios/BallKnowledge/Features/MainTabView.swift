@@ -35,22 +35,20 @@ struct MainTabView: View {
 struct PlayTabView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var modes: [GameModeMetaDTO] = []
-    @State private var showGuessWho = false
-    @State private var showFootballBingo = false
-    @State private var showTargetMan = false
-    @State private var showFootballGolf = false
-    @State private var showBlindRank = false
-    @State private var showOneMore = false
-    @State private var showDraftMaster = false
-    @State private var showFootballTower = false
     @State private var dailyBundle: DailyBundleDTO?
+    @State private var presentedMode: GameModeID?
+    @State private var showAlreadyPlayedAlert = false
+    @State private var alreadyPlayedTitle = ""
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(modes) { mode in
-                        GameModeTile(mode: mode) {
+                        GameModeTile(
+                            mode: mode,
+                            isCompletedToday: isCompleted(mode)
+                        ) {
                             openMode(mode)
                         }
                     }
@@ -64,81 +62,53 @@ struct PlayTabView: View {
                 modes = GameModeCatalog.resolve(from: apiModes)
                 dailyBundle = try? await APIClient.shared.dailyToday()
             }
-            .fullScreenCover(isPresented: $showGuessWho) {
-                if let bundle = dailyBundle, let puzzle = bundle.guessWhoPuzzle {
-                    GuessWhoView(puzzle: puzzle, date: bundle.date, onComplete: {
-                        showGuessWho = false
-                    })
-                }
+            .fullScreenCover(item: $presentedMode) { mode in
+                DailyGameHost(
+                    mode: mode,
+                    dailyBundle: dailyBundle,
+                    allowReplay: false,
+                    onFinished: {
+                        presentedMode = nil
+                        Task {
+                            dailyBundle = try? await APIClient.shared.dailyToday()
+                        }
+                    }
+                )
             }
-            .fullScreenCover(isPresented: $showFootballBingo) {
-                FootballBingoView(onComplete: {
-                    showFootballBingo = false
-                })
-            }
-            .fullScreenCover(isPresented: $showTargetMan) {
-                TargetManView(dailyBundle: dailyBundle, onComplete: {
-                    showTargetMan = false
-                })
-            }
-            .fullScreenCover(isPresented: $showFootballGolf) {
-                FootballGolfView(onComplete: {
-                    showFootballGolf = false
-                })
-            }
-            .fullScreenCover(isPresented: $showBlindRank) {
-                BlindRankView(dailyBundle: dailyBundle, onComplete: {
-                    showBlindRank = false
-                })
-            }
-            .fullScreenCover(isPresented: $showOneMore) {
-                OneMoreView(onComplete: {
-                    showOneMore = false
-                })
-            }
-            .fullScreenCover(isPresented: $showDraftMaster) {
-                DraftMasterView(onComplete: {
-                    showDraftMaster = false
-                })
-            }
-            .fullScreenCover(isPresented: $showFootballTower) {
-                FootballTowerView(onComplete: {
-                    showFootballTower = false
-                })
+            .alert("Already played today", isPresented: $showAlreadyPlayedAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("You've finished \(alreadyPlayedTitle) for today. Come back tomorrow.")
             }
         }
     }
 
+    private func isCompleted(_ mode: GameModeMetaDTO) -> Bool {
+        guard let bundle = dailyBundle else { return false }
+        return DailyCompletionService.completedSet(for: bundle)
+            .contains(GameModeCatalog.normalizedModeId(mode.id))
+    }
+
     private func openMode(_ mode: GameModeMetaDTO) {
-        guard mode.isAvailable else { return }
-        switch GameModeCatalog.normalizedModeId(mode.id) {
-        case GameModeID.guessWho.rawValue:
-            showGuessWho = true
-        case GameModeID.footballBingo.rawValue:
-            showFootballBingo = true
-        case GameModeID.targetMan.rawValue:
-            showTargetMan = true
-        case GameModeID.footballGolf.rawValue:
-            showFootballGolf = true
-        case GameModeID.blindRank.rawValue:
-            showBlindRank = true
-        case GameModeID.oneMore.rawValue:
-            showOneMore = true
-        case GameModeID.draftMaster.rawValue:
-            showDraftMaster = true
-        case GameModeID.footballTower.rawValue:
-            showFootballTower = true
-        default:
-            break
+        guard mode.isAvailable, let bundle = dailyBundle else { return }
+        guard let modeId = GameModeID(rawValue: GameModeCatalog.normalizedModeId(mode.id)) else { return }
+        guard DailyPlayOrder.playableModes.contains(modeId) else { return }
+
+        if bundle.isCompleted(modeId) {
+            alreadyPlayedTitle = mode.title
+            showAlreadyPlayedAlert = true
+            return
         }
+
+        presentedMode = modeId
     }
 }
 
 struct DailyTabView: View {
     @State private var bundle: DailyBundleDTO?
-    @State private var showGuessWho = false
-    @State private var showTargetMan = false
-    @State private var showBlindRank = false
+    @State private var presentedMode: GameModeID?
+    @State private var showAlreadyPlayedAlert = false
+    @State private var alreadyPlayedTitle = ""
 
     var body: some View {
         NavigationStack {
@@ -148,15 +118,31 @@ struct DailyTabView: View {
                         .font(BKFont.caption())
                         .foregroundStyle(BKTheme.textMuted)
 
-                    ForEach(bundle.games) { game in
+                    Text("\(DailyPlayOrder.completedCount(in: bundle))/\(DailyPlayOrder.playableModes.count) completed")
+                        .font(BKFont.body())
+                        .foregroundStyle(BKTheme.textSecondary)
+
+                    ForEach(DailyPlayOrder.playableModes) { mode in
                         Button {
-                            openDailyGame(game, bundle: bundle)
+                            openMode(mode, bundle: bundle)
                         } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(game.title)
-                                    .font(BKFont.headline())
-                                    .foregroundStyle(BKTheme.textPrimary)
-                                dailySubtitle(for: game, bundle: bundle)
+                            HStack {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(mode.title)
+                                        .font(BKFont.headline())
+                                        .foregroundStyle(BKTheme.textPrimary)
+                                    Text(subtitle(for: mode, bundle: bundle))
+                                        .font(BKFont.body())
+                                        .foregroundStyle(
+                                            bundle.isCompleted(mode) ? BKTheme.accent : BKTheme.textSecondary
+                                        )
+                                }
+                                Spacer()
+                                if bundle.isCompleted(mode) {
+                                    Ph.checkCircle.fill
+                                        .color(BKTheme.accent)
+                                        .frame(width: 22, height: 22)
+                                }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(20)
@@ -165,10 +151,6 @@ struct DailyTabView: View {
                         }
                         .buttonStyle(.plain)
                     }
-
-                    Text("Archive coming soon")
-                        .font(BKFont.caption())
-                        .foregroundStyle(BKTheme.textMuted)
                 } else {
                     ProgressView().tint(BKTheme.accent)
                 }
@@ -180,55 +162,51 @@ struct DailyTabView: View {
             .task {
                 bundle = try? await APIClient.shared.dailyToday()
             }
-            .fullScreenCover(isPresented: $showGuessWho) {
-                if let bundle, let puzzle = bundle.guessWhoPuzzle {
-                    GuessWhoView(puzzle: puzzle, date: bundle.date, onComplete: {
-                        showGuessWho = false
-                    })
-                }
+            .fullScreenCover(item: $presentedMode) { mode in
+                DailyGameHost(
+                    mode: mode,
+                    dailyBundle: bundle,
+                    allowReplay: false,
+                    onFinished: {
+                        presentedMode = nil
+                        Task { bundle = try? await APIClient.shared.dailyToday() }
+                    }
+                )
             }
-            .fullScreenCover(isPresented: $showTargetMan) {
-                TargetManView(dailyBundle: bundle, onComplete: {
-                    showTargetMan = false
-                })
-            }
-            .fullScreenCover(isPresented: $showBlindRank) {
-                BlindRankView(dailyBundle: bundle, onComplete: {
-                    showBlindRank = false
-                })
+            .alert("Already played today", isPresented: $showAlreadyPlayedAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("You've finished \(alreadyPlayedTitle) for today. Come back tomorrow.")
             }
         }
     }
 
-    @ViewBuilder
-    private func dailySubtitle(for game: DailyGameDTO, bundle: DailyBundleDTO) -> some View {
-        switch game.puzzle {
-        case .guessWho:
-            Text(bundle.alreadyPlayed ? "Completed" : "8 guesses · Wordle-style player guess")
-                .font(BKFont.body())
-                .foregroundStyle(bundle.alreadyPlayed ? BKTheme.accent : BKTheme.textSecondary)
-        case .targetMan(let puzzle):
-            Text("\(puzzle.title) · target \(puzzle.target)")
-                .font(BKFont.body())
-                .foregroundStyle(BKTheme.textSecondary)
-        case .blindRank(let puzzle):
-            Text("\(puzzle.categoryTitle) · \(puzzle.presentationOrder.count) players")
-                .font(BKFont.body())
-                .foregroundStyle(BKTheme.textSecondary)
-        }
-    }
-
-    private func openDailyGame(_ game: DailyGameDTO, bundle: DailyBundleDTO) {
-        switch GameModeCatalog.normalizedModeId(game.modeId) {
-        case GameModeID.guessWho.rawValue:
-            showGuessWho = true
-        case GameModeID.targetMan.rawValue:
-            showTargetMan = true
-        case GameModeID.blindRank.rawValue:
-            showBlindRank = true
+    private func subtitle(for mode: GameModeID, bundle: DailyBundleDTO) -> String {
+        if bundle.isCompleted(mode) { return "Completed" }
+        switch mode {
+        case .guessWho: return "8 guesses · Wordle-style player guess"
+        case .targetMan:
+            if let puzzle = bundle.targetManPuzzle {
+                return "\(puzzle.title) · target \(puzzle.target)"
+            }
+            return "Hit the stat target"
+        case .blindRank:
+            if let puzzle = bundle.blindRankPuzzle {
+                return "\(puzzle.categoryTitle) · \(puzzle.presentationOrder.count) players"
+            }
+            return "Order the stats"
         default:
-            break
+            return "One play per day"
         }
+    }
+
+    private func openMode(_ mode: GameModeID, bundle: DailyBundleDTO) {
+        if bundle.isCompleted(mode) {
+            alreadyPlayedTitle = mode.title
+            showAlreadyPlayedAlert = true
+            return
+        }
+        presentedMode = mode
     }
 }
 

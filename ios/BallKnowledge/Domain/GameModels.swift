@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum GameModeID: String, CaseIterable {
+enum GameModeID: String, CaseIterable, Identifiable {
     case footballBingo = "football_bingo"
     case oneMore = "one_more"
     case targetMan = "target_man"
@@ -37,6 +37,48 @@ enum GameModeID: String, CaseIterable {
         case .oneMore: return "flame.fill"
         case .footballTower: return "building.2.fill"
         }
+    }
+}
+
+extension GameModeID {
+    var id: String { rawValue }
+}
+
+enum DailyPlayOrder {
+    static let playableModes: [GameModeID] = [
+        .guessWho,
+        .targetMan,
+        .blindRank,
+        .footballBingo,
+        .oneMore,
+        .draftMaster,
+        .footballGolf,
+        .footballTower,
+    ]
+
+    static func completedCount(in bundle: DailyBundleDTO) -> Int {
+        playableModes.filter { bundle.isCompleted($0) }.count
+    }
+
+    static func allComplete(in bundle: DailyBundleDTO) -> Bool {
+        completedCount(in: bundle) >= playableModes.count
+    }
+
+    static func firstIncomplete(in bundle: DailyBundleDTO) -> GameModeID? {
+        playableModes.first { !bundle.isCompleted($0) }
+    }
+
+    static func nextIncomplete(after mode: GameModeID, in bundle: DailyBundleDTO) -> GameModeID? {
+        guard let index = playableModes.firstIndex(of: mode) else { return nil }
+        return playableModes.dropFirst(index + 1).first { !bundle.isCompleted($0) }
+    }
+}
+
+extension DailyBundleDTO {
+    func isCompleted(_ mode: GameModeID) -> Bool {
+        let normalized = mode.rawValue
+        return completedModeIds.contains { GameModeCatalog.normalizedModeId($0) == normalized }
+            || DailyCompletionService.isLocallyCompleted(mode, date: date)
     }
 }
 
