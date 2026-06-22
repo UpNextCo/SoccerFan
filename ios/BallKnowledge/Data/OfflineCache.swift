@@ -151,7 +151,7 @@ enum DailyCompletionService {
         do {
             _ = try await APIClient.shared.dailyComplete(request)
         } catch {
-            try? queueCompletion(request, context: context)
+            try? OfflineCache.queueCompletion(request, context: context)
         }
     }
 
