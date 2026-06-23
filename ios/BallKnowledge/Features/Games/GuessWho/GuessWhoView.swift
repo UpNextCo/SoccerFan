@@ -381,6 +381,8 @@ struct GuessWhoGuessCard: View {
                     GuessWhoFlipAttributeBadge(
                         field: field,
                         playerLeague: row.player.league,
+                        playerTeamId: field.field == "club" ? row.player.teamId : nil,
+                        playerTeamLogoUrl: field.field == "club" ? row.player.teamLogoUrl : nil,
                         isRevealed: !animateFlip || index < revealedCount
                     )
                     .frame(maxWidth: .infinity)
@@ -415,6 +417,8 @@ struct GuessWhoGuessCard: View {
 struct GuessWhoFlipAttributeBadge: View {
     let field: GuessFeedbackFieldDTO
     let playerLeague: String
+    var playerTeamId: Int? = nil
+    var playerTeamLogoUrl: String? = nil
     let isRevealed: Bool
 
     var body: some View {
@@ -423,7 +427,12 @@ struct GuessWhoFlipAttributeBadge: View {
                 GuessWhoBadgePlaceholder()
                     .opacity(isRevealed ? 0 : 1)
 
-                GuessWhoBadgeFace(field: field, playerLeague: playerLeague)
+                GuessWhoBadgeFace(
+                    field: field,
+                    playerLeague: playerLeague,
+                    playerTeamId: playerTeamId,
+                    playerTeamLogoUrl: playerTeamLogoUrl
+                )
                     .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
                     .opacity(isRevealed ? 1 : 0)
             }
@@ -458,6 +467,8 @@ struct GuessWhoBadgePlaceholder: View {
 struct GuessWhoBadgeFace: View {
     let field: GuessFeedbackFieldDTO
     var playerLeague: String = ""
+    var playerTeamId: Int? = nil
+    var playerTeamLogoUrl: String? = nil
 
     private var status: FeedbackStatus { FeedbackStatus(raw: field.status) }
 
@@ -477,6 +488,8 @@ struct GuessWhoBadgeFace: View {
             TeamBadgeImage(
                 club: field.value?.display ?? "",
                 league: playerLeague,
+                teamId: playerTeamId,
+                logoURL: playerTeamLogoUrl.flatMap(URL.init(string:)),
                 size: 34
             ) {
                 abbrevFallback

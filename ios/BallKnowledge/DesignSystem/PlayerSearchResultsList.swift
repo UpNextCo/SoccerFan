@@ -23,13 +23,7 @@ struct PlayerSearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            TeamBadgeImage(
-                club: player.club,
-                league: player.league,
-                teamId: player.teamId,
-                logoURL: player.teamLogoUrl.flatMap(URL.init(string:)),
-                size: 28
-            ) {
+            PlayerTeamBadge(player: player, size: 28) {
                 Circle()
                     .fill(BKTheme.cardElevated)
                     .frame(width: 28, height: 28)

@@ -419,13 +419,7 @@ private struct TargetManFilledSlotRow: View {
                 .background(BKTheme.accent)
                 .clipShape(Circle())
 
-            TeamBadgeImage(
-                club: selection.player.club,
-                league: selection.player.league,
-                teamId: selection.player.teamId,
-                logoURL: selection.player.teamLogoUrl.flatMap(URL.init(string:)),
-                size: 28
-            ) {
+            PlayerTeamBadge(player: selection.player, size: 28) {
                 Circle()
                     .fill(BKTheme.cardElevated)
                     .frame(width: 28, height: 28)

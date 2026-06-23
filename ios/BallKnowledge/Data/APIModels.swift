@@ -47,6 +47,11 @@ struct GuessWhoPuzzleDTO: Codable, Equatable {
     let maxScore: Int
 }
 
+struct TeamLogoDTO: Codable, Equatable {
+    let teamId: Int
+    let logoUrl: String
+}
+
 struct GuessFeedbackFieldDTO: Codable, Equatable {
     let field: String
     let value: StringOrNumber?

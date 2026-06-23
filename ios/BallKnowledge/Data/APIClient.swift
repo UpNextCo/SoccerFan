@@ -117,6 +117,23 @@ actor APIClient {
         )
     }
 
+    func teamLogo(club: String, league: String) async -> TeamLogoDTO? {
+        let trimmedClub = club.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedClub.isEmpty else { return nil }
+
+        do {
+            return try await request(
+                "teams/logo",
+                queryItems: [
+                    URLQueryItem(name: "club", value: trimmedClub),
+                    URLQueryItem(name: "league", value: league.trimmingCharacters(in: .whitespacesAndNewlines)),
+                ]
+            )
+        } catch {
+            return nil
+        }
+    }
+
     func getPlayerCareerStats(playerId: String, league: TargetManLeague) async throws -> PlayerCareerStatsDTO {
         try await getPlayerCareerStats(playerId: playerId, leagueId: league.apiLeagueId)
     }

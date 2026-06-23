@@ -16,13 +16,15 @@
     "job:generate-daily": "tsx src/jobs/generate-daily.ts",
     "job:ingest-players": "tsx src/jobs/ingest-players.ts",
     "job:ingest-stats": "tsx src/jobs/ingest-stats.ts",
+    "job:ingest-stats-gap": "tsx src/jobs/ingest-stats-gap.ts",
     "job:ingest-transfers": "tsx src/jobs/ingest-transfers.ts",
     "job:ingest-trophies": "tsx src/jobs/ingest-trophies.ts",
     "job:ingest-career": "tsx src/jobs/ingest-career.ts",
     "job:ingest-teams": "tsx src/jobs/ingest-teams.ts",
     "job:ingest-stats-all": "tsx src/jobs/ingest-stats-all.ts",
     "job:refresh-player-search": "tsx src/jobs/refresh-player-search.ts",
-    "job:audit-coverage": "tsx src/jobs/audit-coverage.ts"
+    "job:audit-coverage": "tsx src/jobs/audit-coverage.ts",
+    "job:audit-extended": "tsx src/jobs/audit-extended.ts"
   },
   "dependencies": {
     "apple-signin-auth": "^1.7.6",

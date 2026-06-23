@@ -188,9 +188,9 @@ struct HomeHeaderView: View {
                     HStack(spacing: 4) {
                         Ph.fire.fill
                             .color(BKTheme.streak)
-                            .frame(width: 14, height: 14)
-                        Text("\(streak) DAY STREAK")
-                            .font(BKFont.caption(10))
+                            .frame(width: 12, height: 12)
+                        Text("\(streak) \(streak == 1 ? "DAY" : "DAYS")")
+                            .font(BKFont.caption())
                             .foregroundStyle(BKTheme.textPrimary)
                     }
                 }
@@ -240,6 +240,14 @@ struct DailyRunCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                ForEach(0..<totalCount, id: \.self) { index in
+                    Capsule()
+                        .fill(index < completedCount ? BKTheme.accent : BKTheme.cardElevated)
+                        .frame(height: 4)
+                }
+            }
+
             Text("TODAY'S RUN")
                 .font(BKFont.caption(11))
                 .foregroundStyle(BKTheme.accent)
@@ -251,15 +259,6 @@ struct DailyRunCard: View {
             Text(progressSubtitle)
                 .font(BKFont.body(13))
                 .foregroundStyle(BKTheme.textSecondary)
-
-            HStack(spacing: 6) {
-                ForEach(0..<totalCount, id: \.self) { index in
-                    Capsule()
-                        .fill(index < completedCount ? BKTheme.accent : BKTheme.cardElevated)
-                        .frame(height: 4)
-                }
-            }
-            .padding(.top, 2)
 
             if allComplete {
                 TimelineView(.periodic(from: .now, by: 60)) { context in
