@@ -14,7 +14,7 @@ const GAME_MODES = [
   { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9-hole trivia par', playerCount: 7600, isAvailable: true },
   { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
   { id: 'draft_master', title: 'DRAFT MASTER', subtitle: 'Build the best XI', playerCount: 11300, isAvailable: true },
-  { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Pick the World Cup XI', playerCount: 8900, isAvailable: false },
+  { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Guess the World Cup year', playerCount: 8900, isAvailable: true },
   { id: 'football_tower', title: 'FOOTBALL TOWER', subtitle: 'Climb the tower', playerCount: 8700, isAvailable: true },
 ];
 
@@ -32,6 +32,7 @@ export const DAILY_PLAYABLE_MODES = [
   'football_bingo',
   'one_more',
   'draft_master',
+  'world_cup_xi',
   'football_golf',
   'football_tower',
 ] as const;
@@ -40,6 +41,7 @@ const CLIENT_SEED_MODES = new Set<string>([
   'football_bingo',
   'one_more',
   'draft_master',
+  'world_cup_xi',
   'football_golf',
   'football_tower',
 ]);

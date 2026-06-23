@@ -62,6 +62,9 @@
 		D9668C81EED41FE8953CAEF6 /* BlindRankModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367D84D89C2E593BFB8289AF /* BlindRankModels.swift */; };
 		DB3F8BD2B50153E74BCF9281 /* TargetManSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AD5A735A6802BFB333606E4 /* TargetManSeed.swift */; };
 		EE6672A880D715EB249E491C /* BlindRankView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8E55ABF47595B1A2EF4C43 /* BlindRankView.swift */; };
+		A7C8D9E0F1B2C3D4E5F60002 /* WorldCupXIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C8D9E0F1B2C3D4E5F60001 /* WorldCupXIModels.swift */; };
+		A7C8D9E0F1B2C3D4E5F60004 /* WorldCupXISeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C8D9E0F1B2C3D4E5F60003 /* WorldCupXISeed.swift */; };
+		A7C8D9E0F1B2C3D4E5F60006 /* WorldCupXIView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C8D9E0F1B2C3D4E5F60005 /* WorldCupXIView.swift */; };
 		FEEF00D3BDD7648A935B071D /* FootballBingoSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B42BB208E7E01B1BD110962 /* FootballBingoSeed.swift */; };
 /* End PBXBuildFile section */
 
@@ -107,6 +110,9 @@
 		9475EA8DDA597CE44BCD022E /* BallKnowledge.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BallKnowledge.entitlements; sourceTree = "<group>"; };
 		98E7509E1EA4A2B6D31BBC41 /* FootballTowerCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballTowerCatalog.swift; sourceTree = "<group>"; };
 		A36DF66C77EDAE47F240AEB4 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		A7C8D9E0F1B2C3D4E5F60001 /* WorldCupXIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorldCupXIModels.swift; sourceTree = "<group>"; };
+		A7C8D9E0F1B2C3D4E5F60003 /* WorldCupXISeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorldCupXISeed.swift; sourceTree = "<group>"; };
+		A7C8D9E0F1B2C3D4E5F60005 /* WorldCupXIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorldCupXIView.swift; sourceTree = "<group>"; };
 		AB1D794DAC4294F9E4AD39D4 /* FootballTowerModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballTowerModels.swift; sourceTree = "<group>"; };
 		AB7B4131BDF1A75A567731AA /* FootballBingoMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballBingoMatcher.swift; sourceTree = "<group>"; };
 		ACE83C9658DC7D466269FFDB /* DraftMasterSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftMasterSeed.swift; sourceTree = "<group>"; };
@@ -151,6 +157,7 @@
 				77CDD48544B639D55774D533 /* GuessWho */,
 				5A31844CDE5F944A1D13D7C9 /* OneMore */,
 				8B3FBBBC289051A5FC63EFF8 /* TargetMan */,
+				A7C8D9E0F1B2C3D4E5F60007 /* WorldCupXI */,
 			);
 			path = Games;
 			sourceTree = "<group>";
@@ -257,8 +264,18 @@
 				1D508783416F037C0979FF52 /* TargetManModels.swift */,
 				5AD5A735A6802BFB333606E4 /* TargetManSeed.swift */,
 				D61D50E84ABC773CA41236A2 /* TargetManStats.swift */,
+				A7C8D9E0F1B2C3D4E5F60001 /* WorldCupXIModels.swift */,
+				A7C8D9E0F1B2C3D4E5F60003 /* WorldCupXISeed.swift */,
 			);
 			path = Domain;
+			sourceTree = "<group>";
+		};
+		A7C8D9E0F1B2C3D4E5F60007 /* WorldCupXI */ = {
+			isa = PBXGroup;
+			children = (
+				A7C8D9E0F1B2C3D4E5F60005 /* WorldCupXIView.swift */,
+			);
+			path = WorldCupXI;
 			sourceTree = "<group>";
 		};
 		8581FF6AD12DF6E7F4E66117 /* Resources */ = {
@@ -468,6 +485,9 @@
 				DB3F8BD2B50153E74BCF9281 /* TargetManSeed.swift in Sources */,
 				BE083A2C33245336AD9A486F /* TargetManStats.swift in Sources */,
 				9FB86F0EEA7D92139B5A4E28 /* TargetManView.swift in Sources */,
+				A7C8D9E0F1B2C3D4E5F60002 /* WorldCupXIModels.swift in Sources */,
+				A7C8D9E0F1B2C3D4E5F60004 /* WorldCupXISeed.swift in Sources */,
+				A7C8D9E0F1B2C3D4E5F60006 /* WorldCupXIView.swift in Sources */,
 				1CBF05E52D092BB0FC7666DD /* TeamBadge.swift in Sources */,
 				B924B06F7D0D5B7D15D25C70 /* Theme.swift in Sources */,
 				B9E8F1A20314253647586970 /* PlayerSearchResultsList.swift in Sources */,

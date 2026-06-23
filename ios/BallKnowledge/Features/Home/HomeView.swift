@@ -603,7 +603,7 @@ struct DailyGameHost: View {
             case .footballTower:
                 FootballTowerView(dailyOnly: true, allowReplay: allowReplay, onComplete: onFinished)
             case .worldCupXI:
-                DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                WorldCupXIView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
             }
         }
     }

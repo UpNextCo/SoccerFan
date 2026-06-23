@@ -5,7 +5,7 @@ import Foundation
 enum GameModeCatalog {
     private static let defaultPlayerCounts = [12400, 6400, 15200, 22100, 7600, 9800, 11300, 8900, 8700]
 
-    private static let locallyAvailable: Set<GameModeID> = [.guessWho, .footballBingo, .targetMan, .footballGolf, .blindRank, .oneMore, .draftMaster, .footballTower]
+    private static let locallyAvailable: Set<GameModeID> = [.guessWho, .footballBingo, .targetMan, .footballGolf, .blindRank, .oneMore, .draftMaster, .worldCupXI, .footballTower]
 
     /// Maps retired API ids to their replacement mode.
     private static let legacyIdMap: [String: GameModeID] = [

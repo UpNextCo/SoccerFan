@@ -52,6 +52,7 @@ enum DailyPlayOrder {
         .footballBingo,
         .oneMore,
         .draftMaster,
+        .worldCupXI,
         .footballGolf,
         .footballTower,
     ]
