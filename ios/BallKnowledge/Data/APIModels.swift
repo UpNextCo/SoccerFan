@@ -61,6 +61,28 @@ struct PlayerSearchResultDTO: Codable, Identifiable, Equatable {
     let league: String
     let nationality: String
     let position: String
+    let teamId: Int?
+    let teamLogoUrl: String?
+
+    init(
+        id: String,
+        name: String,
+        club: String,
+        league: String,
+        nationality: String,
+        position: String,
+        teamId: Int? = nil,
+        teamLogoUrl: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.club = club
+        self.league = league
+        self.nationality = nationality
+        self.position = position
+        self.teamId = teamId
+        self.teamLogoUrl = teamLogoUrl
+    }
 }
 
 struct PlayerCareerStatsTotalsDTO: Codable, Equatable {

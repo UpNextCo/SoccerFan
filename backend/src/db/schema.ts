@@ -157,6 +157,24 @@ export const playerCareer = pgTable(
   ]
 );
 
+/** API-Football team ids → crest URLs (media CDN, free quota). */
+export const teams = pgTable(
+  'teams',
+  {
+    id: integer('id').primaryKey(),
+    name: text('name').notNull(),
+    nameNorm: text('name_norm').notNull(),
+    leagueId: integer('league_id'),
+    country: text('country'),
+    logoUrl: text('logo_url').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('teams_name_norm_idx').on(table.nameNorm),
+    index('teams_league_id_idx').on(table.leagueId),
+  ]
+);
+
 export const ingestRuns = pgTable('ingest_runs', {
   id: uuid('id').primaryKey().defaultRandom(),
   jobName: text('job_name').notNull(),
@@ -209,4 +227,5 @@ export type PlayerStat = typeof playerStats.$inferSelect;
 export type PlayerTransfer = typeof playerTransfers.$inferSelect;
 export type PlayerHonour = typeof playerHonours.$inferSelect;
 export type PlayerCareerEntry = typeof playerCareer.$inferSelect;
+export type Team = typeof teams.$inferSelect;
 export type DailyPuzzle = typeof dailyPuzzles.$inferSelect;

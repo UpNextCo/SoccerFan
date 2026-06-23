@@ -110,6 +110,8 @@ export interface PlayerSearchResult {
   league: string;
   nationality: string;
   position: string;
+  teamId?: number;
+  teamLogoUrl?: string;
 }
 
 export interface ApiResponse<T> {

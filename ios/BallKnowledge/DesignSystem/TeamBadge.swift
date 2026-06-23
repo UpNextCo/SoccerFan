@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Team crests from the open-source football-logos repo (top 25 European leagues).
-/// https://github.com/luukhopman/football-logos
+/// Team crests — API-Football media CDN first (free quota), football-logos repo as fallback.
 enum TeamBadgeResolver {
+    private static let apiSportsHost = "media.api-sports.io"
+    private static let apiSportsPath = "/football/teams"
+
     private static let cdnHost = "cdn.jsdelivr.net"
     private static let cdnPath = "/gh/luukhopman/football-logos@master/logos"
 
@@ -18,6 +20,7 @@ enum TeamBadgeResolver {
         "ligue 1": "France - Ligue 1",
         "bundesliga": "Germany - Bundesliga",
         "super lig": "Türkiye - Süper Lig",
+        "süper lig": "Türkiye - Süper Lig",
         "eredivisie": "Netherlands - Eredivisie",
         "primeira liga": "Portugal - Liga Portugal",
         "liga portugal": "Portugal - Liga Portugal",
@@ -45,6 +48,10 @@ enum TeamBadgeResolver {
         "paris saint-germain|ligue 1": Entry(leagueFolder: "France - Ligue 1", fileName: "Paris Saint-Germain.png"),
         "galatasaray|super lig": Entry(leagueFolder: "Türkiye - Süper Lig", fileName: "Galatasaray.png"),
     ]
+
+    static func apiSportsLogoURL(teamId: Int) -> URL? {
+        URL(string: "https://\(apiSportsHost)\(apiSportsPath)/\(teamId).png")
+    }
 
     static func logoURL(club: String, league: String) -> URL? {
         guard let entry = resolve(club: club, league: league) else { return nil }
@@ -89,13 +96,21 @@ enum TeamBadgeResolver {
 struct TeamBadgeImage<Fallback: View>: View {
     let club: String
     let league: String
+    var teamId: Int? = nil
+    var logoURL: URL? = nil
     var size: CGFloat = 32
     @ViewBuilder var fallback: () -> Fallback
 
     @State private var loadFailed = false
 
+    private var resolvedURL: URL? {
+        if let logoURL { return logoURL }
+        if let teamId, let url = TeamBadgeResolver.apiSportsLogoURL(teamId: teamId) { return url }
+        return TeamBadgeResolver.logoURL(club: club, league: league)
+    }
+
     var body: some View {
-        if !loadFailed, let url = TeamBadgeResolver.logoURL(club: club, league: league) {
+        if !loadFailed, let url = resolvedURL {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):

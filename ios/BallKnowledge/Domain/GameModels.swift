@@ -190,3 +190,11 @@ enum GuessWhoTiming {
     static let confettiDuration: Double = 2.4
     static let winShareDelay: Double = flipSequenceDuration + confettiDuration
 }
+
+enum PlayerSearchLimits {
+    static let maxResults = 3
+
+    static func resultLimit(for query: String) -> Int {
+        maxResults
+    }
+}

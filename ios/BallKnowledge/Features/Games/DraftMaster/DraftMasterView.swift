@@ -779,7 +779,13 @@ private struct DraftMasterSearchSection: View {
                             viewModel.selectPlayer(player)
                         } label: {
                             HStack(spacing: 12) {
-                                TeamBadgeImage(club: player.club, league: player.league, size: 28) {
+                                TeamBadgeImage(
+                                    club: player.club,
+                                    league: player.league,
+                                    teamId: player.teamId,
+                                    logoURL: player.teamLogoUrl.flatMap(URL.init(string:)),
+                                    size: 28
+                                ) {
                                     Circle()
                                         .fill(BKTheme.cardElevated)
                                         .frame(width: 28, height: 28)

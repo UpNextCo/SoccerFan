@@ -49,11 +49,14 @@ struct HomeView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
-                HomeHeaderView(user: auth.user, onLeagues: { selectedTab = .leagues })
+                HomeHeaderView(
+                    user: auth.user,
+                    streak: auth.user?.streak ?? 0,
+                    onLeagues: { selectedTab = .leagues }
+                )
 
                 if let bundle = viewModel.dailyBundle {
                     DailyRunCard(
-                        streak: auth.user?.streak ?? 0,
                         bundle: bundle,
                         onStart: { startDailyRun(with: bundle) }
                     )
@@ -155,6 +158,7 @@ struct HomeView: View {
 
 struct HomeHeaderView: View {
     let user: UserProfileDTO?
+    let streak: Int
     var onLeagues: () -> Void
 
     var body: some View {
@@ -181,13 +185,14 @@ struct HomeHeaderView: View {
                             .font(BKFont.caption())
                             .foregroundStyle(BKTheme.textPrimary)
                     }
-                    Text("Level \(user?.level ?? 1)")
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.background)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(BKTheme.accent)
-                        .clipShape(Capsule())
+                    HStack(spacing: 4) {
+                        Ph.fire.fill
+                            .color(BKTheme.streak)
+                            .frame(width: 14, height: 14)
+                        Text("\(streak) DAY STREAK")
+                            .font(BKFont.caption(10))
+                            .foregroundStyle(BKTheme.textPrimary)
+                    }
                 }
             }
 
@@ -225,7 +230,6 @@ struct HomeHeaderView: View {
 }
 
 struct DailyRunCard: View {
-    let streak: Int
     let bundle: DailyBundleDTO
     var onStart: () -> Void
 
@@ -236,24 +240,9 @@ struct DailyRunCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("TODAY'S RUN")
-                    .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.accent)
-                Spacer()
-                HStack(spacing: 4) {
-                    Ph.fire.fill
-                        .color(BKTheme.streak)
-                        .frame(width: 14, height: 14)
-                    Text("\(streak) DAY STREAK")
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textPrimary)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(BKTheme.background.opacity(0.6))
-                .clipShape(Capsule())
-            }
+            Text("TODAY'S RUN")
+                .font(BKFont.caption(11))
+                .foregroundStyle(BKTheme.accent)
 
             Text(allComplete ? "ALL DAILIES DONE" : "DAILY RUN")
                 .font(BKFont.title(24))

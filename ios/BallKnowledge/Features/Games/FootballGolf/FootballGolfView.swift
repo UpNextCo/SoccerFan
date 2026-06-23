@@ -628,7 +628,13 @@ private struct FootballGolfSuggestionIcon: View {
             switch suggestion.answerType {
             case .player:
                 if let player = suggestion.player {
-                    TeamBadgeImage(club: player.club, league: player.league, size: 28) {
+                    TeamBadgeImage(
+                        club: player.club,
+                        league: player.league,
+                        teamId: player.teamId,
+                        logoURL: player.teamLogoUrl.flatMap(URL.init(string:)),
+                        size: 28
+                    ) {
                         playerFallback
                     }
                 } else {

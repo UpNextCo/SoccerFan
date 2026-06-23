@@ -19,6 +19,7 @@
     "job:ingest-transfers": "tsx src/jobs/ingest-transfers.ts",
     "job:ingest-trophies": "tsx src/jobs/ingest-trophies.ts",
     "job:ingest-career": "tsx src/jobs/ingest-career.ts",
+    "job:ingest-teams": "tsx src/jobs/ingest-teams.ts",
     "job:ingest-stats-all": "tsx src/jobs/ingest-stats-all.ts",
     "job:refresh-player-search": "tsx src/jobs/refresh-player-search.ts",
     "job:audit-coverage": "tsx src/jobs/audit-coverage.ts"

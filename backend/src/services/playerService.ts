@@ -4,6 +4,8 @@ import { players } from '../db/schema.js';
 import type { GuessFeedbackField, PlayerSearchResult } from '../types.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
 import { resolveSearchLimit } from '../utils/playerSearchRank.js';
+import { lookupTeamLogos } from './teamService.js';
+import { normalizeTeamName } from '../utils/teamName.js';
 
 type SearchRow = {
   id: string;
@@ -169,7 +171,20 @@ export async function searchPlayers(query: string, limit?: number): Promise<Play
     if (deduped.length >= resultLimit) break;
   }
 
-  return deduped;
+  const logos = await lookupTeamLogos(
+    deduped.map((player) => ({ club: player.club, league: player.league }))
+  );
+
+  return deduped.map((player) => {
+    const key = `${normalizeTeamName(player.club)}|${normalizeSearchText(player.league)}`;
+    const logo = logos.get(key);
+    if (!logo) return player;
+    return {
+      ...player,
+      teamId: logo.teamId,
+      teamLogoUrl: logo.logoUrl,
+    };
+  });
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

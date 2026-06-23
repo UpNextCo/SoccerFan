@@ -22,6 +22,13 @@
       "when": 1781641351798,
       "tag": "0003_daily_puzzle_answer",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781641351799,
+      "tag": "0004_teams",
+      "breakpoints": true
     }
   ]
 }
