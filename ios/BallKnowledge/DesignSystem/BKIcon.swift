@@ -10,15 +10,11 @@ enum BKIcon {
     @ViewBuilder
     private static func tabPhosphorIcon(for tab: AppTab, selected: Bool) -> some View {
         switch tab {
-        case .home:
-            Ph.house.weight(selected ? .fill : .regular)
-        case .play:
+        case .today:
             Ph.soccerBall.weight(selected ? .fill : .regular)
-        case .daily:
-            Ph.calendar.weight(selected ? .fill : .regular)
         case .leagues:
             Ph.chartBar.weight(selected ? .fill : .regular)
-        case .profile:
+        case .you:
             Ph.userCircle.weight(selected ? .fill : .regular)
         }
     }
@@ -33,11 +29,9 @@ struct BKTabBar: View {
     }
 
     private let items: [Item] = [
-        Item(tab: .home, title: "Home"),
-        Item(tab: .play, title: "Play"),
-        Item(tab: .daily, title: "Daily"),
+        Item(tab: .today, title: "Today"),
         Item(tab: .leagues, title: "Leagues"),
-        Item(tab: .profile, title: "Profile"),
+        Item(tab: .you, title: "You"),
     ]
 
     var body: some View {

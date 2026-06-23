@@ -1,25 +1,21 @@
 import SwiftUI
 
 enum AppTab: Hashable {
-    case home, play, daily, leagues, profile
+    case today, leagues, you
 }
 
 struct MainTabView: View {
-    @State private var selectedTab: AppTab = .home
+    @State private var selectedTab: AppTab = .today
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Group {
                 switch selectedTab {
-                case .home:
+                case .today:
                     HomeView(selectedTab: $selectedTab)
-                case .play:
-                    PlayTabView()
-                case .daily:
-                    DailyTabView()
                 case .leagues:
                     LeaguesTabView()
-                case .profile:
+                case .you:
                     ProfileTabView()
                 }
             }
@@ -29,192 +25,6 @@ struct MainTabView: View {
             BKTabBar(selection: $selectedTab)
         }
         .background(BKTheme.background)
-    }
-}
-
-struct PlayTabView: View {
-    @Environment(AuthManager.self) private var auth
-    @Environment(\.modelContext) private var modelContext
-    @State private var modes: [GameModeMetaDTO] = []
-    @State private var dailyBundle: DailyBundleDTO?
-    @State private var presentedMode: GameModeID?
-    @State private var showAlreadyPlayedAlert = false
-    @State private var alreadyPlayedTitle = ""
-
-    private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(modes) { mode in
-                        GameModeTile(
-                            mode: mode,
-                            isCompletedToday: allowsUnlimitedDailyPlay ? false : isCompleted(mode)
-                        ) {
-                            openMode(mode)
-                        }
-                    }
-                }
-                .padding(16)
-            }
-            .background(BKTheme.background)
-            .navigationTitle("Play")
-            .task {
-                let apiModes = try? await APIClient.shared.gameModes()
-                modes = GameModeCatalog.resolve(from: apiModes)
-                dailyBundle = try? await APIClient.shared.dailyToday()
-            }
-            .fullScreenCover(item: $presentedMode) { mode in
-                DailyGameHost(
-                    mode: mode,
-                    dailyBundle: dailyBundle,
-                    allowReplay: allowsUnlimitedDailyPlay,
-                    onFinished: {
-                        presentedMode = nil
-                        Task {
-                            dailyBundle = try? await APIClient.shared.dailyToday()
-                        }
-                    }
-                )
-            }
-            .alert("Already played today", isPresented: $showAlreadyPlayedAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("You've finished \(alreadyPlayedTitle) for today. Come back tomorrow.")
-            }
-        }
-    }
-
-    private func isCompleted(_ mode: GameModeMetaDTO) -> Bool {
-        guard let bundle = dailyBundle else { return false }
-        return DailyCompletionService.completedSet(for: bundle)
-            .contains(GameModeCatalog.normalizedModeId(mode.id))
-    }
-
-    private func openMode(_ mode: GameModeMetaDTO) {
-        guard mode.isAvailable, let bundle = dailyBundle else { return }
-        guard let modeId = GameModeID(rawValue: GameModeCatalog.normalizedModeId(mode.id)) else { return }
-        guard DailyPlayOrder.playableModes.contains(modeId) else { return }
-
-        if !allowsUnlimitedDailyPlay, bundle.isCompleted(modeId) {
-            alreadyPlayedTitle = mode.title
-            showAlreadyPlayedAlert = true
-            return
-        }
-
-        presentedMode = modeId
-    }
-}
-
-struct DailyTabView: View {
-    @Environment(AuthManager.self) private var auth
-    @State private var bundle: DailyBundleDTO?
-    @State private var presentedMode: GameModeID?
-    @State private var showAlreadyPlayedAlert = false
-    @State private var alreadyPlayedTitle = ""
-
-    private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                if let bundle {
-                    Text(bundle.date)
-                        .font(BKFont.caption())
-                        .foregroundStyle(BKTheme.textMuted)
-
-                    Text("\(DailyPlayOrder.completedCount(in: bundle))/\(DailyPlayOrder.playableModes.count) completed")
-                        .font(BKFont.body())
-                        .foregroundStyle(BKTheme.textSecondary)
-
-                    ForEach(DailyPlayOrder.playableModes) { mode in
-                        Button {
-                            openMode(mode, bundle: bundle)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(mode.title)
-                                        .font(BKFont.headline())
-                                        .foregroundStyle(BKTheme.textPrimary)
-                                    Text(subtitle(for: mode, bundle: bundle))
-                                        .font(BKFont.body())
-                                        .foregroundStyle(
-                                            !allowsUnlimitedDailyPlay && bundle.isCompleted(mode)
-                                                ? BKTheme.accent
-                                                : BKTheme.textSecondary
-                                        )
-                                }
-                                Spacer()
-                                if !allowsUnlimitedDailyPlay, bundle.isCompleted(mode) {
-                                    Ph.checkCircle.fill
-                                        .color(BKTheme.accent)
-                                        .frame(width: 22, height: 22)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(20)
-                            .background(BKTheme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                } else {
-                    ProgressView().tint(BKTheme.accent)
-                }
-                Spacer()
-            }
-            .padding(16)
-            .background(BKTheme.background)
-            .navigationTitle("Daily")
-            .task {
-                bundle = try? await APIClient.shared.dailyToday()
-            }
-            .fullScreenCover(item: $presentedMode) { mode in
-                DailyGameHost(
-                    mode: mode,
-                    dailyBundle: bundle,
-                    allowReplay: allowsUnlimitedDailyPlay,
-                    onFinished: {
-                        presentedMode = nil
-                        Task { bundle = try? await APIClient.shared.dailyToday() }
-                    }
-                )
-            }
-            .alert("Already played today", isPresented: $showAlreadyPlayedAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("You've finished \(alreadyPlayedTitle) for today. Come back tomorrow.")
-            }
-        }
-    }
-
-    private func subtitle(for mode: GameModeID, bundle: DailyBundleDTO) -> String {
-        if !allowsUnlimitedDailyPlay, bundle.isCompleted(mode) { return "Completed" }
-        switch mode {
-        case .guessWho: return "8 guesses · Wordle-style player guess"
-        case .targetMan:
-            if let puzzle = bundle.targetManPuzzle {
-                return "\(puzzle.title) · target \(puzzle.target)"
-            }
-            return "Hit the stat target"
-        case .blindRank:
-            if let puzzle = bundle.blindRankPuzzle {
-                return "\(puzzle.categoryTitle) · \(puzzle.presentationOrder.count) players"
-            }
-            return "Order the stats"
-        default:
-            return "One play per day"
-        }
-    }
-
-    private func openMode(_ mode: GameModeID, bundle: DailyBundleDTO) {
-        if !allowsUnlimitedDailyPlay, bundle.isCompleted(mode) {
-            alreadyPlayedTitle = mode.title
-            showAlreadyPlayedAlert = true
-            return
-        }
-        presentedMode = mode
     }
 }
 

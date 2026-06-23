@@ -57,34 +57,24 @@ struct HomeView: View {
                     onLeagues: { selectedTab = .leagues }
                 )
 
-                if let bundle = viewModel.dailyBundle {
-                    DailyRunCard(
-                        bundle: bundle,
+                if viewModel.dailyBundle != nil || !viewModel.gameModes.isEmpty {
+                    DailySection(
+                        modes: viewModel.gameModes,
+                        bundle: viewModel.dailyBundle,
                         allowUnlimitedPlay: allowsUnlimitedDailyPlay,
-                        onStart: { startDailyRun(with: bundle) }
+                        onContinue: {
+                            guard let bundle = viewModel.dailyBundle else { return }
+                            startDailyRun(with: bundle)
+                        },
+                        onSelect: { mode in
+                            guard let bundle = viewModel.dailyBundle else { return }
+                            openMode(mode, bundle: bundle)
+                        }
                     )
                 } else if viewModel.isLoading {
                     ProgressView()
                         .tint(BKTheme.accent)
                         .frame(height: 200)
-                }
-
-                if let bundle = viewModel.dailyBundle {
-                    GamesGridSection(
-                        modes: viewModel.gameModes,
-                        completedModeIds: allowsUnlimitedDailyPlay
-                            ? []
-                            : DailyCompletionService.completedSet(for: bundle),
-                        onSelect: { mode in
-                            openMode(mode, bundle: bundle)
-                        }
-                    )
-                } else {
-                    GamesGridSection(
-                        modes: viewModel.gameModes,
-                        completedModeIds: [],
-                        onSelect: { _ in }
-                    )
                 }
 
                 ProgressStripView(
@@ -245,108 +235,285 @@ struct HomeHeaderView: View {
     }
 }
 
-struct DailyRunCard: View {
-    let bundle: DailyBundleDTO
+struct DailySection: View {
+    let modes: [GameModeMetaDTO]
+    let bundle: DailyBundleDTO?
     var allowUnlimitedPlay = false
-    var onStart: () -> Void
+    var onContinue: () -> Void
+    var onSelect: (GameModeMetaDTO) -> Void
 
-    private var completedCount: Int { DailyPlayOrder.completedCount(in: bundle) }
+    private var orderedModes: [GameModeMetaDTO] {
+        DailyPlayOrder.playableModes.compactMap { id in
+            modes.first { GameModeCatalog.normalizedModeId($0.id) == id.rawValue }
+        }
+    }
+
     private var totalCount: Int { DailyPlayOrder.playableModes.count }
-    private var allComplete: Bool { DailyPlayOrder.allComplete(in: bundle) }
-    private var nextMode: GameModeID? { DailyPlayOrder.firstIncomplete(in: bundle) }
-    private var showStartButton: Bool { allowUnlimitedPlay || !allComplete }
+
+    private var completedCount: Int {
+        guard let bundle, !allowUnlimitedPlay else { return 0 }
+        return DailyPlayOrder.completedCount(in: bundle)
+    }
+
+    private var allComplete: Bool {
+        guard let bundle, !allowUnlimitedPlay else { return false }
+        return DailyPlayOrder.allComplete(in: bundle)
+    }
+
+    private var upNextId: GameModeID? {
+        guard let bundle, !allowUnlimitedPlay else { return DailyPlayOrder.playableModes.first }
+        return DailyPlayOrder.firstIncomplete(in: bundle)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("TODAY'S GAMES")
-                .font(BKFont.caption(11))
-                .foregroundStyle(BKTheme.accent)
-
-            Text(allComplete && !allowUnlimitedPlay ? "ALL DAILIES DONE" : "DAILY GAMES")
-                .font(BKFont.title(24))
-                .foregroundStyle(BKTheme.textPrimary)
-
-            Text(progressSubtitle)
-                .font(BKFont.body(13))
-                .foregroundStyle(BKTheme.textSecondary)
-
-            if allComplete && !allowUnlimitedPlay {
-                TimelineView(.periodic(from: .now, by: 60)) { context in
-                    HStack(spacing: 6) {
-                        Ph.checkCircle.fill
-                            .color(BKTheme.accent)
-                            .frame(width: 16, height: 16)
-                        Text("New dailies in \(DailyRunCard.timeUntilMidnight(from: context.date))")
-                            .font(BKFont.body(13))
-                            .foregroundStyle(BKTheme.textSecondary)
-                    }
+        VStack(spacing: 12) {
+            header
+            VStack(spacing: 10) {
+                ForEach(Array(orderedModes.enumerated()), id: \.element.id) { index, mode in
+                    DailyGameCard(
+                        index: index + 1,
+                        mode: mode,
+                        state: state(for: mode),
+                        onTap: { onSelect(mode) }
+                    )
                 }
             }
+        }
+    }
 
-            if showStartButton {
-                Button(action: onStart) {
-                    HStack {
-                        Text(startButtonTitle)
-                            .font(BKFont.headline(14))
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TODAY'S DAILY")
+                        .font(BKFont.caption(11))
+                        .foregroundStyle(BKTheme.accent)
+                    Text(dateline)
+                        .font(BKFont.title(22))
+                        .foregroundStyle(BKTheme.textPrimary)
+                }
+                Spacer()
+                Text("\(completedCount)/\(totalCount)")
+                    .font(BKFont.headline(16))
+                    .foregroundStyle(BKTheme.textSecondary)
+            }
+
+            progressBar
+
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                Text(subtitle(now: context.date))
+                    .font(BKFont.body(13))
+                    .foregroundStyle(BKTheme.textSecondary)
+            }
+
+            if !allComplete {
+                Button(action: onContinue) {
+                    HStack(spacing: 8) {
+                        Text(ctaTitle)
+                            .font(BKFont.headline(15))
                         Ph.arrowRight.bold
                             .color(BKTheme.background)
                             .frame(width: 16, height: 16)
                     }
                     .foregroundStyle(BKTheme.background)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
                     .background(BKTheme.accent)
                     .clipShape(Capsule())
                 }
-                .padding(.top, 4)
             }
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            GeometryReader { geo in
-                ZStack {
-                    LinearGradient(
-                        colors: [BKTheme.cardElevated, BKTheme.card],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-
-                    BundleResourceImage(name: "banner3")
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-
-                    LinearGradient(
-                        colors: [BKTheme.card.opacity(0.92), BKTheme.card.opacity(0.55), .clear],
-                        startPoint: .leading,
-                        endPoint: UnitPoint(x: 0.65, y: 0.5)
-                    )
-                }
-            }
-        }
+        .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    private var startButtonTitle: String {
-        if allowUnlimitedPlay, allComplete { return "PLAY DAILY GAMES" }
-        if nextMode == DailyPlayOrder.playableModes.first || nextMode == nil {
-            return "START DAILY GAMES"
+    private var progressBar: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<totalCount, id: \.self) { i in
+                Capsule()
+                    .fill(i < completedCount ? BKTheme.accent : BKTheme.cardElevated)
+                    .frame(height: 6)
+            }
         }
-        return "CONTINUE DAILY GAMES"
     }
 
-    private var progressSubtitle: String {
+    private var dateline: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE d MMM"
+        return formatter.string(from: Date())
+    }
+
+    private var ctaTitle: String {
+        completedCount == 0 ? "START TODAY'S DAILY" : "CONTINUE"
+    }
+
+    private func subtitle(now: Date) -> String {
         if allComplete {
-            return "\(completedCount)/\(totalCount) games completed today"
+            return "All done — new games in \(DailyTime.untilMidnight(from: now))"
         }
-        if let nextMode {
-            return "Game \(completedCount + 1) of \(totalCount) · \(nextMode.title)"
-        }
-        return "\(completedCount)/\(totalCount) completed"
+        return "Play each game once · resets in \(DailyTime.untilMidnight(from: now))"
     }
 
-    static func timeUntilMidnight(from date: Date, calendar: Calendar = .current) -> String {
+    private func state(for mode: GameModeMetaDTO) -> DailyTileState {
+        let modeId = GameModeID(rawValue: GameModeCatalog.normalizedModeId(mode.id))
+        if let bundle, !allowUnlimitedPlay, let modeId, bundle.isCompleted(modeId) {
+            return .completed
+        }
+        if let modeId, modeId == upNextId { return .upNext }
+        return .upcoming
+    }
+}
+
+struct DailyGameCard: View {
+    let index: Int
+    let mode: GameModeMetaDTO
+    let state: DailyTileState
+    var onTap: () -> Void
+
+    private let cornerRadius: CGFloat = 18
+    private let height: CGFloat = 128
+
+    private var tileArtImageName: String? {
+        GameModeTileArt.bundleImageName(for: GameModeCatalog.normalizedModeId(mode.id))
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            ZStack(alignment: .bottomLeading) {
+                artLayer
+                gradientLayer
+
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(mode.title)
+                            .font(.system(size: 19, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                        Text(DailyGameCard.blurb(for: mode))
+                            .font(BKFont.body(12))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                    }
+                    Spacer(minLength: 8)
+                    trailingBadge
+                }
+                .padding(14)
+
+                indexBadge
+            }
+            .frame(height: height)
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(state == .upNext ? BKTheme.accent : Color.white.opacity(0.06),
+                            lineWidth: state == .upNext ? 2 : 1)
+            )
+            .saturation(state == .completed ? 0.25 : 1)
+        }
+        .buttonStyle(TilePressStyle())
+    }
+
+    private let artVerticalShift: CGFloat = 40
+
+    private var artLayer: some View {
+        GeometryReader { geo in
+            ZStack {
+                BKTheme.cardElevated
+                if let tileArtImageName {
+                    GameModeBundleImage(name: tileArtImageName)
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+                        .offset(y: -artVerticalShift)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .clipped()
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var gradientLayer: some View {
+        LinearGradient(
+            colors: [
+                .black.opacity(state == .completed ? 0.5 : 0.05),
+                .black.opacity(state == .completed ? 0.65 : 0.4),
+                .black.opacity(0.82),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private var trailingBadge: some View {
+        switch state {
+        case .completed:
+            HStack(spacing: 5) {
+                Ph.checkCircle.fill.color(BKTheme.accent).frame(width: 16, height: 16)
+                Text("DONE").font(BKFont.caption(10)).foregroundStyle(.white)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.45))
+            .clipShape(Capsule())
+        case .upNext:
+            HStack(spacing: 6) {
+                Ph.play.fill.color(BKTheme.background).frame(width: 12, height: 12)
+                Text("PLAY").font(BKFont.caption(11)).foregroundStyle(BKTheme.background)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(BKTheme.accent)
+            .clipShape(Capsule())
+        case .upcoming:
+            Ph.play.fill
+                .color(.white)
+                .frame(width: 13, height: 13)
+                .padding(10)
+                .background(.black.opacity(0.4))
+                .clipShape(Circle())
+        }
+    }
+
+    private var indexBadge: some View {
+        VStack {
+            HStack {
+                Text("\(index)")
+                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .foregroundStyle(state == .upNext ? BKTheme.background : .white)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(state == .upNext ? BKTheme.accent : Color.black.opacity(0.5)))
+                Spacer()
+            }
+            Spacer()
+        }
+        .padding(12)
+    }
+
+    static func blurb(for mode: GameModeMetaDTO) -> String {
+        guard let id = GameModeID(rawValue: GameModeCatalog.normalizedModeId(mode.id)) else {
+            return mode.subtitle
+        }
+        switch id {
+        case .guessWho: return "Crack the mystery player"
+        case .targetMan: return "Hit the stat target"
+        case .blindRank: return "Rank them blind"
+        case .footballBingo: return "Fill the grid"
+        case .oneMore: return "Name one more"
+        case .draftMaster: return "Draft the best XI"
+        case .worldCupXI: return "Build the World Cup XI"
+        case .footballGolf: return "Fewest guesses wins"
+        case .footballTower: return "Climb the tower"
+        }
+    }
+}
+
+enum DailyTime {
+    static func untilMidnight(from date: Date, calendar: Calendar = .current) -> String {
         let startOfToday = calendar.startOfDay(for: date)
         guard let midnight = calendar.date(byAdding: .day, value: 1, to: startOfToday) else {
             return "tomorrow"
@@ -365,142 +532,10 @@ struct DailyRunCard: View {
     }
 }
 
-struct GamesGridSection: View {
-    let modes: [GameModeMetaDTO]
-    let completedModeIds: Set<String>
-    var onSelect: (GameModeMetaDTO) -> Void
-
-    let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("GAMES")
-                    .font(BKFont.headline(18))
-                    .foregroundStyle(BKTheme.textPrimary)
-                Spacer()
-                Text("Daily only")
-                    .font(BKFont.caption())
-                    .foregroundStyle(BKTheme.textMuted)
-            }
-
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(modes) { mode in
-                    GameModeTile(
-                        mode: mode,
-                        isCompletedToday: isCompleted(mode)
-                    ) {
-                        onSelect(mode)
-                    }
-                }
-            }
-        }
-    }
-
-    private func isCompleted(_ mode: GameModeMetaDTO) -> Bool {
-        completedModeIds.contains(GameModeCatalog.normalizedModeId(mode.id))
-    }
-}
-
-struct GameModeTile: View {
-    let mode: GameModeMetaDTO
-    var isCompletedToday = false
-    var onTap: () -> Void
-
-    private let cornerRadius: CGFloat = 14
-
-    private var tileArtImageName: String? {
-        GameModeTileArt.bundleImageName(for: GameModeCatalog.normalizedModeId(mode.id))
-    }
-
-    private var usesImageArt: Bool { tileArtImageName != nil }
-
-    var body: some View {
-        Button(action: onTap) {
-            ZStack(alignment: .topLeading) {
-                BKTheme.card
-
-                if usesImageArt {
-                    tileArtLayer
-                    tileBottomFade
-                }
-
-                tileContent
-                    .zIndex(2)
-
-                if isCompletedToday {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Ph.checkCircle.fill
-                                .color(BKTheme.accent)
-                                .frame(width: 22, height: 22)
-                                .background(Circle().fill(BKTheme.background.opacity(0.85)))
-                                .padding(8)
-                        }
-                        Spacer()
-                    }
-                    .zIndex(3)
-                }
-            }
-            .frame(height: 110)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .opacity(tileOpacity)
-        }
-        .buttonStyle(TilePressStyle())
-    }
-
-    private var tileOpacity: Double {
-        if !mode.isAvailable { return usesImageArt ? 0.65 : 0.65 }
-        if isCompletedToday { return usesImageArt ? 0.82 : 0.82 }
-        return 1
-    }
-
-    private var tileArtLayer: some View {
-        GeometryReader { geo in
-            if let tileArtImageName {
-                GameModeBundleImage(name: tileArtImageName)
-                    .scaledToFill()
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .opacity(mode.isAvailable ? 1 : 0.75)
-            }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private var tileBottomFade: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            LinearGradient(
-                colors: [Color.clear, Color.black.opacity(0.55), Color.black.opacity(0.88)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 54)
-        }
-        .allowsHitTesting(false)
-        .zIndex(1)
-    }
-
-    private var tileContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Spacer(minLength: 0)
-            tileTitle
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .padding(10)
-    }
-
-    private var tileTitle: some View {
-        Text(mode.title)
-            .font(.system(size: 15, weight: .black, design: .rounded))
-            .foregroundStyle(BKTheme.textPrimary)
-            .shadow(color: usesImageArt ? Color.black.opacity(0.45) : .clear, radius: 3, y: 1)
-            .lineLimit(2)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-    }
+enum DailyTileState {
+    case upNext
+    case completed
+    case upcoming
 }
 
 private struct TilePressStyle: ButtonStyle {
