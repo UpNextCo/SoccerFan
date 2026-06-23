@@ -514,10 +514,6 @@ private struct TargetManSearchSection: View {
             if !viewModel.searchResults.isEmpty {
                 PlayerSearchResultsList(
                     players: viewModel.searchResults,
-                    showsNarrowHint: PlayerSearchUI.showsNarrowHint(
-                        resultCount: viewModel.searchResults.count,
-                        query: viewModel.searchQuery
-                    ),
                     isDisabled: { viewModel.selectedPlayerIds.contains($0.id) || viewModel.state.isFull },
                     trailing: { player in
                         if viewModel.selectedPlayerIds.contains(player.id) {

@@ -29,6 +29,7 @@
 		460647B5081D7FA601FE9917 /* FootballTowerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19BE49785C49F03DC8047026 /* FootballTowerView.swift */; };
 		563F83312F83D02738FBF404 /* FootballBingoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BE7B82FFB93547E2C0D73E /* FootballBingoView.swift */; };
 		5BEE19F85576BD840CBA34BD /* GameModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8014DDCB14BE89801F5278AA /* GameModels.swift */; };
+		5C1D2E3F405162738495A6B7 /* PlayerSearchLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D3E4F5061728394A5B6C7D /* PlayerSearchLimits.swift */; };
 		5EC83A87135A943A90837588 /* DraftMasterModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9497FB431AA5C1D5BBB301C /* DraftMasterModels.swift */; };
 		611DE24E9AB1CE22F13BACEA /* FootballGolfView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2788D368A9154DB9D526DD10 /* FootballGolfView.swift */; };
 		6168F1E7E609660A0F9C2D57 /* FootballGolfModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F6C9BA15F9200256CCE247F /* FootballGolfModels.swift */; };
@@ -99,6 +100,7 @@
 		A1B2C3D4E5F60718293A4B5D /* PlayerSearchResultsList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSearchResultsList.swift; sourceTree = "<group>"; };
 		7F6C9BA15F9200256CCE247F /* FootballGolfModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballGolfModels.swift; sourceTree = "<group>"; };
 		8014DDCB14BE89801F5278AA /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
+		C2D3E4F5061728394A5B6C7D /* PlayerSearchLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSearchLimits.swift; sourceTree = "<group>"; };
 		87C971975D4210521A905564 /* BlindRankSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlindRankSeed.swift; sourceTree = "<group>"; };
 		87D4683B0C6574234A9A73DF /* OneMoreModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneMoreModels.swift; sourceTree = "<group>"; };
 		88849D75752EA27739D8CDE3 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
@@ -252,6 +254,7 @@
 				28C709EF976C20D67984569C /* GameEngine.swift */,
 				ECF087E8BC4A2736630E7F1C /* GameModeCatalog.swift */,
 				8014DDCB14BE89801F5278AA /* GameModels.swift */,
+				C2D3E4F5061728394A5B6C7D /* PlayerSearchLimits.swift */,
 				87D4683B0C6574234A9A73DF /* OneMoreModels.swift */,
 				E36181E830587EC21B5EC0E7 /* OneMoreSeed.swift */,
 				1D508783416F037C0979FF52 /* TargetManModels.swift */,
@@ -452,6 +455,7 @@
 				988F464045F91747F79679EB /* GameModeCatalog.swift in Sources */,
 				A49D0D55AE15A06620BDC53F /* GameModeTileArt.swift in Sources */,
 				5BEE19F85576BD840CBA34BD /* GameModels.swift in Sources */,
+				5C1D2E3F405162738495A6B7 /* PlayerSearchLimits.swift in Sources */,
 				122B4C6CD985D0A176790058 /* GuessWhoView.swift in Sources */,
 				D75B501F091CEFAC1224915A /* HomeView.swift in Sources */,
 				374EADD57FF95C3F8EDAADB5 /* KeychainHelper.swift in Sources */,

@@ -106,13 +106,13 @@ enum FootballTowerCatalog {
     static func searchClubs(query: String) -> [String] {
         let q = normalized(query)
         guard q.count >= 2 else { return [] }
-        return plClubs.filter { normalized($0).contains(q) }.prefix(6).map { $0 }
+        return plClubs.filter { normalized($0).contains(q) }.prefix(PlayerSearchLimits.maxResults).map { $0 }
     }
 
     static func searchCountries(query: String) -> [String] {
         let q = normalized(query)
         guard q.count >= 2 else { return [] }
-        return countries.filter { normalized($0).contains(q) }.prefix(6).map { $0 }
+        return countries.filter { normalized($0).contains(q) }.prefix(PlayerSearchLimits.maxResults).map { $0 }
     }
 
     private static func p(

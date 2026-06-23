@@ -1,30 +1,13 @@
 import SwiftUI
 
-// MARK: - Capped dropdown container
+// MARK: - Results dropdown (sizes to content)
 
-struct CappedSearchResultsContainer<Content: View>: View {
-    var maxHeight: CGFloat = 220
-    var showsNarrowHint: Bool = false
+struct SearchResultsContainer<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(showsIndicators: true) {
-                VStack(spacing: 0) {
-                    content()
-                }
-            }
-            .frame(maxHeight: maxHeight)
-
-            if showsNarrowHint {
-                Text("KEEP TYPING TO NARROW RESULTS")
-                    .font(BKFont.caption(9))
-                    .tracking(0.4)
-                    .foregroundStyle(BKTheme.textMuted)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(BKTheme.cardElevated.opacity(0.65))
-            }
+            content()
         }
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -105,14 +88,13 @@ struct SearchSuggestionRow: View {
 
 struct PlayerSearchResultsList: View {
     let players: [PlayerSearchResultDTO]
-    var showsNarrowHint: Bool = false
     var isDisabled: (PlayerSearchResultDTO) -> Bool = { _ in false }
     var subtitle: (PlayerSearchResultDTO) -> String = { "\($0.club) · \($0.league)" }
     var trailing: (PlayerSearchResultDTO) -> AnyView? = { _ in nil }
     var onSelect: (PlayerSearchResultDTO) -> Void
 
     var body: some View {
-        CappedSearchResultsContainer(showsNarrowHint: showsNarrowHint) {
+        SearchResultsContainer {
             ForEach(players) { player in
                 Button {
                     onSelect(player)
@@ -130,19 +112,5 @@ struct PlayerSearchResultsList: View {
                 }
             }
         }
-    }
-}
-
-enum PlayerSearchUI {
-    static func showsNarrowHint(resultCount: Int, query: String) -> Bool {
-        resultCount >= 4 && query.trimmingCharacters(in: .whitespaces).count <= 4
-    }
-
-    static func localResultLimit(for query: String) -> Int {
-        let len = query.trimmingCharacters(in: .whitespaces).count
-        if len <= 2 { return 4 }
-        if len <= 4 { return 6 }
-        if len <= 6 { return 8 }
-        return 10
     }
 }

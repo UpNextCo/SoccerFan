@@ -542,10 +542,6 @@ private struct OneMoreSearchSection: View {
             if !viewModel.searchResults.isEmpty {
                 PlayerSearchResultsList(
                     players: viewModel.searchResults,
-                    showsNarrowHint: PlayerSearchUI.showsNarrowHint(
-                        resultCount: viewModel.searchResults.count,
-                        query: viewModel.searchQuery
-                    ),
                     isDisabled: { viewModel.state.usedPlayerIds.contains($0.id) },
                     onSelect: { player in
                         isSearchFocused.wrappedValue = false

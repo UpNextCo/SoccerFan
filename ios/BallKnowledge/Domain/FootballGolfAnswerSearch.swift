@@ -84,7 +84,7 @@ enum FootballGolfAnswerSearch {
                 entry.searchTerms.contains { normalize($0).contains(normalizedQuery) }
                     || normalize(entry.name).contains(normalizedQuery)
             }
-            .prefix(PlayerSearchUI.localResultLimit(for: query))
+            .prefix(PlayerSearchLimits.resultLimit(for: query))
             .map { FootballGolfAnswerSuggestion.fromLocal($0) }
     }
 

@@ -206,7 +206,7 @@ enum FootballTowerSearch {
             } catch {
                 return FootballTowerCatalog.players
                     .filter { FootballTowerCatalog.normalized($0.name).contains(FootballTowerCatalog.normalized(trimmed)) }
-                    .prefix(PlayerSearchUI.localResultLimit(for: trimmed))
+                    .prefix(PlayerSearchLimits.resultLimit(for: trimmed))
                     .map {
                         FootballTowerSuggestion(
                             id: $0.id,

@@ -588,12 +588,7 @@ private struct FootballTowerSearchSection: View {
             )
 
             if !viewModel.searchResults.isEmpty {
-                CappedSearchResultsContainer(
-                    showsNarrowHint: PlayerSearchUI.showsNarrowHint(
-                        resultCount: viewModel.searchResults.count,
-                        query: viewModel.searchQuery
-                    )
-                ) {
+                SearchResultsContainer {
                     ForEach(viewModel.searchResults) { suggestion in
                         Button {
                             isSearchFocused.wrappedValue = false

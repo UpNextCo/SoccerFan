@@ -59,6 +59,8 @@ final class DraftMasterViewModel {
                     && !state.usedPlayerIds.contains(player.id)
                     && DraftMasterPositionMapper.canFit(player, filled: state.filledPositions)
             }
+            .prefix(PlayerSearchLimits.maxResults)
+            .map { $0 }
         } catch {
             searchResults = []
         }
@@ -770,12 +772,7 @@ private struct DraftMasterSearchSection: View {
             }
 
             if !viewModel.searchResults.isEmpty {
-                CappedSearchResultsContainer(
-                    showsNarrowHint: PlayerSearchUI.showsNarrowHint(
-                        resultCount: viewModel.searchResults.count,
-                        query: viewModel.searchQuery
-                    )
-                ) {
+                SearchResultsContainer {
                     ForEach(viewModel.searchResults) { player in
                         Button {
                             isSearchFocused.wrappedValue = false

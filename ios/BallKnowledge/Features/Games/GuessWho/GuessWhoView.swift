@@ -676,10 +676,6 @@ struct GuessWhoSearchSection: View {
                 if !viewModel.searchResults.isEmpty {
                     PlayerSearchResultsList(
                         players: viewModel.searchResults,
-                        showsNarrowHint: PlayerSearchUI.showsNarrowHint(
-                            resultCount: viewModel.searchResults.count,
-                            query: viewModel.searchQuery
-                        ),
                         onSelect: { player in
                             isSearchFocused.wrappedValue = false
                             Task { await viewModel.submitGuess(player, context: modelContext) }
