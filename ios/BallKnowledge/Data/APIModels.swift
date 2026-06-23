@@ -19,6 +19,15 @@ struct UserProfileDTO: Codable, Equatable {
     let streak: Int
     let todayXp: Int
     var avatarUrl: String?
+    var favoriteTeamId: Int?
+}
+
+struct TeamSearchResultDTO: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let logoUrl: String?
+    let leagueId: Int?
+    let country: String?
 }
 
 struct AuthResponseDTO: Codable {

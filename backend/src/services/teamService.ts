@@ -1,4 +1,4 @@
-import { inArray } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { teams } from '../db/schema.js';
 import {
@@ -86,6 +86,51 @@ export async function lookupTeamLogos(
   }
 
   return result;
+}
+
+export type TeamSearchResult = {
+  id: number;
+  name: string;
+  logoUrl: string;
+  leagueId: number | null;
+  country: string | null;
+};
+
+/**
+ * Team picker search. Empty query returns current top-5-league clubs; otherwise
+ * substring-matches on the normalized name. Big leagues + prefix matches rank first.
+ */
+export async function searchTeams(query: string, limit = 30): Promise<TeamSearchResult[]> {
+  const q = normalizeTeamName(query);
+  const like = `%${q}%`;
+  const prefix = `${q}%`;
+
+  const rows = (await db.execute(sql`
+    SELECT id, name, logo_url, league_id, country
+    FROM teams
+    WHERE (${q} = '' AND league_id IS NOT NULL)
+       OR (${q} <> '' AND name_norm LIKE ${like})
+    ORDER BY
+      (league_id IN (39, 140, 135, 78, 61)) DESC,
+      (name_norm LIKE ${prefix}) DESC,
+      length(name) ASC,
+      name ASC
+    LIMIT ${limit}
+  `)) as unknown as Array<{
+    id: number;
+    name: string;
+    logo_url: string;
+    league_id: number | null;
+    country: string | null;
+  }>;
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    logoUrl: row.logo_url,
+    leagueId: row.league_id,
+    country: row.country,
+  }));
 }
 
 export async function upsertTeam(row: {

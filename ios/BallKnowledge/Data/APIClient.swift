@@ -196,6 +196,10 @@ actor APIClient {
         try await request("leagues/teams")
     }
 
+    func searchTeams(query: String) async throws -> [TeamSearchResultDTO] {
+        try await request("teams/search", queryItems: [URLQueryItem(name: "q", value: query)])
+    }
+
     func setFavoriteTeam(_ teamId: Int?) async throws {
         struct TeamBody: Encodable { let teamId: Int? }
         struct TeamResult: Decodable { let favoriteTeamId: Int? }

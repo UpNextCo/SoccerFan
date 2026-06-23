@@ -6,6 +6,7 @@ export interface UserProfile {
   streak: number;
   todayXp: number;
   avatarUrl?: string;
+  favoriteTeamId?: number | null;
 }
 
 export interface AuthAppleRequest {

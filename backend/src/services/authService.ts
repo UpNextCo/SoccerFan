@@ -20,6 +20,7 @@ function toUserProfile(
     level: progress.level,
     streak: progress.streak,
     todayXp: progress.todayXp,
+    favoriteTeamId: user.favoriteTeamId ?? null,
   };
 }
 

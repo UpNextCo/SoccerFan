@@ -43,6 +43,161 @@ struct OnboardingContainerView: View {
     }
 }
 
+struct TeamPickerView: View {
+    @Environment(AuthManager.self) private var auth
+    var onDone: () -> Void
+
+    @State private var query = ""
+    @State private var results: [TeamSearchResultDTO] = []
+    @State private var selected: TeamSearchResultDTO?
+    @State private var isSaving = false
+    @State private var isSearching = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 8) {
+                Text("Pick your club")
+                    .font(BKFont.title(26))
+                    .foregroundStyle(BKTheme.textPrimary)
+                Text("Earn XP for your team and climb the club league against rival fans.")
+                    .font(BKFont.body(14))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(BKTheme.textSecondary)
+                    .padding(.horizontal, 32)
+            }
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+
+            searchField
+                .padding(.horizontal, 16)
+
+            resultsList
+
+            footer
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(BKTheme.background)
+        .task(id: query) { await runSearch() }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(BKTheme.textMuted)
+            TextField("Search teams", text: $query)
+                .foregroundStyle(BKTheme.textPrimary)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.words)
+            if isSearching {
+                ProgressView().scaleEffect(0.7).tint(BKTheme.accent)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var resultsList: some View {
+        ScrollView(showsIndicators: false) {
+            LazyVStack(spacing: 8) {
+                ForEach(results) { team in
+                    Button { selected = team } label: {
+                        teamRow(team)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if results.isEmpty && !isSearching {
+                    Text(query.isEmpty ? "Start typing to find your club." : "No teams found.")
+                        .font(BKFont.body(13))
+                        .foregroundStyle(BKTheme.textMuted)
+                        .padding(.top, 40)
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func teamRow(_ team: TeamSearchResultDTO) -> some View {
+        let isSelected = selected?.id == team.id
+        return HStack(spacing: 12) {
+            AsyncImage(url: URL(string: team.logoUrl ?? "")) { image in
+                image.resizable().scaledToFit()
+            } placeholder: {
+                Image(systemName: "shield.fill").foregroundStyle(BKTheme.textMuted)
+            }
+            .frame(width: 32, height: 32)
+
+            Text(team.name)
+                .font(BKFont.headline(15))
+                .foregroundStyle(BKTheme.textPrimary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            if isSelected {
+                Ph.checkCircle.fill
+                    .color(BKTheme.accent)
+                    .frame(width: 22, height: 22)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(isSelected ? BKTheme.cardElevated : BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isSelected ? BKTheme.accent : .clear, lineWidth: 1.5)
+        )
+    }
+
+    private var footer: some View {
+        VStack(spacing: 12) {
+            Button(action: confirm) {
+                Text(isSaving ? "Saving…" : "Continue")
+                    .font(BKFont.headline())
+                    .foregroundStyle(BKTheme.background)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(selected == nil ? BKTheme.cardElevated : BKTheme.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+            .disabled(selected == nil || isSaving)
+
+            Button("Skip for now") { skip() }
+                .font(BKFont.caption())
+                .foregroundStyle(BKTheme.textMuted)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 24)
+    }
+
+    private func runSearch() async {
+        isSearching = true
+        defer { isSearching = false }
+        try? await Task.sleep(for: .milliseconds(250))
+        if Task.isCancelled { return }
+        results = (try? await APIClient.shared.searchTeams(query: query)) ?? []
+    }
+
+    private func confirm() {
+        guard let selected else { return }
+        isSaving = true
+        Task {
+            try? await APIClient.shared.setFavoriteTeam(selected.id)
+            await auth.refreshProfile()
+            isSaving = false
+            onDone()
+        }
+    }
+
+    private func skip() {
+        UserDefaults.standard.set(true, forKey: UserDefaultsKeys.skippedTeamPick)
+        onDone()
+    }
+}
+
 struct WelcomeOnboardingPage: View {
     var onContinue: () -> Void
 

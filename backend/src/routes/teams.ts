@@ -1,8 +1,14 @@
 import { Router } from 'express';
 import { requireAuth, sendSuccess } from '../middleware/auth.js';
-import { lookupTeamLogo } from '../services/teamService.js';
+import { lookupTeamLogo, searchTeams } from '../services/teamService.js';
 
 export const teamsRouter = Router();
+
+teamsRouter.get('/search', requireAuth, async (req, res) => {
+  const q = String(req.query.q ?? '').trim();
+  const results = await searchTeams(q);
+  sendSuccess(res, results);
+});
 
 teamsRouter.get('/logo', requireAuth, async (req, res) => {
   const club = String(req.query.club ?? '').trim();

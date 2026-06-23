@@ -202,16 +202,11 @@ struct PlayerStandingRow: View {
                 .foregroundStyle(zoneColor)
                 .frame(width: 28, alignment: .center)
 
-            Circle()
-                .fill(BKTheme.cardElevated)
+            avatarView
                 .frame(width: 36, height: 36)
-                .overlay {
-                    Text(initials)
-                        .font(BKFont.caption(13))
-                        .foregroundStyle(BKTheme.accent)
-                }
+                .clipShape(Circle())
 
-            Text(isCurrentUser ? "\(player.displayName) (You)" : player.displayName)
+            Text(nameText)
                 .font(BKFont.headline(15))
                 .foregroundStyle(BKTheme.textPrimary)
                 .lineLimit(1)
@@ -237,10 +232,25 @@ struct PlayerStandingRow: View {
         )
     }
 
-    private var initials: String {
-        let parts = player.displayName.split(separator: " ")
-        let letters = parts.prefix(2).compactMap { $0.first.map(String.init) }.joined()
-        return letters.isEmpty ? "?" : letters.uppercased()
+    @ViewBuilder
+    private var avatarView: some View {
+        if isCurrentUser, let image = LocalProfile.loadAvatar() {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            BKTheme.cardElevated
+                .overlay {
+                    Ph.userCircle.fill
+                        .color(BKTheme.accent)
+                        .frame(width: 22, height: 22)
+                }
+        }
+    }
+
+    private var nameText: String {
+        let base = isCurrentUser ? (LocalProfile.nameOverride ?? player.displayName) : player.displayName
+        return isCurrentUser ? "\(base) (You)" : base
     }
 }
 

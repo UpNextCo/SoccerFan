@@ -27,4 +27,5 @@ enum AppConfig {
 enum UserDefaultsKeys {
     static let hasCompletedOnboarding = "hasCompletedOnboarding"
     static let isDevAccount = "isDevAccount"
+    static let skippedTeamPick = "skippedTeamPick"
 }
