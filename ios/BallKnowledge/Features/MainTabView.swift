@@ -33,24 +33,21 @@ struct MainTabView: View {
 
 struct LeaguesTabView: View {
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                Ph.trophy.fill
-                    .color(.yellow)
-                    .frame(width: 48, height: 48)
-                Text("Weekly Leagues")
-                    .font(BKFont.title())
-                    .foregroundStyle(BKTheme.textPrimary)
-                Text("Compete in Bronze, Silver and Gold leagues. Coming soon.")
-                    .font(BKFont.body())
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(BKTheme.textSecondary)
-                    .padding(.horizontal, 32)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(BKTheme.background)
-            .navigationTitle("Leagues")
+        VStack(spacing: 16) {
+            Ph.trophy.fill
+                .color(.yellow)
+                .frame(width: 48, height: 48)
+            Text("Weekly Leagues")
+                .font(BKFont.title())
+                .foregroundStyle(BKTheme.textPrimary)
+            Text("Compete in Bronze, Silver and Gold leagues. Coming soon.")
+                .font(BKFont.body())
+                .multilineTextAlignment(.center)
+                .foregroundStyle(BKTheme.textSecondary)
+                .padding(.horizontal, 32)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(BKTheme.background)
     }
 }
 
@@ -148,24 +145,20 @@ struct ProfileTabView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    header
-                    statsCard
-                    accountSection
-                    aboutSection
-                    dangerSection
-                    versionLabel
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 20)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 20) {
+                header
+                    .padding(.top, 28)
+                statsCard
+                accountSection
+                aboutSection
+                dangerSection
+                versionLabel
             }
-            .background(BKTheme.background)
-            .navigationTitle("You")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
         }
+        .background(BKTheme.background)
         .onAppear { avatarImage = LocalProfile.loadAvatar() }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, newItem in

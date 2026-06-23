@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 @MainActor
 @Observable
@@ -52,8 +53,7 @@ struct HomeView: View {
             VStack(spacing: 20) {
                 HomeHeaderView(
                     user: auth.user,
-                    streak: auth.user?.streak ?? 0,
-                    onLeagues: { selectedTab = .leagues }
+                    streak: auth.user?.streak ?? 0
                 )
 
                 if viewModel.dailyBundle != nil || !viewModel.gameModes.isEmpty {
@@ -125,73 +125,220 @@ struct HomeView: View {
 struct HomeHeaderView: View {
     let user: UserProfileDTO?
     let streak: Int
-    var onLeagues: () -> Void
+    @State private var avatarImage: UIImage?
+    @State private var showNotifications = false
+
+    private var activityEvents: [ActivityEvent] {
+        HomeActivity.events(user: user, streak: streak)
+    }
+
+    private var hasUnread: Bool {
+        activityEvents.contains { $0.unread }
+    }
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(BKTheme.cardElevated)
-                .frame(width: 44, height: 44)
-                .overlay {
-                    Text(initials)
-                        .font(BKFont.headline(14))
-                        .foregroundStyle(BKTheme.accent)
-                }
+            avatarCircle
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("BALL KNOWLEDGE")
-                    .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.accent)
+                Text(headerName)
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
                 HStack(spacing: 8) {
                     HStack(spacing: 4) {
                         Ph.lightning.fill
-                            .color(BKTheme.textPrimary)
+                            .color(BKTheme.accent)
                             .frame(width: 12, height: 12)
                         Text("\(user?.xp ?? 0)")
                             .font(BKFont.caption())
                             .foregroundStyle(BKTheme.textPrimary)
+                        Text("XP")
+                            .font(BKFont.caption())
+                            .foregroundStyle(BKTheme.textSecondary)
                     }
                     HStack(spacing: 4) {
                         Ph.fire.fill
                             .color(BKTheme.streak)
                             .frame(width: 12, height: 12)
-                        Text("\(streak) \(streak == 1 ? "DAY" : "DAYS")")
+                        Text("\(streak)")
                             .font(BKFont.caption())
                             .foregroundStyle(BKTheme.textPrimary)
+                        Text(streak == 1 ? "DAY" : "DAYS")
+                            .font(BKFont.caption())
+                            .foregroundStyle(BKTheme.textSecondary)
                     }
                 }
             }
 
             Spacer()
 
-            Button(action: onLeagues) {
-                Ph.trophy.fill
-                    .color(.yellow)
-                    .frame(width: 20, height: 20)
+            Button { showNotifications = true } label: {
+                Ph.bell.fill
+                    .color(BKTheme.textSecondary)
+                    .frame(width: 18, height: 18)
                     .frame(width: 40, height: 40)
                     .background(BKTheme.card)
                     .clipShape(Circle())
+                    .overlay(alignment: .topTrailing) {
+                        if hasUnread {
+                            Circle()
+                                .fill(BKTheme.accent)
+                                .frame(width: 8, height: 8)
+                                .offset(x: -2, y: 2)
+                        }
+                    }
             }
-
-            Ph.bell.fill
-                .color(BKTheme.textSecondary)
-                .frame(width: 18, height: 18)
-                .frame(width: 40, height: 40)
-                .background(BKTheme.card)
-                .clipShape(Circle())
-                .overlay(alignment: .topTrailing) {
-                    Circle()
-                        .fill(BKTheme.accent)
-                        .frame(width: 8, height: 8)
-                        .offset(x: -2, y: 2)
-                }
+            .buttonStyle(.plain)
         }
         .padding(.top, 8)
+        .onAppear { avatarImage = LocalProfile.loadAvatar() }
+        .sheet(isPresented: $showNotifications) {
+            NotificationsView(events: activityEvents)
+        }
     }
 
-    private var initials: String {
-        let parts = (user?.displayName ?? "BK").split(separator: " ")
-        return parts.prefix(2).compactMap { $0.first.map(String.init) }.joined().uppercased()
+    private var headerName: String {
+        LocalProfile.nameOverride ?? user?.displayName ?? "Player"
+    }
+
+    private var avatarCircle: some View {
+        Group {
+            if let avatarImage {
+                Image(uiImage: avatarImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                BKTheme.cardElevated
+                    .overlay {
+                        Ph.userCircle.fill
+                            .color(BKTheme.accent)
+                            .frame(width: 26, height: 26)
+                    }
+            }
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(Circle())
+    }
+}
+
+struct ActivityEvent: Identifiable {
+    let id = UUID()
+    let icon: String
+    let tint: Color
+    let title: String
+    let message: String
+    let unread: Bool
+}
+
+/// Builds the in-app activity feed from current profile state (client-derived for now —
+/// swap to a server activity endpoint later without changing NotificationsView).
+enum HomeActivity {
+    static func events(user: UserProfileDTO?, streak: Int) -> [ActivityEvent] {
+        var events: [ActivityEvent] = []
+        let todayXp = user?.todayXp ?? 0
+        let level = user?.level ?? 1
+        let xp = user?.xp ?? 0
+
+        if todayXp == 0 {
+            events.append(ActivityEvent(
+                icon: "flame.fill",
+                tint: BKTheme.streak,
+                title: streak > 0 ? "Keep your \(streak)-day streak alive" : "Start your streak today",
+                message: "Play today's games before midnight to \(streak > 0 ? "extend" : "begin") your streak.",
+                unread: true
+            ))
+        } else {
+            events.append(ActivityEvent(
+                icon: "checkmark.circle.fill",
+                tint: BKTheme.accent,
+                title: "You've played today",
+                message: "Nice — \(todayXp) XP banked so far today.",
+                unread: false
+            ))
+        }
+
+        if streak >= 3 {
+            events.append(ActivityEvent(
+                icon: "flame.fill",
+                tint: BKTheme.streak,
+                title: "\(streak)-day streak",
+                message: "You're on a roll — don't break the chain.",
+                unread: false
+            ))
+        }
+
+        events.append(ActivityEvent(
+            icon: "star.fill",
+            tint: BKTheme.accent,
+            title: "Level \(level)",
+            message: "\(xp) total XP earned. Keep climbing.",
+            unread: false
+        ))
+
+        events.append(ActivityEvent(
+            icon: "chart.bar.fill",
+            tint: .yellow,
+            title: "Leagues are coming",
+            message: "Weekly Bronze, Silver and Gold leagues launch soon.",
+            unread: false
+        ))
+
+        return events
+    }
+}
+
+struct NotificationsView: View {
+    let events: [ActivityEvent]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 10) {
+                    ForEach(events) { event in
+                        HStack(spacing: 14) {
+                            Image(systemName: event.icon)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(event.tint)
+                                .frame(width: 40, height: 40)
+                                .background(BKTheme.cardElevated)
+                                .clipShape(Circle())
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(event.title)
+                                    .font(BKFont.headline(15))
+                                    .foregroundStyle(BKTheme.textPrimary)
+                                Text(event.message)
+                                    .font(BKFont.body(13))
+                                    .foregroundStyle(BKTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            Spacer(minLength: 0)
+
+                            if event.unread {
+                                Circle().fill(BKTheme.accent).frame(width: 8, height: 8)
+                            }
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(BKTheme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
+                }
+                .padding(16)
+            }
+            .background(BKTheme.background)
+            .navigationTitle("Activity")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(BKTheme.accent)
+                }
+            }
+        }
     }
 }
 
