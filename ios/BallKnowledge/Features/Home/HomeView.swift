@@ -202,6 +202,8 @@ struct DailySection: View {
     let todayXp: Int
     var onSelect: (GameModeMetaDTO) -> Void
 
+    @State private var glow = false
+
     private var orderedModes: [GameModeMetaDTO] {
         DailyPlayOrder.playableModes.compactMap { id in
             modes.first { GameModeCatalog.normalizedModeId($0.id) == id.rawValue }
@@ -258,7 +260,9 @@ struct DailySection: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("\(completedCount)")
                         .font(.system(size: 40, weight: .black, design: .rounded))
-                        .foregroundStyle(BKTheme.textPrimary)
+                        .foregroundStyle(completedCount > 0 ? BKTheme.accent : BKTheme.textPrimary)
+                        .contentTransition(.numericText())
+                        .animation(.spring(response: 0.45, dampingFraction: 0.7), value: completedCount)
                     Text("/ \(totalCount) games completed")
                         .font(BKFont.body(14))
                         .foregroundStyle(BKTheme.textSecondary)
@@ -280,18 +284,47 @@ struct DailySection: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(BKTheme.card)
+        .background {
+            ZStack {
+                LinearGradient(
+                    colors: [BKTheme.cardElevated, BKTheme.card],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                RadialGradient(
+                    colors: [BKTheme.accent.opacity(glow ? 0.20 : 0.07), .clear],
+                    center: .topTrailing,
+                    startRadius: 2,
+                    endRadius: 240
+                )
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(BKTheme.accent.opacity(0.12), lineWidth: 1)
+        )
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
+                glow = true
+            }
+        }
     }
 
     private var progressBar: some View {
         HStack(spacing: 5) {
             ForEach(0..<totalCount, id: \.self) { i in
                 Capsule()
-                    .fill(i < completedCount ? BKTheme.accent : BKTheme.cardElevated)
+                    .fill(i < completedCount
+                          ? AnyShapeStyle(LinearGradient(colors: [BKTheme.accent, BKTheme.accentMuted],
+                                                         startPoint: .leading, endPoint: .trailing))
+                          : AnyShapeStyle(BKTheme.cardElevated))
                     .frame(height: 6)
+                    .shadow(color: i < completedCount ? BKTheme.accent.opacity(0.55) : .clear,
+                            radius: 4)
             }
         }
+        .animation(.spring(response: 0.45, dampingFraction: 0.7), value: completedCount)
     }
 
     private var dateline: String {
