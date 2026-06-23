@@ -14,6 +14,7 @@ enum GameModeCatalog {
         "emoji_players": .oneMore,
         "guess_the_goal": .draftMaster,
         "career_path": .footballTower,
+        "tenaball": .worldCupXI,
     ]
 
     static func resolve(from apiModes: [GameModeMetaDTO]?) -> [GameModeMetaDTO] {

@@ -8,13 +8,13 @@ enum GameModeID: String, CaseIterable, Identifiable {
     case footballGolf = "football_golf"
     case blindRank = "blind_rank"
     case draftMaster = "draft_master"
-    case tenaball = "tenaball"
+    case worldCupXI = "world_cup_xi"
     case footballTower = "football_tower"
 
     var title: String {
         switch self {
         case .footballBingo: return "FOOTBALL BINGO"
-        case .tenaball: return "TENABALL"
+        case .worldCupXI: return "WORLD CUP XI"
         case .targetMan: return "TARGET MAN"
         case .guessWho: return "GUESS WHO?"
         case .footballGolf: return "FOOTBALL GOLF"
@@ -28,7 +28,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .footballBingo: return "square.grid.3x3.fill"
-        case .tenaball: return "target"
+        case .worldCupXI: return "flag.2.crossed.fill"
         case .targetMan: return "scope"
         case .guessWho: return "person.fill.questionmark"
         case .footballGolf: return "flag.fill"

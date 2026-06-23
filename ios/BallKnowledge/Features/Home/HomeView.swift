@@ -602,7 +602,7 @@ struct DailyGameHost: View {
                 FootballGolfView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
             case .footballTower:
                 FootballTowerView(dailyOnly: true, allowReplay: allowReplay, onComplete: onFinished)
-            case .tenaball:
+            case .worldCupXI:
                 DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
             }
         }

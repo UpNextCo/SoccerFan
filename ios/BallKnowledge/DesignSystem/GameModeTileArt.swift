@@ -4,12 +4,23 @@ import UIKit
 enum GameModeTileArt {
     /// Drop `{modeId}.png` into `Resources/GameTiles/` — no Asset Catalog or xcodegen change needed.
     /// Filenames match `GameModeID.rawValue`, e.g. `guess_who.png`, `football_bingo.png`.
+    private static let bundleImageNameOverrides: [String: String] = [
+        "world_cup_xi": "worldcup11",
+    ]
+
     static func bundleImageName(for modeId: String) -> String? {
         let resolvedId = GameModeCatalog.normalizedModeId(modeId)
-        return bundleImageURL(for: resolvedId) != nil ? resolvedId : nil
+        let imageName = bundleImageNameOverrides[resolvedId] ?? resolvedId
+        return bundleImageURL(named: imageName) != nil ? resolvedId : nil
     }
 
-    static func bundleImageURL(for name: String) -> URL? {
+    static func bundleImageURL(for modeId: String) -> URL? {
+        let resolvedId = GameModeCatalog.normalizedModeId(modeId)
+        let imageName = bundleImageNameOverrides[resolvedId] ?? resolvedId
+        return bundleImageURL(named: imageName)
+    }
+
+    private static func bundleImageURL(named name: String) -> URL? {
         let extensions = ["png", "PNG", "jpg", "jpeg"]
 
         for ext in extensions {
