@@ -61,9 +61,7 @@ struct HomeView: View {
                         modes: viewModel.gameModes,
                         bundle: viewModel.dailyBundle,
                         allowUnlimitedPlay: allowsUnlimitedDailyPlay,
-                        streak: auth.user?.streak ?? 0,
                         todayXp: auth.user?.todayXp ?? 0,
-                        xpGoal: AppConfig.dailyXpGoal,
                         onSelect: { mode in
                             guard let bundle = viewModel.dailyBundle else { return }
                             openMode(mode, bundle: bundle)
@@ -201,9 +199,7 @@ struct DailySection: View {
     let modes: [GameModeMetaDTO]
     let bundle: DailyBundleDTO?
     var allowUnlimitedPlay = false
-    let streak: Int
     let todayXp: Int
-    let xpGoal: Int
     var onSelect: (GameModeMetaDTO) -> Void
 
     private var orderedModes: [GameModeMetaDTO] {
@@ -263,45 +259,29 @@ struct DailySection: View {
                     Text("\(completedCount)")
                         .font(.system(size: 40, weight: .black, design: .rounded))
                         .foregroundStyle(BKTheme.textPrimary)
-                    Text("/ \(totalCount) games played")
+                    Text("/ \(totalCount) games completed")
                         .font(BKFont.body(14))
                         .foregroundStyle(BKTheme.textSecondary)
                     Spacer()
+                    HStack(spacing: 6) {
+                        Ph.lightning.fill
+                            .color(BKTheme.accent)
+                            .frame(width: 16, height: 16)
+                        Text("\(todayXp)")
+                            .font(BKFont.headline(17))
+                            .foregroundStyle(BKTheme.textPrimary)
+                        Text("XP TODAY")
+                            .font(BKFont.caption(10))
+                            .foregroundStyle(BKTheme.textMuted)
+                    }
                 }
                 progressBar
-            }
-
-            HStack(spacing: 12) {
-                statPill(icon: Ph.fire.fill, tint: BKTheme.streak, value: "\(streak)", label: "DAY STREAK")
-                statPill(icon: Ph.lightning.fill, tint: BKTheme.accent, value: "\(todayXp)", label: "XP TODAY")
             }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
-    }
-
-    private func statPill(icon: Image, tint: Color, value: String, label: String) -> some View {
-        HStack(spacing: 10) {
-            icon
-                .color(tint)
-                .frame(width: 18, height: 18)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(value)
-                    .font(BKFont.headline(17))
-                    .foregroundStyle(BKTheme.textPrimary)
-                Text(label)
-                    .font(BKFont.caption(9))
-                    .foregroundStyle(BKTheme.textMuted)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity)
-        .background(BKTheme.cardElevated)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private var progressBar: some View {
