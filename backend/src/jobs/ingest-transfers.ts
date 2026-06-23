@@ -5,7 +5,7 @@
 import 'dotenv/config';
 import { fetchFootballApi, footballApiUrl } from './ingest-api.js';
 import { beginIngestRun, finishIngestRun } from './ingest-run.js';
-import { loadIngestPlayers } from './ingest-player-map.js';
+import { isTruthyEnv, loadIngestPlayers } from './ingest-player-map.js';
 import { classifyTransferType, parseTransferFeeEurM } from './parse-fee.js';
 import { db } from '../db/index.js';
 import { playerTransfers } from '../db/schema.js';
@@ -25,7 +25,15 @@ export async function runIngestTransfers(): Promise<number> {
   let total = 0;
 
   try {
-    const players = await loadIngestPlayers();
+    let players = await loadIngestPlayers();
+    if (isTruthyEnv(process.env.INGEST_SKIP_ENRICHED)) {
+      const enriched = new Set(
+        (await db.selectDistinct({ pid: playerTransfers.playerId }).from(playerTransfers)).map((r) => r.pid)
+      );
+      const before = players.length;
+      players = players.filter((p) => !enriched.has(p.id));
+      console.log(`Skip-enriched: ${before - players.length} already have transfer rows, ${players.length} remaining`);
+    }
     console.log(`Fetching transfers for ${players.length} players...`);
 
     for (const player of players) {

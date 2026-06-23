@@ -10,7 +10,15 @@ export type PlayerRef = {
   currentLeague: string;
 };
 
+export function isTruthyEnv(value: string | undefined): boolean {
+  if (!value) return false;
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
 export async function loadIngestPlayers(): Promise<PlayerRef[]> {
+  // INGEST_ALL_PLAYERS=1 enriches every stored player (not just current top-5-league
+  // players) — required to reach full coverage of the historical 2010+ player set.
+  const includeAll = isTruthyEnv(process.env.INGEST_ALL_PLAYERS);
   const leagues = resolveIngestLeagues();
   const leagueNames = new Set<string>(leagues.map((l) => l.name));
 
@@ -25,7 +33,7 @@ export async function loadIngestPlayers(): Promise<PlayerRef[]> {
 
   return rows
     .filter((row): row is PlayerRef => Boolean(row.externalId))
-    .filter((row) => leagueNames.has(row.currentLeague));
+    .filter((row) => includeAll || leagueNames.has(row.currentLeague));
 }
 
 export function leagueIdForName(name: string): number | undefined {

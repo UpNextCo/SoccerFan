@@ -222,10 +222,15 @@ struct DailySection: View {
         return DailyPlayOrder.allComplete(in: bundle)
     }
 
+    private let gridColumns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+    ]
+
     var body: some View {
         VStack(spacing: 12) {
             hub
-            VStack(spacing: 10) {
+            LazyVGrid(columns: gridColumns, spacing: 10) {
                 ForEach(orderedModes) { mode in
                     DailyGameCard(
                         mode: mode,
@@ -292,7 +297,7 @@ struct DailySection: View {
                     endPoint: .bottomTrailing
                 )
                 RadialGradient(
-                    colors: [BKTheme.accent.opacity(glow ? 0.20 : 0.07), .clear],
+                    colors: [BKTheme.accent.opacity(glow ? 0.12 : 0.04), .clear],
                     center: .topTrailing,
                     startRadius: 2,
                     endRadius: 240
@@ -318,7 +323,7 @@ struct DailySection: View {
                     .fill(i < completedCount
                           ? AnyShapeStyle(LinearGradient(colors: [BKTheme.accent, BKTheme.accentMuted],
                                                          startPoint: .leading, endPoint: .trailing))
-                          : AnyShapeStyle(BKTheme.cardElevated))
+                          : AnyShapeStyle(Color.white.opacity(0.22)))
                     .frame(height: 6)
                     .shadow(color: i < completedCount ? BKTheme.accent.opacity(0.55) : .clear,
                             radius: 4)
@@ -361,20 +366,24 @@ struct DailyGameCard: View {
                 gradientLayer
 
                 HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(mode.title)
-                            .font(.system(size: 19, weight: .black, design: .rounded))
+                            .font(.system(size: 16, weight: .black, design: .rounded))
                             .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
                             .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
                         Text(DailyGameCard.blurb(for: mode))
-                            .font(BKFont.body(12))
+                            .font(BKFont.body(11))
                             .foregroundStyle(.white.opacity(0.85))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                             .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                     }
-                    Spacer(minLength: 8)
+                    Spacer(minLength: 6)
                     trailingBadge
                 }
-                .padding(14)
+                .padding(12)
             }
             .frame(height: height)
             .frame(maxWidth: .infinity)
@@ -388,17 +397,17 @@ struct DailyGameCard: View {
         .buttonStyle(TilePressStyle())
     }
 
-    private let artVerticalShift: CGFloat = 40
-
     private var artLayer: some View {
         GeometryReader { geo in
+            let overflow = max(0, geo.size.width - geo.size.height)
+            let shift = overflow * 0.18
             ZStack {
                 BKTheme.cardElevated
                 if let tileArtImageName {
                     GameModeBundleImage(name: tileArtImageName)
                         .scaledToFill()
                         .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-                        .offset(y: -artVerticalShift)
+                        .offset(y: -shift)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
@@ -433,12 +442,7 @@ struct DailyGameCard: View {
             .background(.black.opacity(0.45))
             .clipShape(Capsule())
         case .available:
-            Ph.play.fill
-                .color(.white)
-                .frame(width: 13, height: 13)
-                .padding(10)
-                .background(.black.opacity(0.4))
-                .clipShape(Circle())
+            EmptyView()
         }
     }
 
