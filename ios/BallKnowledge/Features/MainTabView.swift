@@ -31,23 +31,261 @@ struct MainTabView: View {
     }
 }
 
+enum LeagueScope: String, CaseIterable, Identifiable {
+    case me = "My League"
+    case teams = "Teams"
+    case overall = "Overall"
+    var id: String { rawValue }
+}
+
+@MainActor
+@Observable
+final class LeaguesViewModel {
+    var players: [PlayerStandingDTO] = []
+    var teams: [TeamStandingDTO] = []
+    var caption: String = ""
+    var isLoading = false
+    var loadedScope: LeagueScope?
+
+    func load(_ scope: LeagueScope) async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            switch scope {
+            case .me:
+                let result = try await APIClient.shared.leaguesMe()
+                players = result.standings
+                caption = "Top 5 promote · bottom 5 drop · resets Monday"
+            case .teams:
+                let result = try await APIClient.shared.leaguesTeams()
+                teams = result.standings
+                caption = "Ranked by average XP per fan this week"
+            case .overall:
+                let result = try await APIClient.shared.leaguesOverall()
+                players = result.standings
+                caption = "All-time XP leaders"
+            }
+            loadedScope = scope
+        } catch {
+            players = []
+            teams = []
+            caption = ""
+            loadedScope = scope
+        }
+    }
+}
+
 struct LeaguesTabView: View {
+    @Environment(AuthManager.self) private var auth
+    @State private var scope: LeagueScope = .me
+    @State private var viewModel = LeaguesViewModel()
+
+    private var cohortSize: Int { viewModel.players.count }
+
     var body: some View {
-        VStack(spacing: 16) {
-            Ph.trophy.fill
-                .color(.yellow)
-                .frame(width: 48, height: 48)
-            Text("Weekly Leagues")
-                .font(BKFont.title())
+        VStack(spacing: 14) {
+            Picker("League", selection: $scope) {
+                ForEach(LeagueScope.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+
+            if !viewModel.caption.isEmpty {
+                Text(viewModel.caption)
+                    .font(BKFont.caption(11))
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+
+            content
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(BKTheme.background)
+        .task(id: scope) { await viewModel.load(scope) }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if viewModel.isLoading && viewModel.loadedScope != scope {
+            Spacer()
+            ProgressView().tint(BKTheme.accent)
+            Spacer()
+        } else if scope == .teams {
+            if viewModel.teams.isEmpty {
+                emptyState(
+                    icon: "shield.lefthalf.filled",
+                    title: "No clubs ranked yet",
+                    message: "Pick the team you support, then earn XP to put them on the table."
+                )
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 8) {
+                        ForEach(viewModel.teams) { TeamStandingRow(team: $0) }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
+                }
+            }
+        } else {
+            if viewModel.players.isEmpty {
+                emptyState(
+                    icon: "trophy.fill",
+                    title: "No standings yet",
+                    message: "Play today's games to join this week's league and climb the table."
+                )
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 8) {
+                        ForEach(viewModel.players) { player in
+                            PlayerStandingRow(
+                                player: player,
+                                isCurrentUser: player.userId == auth.user?.id,
+                                zone: scope == .me ? zone(for: player.rank) : .none
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
+                }
+            }
+        }
+    }
+
+    private func zone(for rank: Int) -> StandingZone {
+        guard cohortSize >= 12 else { return .none }
+        if rank <= 5 { return .promotion }
+        if rank > cohortSize - 5 { return .relegation }
+        return .none
+    }
+
+    private func emptyState(icon: String, title: String, message: String) -> some View {
+        VStack(spacing: 14) {
+            Spacer()
+            Image(systemName: icon)
+                .font(.system(size: 44, weight: .bold))
+                .foregroundStyle(BKTheme.accent)
+            Text(title)
+                .font(BKFont.headline(18))
                 .foregroundStyle(BKTheme.textPrimary)
-            Text("Compete in Bronze, Silver and Gold leagues. Coming soon.")
-                .font(BKFont.body())
+            Text(message)
+                .font(BKFont.body(14))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(BKTheme.textSecondary)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 40)
+            Spacer()
+            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(BKTheme.background)
+    }
+}
+
+enum StandingZone {
+    case promotion, relegation, none
+}
+
+struct PlayerStandingRow: View {
+    let player: PlayerStandingDTO
+    var isCurrentUser = false
+    var zone: StandingZone = .none
+
+    private var zoneColor: Color {
+        switch zone {
+        case .promotion: return BKTheme.accent
+        case .relegation: return BKTheme.wrong
+        case .none: return BKTheme.textMuted
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(player.rank)")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+                .foregroundStyle(zoneColor)
+                .frame(width: 28, alignment: .center)
+
+            Circle()
+                .fill(BKTheme.cardElevated)
+                .frame(width: 36, height: 36)
+                .overlay {
+                    Text(initials)
+                        .font(BKFont.caption(13))
+                        .foregroundStyle(BKTheme.accent)
+                }
+
+            Text(isCurrentUser ? "\(player.displayName) (You)" : player.displayName)
+                .font(BKFont.headline(15))
+                .foregroundStyle(BKTheme.textPrimary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 4) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(BKTheme.accent)
+                Text("\(player.xp)")
+                    .font(BKFont.headline(14))
+                    .foregroundStyle(BKTheme.textPrimary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(isCurrentUser ? BKTheme.cardElevated : BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isCurrentUser ? BKTheme.accent.opacity(0.6) : .clear, lineWidth: 1.5)
+        )
+    }
+
+    private var initials: String {
+        let parts = player.displayName.split(separator: " ")
+        let letters = parts.prefix(2).compactMap { $0.first.map(String.init) }.joined()
+        return letters.isEmpty ? "?" : letters.uppercased()
+    }
+}
+
+struct TeamStandingRow: View {
+    let team: TeamStandingDTO
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(team.rank)")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+                .foregroundStyle(team.rank <= 3 ? BKTheme.accent : BKTheme.textMuted)
+                .frame(width: 28, alignment: .center)
+
+            AsyncImage(url: URL(string: team.logoUrl ?? "")) { image in
+                image.resizable().scaledToFit()
+            } placeholder: {
+                Image(systemName: "shield.fill").foregroundStyle(BKTheme.textMuted)
+            }
+            .frame(width: 32, height: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(team.name)
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .lineLimit(1)
+                Text("\(team.members) \(team.members == 1 ? "fan" : "fans")")
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(Int(team.score))")
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
+                Text("avg XP")
+                    .font(BKFont.caption(9))
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }
 

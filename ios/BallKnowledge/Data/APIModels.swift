@@ -26,6 +26,43 @@ struct AuthResponseDTO: Codable {
     let user: UserProfileDTO
 }
 
+struct PlayerStandingDTO: Codable, Identifiable {
+    let userId: String
+    let displayName: String
+    let favoriteTeamId: Int?
+    let xp: Int
+    let rank: Int
+    var id: String { userId }
+}
+
+struct TeamStandingDTO: Codable, Identifiable {
+    let teamId: Int
+    let name: String
+    let logoUrl: String?
+    let members: Int
+    let totalXp: Int
+    let score: Double
+    let rank: Int
+    var id: Int { teamId }
+}
+
+struct MyLeagueDTO: Codable {
+    let weekStart: String
+    let cohortId: String?
+    let standings: [PlayerStandingDTO]
+}
+
+struct PlayerStandingsDTO: Codable {
+    let weekStart: String?
+    let date: String?
+    let standings: [PlayerStandingDTO]
+}
+
+struct TeamStandingsDTO: Codable {
+    let weekStart: String
+    let standings: [TeamStandingDTO]
+}
+
 struct AuthAppleRequestDTO: Encodable {
     let identityToken: String
     let displayName: String?

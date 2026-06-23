@@ -179,6 +179,28 @@ actor APIClient {
     func gameModes() async throws -> [GameModeMetaDTO] {
         try await request("games")
     }
+
+    func leaguesMe() async throws -> MyLeagueDTO {
+        try await request("leagues/me")
+    }
+
+    func leaguesWeekly() async throws -> PlayerStandingsDTO {
+        try await request("leagues/weekly")
+    }
+
+    func leaguesOverall() async throws -> PlayerStandingsDTO {
+        try await request("leagues/overall")
+    }
+
+    func leaguesTeams() async throws -> TeamStandingsDTO {
+        try await request("leagues/teams")
+    }
+
+    func setFavoriteTeam(_ teamId: Int?) async throws {
+        struct TeamBody: Encodable { let teamId: Int? }
+        struct TeamResult: Decodable { let favoriteTeamId: Int? }
+        let _: TeamResult = try await request("leagues/team", method: "PUT", body: TeamBody(teamId: teamId))
+    }
 }
 
 private struct AnyEncodable: Encodable {
