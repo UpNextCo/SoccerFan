@@ -13,8 +13,18 @@ enum AppConfig {
     static let privacyPolicyURL = URL(string: "https://ballknowledge.app/privacy")!
     static let maxGuessWhoGuesses = 8
     static let dailyXpGoal = 300
+
+    /// Dev sign-in can replay dailies and skips completed-game UI lockout (DEBUG only).
+    static func allowsUnlimitedDailyPlay(isDevAccount: Bool) -> Bool {
+        #if DEBUG
+        return isDevAccount
+        #else
+        return false
+        #endif
+    }
 }
 
 enum UserDefaultsKeys {
     static let hasCompletedOnboarding = "hasCompletedOnboarding"
+    static let isDevAccount = "isDevAccount"
 }

@@ -8,6 +8,11 @@ final class AuthManager {
     var isAuthenticated = false
     var isLoading = true
     var errorMessage: String?
+    private(set) var isDevAccount = false
+
+    var allowsUnlimitedDailyPlay: Bool {
+        AppConfig.allowsUnlimitedDailyPlay(isDevAccount: isDevAccount)
+    }
 
     func bootstrap() async {
         isLoading = true
@@ -21,9 +26,11 @@ final class AuthManager {
         do {
             user = try await APIClient.shared.me()
             isAuthenticated = true
+            isDevAccount = UserDefaults.standard.bool(forKey: UserDefaultsKeys.isDevAccount)
         } catch {
             await APIClient.shared.clearToken()
             isAuthenticated = false
+            isDevAccount = false
         }
     }
 
@@ -31,6 +38,9 @@ final class AuthManager {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+
+        isDevAccount = identityToken.hasPrefix("dev:")
+        UserDefaults.standard.set(isDevAccount, forKey: UserDefaultsKeys.isDevAccount)
 
         do {
             let response = try await APIClient.shared.authApple(
@@ -58,6 +68,8 @@ final class AuthManager {
         await APIClient.shared.clearToken()
         user = nil
         isAuthenticated = false
+        isDevAccount = false
+        UserDefaults.standard.set(false, forKey: UserDefaultsKeys.isDevAccount)
     }
 
     func deleteAccount() async {

@@ -109,7 +109,12 @@ actor TeamLogoCache {
     private var cache: [String: CachedLogo] = [:]
     private var inFlight: [String: Task<CachedLogo, Never>] = [:]
 
-    func lookup(club: String, league: String) async -> CachedLogo {
+    func lookup(club: String, league: String) async -> (teamId: Int?, logoURL: URL?) {
+        let cached = await lookupCached(club: club, league: league)
+        return (cached.teamId, cached.logoURL)
+    }
+
+    private func lookupCached(club: String, league: String) async -> CachedLogo {
         let key = TeamBadgeResolver.cacheKey(club: club, league: league)
         if let cached = cache[key] { return cached }
 

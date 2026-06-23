@@ -33,12 +33,15 @@ struct MainTabView: View {
 }
 
 struct PlayTabView: View {
+    @Environment(AuthManager.self) private var auth
     @Environment(\.modelContext) private var modelContext
     @State private var modes: [GameModeMetaDTO] = []
     @State private var dailyBundle: DailyBundleDTO?
     @State private var presentedMode: GameModeID?
     @State private var showAlreadyPlayedAlert = false
     @State private var alreadyPlayedTitle = ""
+
+    private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
 
     var body: some View {
         NavigationStack {
@@ -47,7 +50,7 @@ struct PlayTabView: View {
                     ForEach(modes) { mode in
                         GameModeTile(
                             mode: mode,
-                            isCompletedToday: isCompleted(mode)
+                            isCompletedToday: allowsUnlimitedDailyPlay ? false : isCompleted(mode)
                         ) {
                             openMode(mode)
                         }
@@ -66,7 +69,7 @@ struct PlayTabView: View {
                 DailyGameHost(
                     mode: mode,
                     dailyBundle: dailyBundle,
-                    allowReplay: false,
+                    allowReplay: allowsUnlimitedDailyPlay,
                     onFinished: {
                         presentedMode = nil
                         Task {
@@ -94,7 +97,7 @@ struct PlayTabView: View {
         guard let modeId = GameModeID(rawValue: GameModeCatalog.normalizedModeId(mode.id)) else { return }
         guard DailyPlayOrder.playableModes.contains(modeId) else { return }
 
-        if bundle.isCompleted(modeId) {
+        if !allowsUnlimitedDailyPlay, bundle.isCompleted(modeId) {
             alreadyPlayedTitle = mode.title
             showAlreadyPlayedAlert = true
             return
@@ -105,10 +108,13 @@ struct PlayTabView: View {
 }
 
 struct DailyTabView: View {
+    @Environment(AuthManager.self) private var auth
     @State private var bundle: DailyBundleDTO?
     @State private var presentedMode: GameModeID?
     @State private var showAlreadyPlayedAlert = false
     @State private var alreadyPlayedTitle = ""
+
+    private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
 
     var body: some View {
         NavigationStack {
@@ -134,11 +140,13 @@ struct DailyTabView: View {
                                     Text(subtitle(for: mode, bundle: bundle))
                                         .font(BKFont.body())
                                         .foregroundStyle(
-                                            bundle.isCompleted(mode) ? BKTheme.accent : BKTheme.textSecondary
+                                            !allowsUnlimitedDailyPlay && bundle.isCompleted(mode)
+                                                ? BKTheme.accent
+                                                : BKTheme.textSecondary
                                         )
                                 }
                                 Spacer()
-                                if bundle.isCompleted(mode) {
+                                if !allowsUnlimitedDailyPlay, bundle.isCompleted(mode) {
                                     Ph.checkCircle.fill
                                         .color(BKTheme.accent)
                                         .frame(width: 22, height: 22)
@@ -166,7 +174,7 @@ struct DailyTabView: View {
                 DailyGameHost(
                     mode: mode,
                     dailyBundle: bundle,
-                    allowReplay: false,
+                    allowReplay: allowsUnlimitedDailyPlay,
                     onFinished: {
                         presentedMode = nil
                         Task { bundle = try? await APIClient.shared.dailyToday() }
@@ -182,7 +190,7 @@ struct DailyTabView: View {
     }
 
     private func subtitle(for mode: GameModeID, bundle: DailyBundleDTO) -> String {
-        if bundle.isCompleted(mode) { return "Completed" }
+        if !allowsUnlimitedDailyPlay, bundle.isCompleted(mode) { return "Completed" }
         switch mode {
         case .guessWho: return "8 guesses · Wordle-style player guess"
         case .targetMan:
@@ -201,7 +209,7 @@ struct DailyTabView: View {
     }
 
     private func openMode(_ mode: GameModeID, bundle: DailyBundleDTO) {
-        if bundle.isCompleted(mode) {
+        if !allowsUnlimitedDailyPlay, bundle.isCompleted(mode) {
             alreadyPlayedTitle = mode.title
             showAlreadyPlayedAlert = true
             return

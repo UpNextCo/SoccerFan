@@ -46,6 +46,8 @@ struct HomeView: View {
     @State private var alreadyPlayedTitle = ""
     @Binding var selectedTab: AppTab
 
+    private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
@@ -58,6 +60,7 @@ struct HomeView: View {
                 if let bundle = viewModel.dailyBundle {
                     DailyRunCard(
                         bundle: bundle,
+                        allowUnlimitedPlay: allowsUnlimitedDailyPlay,
                         onStart: { startDailyRun(with: bundle) }
                     )
                 } else if viewModel.isLoading {
@@ -69,7 +72,9 @@ struct HomeView: View {
                 if let bundle = viewModel.dailyBundle {
                     GamesGridSection(
                         modes: viewModel.gameModes,
-                        completedModeIds: DailyCompletionService.completedSet(for: bundle),
+                        completedModeIds: allowsUnlimitedDailyPlay
+                            ? []
+                            : DailyCompletionService.completedSet(for: bundle),
                         onSelect: { mode in
                             openMode(mode, bundle: bundle)
                         }
@@ -103,7 +108,7 @@ struct HomeView: View {
             DailyGameHost(
                 mode: mode,
                 dailyBundle: viewModel.dailyBundle,
-                allowReplay: false,
+                allowReplay: allowsUnlimitedDailyPlay,
                 onFinished: { handleModeFinished(mode) }
             )
         }
@@ -119,7 +124,7 @@ struct HomeView: View {
         guard let modeId = GameModeID(rawValue: GameModeCatalog.normalizedModeId(mode.id)) else { return }
         guard DailyPlayOrder.playableModes.contains(modeId) else { return }
 
-        if bundle.isCompleted(modeId) {
+        if !allowsUnlimitedDailyPlay, bundle.isCompleted(modeId) {
             alreadyPlayedTitle = mode.title
             showAlreadyPlayedAlert = true
             return
@@ -130,6 +135,12 @@ struct HomeView: View {
     }
 
     private func startDailyRun(with bundle: DailyBundleDTO) {
+        if allowsUnlimitedDailyPlay {
+            isSequentialDaily = true
+            presentedMode = DailyPlayOrder.firstIncomplete(in: bundle) ?? DailyPlayOrder.playableModes.first
+            return
+        }
+
         guard let next = DailyPlayOrder.firstIncomplete(in: bundle) else { return }
         isSequentialDaily = true
         presentedMode = next
@@ -142,6 +153,11 @@ struct HomeView: View {
             await viewModel.load(context: modelContext)
 
             guard isSequentialDaily, let bundle = viewModel.dailyBundle else {
+                isSequentialDaily = false
+                return
+            }
+
+            if allowsUnlimitedDailyPlay {
                 isSequentialDaily = false
                 return
             }
@@ -231,28 +247,22 @@ struct HomeHeaderView: View {
 
 struct DailyRunCard: View {
     let bundle: DailyBundleDTO
+    var allowUnlimitedPlay = false
     var onStart: () -> Void
 
     private var completedCount: Int { DailyPlayOrder.completedCount(in: bundle) }
     private var totalCount: Int { DailyPlayOrder.playableModes.count }
     private var allComplete: Bool { DailyPlayOrder.allComplete(in: bundle) }
     private var nextMode: GameModeID? { DailyPlayOrder.firstIncomplete(in: bundle) }
+    private var showStartButton: Bool { allowUnlimitedPlay || !allComplete }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                ForEach(0..<totalCount, id: \.self) { index in
-                    Capsule()
-                        .fill(index < completedCount ? BKTheme.accent : BKTheme.cardElevated)
-                        .frame(height: 4)
-                }
-            }
-
-            Text("TODAY'S RUN")
+            Text("TODAY'S GAMES")
                 .font(BKFont.caption(11))
                 .foregroundStyle(BKTheme.accent)
 
-            Text(allComplete ? "ALL DAILIES DONE" : "DAILY RUN")
+            Text(allComplete && !allowUnlimitedPlay ? "ALL DAILIES DONE" : "DAILY GAMES")
                 .font(BKFont.title(24))
                 .foregroundStyle(BKTheme.textPrimary)
 
@@ -260,7 +270,7 @@ struct DailyRunCard: View {
                 .font(BKFont.body(13))
                 .foregroundStyle(BKTheme.textSecondary)
 
-            if allComplete {
+            if allComplete && !allowUnlimitedPlay {
                 TimelineView(.periodic(from: .now, by: 60)) { context in
                     HStack(spacing: 6) {
                         Ph.checkCircle.fill
@@ -273,10 +283,10 @@ struct DailyRunCard: View {
                 }
             }
 
-            if !allComplete {
+            if showStartButton {
                 Button(action: onStart) {
                     HStack {
-                        Text(nextMode == DailyPlayOrder.playableModes.first ? "START DAILY" : "CONTINUE DAILY")
+                        Text(startButtonTitle)
                             .font(BKFont.headline(14))
                         Ph.arrowRight.bold
                             .color(BKTheme.background)
@@ -302,7 +312,7 @@ struct DailyRunCard: View {
                         endPoint: .bottomTrailing
                     )
 
-                    BundleResourceImage(name: "banner2")
+                    BundleResourceImage(name: "banner3")
                         .scaledToFill()
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
@@ -316,6 +326,14 @@ struct DailyRunCard: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+
+    private var startButtonTitle: String {
+        if allowUnlimitedPlay, allComplete { return "PLAY DAILY GAMES" }
+        if nextMode == DailyPlayOrder.playableModes.first || nextMode == nil {
+            return "START DAILY GAMES"
+        }
+        return "CONTINUE DAILY GAMES"
     }
 
     private var progressSubtitle: String {
