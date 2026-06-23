@@ -29,6 +29,13 @@
       "when": 1781641351799,
       "tag": "0004_teams",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782257376373,
+      "tag": "0005_crazy_sentry",
+      "breakpoints": true
     }
   ]
 }

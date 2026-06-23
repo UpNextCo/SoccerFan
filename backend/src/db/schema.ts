@@ -16,6 +16,7 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   appleSub: text('apple_sub').notNull().unique(),
   displayName: text('display_name').notNull().default('Player'),
+  favoriteTeamId: integer('favorite_team_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -221,7 +222,60 @@ export const dailyCompletions = pgTable(
   (table) => [index('daily_completions_user_date_idx').on(table.userId, table.date)]
 );
 
+/** Per-user, per-day, per-mode XP ledger — powers daily/weekly/team/overall leagues. */
+export const xpLedger = pgTable(
+  'xp_ledger',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    modeId: text('mode_id').notNull(),
+    xpEarned: integer('xp_earned').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('xp_ledger_user_date_mode_unique').on(table.userId, table.date, table.modeId),
+    index('xp_ledger_date_idx').on(table.date),
+    index('xp_ledger_user_idx').on(table.userId),
+  ]
+);
+
+/** A weekly competition group (Bronze/Silver/Gold tier) of ~30 players. */
+export const leagueCohorts = pgTable(
+  'league_cohorts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tier: text('tier').notNull().default('bronze'),
+    weekStart: date('week_start').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('league_cohorts_week_tier_idx').on(table.weekStart, table.tier)]
+);
+
+export const leagueMemberships = pgTable(
+  'league_memberships',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    cohortId: uuid('cohort_id')
+      .notNull()
+      .references(() => leagueCohorts.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    weekStart: date('week_start').notNull(),
+  },
+  (table) => [
+    uniqueIndex('league_memberships_user_week_unique').on(table.userId, table.weekStart),
+    index('league_memberships_cohort_idx').on(table.cohortId),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
+export type XpLedgerEntry = typeof xpLedger.$inferSelect;
+export type LeagueCohort = typeof leagueCohorts.$inferSelect;
+export type LeagueMembership = typeof leagueMemberships.$inferSelect;
 export type Player = typeof players.$inferSelect;
 export type PlayerStat = typeof playerStats.$inferSelect;
 export type PlayerTransfer = typeof playerTransfers.$inferSelect;

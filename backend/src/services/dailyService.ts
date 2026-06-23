@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import { dailyCompletions, dailyPuzzles, userProgress } from '../db/schema.js';
 import { computeLevel } from './authService.js';
 import { getPlayerById } from './playerService.js';
+import { ensureWeeklyMembership, recordXp, weekStartFor } from './leagueService.js';
 import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
@@ -250,6 +251,10 @@ export async function completeDaily(
       todayXpDate: today,
     })
     .where(eq(userProgress.userId, userId));
+
+  // Feed the league system: append to the XP ledger and ensure a weekly cohort.
+  await recordXp(userId, input.modeId, xpEarned, input.date);
+  await ensureWeeklyMembership(userId, weekStartFor(input.date));
 
   return {
     xpEarned,

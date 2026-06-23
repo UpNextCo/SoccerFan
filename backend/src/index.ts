@@ -3,6 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import { authRouter } from './routes/auth.js';
 import { dailyRouter } from './routes/daily.js';
+import { leaguesRouter } from './routes/leagues.js';
 import { gamesRouter, playersRouter } from './routes/players.js';
 import { statsRouter } from './routes/stats.js';
 import { teamsRouter } from './routes/teams.js';
@@ -20,6 +21,7 @@ app.get('/health', (_req, res) => {
 
 app.use('/auth', authRouter);
 app.use('/daily', dailyRouter);
+app.use('/leagues', leaguesRouter);
 app.use('/players', playersRouter);
 app.use('/stats', statsRouter);
 app.use('/teams', teamsRouter);
