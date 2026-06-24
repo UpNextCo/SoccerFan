@@ -64,10 +64,37 @@ export interface BlindRankPuzzlePublic {
   }>;
 }
 
+export interface FootballBingoPuzzlePublic {
+  modeId: 'football_bingo';
+  puzzleId: string;
+  date: string;
+  title: string;
+  categories: Array<{
+    id: string;
+    title: string;
+    type: string;
+    iconType: string;
+    iconValue: string;
+    matchingRule: string;
+  }>;
+  players: Array<{
+    id: string;
+    name: string;
+    nationality: string;
+    clubs: string[];
+    leagues: string[];
+    trophies: string[];
+    teammates: string[];
+    managers: string[];
+    premierLeagueApps: number | null;
+  }>;
+}
+
 export type DailyPuzzlePublic =
   | GuessWhoPuzzlePublic
   | TargetManPuzzlePublic
-  | BlindRankPuzzlePublic;
+  | BlindRankPuzzlePublic
+  | FootballBingoPuzzlePublic;
 
 export interface GuessFeedbackField {
   field: string;

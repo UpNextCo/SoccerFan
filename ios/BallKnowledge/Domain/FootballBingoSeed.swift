@@ -16,6 +16,44 @@ enum FootballBingoSeed {
         return game
     }
 
+    /// Build a game from a server-generated puzzle (categories + player queue are
+    /// already chosen and deterministically ordered server-side).
+    static func makeGame(from dto: FootballBingoPuzzleDTO) -> FootballBingoGame {
+        let categories = dto.categories.map { c in
+            FootballBingoCategory(
+                id: c.id,
+                title: c.title,
+                type: FootballBingoCategoryType(rawValue: c.type) ?? .nationality,
+                iconType: FootballBingoIconType(rawValue: c.iconType) ?? .custom,
+                iconValue: c.iconValue,
+                matchingRule: c.matchingRule
+            )
+        }
+        let players = dto.players.map { p in
+            FootballBingoPlayer(
+                id: p.id,
+                name: p.name,
+                nationality: p.nationality,
+                clubs: p.clubs,
+                leagues: p.leagues,
+                trophies: p.trophies,
+                teammates: p.teammates,
+                managers: p.managers,
+                premierLeagueApps: p.premierLeagueApps
+            )
+        }
+        return FootballBingoGame(
+            id: dto.puzzleId,
+            title: dto.title,
+            categories: categories,
+            playerQueue: players,
+            currentPlayerIndex: 0,
+            completedCategoryIds: [],
+            remainingPlayers: players.count,
+            status: .active
+        )
+    }
+
     static func makeGame() -> FootballBingoGame {
         let categories = defaultCategories
         let queue = defaultPlayers.shuffled()

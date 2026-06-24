@@ -31,10 +31,41 @@ struct BlindRankPuzzleDTO: Codable, Equatable {
     let presentationOrder: [BlindRankPresentationPlayerDTO]
 }
 
+struct FootballBingoCategoryDTO: Codable, Equatable {
+    let id: String
+    let title: String
+    let type: String
+    let iconType: String
+    let iconValue: String
+    let matchingRule: String
+}
+
+struct FootballBingoPlayerDTO: Codable, Equatable {
+    let id: String
+    let name: String
+    let nationality: String
+    let clubs: [String]
+    let leagues: [String]
+    let trophies: [String]
+    let teammates: [String]
+    let managers: [String]
+    let premierLeagueApps: Int?
+}
+
+struct FootballBingoPuzzleDTO: Codable, Equatable {
+    let modeId: String
+    let puzzleId: String
+    let date: String
+    let title: String
+    let categories: [FootballBingoCategoryDTO]
+    let players: [FootballBingoPlayerDTO]
+}
+
 enum DailyPuzzleDTO: Codable, Equatable {
     case guessWho(GuessWhoPuzzleDTO)
     case targetMan(TargetManPuzzleDTO)
     case blindRank(BlindRankPuzzleDTO)
+    case footballBingo(FootballBingoPuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
         case modeId
@@ -51,6 +82,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .targetMan(try TargetManPuzzleDTO(from: decoder))
         case GameModeID.blindRank.rawValue:
             self = .blindRank(try BlindRankPuzzleDTO(from: decoder))
+        case GameModeID.footballBingo.rawValue:
+            self = .footballBingo(try FootballBingoPuzzleDTO(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .modeId,
@@ -68,6 +101,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .blindRank(let puzzle):
             try puzzle.encode(to: encoder)
+        case .footballBingo(let puzzle):
+            try puzzle.encode(to: encoder)
         }
     }
 
@@ -76,6 +111,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .guessWho: return GameModeID.guessWho.rawValue
         case .targetMan: return GameModeID.targetMan.rawValue
         case .blindRank: return GameModeID.blindRank.rawValue
+        case .footballBingo: return GameModeID.footballBingo.rawValue
         }
     }
 }
@@ -138,6 +174,11 @@ extension DailyBundleDTO {
 
     var blindRankPuzzle: BlindRankPuzzleDTO? {
         guard case .blindRank(let puzzle) = game(for: .blindRank)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var footballBingoPuzzle: FootballBingoPuzzleDTO? {
+        guard case .footballBingo(let puzzle) = game(for: .footballBingo)?.puzzle else { return nil }
         return puzzle
     }
 }

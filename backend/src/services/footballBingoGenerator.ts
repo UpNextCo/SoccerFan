@@ -119,6 +119,20 @@ async function rows<T extends Record<string, unknown>>(query: ReturnType<typeof 
   return (await db.execute(query)) as unknown as T[];
 }
 
+/** Most common BIG5 league per club name, for crest lookup on the client. */
+async function loadClubLeagues(): Promise<Map<string, string>> {
+  const rows2 = await rows<{ team_name: string; league_name: string }>(sql`
+    SELECT team_name, league_name FROM (
+      SELECT team_name, league_name,
+             ROW_NUMBER() OVER (PARTITION BY team_name ORDER BY COUNT(*) DESC) AS rn
+      FROM player_stats
+      WHERE league_id IN (39, 140, 135, 78, 61) AND team_name IS NOT NULL
+      GROUP BY team_name, league_name
+    ) t WHERE rn = 1
+  `);
+  return new Map(rows2.map((r) => [r.team_name, r.league_name]));
+}
+
 async function loadPool(): Promise<BingoPlayer[]> {
   const idRows = await rows<{ player_id: string }>(sql`
     SELECT player_id FROM player_stats
@@ -175,7 +189,7 @@ function countMatchers(pool: BingoPlayer[], cat: BingoCategory): number {
   return pool.filter((p) => matches(p, cat)).length;
 }
 
-function buildCandidates(pool: BingoPlayer[]): Record<CatType, BingoCategory[]> {
+function buildCandidates(pool: BingoPlayer[], clubLeagues: Map<string, string>): Record<CatType, BingoCategory[]> {
   const tally = (extract: (p: BingoPlayer) => string[]) => {
     const counts = new Map<string, number>();
     for (const p of pool) for (const v of new Set(extract(p))) counts.set(v, (counts.get(v) ?? 0) + 1);
@@ -188,7 +202,7 @@ function buildCandidates(pool: BingoPlayer[]): Record<CatType, BingoCategory[]> 
 
   const clubs = [...tally((p) => p.clubs).entries()]
     .filter(([n, c]) => n && c >= MIN_POOL_MATCHERS)
-    .map(([n]): BingoCategory => ({ id: `club_${norm(n)}`, title: `Played for ${n}`, type: 'playedForClub', iconType: 'clubBadge', iconValue: n, matchingRule: n }));
+    .map(([n]): BingoCategory => ({ id: `club_${norm(n)}`, title: `Played for ${n}`, type: 'playedForClub', iconType: 'clubBadge', iconValue: `${n}|${clubLeagues.get(n) ?? 'Premier League'}`, matchingRule: n }));
 
   const leagues = LEAGUES.map((l): BingoCategory => ({ id: `lge_${norm(l)}`, title: l, type: 'playedInLeague', iconType: 'league', iconValue: l, matchingRule: l }))
     .filter((c) => countMatchers(pool, c) >= MIN_POOL_MATCHERS);
@@ -205,11 +219,11 @@ function buildCandidates(pool: BingoPlayer[]): Record<CatType, BingoCategory[]> 
 }
 
 export async function generateFootballBingoPuzzle(date: string): Promise<FootballBingoPuzzle> {
-  const pool = await loadPool();
+  const [pool, clubLeagues] = await Promise.all([loadPool(), loadClubLeagues()]);
   if (pool.length < 50) throw new Error('Not enough players in pool for Football Bingo');
 
   const seed = hashStr(`${date}:football_bingo`);
-  const candidates = buildCandidates(pool);
+  const candidates = buildCandidates(pool, clubLeagues);
 
   // Target mix (falls back to whatever's available to reach GRID).
   const target: Array<[CatType, number]> = [

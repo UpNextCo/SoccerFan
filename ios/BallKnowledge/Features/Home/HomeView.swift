@@ -669,7 +669,12 @@ struct DailyGameHost: View {
             case .blindRank:
                 BlindRankView(dailyBundle: dailyBundle, allowReplay: allowReplay, onComplete: onFinished)
             case .footballBingo:
-                FootballBingoView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
+                FootballBingoView(
+                    dailyDate: dailyBundle?.date,
+                    serverPuzzle: dailyBundle?.footballBingoPuzzle,
+                    allowReplay: allowReplay,
+                    onComplete: onFinished
+                )
             case .oneMore:
                 OneMoreView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
             case .draftMaster:

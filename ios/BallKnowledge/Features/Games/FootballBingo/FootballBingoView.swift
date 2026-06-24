@@ -104,8 +104,15 @@ struct FootballBingoView: View {
     private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
-        if let dailyDate {
+    init(
+        dailyDate: String? = nil,
+        serverPuzzle: FootballBingoPuzzleDTO? = nil,
+        allowReplay: Bool = true,
+        onComplete: @escaping () -> Void
+    ) {
+        if let serverPuzzle {
+            _viewModel = State(initialValue: FootballBingoViewModel(game: FootballBingoSeed.makeGame(from: serverPuzzle)))
+        } else if let dailyDate {
             _viewModel = State(initialValue: FootballBingoViewModel(game: FootballBingoSeed.makeDailyGame(date: dailyDate)))
         } else {
             _viewModel = State(initialValue: FootballBingoViewModel())

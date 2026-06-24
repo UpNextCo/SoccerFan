@@ -5,6 +5,7 @@ import { computeLevel } from './authService.js';
 import { getPlayerById } from './playerService.js';
 import { ensureWeeklyMembership, recordXp, weekStartFor } from './leagueService.js';
 import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
+import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
 const GAME_MODES = [
@@ -23,6 +24,14 @@ const DAILY_PUZZLE_MODES = [
   { modeId: 'guess_who', title: 'GUESS WHO?' },
   { modeId: 'target_man', title: 'TARGET MAN' },
   { modeId: 'blind_rank', title: 'BLIND RANK' },
+] as const;
+
+/** Modes whose puzzle is generated + stored server-side and shipped in the bundle. */
+const BUNDLE_PUZZLE_MODES = [
+  { modeId: 'guess_who', title: 'GUESS WHO?' },
+  { modeId: 'target_man', title: 'TARGET MAN' },
+  { modeId: 'blind_rank', title: 'BLIND RANK' },
+  { modeId: 'football_bingo', title: 'FOOTBALL BINGO' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -82,6 +91,33 @@ export function getGameModes() {
   return GAME_MODES;
 }
 
+/** Generate + store today's Football Bingo grid if not present. Best-effort. */
+async function ensureBingoPuzzle(date: string): Promise<void> {
+  const existing = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_bingo')))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  try {
+    const puzzle = await generateFootballBingoPuzzle(date);
+    const check = isBingoSolvable(puzzle);
+    if (!check.ok) {
+      console.warn(`Skipped football_bingo for ${date}: generated grid was not solvable`);
+      return;
+    }
+    await db
+      .insert(dailyPuzzles)
+      .values({ date, modeId: 'football_bingo', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
+      .onConflictDoNothing();
+    console.log(`Generated football_bingo puzzle for ${date}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Skipped football_bingo for ${date}: ${message}`);
+  }
+}
+
 async function ensureDailyPuzzles(date: string): Promise<void> {
   const rows = await db
     .select({ modeId: dailyPuzzles.modeId })
@@ -93,6 +129,9 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
 
   if (missing) {
     await generateAllDailyPuzzles(date);
+  }
+  if (!existing.has('football_bingo')) {
+    await ensureBingoPuzzle(date);
   }
 }
 
@@ -124,7 +163,7 @@ export async function getDailyBundle(userId: string): Promise<DailyBundle> {
 
   const puzzles = await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.date, date));
 
-  const games = DAILY_PUZZLE_MODES.flatMap((mode) => {
+  const games = BUNDLE_PUZZLE_MODES.flatMap((mode) => {
     const row = puzzles.find((puzzle) => puzzle.modeId === mode.modeId);
     if (!row) return [];
     return [
