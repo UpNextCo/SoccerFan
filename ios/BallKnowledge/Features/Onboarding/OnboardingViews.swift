@@ -407,14 +407,10 @@ struct WelcomeOnboardingPage: View {
         VStack(spacing: 32) {
             Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(BKTheme.accent.opacity(0.15))
-                    .frame(width: 140, height: 140)
-                Ph.soccerBall.fill
-                    .color(BKTheme.accent)
-                    .frame(width: 64, height: 64)
-            }
+            GameModeBundleImage(name: "balllsss")
+                .scaledToFill()
+                .frame(width: 200, height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 28))
 
             VStack(spacing: 12) {
                 Text("BALL KNOWLEDGE")
