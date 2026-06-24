@@ -94,37 +94,22 @@ async function main() {
     names: string[];
   }
   const plans: Plan[] = [];
-  let skippedOverlap = 0;
-
-  let skippedObscure = 0;
+  let skippedLowConfidence = 0;
   for (const [, group] of groups) {
     if (group.length < 2) continue;
 
-    // Prominence gate: only dedupe players notable enough to be confidently the
-    // same person (a real market value). Obscure same-name lower-league players
-    // are left alone — merging them risks combining two different people.
-    if (!group.some((r) => r.peakValue != null)) {
-      skippedObscure += 1;
+    // High-confidence ONLY: identical name+nationality, identical non-null peak value,
+    // AND that value is high (≥ €20m). Prominent players with the same name + exact
+    // same value are the same person; obscure common-name collisions (low value) are
+    // left alone, since a single Transfermarkt entry can get matched by several of our
+    // records and we must not merge genuinely different journeymen.
+    const MIN_PEAK = 20_000_000;
+    const peaks = group.map((r) => r.peakValue);
+    const samePeak =
+      peaks.every((v) => v != null) && new Set(peaks).size === 1 && (peaks[0] ?? 0) >= MIN_PEAK;
+    if (!samePeak) {
+      skippedLowConfidence += 1;
       continue;
-    }
-
-    // Overlap check across records that HAVE stats.
-    const withStats = group.filter((r) => r.seasons.size > 0);
-    const seen = new Set<number>();
-    let overlap = false;
-    for (const r of withStats) {
-      for (const s of r.seasons) {
-        if (seen.has(s)) {
-          overlap = true;
-          break;
-        }
-        seen.add(s);
-      }
-      if (overlap) break;
-    }
-    if (overlap) {
-      skippedOverlap += 1;
-      continue; // likely genuinely different people sharing a name
     }
 
     // Canonical: prefer an api-football record (external_id), then most seasons.
@@ -146,8 +131,7 @@ async function main() {
 
   const totalDups = plans.reduce((n, p) => n + p.fromIds.length, 0);
   console.log(`Mergeable groups: ${plans.length} (${totalDups} duplicate rows to remove)`);
-  console.log(`Skipped ${skippedOverlap} groups with overlapping seasons (different people).`);
-  console.log(`Skipped ${skippedObscure} groups with no market value (obscure — left alone for safety).\n`);
+  console.log(`Skipped ${skippedLowConfidence} same-name groups without identical peak value (left alone for safety).\n`);
   for (const p of plans.slice(0, 40)) {
     console.log(`  [${p.names.join(' | ')}]  ⇒  "${p.chosen}"`);
   }
@@ -167,11 +151,30 @@ async function main() {
     try {
       await db.transaction(async (tx) => {
         for (const fromId of plan.fromIds) {
-          await tx.execute(sql`UPDATE player_stats SET player_id = ${plan.toId} WHERE player_id = ${fromId}`);
-          await tx.execute(sql`UPDATE player_career SET player_id = ${plan.toId} WHERE player_id = ${fromId}`);
-          await tx.execute(sql`UPDATE player_honours SET player_id = ${plan.toId} WHERE player_id = ${fromId}`);
-          await tx.execute(sql`UPDATE player_transfers SET player_id = ${plan.toId} WHERE player_id = ${fromId}`);
-          await tx.execute(sql`UPDATE daily_puzzles SET answer_player_id = ${plan.toId} WHERE answer_player_id = ${fromId}`);
+          const to = plan.toId;
+          // Drop rows that would collide on the canonical (same player/season), then repoint the rest.
+          await tx.execute(sql`
+            DELETE FROM player_stats d WHERE d.player_id = ${fromId} AND EXISTS (
+              SELECT 1 FROM player_stats c WHERE c.player_id = ${to}
+                AND c.league_id = d.league_id AND c.season = d.season AND c.team_id = d.team_id)`);
+          await tx.execute(sql`UPDATE player_stats SET player_id = ${to} WHERE player_id = ${fromId}`);
+          await tx.execute(sql`
+            DELETE FROM player_career d WHERE d.player_id = ${fromId} AND EXISTS (
+              SELECT 1 FROM player_career c WHERE c.player_id = ${to}
+                AND c.team_id = d.team_id AND c.season_from = d.season_from)`);
+          await tx.execute(sql`UPDATE player_career SET player_id = ${to} WHERE player_id = ${fromId}`);
+          await tx.execute(sql`
+            DELETE FROM player_honours d WHERE d.player_id = ${fromId} AND EXISTS (
+              SELECT 1 FROM player_honours c WHERE c.player_id = ${to}
+                AND c.competition = d.competition AND c.season = d.season AND c.placement = d.placement)`);
+          await tx.execute(sql`UPDATE player_honours SET player_id = ${to} WHERE player_id = ${fromId}`);
+          await tx.execute(sql`
+            DELETE FROM player_transfers d WHERE d.player_id = ${fromId} AND EXISTS (
+              SELECT 1 FROM player_transfers c WHERE c.player_id = ${to}
+                AND c.transfer_date IS NOT DISTINCT FROM d.transfer_date
+                AND c.from_team_id = d.from_team_id AND c.to_team_id = d.to_team_id)`);
+          await tx.execute(sql`UPDATE player_transfers SET player_id = ${to} WHERE player_id = ${fromId}`);
+          await tx.execute(sql`UPDATE daily_puzzles SET answer_player_id = ${to} WHERE answer_player_id = ${fromId}`);
           await tx.execute(sql`DELETE FROM players WHERE id = ${fromId}`);
         }
         await tx.execute(sql`
