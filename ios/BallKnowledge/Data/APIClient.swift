@@ -126,6 +126,23 @@ actor APIClient {
         return resp.correct
     }
 
+    func validateOneMoreAnswer(date: String, playerId: String) async throws -> (valid: Bool, statValue: Int) {
+        struct Body: Encodable {
+            let date: String
+            let playerId: String
+        }
+        struct Resp: Decodable {
+            let valid: Bool
+            let statValue: Int
+        }
+        let resp: Resp = try await request(
+            "daily/onemore/validate",
+            method: "POST",
+            body: Body(date: date, playerId: playerId)
+        )
+        return (resp.valid, resp.statValue)
+    }
+
     func searchPlayers(query: String) async throws -> [PlayerSearchResultDTO] {
         try await request(
             "players/search",

@@ -8,6 +8,7 @@ import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzz
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import { generateFootballTowerPuzzle, type TowerFloor } from './footballTowerGenerator.js';
 import { isFootballNation, isPremierLeagueClub, playerSatisfiesRule } from './towerRules.js';
+import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
 const GAME_MODES = [
@@ -35,6 +36,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'blind_rank', title: 'BLIND RANK' },
   { modeId: 'football_bingo', title: 'FOOTBALL BINGO' },
   { modeId: 'football_tower', title: 'FOOTBALL TOWER' },
+  { modeId: 'one_more', title: 'ONE MORE' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -146,6 +148,31 @@ async function ensureTowerPuzzle(date: string): Promise<void> {
   }
 }
 
+/** Generate + store today's One More prompt if not present. Best-effort. */
+async function ensureOneMorePuzzle(date: string): Promise<void> {
+  const existing = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'one_more')))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  try {
+    const { puzzle, pool } = await generateOneMorePuzzle(date);
+    if (pool < 10) {
+      console.warn(`Skipped one_more for ${date}: pool only ${pool}`);
+      return;
+    }
+    await db
+      .insert(dailyPuzzles)
+      .values({ date, modeId: 'one_more', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
+      .onConflictDoNothing();
+    console.log(`Generated one_more puzzle for ${date}`);
+  } catch (error) {
+    console.warn(`Skipped one_more for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 async function ensureDailyPuzzles(date: string): Promise<void> {
   const rows = await db
     .select({ modeId: dailyPuzzles.modeId })
@@ -164,6 +191,28 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   if (!existing.has('football_tower')) {
     await ensureTowerPuzzle(date);
   }
+  if (!existing.has('one_more')) {
+    await ensureOneMorePuzzle(date);
+  }
+}
+
+/** Validate a One More answer: does the player meet the prompt's stat minimum? */
+export async function validateOneMoreAnswer(
+  date: string,
+  playerId: string
+): Promise<{ valid: boolean; statValue: number }> {
+  const rows = await db
+    .select()
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'one_more')))
+    .limit(1);
+  const puzzle = rows[0]?.puzzleJson as
+    | { leagueId: number; category: 'goals' | 'assists' | 'appearances'; minimum: number }
+    | undefined;
+  if (!puzzle) throw new Error('One More puzzle not found');
+
+  const statValue = await oneMoreStatValue(playerId, puzzle.leagueId, puzzle.category);
+  return { valid: statValue >= puzzle.minimum, statValue };
 }
 
 /** Validate a Football Tower answer against the stored floor's rule. Authoritative. */

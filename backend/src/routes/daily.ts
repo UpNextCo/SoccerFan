@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
-import { completeDaily, getDailyBundle, getDailyPuzzle, validateGuess, validateTowerAnswer } from '../services/dailyService.js';
+import { completeDaily, getDailyBundle, getDailyPuzzle, validateGuess, validateTowerAnswer, validateOneMoreAnswer } from '../services/dailyService.js';
 
 export const dailyRouter = Router();
 
@@ -97,5 +97,25 @@ dailyRouter.post('/tower/validate', requireAuth, async (req, res) => {
     sendSuccess(res, { correct });
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Tower validation failed', 400);
+  }
+});
+
+const oneMoreSchema = z.object({
+  date: z.string(),
+  playerId: z.string().uuid(),
+});
+
+dailyRouter.post('/onemore/validate', requireAuth, async (req, res) => {
+  const parsed = oneMoreSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+
+  try {
+    const result = await validateOneMoreAnswer(parsed.data.date, parsed.data.playerId);
+    sendSuccess(res, result);
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'One More validation failed', 400);
   }
 });

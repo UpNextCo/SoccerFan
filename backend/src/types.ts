@@ -104,12 +104,24 @@ export interface FootballTowerPuzzlePublic {
   }>;
 }
 
+export interface OneMorePuzzlePublic {
+  modeId: 'one_more';
+  puzzleId: string;
+  date: string;
+  leagueId: number;
+  league: string;
+  category: string;
+  minimum: number;
+  title: string;
+}
+
 export type DailyPuzzlePublic =
   | GuessWhoPuzzlePublic
   | TargetManPuzzlePublic
   | BlindRankPuzzlePublic
   | FootballBingoPuzzlePublic
-  | FootballTowerPuzzlePublic;
+  | FootballTowerPuzzlePublic
+  | OneMorePuzzlePublic;
 
 export interface GuessFeedbackField {
   field: string;

@@ -13,6 +13,20 @@ enum OneMoreSeed {
         )
     }
 
+    /// Build the daily prompt from the server-generated puzzle (validated server-side).
+    static func makeServerPrompt(from dto: OneMorePuzzleDTO) -> OneMorePrompt? {
+        guard let league = TargetManLeague(rawValue: dto.league),
+              let category = TargetManStatCategory(rawValue: dto.category) else { return nil }
+        return OneMorePrompt(
+            id: dto.puzzleId,
+            league: league,
+            category: category,
+            minimum: dto.minimum,
+            isDaily: true,
+            date: dto.date
+        )
+    }
+
     static func makePracticePrompt() -> OneMorePrompt {
         OneMorePrompt(
             id: "one_more_practice_\(UUID().uuidString.prefix(8))",

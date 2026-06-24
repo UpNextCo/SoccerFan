@@ -76,12 +76,24 @@ struct FootballTowerPuzzleDTO: Codable, Equatable {
     let floors: [FootballTowerFloorDTO]
 }
 
+struct OneMorePuzzleDTO: Codable, Equatable {
+    let modeId: String
+    let puzzleId: String
+    let date: String
+    let leagueId: Int
+    let league: String
+    let category: String
+    let minimum: Int
+    let title: String
+}
+
 enum DailyPuzzleDTO: Codable, Equatable {
     case guessWho(GuessWhoPuzzleDTO)
     case targetMan(TargetManPuzzleDTO)
     case blindRank(BlindRankPuzzleDTO)
     case footballBingo(FootballBingoPuzzleDTO)
     case footballTower(FootballTowerPuzzleDTO)
+    case oneMore(OneMorePuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
         case modeId
@@ -102,6 +114,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .footballBingo(try FootballBingoPuzzleDTO(from: decoder))
         case GameModeID.footballTower.rawValue:
             self = .footballTower(try FootballTowerPuzzleDTO(from: decoder))
+        case GameModeID.oneMore.rawValue:
+            self = .oneMore(try OneMorePuzzleDTO(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .modeId,
@@ -123,6 +137,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .footballTower(let puzzle):
             try puzzle.encode(to: encoder)
+        case .oneMore(let puzzle):
+            try puzzle.encode(to: encoder)
         }
     }
 
@@ -133,6 +149,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .blindRank: return GameModeID.blindRank.rawValue
         case .footballBingo: return GameModeID.footballBingo.rawValue
         case .footballTower: return GameModeID.footballTower.rawValue
+        case .oneMore: return GameModeID.oneMore.rawValue
         }
     }
 }
@@ -205,6 +222,11 @@ extension DailyBundleDTO {
 
     var footballTowerPuzzle: FootballTowerPuzzleDTO? {
         guard case .footballTower(let puzzle) = game(for: .footballTower)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var oneMorePuzzle: OneMorePuzzleDTO? {
+        guard case .oneMore(let puzzle) = game(for: .oneMore)?.puzzle else { return nil }
         return puzzle
     }
 }

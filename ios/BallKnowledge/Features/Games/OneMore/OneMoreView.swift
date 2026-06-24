@@ -16,12 +16,15 @@ final class OneMoreViewModel {
     var lastFeedback: String?
 
     private let practice: Bool
+    private let serverPrompt: Bool
 
-    init(practice: Bool = false, dailyDate: String? = nil) {
+    init(practice: Bool = false, dailyDate: String? = nil, serverPuzzle: OneMorePuzzleDTO? = nil) {
         self.practice = practice
+        let serverDaily = practice ? nil : serverPuzzle.flatMap(OneMoreSeed.makeServerPrompt)
+        self.serverPrompt = serverDaily != nil
         let prompt = practice
             ? OneMoreSeed.makePracticePrompt()
-            : OneMoreSeed.makeDailyPrompt(date: dailyDate)
+            : (serverDaily ?? OneMoreSeed.makeDailyPrompt(date: dailyDate))
         self.state = OneMoreGameState(prompt: prompt)
     }
 
@@ -53,15 +56,32 @@ final class OneMoreViewModel {
         }
     }
 
-    func submitPlayer(_ player: PlayerSearchResultDTO) {
+    func submitPlayer(_ player: PlayerSearchResultDTO) async {
         guard state.phase == .playing else { return }
 
+        if state.usedPlayerIds.contains(player.id) {
+            rejectPick(player: player, reason: "Already named")
+            return
+        }
+
         state.phase = .validating
-        let result = OneMoreMatcher.validate(
-            player,
-            prompt: state.prompt,
-            usedIds: state.usedPlayerIds
-        )
+
+        var result: OneMoreValidationResult
+        if serverPrompt, let date = state.prompt.date {
+            do {
+                let outcome = try await APIClient.shared.validateOneMoreAnswer(date: date, playerId: player.id)
+                result = outcome.valid
+                    ? .valid(statValue: outcome.statValue)
+                    : .notEligible(reason: "Doesn't qualify — need \(state.prompt.minimum)+ \(state.prompt.category.label.lowercased())")
+            } catch {
+                result = OneMoreMatcher.validate(player, prompt: state.prompt, usedIds: state.usedPlayerIds)
+            }
+        } else {
+            result = OneMoreMatcher.validate(player, prompt: state.prompt, usedIds: state.usedPlayerIds)
+        }
+
+        // Phase may have changed while awaiting; only proceed if still validating this turn.
+        guard state.phase == .validating else { return }
 
         switch result {
         case .valid(let statValue):
@@ -155,8 +175,14 @@ struct OneMoreView: View {
     private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, practice: Bool = false, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: OneMoreViewModel(practice: practice, dailyDate: dailyDate))
+    init(
+        dailyDate: String? = nil,
+        serverPuzzle: OneMorePuzzleDTO? = nil,
+        practice: Bool = false,
+        allowReplay: Bool = true,
+        onComplete: @escaping () -> Void
+    ) {
+        _viewModel = State(initialValue: OneMoreViewModel(practice: practice, dailyDate: dailyDate, serverPuzzle: serverPuzzle))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete
@@ -545,7 +571,7 @@ private struct OneMoreSearchSection: View {
                     isDisabled: { viewModel.state.usedPlayerIds.contains($0.id) },
                     onSelect: { player in
                         isSearchFocused.wrappedValue = false
-                        viewModel.submitPlayer(player)
+                        Task { await viewModel.submitPlayer(player) }
                     }
                 )
             }
