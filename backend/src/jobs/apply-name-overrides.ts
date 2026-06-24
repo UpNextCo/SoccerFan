@@ -48,6 +48,8 @@ const OVERRIDES: Array<[string, string, string]> = [
   ['Emerson Leite de Souza Júnior', 'Brazil', 'Emerson Royal'],
   ['Bruno da Silva Peres', 'Brazil', 'Bruno Peres'],
   ['Sergio García de la Fuente', 'Spain', 'Sergio García'],
+  ['David Gea', 'Spain', 'David de Gea'],
+  ['Pedro Rodríguez Ledesma', 'Spain', 'Pedro'],
 ];
 
 async function main() {
