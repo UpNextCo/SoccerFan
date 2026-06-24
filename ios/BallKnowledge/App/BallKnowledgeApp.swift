@@ -21,21 +21,17 @@ struct BallKnowledgeApp: App {
 
 struct RootView: View {
     @Environment(AuthManager.self) private var auth
-    @AppStorage(UserDefaultsKeys.skippedTeamPick) private var skippedTeamPick = false
-
-    private var needsTeamPick: Bool {
-        auth.user?.favoriteTeamId == nil && !skippedTeamPick
-    }
+    @AppStorage(UserDefaultsKeys.completedPostSignInSetup) private var completedSetup = false
 
     var body: some View {
         Group {
             if auth.isLoading {
                 LaunchLoadingView()
             } else if auth.isAuthenticated {
-                if needsTeamPick {
-                    TeamPickerView(onDone: {})
-                } else {
+                if completedSetup {
                     MainTabView()
+                } else {
+                    PostSignInSetupView()
                 }
             } else if UserDefaults.standard.bool(forKey: UserDefaultsKeys.hasCompletedOnboarding) {
                 SignInOnlyView()
