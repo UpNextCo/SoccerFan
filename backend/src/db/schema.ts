@@ -42,6 +42,7 @@ export const players = pgTable(
     nationality: text('nationality').notNull(),
     position: text('position').notNull(),
     age: integer('age').notNull(),
+    birthDate: date('birth_date'),
     currentClub: text('current_club').notNull(),
     currentLeague: text('current_league').notNull(),
     shirtNumber: integer('shirt_number'),
