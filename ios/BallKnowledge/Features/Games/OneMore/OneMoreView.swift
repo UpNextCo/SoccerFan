@@ -206,7 +206,10 @@ struct OneMoreView: View {
                             )
 
                             if !viewModel.state.picks.isEmpty {
-                                OneMorePickHistory(picks: viewModel.state.picks)
+                                OneMorePickHistory(
+                                    picks: viewModel.state.picks,
+                                    statLabel: viewModel.state.prompt.category.label.lowercased()
+                                )
                             }
                         }
                         .padding(.horizontal, 16)
@@ -342,7 +345,7 @@ private struct OneMorePromptCard: View {
                     .font(BKFont.caption(11))
                     .tracking(1)
                     .foregroundStyle(BKTheme.textMuted)
-                Text("\(prompt.minimum)+ PREMIER LEAGUE GOALS")
+                Text("\(prompt.minimum)+ \(prompt.league.rawValue.uppercased()) \(prompt.category.label.uppercased())")
                     .font(BKFont.headline(18))
                     .foregroundStyle(BKTheme.textPrimary)
                     .multilineTextAlignment(.center)
@@ -442,6 +445,7 @@ private struct OneMoreScoreHero: View {
 
 private struct OneMorePickHistory: View {
     let picks: [OneMorePick]
+    var statLabel: String = "goals"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -462,7 +466,7 @@ private struct OneMorePickHistory: View {
                             .font(BKFont.headline(14))
                             .foregroundStyle(BKTheme.textPrimary)
                             .lineLimit(1)
-                        Text("\(pick.statValue) PL goals")
+                        Text("\(pick.statValue) \(statLabel)")
                             .font(BKFont.caption(10))
                             .foregroundStyle(BKTheme.textMuted)
                     }

@@ -133,7 +133,9 @@ async function ensureTowerPuzzle(date: string): Promise<void> {
   if (existing.length > 0) return;
 
   try {
-    const { puzzle } = await generateFootballTowerPuzzle(date);
+    // Fast static path here so the bundle request never blocks on the LLM. The rich
+    // Claude-curated version is produced ahead of time by `npm run job:gen-tower store`.
+    const { puzzle } = await generateFootballTowerPuzzle(date, { llm: false });
     if (puzzle.floors.length < 40) {
       console.warn(`Skipped football_tower for ${date}: only ${puzzle.floors.length} floors`);
       return;

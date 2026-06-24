@@ -68,16 +68,17 @@ function ruleConditions(rule: TowerRule) {
 
 const AGG = sql`
   WITH agg AS (
-    SELECT p.id, p.nationality, p.position,
+    SELECT p.id, p.nationality, p.position, p.market_value_tier AS mvt,
       COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_apps,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_goals,
       COALESCE(SUM(s.assists)     FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_assists,
       COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = ${UCL}), 0)::int AS ucl_apps,
-      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = ${UCL}), 0)::int AS ucl_goals
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = ${UCL}), 0)::int AS ucl_goals,
+      COALESCE(SUM(s.appearances), 0)::int AS total_apps
     FROM players p
     LEFT JOIN player_stats s ON s.player_id = p.id
     WHERE p.external_id IS NOT NULL
-    GROUP BY p.id, p.nationality, p.position
+    GROUP BY p.id, p.nationality, p.position, p.market_value_tier
   )`;
 
 /** How many players satisfy this rule (for generation solvability). */
@@ -87,11 +88,39 @@ export async function countValidPlayers(rule: TowerRule): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
+/**
+ * How many RECOGNISABLE players satisfy the rule — a far better difficulty signal than
+ * raw count. Recognisable = top market-value tier OR a big career (lots of apps), so a
+ * prompt with 500 obscure answers but few famous ones is correctly rated hard.
+ */
+export async function countFamousPlayers(rule: TowerRule): Promise<number> {
+  const conds = sql.join(ruleConditions(rule), sql` AND `);
+  const rows = (await db.execute(sql`
+    ${AGG} SELECT COUNT(*)::int AS n FROM agg a
+    WHERE ${conds} AND (a.mvt >= 4 OR a.total_apps >= 250)
+  `)) as unknown as Array<{ n: number }>;
+  return rows[0]?.n ?? 0;
+}
+
 /** Does this specific player satisfy the rule? Same SQL, filtered to one id. */
 export async function playerSatisfiesRule(playerId: string, rule: TowerRule): Promise<boolean> {
   const conds = sql.join(ruleConditions(rule), sql` AND `);
   const rows = (await db.execute(sql`${AGG} SELECT 1 FROM agg a WHERE a.id = ${playerId} AND ${conds} LIMIT 1`)) as unknown as unknown[];
   return rows.length > 0;
+}
+
+/** Up to `limit` of the most recognisable players satisfying the rule (real names,
+ *  most famous first) — used to let the LLM judge difficulty from concrete answers. */
+export async function sampleFamousPlayers(rule: TowerRule, limit = 6): Promise<string[]> {
+  const conds = sql.join(ruleConditions(rule), sql` AND `);
+  const rows = (await db.execute(sql`
+    ${AGG}
+    SELECT (SELECT name FROM players WHERE id = a.id) AS name
+    FROM agg a WHERE ${conds}
+    ORDER BY a.mvt DESC, a.total_apps DESC
+    LIMIT ${limit}
+  `)) as unknown as Array<{ name: string }>;
+  return rows.map((r) => r.name).filter(Boolean);
 }
 
 function norm(s: string): string {
@@ -106,6 +135,25 @@ export async function isPremierLeagueClub(name: string): Promise<boolean> {
     plClubCache = new Set(rows.map((r) => norm(r.team_name)));
   }
   return plClubCache.has(norm(name));
+}
+
+/** Allowed building blocks for LLM-proposed prompts: real clubs + nationalities that
+ *  have enough players to make a solvable prompt. */
+export async function towerVocab(): Promise<{ clubs: string[]; nationalities: string[] }> {
+  const clubRows = (await db.execute(sql`
+    SELECT team_name, COUNT(DISTINCT player_id)::int AS n
+    FROM player_stats
+    WHERE league_id IN (39, 140, 135, 78, 61) AND team_name IS NOT NULL
+    GROUP BY team_name HAVING COUNT(DISTINCT player_id) >= 18
+    ORDER BY n DESC LIMIT 60
+  `)) as unknown as Array<{ team_name: string; n: number }>;
+  const natRows = (await db.execute(sql`
+    SELECT nationality, COUNT(*)::int AS n
+    FROM players WHERE external_id IS NOT NULL AND nationality <> 'Unknown'
+    GROUP BY nationality HAVING COUNT(*) >= 25
+    ORDER BY n DESC LIMIT 45
+  `)) as unknown as Array<{ nationality: string; n: number }>;
+  return { clubs: clubRows.map((r) => r.team_name), nationalities: natRows.map((r) => r.nationality) };
 }
 
 let nationCache: Set<string> | null = null;

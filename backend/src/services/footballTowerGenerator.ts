@@ -10,7 +10,8 @@
  * Dry run: DATABASE_URL=... npm run job:gen-tower [date]
  */
 import 'dotenv/config';
-import { countValidPlayers, type TowerRule } from './towerRules.js';
+import { countFamousPlayers, countValidPlayers, towerVocab, type TowerRule } from './towerRules.js';
+import { proposeTowerPrompts } from './llmCuration.js';
 
 type AnswerType = 'player' | 'club' | 'country';
 type Difficulty = 'easy' | 'medium' | 'hard' | 'elite';
@@ -75,10 +76,6 @@ function difficultyForFloor(floor: number): Difficulty {
   if (floor <= 30) return 'hard';
   return 'elite';
 }
-function minFloorForDifficulty(d: Difficulty): number {
-  return d === 'easy' ? 1 : d === 'medium' ? 6 : d === 'hard' ? 16 : 31;
-}
-
 function hashStr(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i += 1) {
@@ -91,55 +88,148 @@ function hashStr(s: string): number {
 /** Minimum valid answers a template must have to be usable. */
 const MIN_VALID = 3;
 
-export async function generateFootballTowerPuzzle(date: string): Promise<{ puzzle: FootballTowerPuzzle; report: Array<{ prompt: string; valid: number }> }> {
-  // Solvability: count valid answers per player-rule template (club/country always ok).
-  const report: Array<{ prompt: string; valid: number }> = [];
-  const usable: Template[] = [];
-  for (const t of TEMPLATES) {
-    if (t.answerType === 'player') {
-      const n = await countValidPlayers(t.rule);
-      report.push({ prompt: t.prompt, valid: n });
-      if (n >= MIN_VALID) usable.push(t);
-    } else {
-      report.push({ prompt: t.prompt, valid: -1 }); // closed set, always solvable
-      usable.push(t);
+interface Candidate {
+  prompt: string;
+  answerType: AnswerType;
+  rule: TowerRule;
+  difficulty: number; // 0 (easy) → 100 (hard)
+}
+
+/** Always-easy anchors so floor 1-2 are gentle, regardless of the proposed set. */
+const CLOSED_ANCHORS: Candidate[] = [
+  { prompt: 'Name a football nation.', answerType: 'country', rule: {}, difficulty: 2 },
+  { prompt: 'Name a Premier League club.', answerType: 'club', rule: {}, difficulty: 5 },
+];
+
+export async function generateFootballTowerPuzzle(
+  date: string,
+  opts: { llm?: boolean } = {}
+): Promise<{ puzzle: FootballTowerPuzzle; report: Array<{ prompt: string; valid: number; difficulty: number }>; curated: string }> {
+  const useLlm = opts.llm ?? true;
+  const report: Array<{ prompt: string; valid: number; difficulty: number }> = [];
+  let candidates: Candidate[] = [];
+  let curated = 'data';
+
+  // 1) Preferred path: Claude proposes a varied, difficulty-spread set; we DB-verify each.
+  // Gated by `llm` so the on-demand bundle path stays fast (the slow LLM call runs in the
+  // offline pre-generation job instead).
+  const vocab = useLlm ? await towerVocab() : { clubs: [], nationalities: [] };
+  const proposals = useLlm ? await proposeTowerPrompts(vocab) : null;
+  if (proposals) {
+    const verified: Candidate[] = [];
+    const seenPrompts = new Set<string>();
+    for (const p of proposals) {
+      if (seenPrompts.has(p.prompt.toLowerCase())) continue;
+      // Our rules are AND-only; reject any "or" prompt whose wording can't match the rule.
+      if (/\bor\b/i.test(p.prompt)) continue;
+      let n = 0;
+      try {
+        n = await countValidPlayers(p.rule);
+      } catch {
+        n = 0; // malformed rule from the model — skip
+      }
+      report.push({ prompt: p.prompt, valid: n, difficulty: p.difficulty });
+      if (n >= MIN_VALID) {
+        seenPrompts.add(p.prompt.toLowerCase());
+        verified.push({ prompt: p.prompt, answerType: 'player', rule: p.rule, difficulty: p.difficulty });
+      }
+    }
+    if (verified.length >= 20) {
+      candidates = [...CLOSED_ANCHORS, ...verified];
+      curated = 'llm';
     }
   }
 
+  // 2) Fallback: static templates ordered by fame-weighted difficulty.
+  if (candidates.length === 0) {
+    const scored: Array<{ t: Template; fame: number }> = [];
+    for (const t of TEMPLATES) {
+      if (t.answerType === 'player') {
+        const n = await countValidPlayers(t.rule);
+        if (n < MIN_VALID) {
+          report.push({ prompt: t.prompt, valid: n, difficulty: 0 });
+          continue;
+        }
+        const fame = await countFamousPlayers(t.rule);
+        scored.push({ t, fame });
+      } else {
+        scored.push({ t, fame: Number.MAX_SAFE_INTEGER });
+      }
+    }
+    scored.sort((a, b) => b.fame - a.fame); // easiest (most famous answers) first
+    const n = scored.length;
+    candidates = scored.map((s, i) => ({
+      prompt: s.t.prompt,
+      answerType: s.t.answerType,
+      rule: s.t.rule,
+      difficulty: n <= 1 ? 50 : (i / (n - 1)) * 100,
+    }));
+    for (const c of candidates) report.push({ prompt: c.prompt, valid: -1, difficulty: c.difficulty });
+  }
+
+  // Order easy → hard, then walk floors 1→40 along the curve, picking from a small window
+  // for variety while avoiding any prompt used in the last few floors.
+  candidates.sort((a, b) => a.difficulty - b.difficulty);
+  const M = candidates.length;
   const floors: TowerFloor[] = [];
+  const recent: string[] = [];
+  const usedAll = new Set<string>();
+  const WIN = 5;
   for (let floor = 1; floor <= 40; floor += 1) {
-    const difficulty = difficultyForFloor(floor);
-    const cap = minFloorForDifficulty(difficulty);
-    // Prefer templates of THIS difficulty band; widen to anything <= the band only if
-    // a band has too few usable templates, so harder floors stay genuinely harder.
-    const sameBand = usable.filter((t) => t.minFloor === cap);
-    const eligible = sameBand.length >= 2 ? sameBand : usable.filter((t) => t.minFloor <= cap);
-    const pool = eligible.length > 0 ? eligible : usable;
-    const idx = hashStr(`${date}:tower:${floor}`) % pool.length;
-    const t = pool[idx]!;
-    floors.push({ floor, difficulty, prompt: t.prompt, answerType: t.answerType, rule: t.rule });
+    const center = M <= 1 ? 0 : Math.round(((floor - 1) / 39) * (M - 1));
+    // Keep a constant-width window even at the edges (so the top floors still have a
+    // choice and don't repeat), shifting it inward rather than shrinking it.
+    let lo = center - Math.floor(WIN / 2);
+    let hi = lo + WIN - 1;
+    if (lo < 0) { hi -= lo; lo = 0; }
+    if (hi > M - 1) { lo -= hi - (M - 1); hi = M - 1; }
+    lo = Math.max(0, lo);
+    const window: number[] = [];
+    for (let i = lo; i <= hi; i += 1) window.push(i);
+    // Prefer a prompt never used yet (we have more candidates than floors), then one not
+    // used recently, then anything in the window — so repeats are essentially eliminated.
+    let pickPool = window.filter((i) => !usedAll.has(candidates[i]!.prompt));
+    if (pickPool.length === 0) pickPool = window.filter((i) => !recent.includes(candidates[i]!.prompt));
+    if (pickPool.length === 0) pickPool = window;
+    const pickIdx = pickPool[hashStr(`${date}:tower:${floor}`) % pickPool.length]!;
+    const c = candidates[pickIdx]!;
+    usedAll.add(c.prompt);
+    recent.push(c.prompt);
+    if (recent.length > 5) recent.shift();
+    floors.push({ floor, difficulty: difficultyForFloor(floor), prompt: c.prompt, answerType: c.answerType, rule: c.rule });
   }
 
   return {
     puzzle: { modeId: 'football_tower', puzzleId: `${date}-football_tower`, date, title: 'Daily Football Tower', floors },
     report,
+    curated,
   };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const date = process.argv[2] ?? new Date().toISOString().slice(0, 10);
+  const args = process.argv.slice(2);
+  const store = args.includes('store');
+  const date = args.find((a) => /^\d{4}-\d{2}-\d{2}$/.test(a)) ?? new Date().toISOString().slice(0, 10);
   generateFootballTowerPuzzle(date)
-    .then(({ puzzle, report }) => {
-      console.log(`\n=== FOOTBALL TOWER ${date} — ${puzzle.floors.length} floors ===\n`);
-      console.log('Template solvability (valid answers in DB):');
-      for (const r of report.sort((a, b) => a.valid - b.valid)) {
-        const flag = r.valid === -1 ? '🔵 closed' : r.valid < MIN_VALID ? '❌ DROPPED' : r.valid < 10 ? '⚠️  thin' : '✅';
-        console.log(`  ${flag.padEnd(10)} ${String(r.valid === -1 ? '' : r.valid).padStart(5)}  ${r.prompt}`);
+    .then(async ({ puzzle, report, curated }) => {
+      if (store) {
+        const { db } = await import('../db/index.js');
+        const { dailyPuzzles } = await import('../db/schema.js');
+        const { and, eq } = await import('drizzle-orm');
+        await db.delete(dailyPuzzles).where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_tower')));
+        await db.insert(dailyPuzzles).values({ date, modeId: 'football_tower', puzzleJson: puzzle, answerPlayerId: null, answerJson: null });
+        console.log(`\n💾 Stored ${curated.toUpperCase()} tower for ${date}.`);
       }
-      console.log('\nSample floors:');
-      for (const f of [1, 6, 16, 31, 40]) {
-        const fl = puzzle.floors[f - 1]!;
-        console.log(`  Floor ${f} [${fl.difficulty}] ${fl.prompt}`);
+      console.log(`\n=== FOOTBALL TOWER ${date} — ${puzzle.floors.length} floors · ordering: ${curated.toUpperCase()} ===\n`);
+      console.log('Proposed prompts (Claude difficulty · verified answers):');
+      for (const r of report.sort((a, b) => a.difficulty - b.difficulty)) {
+        const flag = r.valid >= 0 && r.valid < MIN_VALID ? '❌ unsolvable' : r.difficulty >= 70 ? '🔴 hard' : r.difficulty >= 40 ? '🟠 med' : '🟢 easy';
+        const validStr = r.valid < 0 ? '   —' : String(r.valid).padStart(4);
+        console.log(`  ${flag.padEnd(13)} diff ${String(Math.round(r.difficulty)).padStart(3)} · answers ${validStr}  ${r.prompt}`);
+      }
+      console.log('\nFull floor ramp:');
+      for (const fl of puzzle.floors) {
+        console.log(`  ${String(fl.floor).padStart(2)} [${fl.difficulty.padEnd(6)}] ${fl.prompt}`);
       }
       process.exit(0);
     })

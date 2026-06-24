@@ -16,6 +16,7 @@
     "job:generate-daily": "tsx src/jobs/generate-daily.ts",
     "job:gen-bingo": "tsx src/services/footballBingoGenerator.ts",
     "job:gen-tower": "tsx src/services/footballTowerGenerator.ts",
+    "job:tower-daily": "tsx src/services/footballTowerGenerator.ts store",
     "job:gen-onemore": "tsx src/services/oneMoreGenerator.ts",
     "job:ingest-players": "tsx src/jobs/ingest-players.ts",
     "job:ingest-stats": "tsx src/jobs/ingest-stats.ts",
@@ -46,6 +47,7 @@
     "job:audit-quality": "tsx src/jobs/audit-quality.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
     "apple-signin-auth": "^1.7.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
