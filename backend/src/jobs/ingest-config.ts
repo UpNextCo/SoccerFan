@@ -30,7 +30,14 @@ export const INGEST_LEAGUES = [
   { id: 61, name: 'Ligue 1' },
 ] as const;
 
-export type IngestLeague = (typeof INGEST_LEAGUES)[number];
+export type IngestLeague = { id: number; name: string };
+
+/** Continental cups — ingested for stats only (NOT part of the domestic-league
+ *  rotation used by generators / loadIngestPlayers). Target via INGEST_LEAGUE_IDS. */
+export const CUP_COMPETITIONS: IngestLeague[] = [
+  { id: 2, name: 'UEFA Champions League' },
+  { id: 3, name: 'UEFA Europa League' },
+];
 
 export function resolveIngestLeagues(): IngestLeague[] {
   const raw = process.env.INGEST_LEAGUE_IDS?.trim();
@@ -52,6 +59,34 @@ export function resolveIngestLeagues(): IngestLeague[] {
   }
 
   return [...picked];
+}
+
+/**
+ * Competitions to ingest STATS for. Defaults to the domestic big-5, but
+ * INGEST_LEAGUE_IDS may also select continental cups (2 = UCL, 3 = Europa),
+ * e.g. INGEST_LEAGUE_IDS=2,3 npm run job:ingest-stats.
+ */
+export function resolveStatsCompetitions(): IngestLeague[] {
+  const raw = process.env.INGEST_LEAGUE_IDS?.trim();
+  if (!raw) return [...INGEST_LEAGUES];
+
+  const all: IngestLeague[] = [...INGEST_LEAGUES, ...CUP_COMPETITIONS];
+  const tokens = raw.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+  const picked = all.filter((comp) =>
+    tokens.some(
+      (token) =>
+        token === String(comp.id) ||
+        comp.name.toLowerCase() === token ||
+        comp.name.toLowerCase().includes(token)
+    )
+  );
+
+  if (picked.length === 0) {
+    const available = all.map((c) => `${c.id}=${c.name}`).join(', ');
+    throw new Error(`INGEST_LEAGUE_IDS matched no competitions. Available: ${available}`);
+  }
+
+  return picked;
 }
 
 /** How many past seasons of stats to pull (default 2 = ~2024 + 2025). */

@@ -3,7 +3,7 @@
  * Usage: INGEST_LEAGUE_IDS=39 INGEST_SEASONS_BACK=2 npm run job:ingest-stats
  */
 import 'dotenv/config';
-import { resolveIngestLeagues, resolveIngestSeasonsBack } from './ingest-config.js';
+import { resolveStatsCompetitions, resolveIngestSeasonsBack } from './ingest-config.js';
 import { fetchFootballApi, footballApiUrl } from './ingest-api.js';
 import { beginIngestRun, finishIngestRun } from './ingest-run.js';
 import { loadExternalIdMap } from './ingest-player-map.js';
@@ -127,7 +127,7 @@ export async function runIngestStats(): Promise<number> {
   let total = 0;
 
   try {
-    const leagues = resolveIngestLeagues();
+    const leagues = resolveStatsCompetitions();
     const seasons = resolveIngestSeasonsBack();
     const playerMap = await loadExternalIdMap();
 

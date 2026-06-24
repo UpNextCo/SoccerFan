@@ -222,6 +222,70 @@ async function main() {
   console.log(`⏸  Football Golf   uses general data — fine once above are ready`);
   console.log(`⛔ World Cup XI    blocked — needs international squad data (not ingested)`);
 
+  // ---------- PRE-2010 (FBref) COVERAGE ----------
+  const histSummary = await rows<{
+    league_name: string;
+    seasons: number;
+    min_s: number;
+    max_s: number;
+    players: number;
+    rows: number;
+  }>(sql`
+    SELECT league_name,
+           COUNT(DISTINCT season)::int AS seasons,
+           MIN(season)::int AS min_s,
+           MAX(season)::int AS max_s,
+           COUNT(DISTINCT player_id)::int AS players,
+           COUNT(*)::int AS rows
+    FROM player_stats
+    WHERE season < 2010
+    GROUP BY league_name
+    ORDER BY league_name
+  `);
+
+  console.log('\n── PRE-2010 COVERAGE (FBref backfill) ──────────');
+  if (histSummary.length === 0) {
+    console.log('No pre-2010 stats yet — run the FBref backfill + job:import-fbref.');
+  } else {
+    for (const r of histSummary) {
+      console.log(
+        `   ${r.league_name.padEnd(15)} ${r.seasons} seasons (${r.min_s}–${r.max_s}) · ${r.players} players · ${r.rows} rows`
+      );
+    }
+
+    const missing = await rows<{ league_name: string; season: number }>(sql`
+      WITH expected AS (
+        SELECT l.league_name, s.season
+        FROM (VALUES ('Premier League'), ('La Liga'), ('Serie A'), ('Bundesliga'), ('Ligue 1')) AS l(league_name)
+        CROSS JOIN generate_series(1995, 2009) AS s(season)
+      ),
+      present AS (
+        SELECT DISTINCT league_name, season FROM player_stats WHERE season < 2010
+      )
+      SELECT e.league_name, e.season
+      FROM expected e
+      LEFT JOIN present p ON p.league_name = e.league_name AND p.season = e.season
+      WHERE p.season IS NULL
+      ORDER BY e.league_name, e.season
+    `);
+
+    if (missing.length === 0) {
+      console.log('   ✅ All 1995–2009 league-seasons present.');
+    } else {
+      const byLeague = new Map<string, number[]>();
+      for (const m of missing) {
+        const list = byLeague.get(m.league_name) ?? [];
+        list.push(m.season);
+        byLeague.set(m.league_name, list);
+      }
+      console.log(`   Missing ${missing.length} league-seasons (1995–2009):`);
+      for (const [league, seasons] of byLeague) {
+        console.log(`     ${league.padEnd(15)} ${seasons.join(', ')}`);
+      }
+      console.log('   (re-run scraper for retry-able gaps; pre-2000 non-English likely absent on FBref)');
+    }
+  }
+
   // ---------- TODAY'S PUZZLES ----------
   const today = new Date().toISOString().slice(0, 10);
   const puzzles = await rows<{ mode_id: string }>(sql`

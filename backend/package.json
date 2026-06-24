@@ -24,9 +24,13 @@
     "job:ingest-stats-all": "tsx src/jobs/ingest-stats-all.ts",
     "job:refresh-player-search": "tsx src/jobs/refresh-player-search.ts",
     "job:market-value": "tsx src/jobs/compute-market-value.ts",
+    "job:import-fbref": "tsx src/jobs/import-fbref.ts",
+    "job:reconcile-players": "tsx src/jobs/reconcile-players.ts",
+    "job:import-transfermarkt": "tsx src/jobs/import-transfermarkt.ts",
     "job:audit-coverage": "tsx src/jobs/audit-coverage.ts",
     "job:audit-extended": "tsx src/jobs/audit-extended.ts",
-    "job:audit-readiness": "tsx src/jobs/audit-readiness.ts"
+    "job:audit-readiness": "tsx src/jobs/audit-readiness.ts",
+    "job:audit-quality": "tsx src/jobs/audit-quality.ts"
   },
   "dependencies": {
     "apple-signin-auth": "^1.7.6",
