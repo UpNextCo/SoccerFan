@@ -12,6 +12,26 @@ enum FootballTowerSeed {
         return buildTower(seed: seed, dateKey: "free", count: 40)
     }
 
+    /// Build the daily tower from server-generated floors (answers validated server-side).
+    static func makeServerTower(floors: [FootballTowerFloorDTO]) -> [FootballTowerQuestion] {
+        floors
+            .sorted { $0.floor < $1.floor }
+            .map { f in
+                let type = FootballTowerAnswerType(rawValue: f.answerType) ?? .player
+                // Rule is server-authoritative; this local value is only a placeholder
+                // for the (unused) client validator fallback.
+                let rule: FootballTowerRule = type == .club ? .plClub : (type == .country ? .country : .plPlayer)
+                return FootballTowerQuestion(
+                    id: "ftq_srv_\(f.floor)",
+                    floor: f.floor,
+                    difficulty: FootballTowerDifficulty(rawValue: f.difficulty) ?? .easy,
+                    prompt: f.prompt,
+                    answerType: type,
+                    rule: rule
+                )
+            }
+    }
+
     static func resultSummary(
         state: FootballTowerGameState,
         standout: String?
@@ -195,7 +215,8 @@ enum FootballTowerSearch {
                 let players = try await APIClient.shared.searchPlayers(query: trimmed)
             return players.map { player in
                     FootballTowerSuggestion(
-                        id: FootballTowerValidator.answerId(for: player.name, type: .player),
+                        // Real player UUID so the server can validate the answer.
+                        id: player.id,
                         name: player.name,
                         subtitle: "\(player.club) · \(player.nationality)",
                         nationality: player.nationality,

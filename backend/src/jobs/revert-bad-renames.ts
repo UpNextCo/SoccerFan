@@ -48,7 +48,12 @@ async function main() {
   const fixes: Fix[] = [];
 
   for (const p of rows) {
-    if (p.apps >= PROMINENT_APPS) continue; // trust prominent matches
+    const tokenCount = p.name.trim().split(/\s+/).filter(Boolean).length;
+    // A prominent SINGLE-token name is a legit nickname (Isco, Koke, Pepe) — keep it.
+    // A prominent MULTI-token name that shares no token with the player's aliases is a
+    // different real player's name landed here by a bad DOB match ("Andrea Pirlo" on
+    // Forlán's row) — revert it. Non-prominent rows are always eligible.
+    if (p.apps >= PROMINENT_APPS && tokenCount === 1) continue;
     const aliases = Array.isArray(p.aliases) ? p.aliases : [];
     const nameToks = new Set(tokenize(p.name));
     if (nameToks.size === 0) continue;

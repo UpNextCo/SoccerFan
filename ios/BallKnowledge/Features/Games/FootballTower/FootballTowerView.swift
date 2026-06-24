@@ -18,8 +18,16 @@ final class FootballTowerViewModel {
     var feedbackMessage: String?
     var isSuccessFeedback = false
 
+    private let serverFloors: [FootballTowerFloorDTO]?
+    private let serverDate: String?
+
+    init(serverPuzzle: FootballTowerPuzzleDTO? = nil) {
+        serverFloors = serverPuzzle?.floors
+        serverDate = serverPuzzle?.date
+    }
+
     private var todayDate: String {
-        String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        serverDate ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
     }
 
     var dailyBestFloor: Int? {
@@ -31,7 +39,12 @@ final class FootballTowerViewModel {
     }
 
     func startDaily() {
-        let questions = FootballTowerSeed.makeDailyTower(date: todayDate)
+        let questions: [FootballTowerQuestion]
+        if let floors = serverFloors, !floors.isEmpty {
+            questions = FootballTowerSeed.makeServerTower(floors: floors)
+        } else {
+            questions = FootballTowerSeed.makeDailyTower(date: todayDate)
+        }
         state = FootballTowerGameState(mode: .daily, date: todayDate, questions: questions)
         resetSearch()
     }
@@ -60,20 +73,40 @@ final class FootballTowerViewModel {
         searchResults = await FootballTowerSearch.search(query: query, question: question)
     }
 
-    func submit(_ suggestion: FootballTowerSuggestion) {
-        guard var run = state,
-              let question = run.currentQuestion,
-              run.phase == .playing else { return }
+    func submit(_ suggestion: FootballTowerSuggestion) async {
+        guard let run0 = state,
+              let question = run0.currentQuestion,
+              run0.phase == .playing,
+              !run0.usedAnswerIds.contains(suggestion.id) else { return }
 
-        let isCorrect = FootballTowerValidator.validate(
-            answerId: suggestion.id,
-            answerName: suggestion.name,
-            question: question,
-            usedIds: run.usedAnswerIds,
-            nationality: suggestion.nationality,
-            league: suggestion.league,
-            position: suggestion.position
-        )
+        let floor = run0.currentFloor
+        let date = run0.date
+        // Players validate by UUID; clubs/countries by name (server is authoritative).
+        let value = question.answerType == .player ? suggestion.id : suggestion.name
+
+        var isCorrect: Bool
+        do {
+            isCorrect = try await APIClient.shared.validateTowerAnswer(
+                date: date,
+                floor: floor,
+                answerType: question.answerType.rawValue,
+                value: value
+            )
+        } catch {
+            // Offline fallback: best-effort local check against the searched player's data.
+            isCorrect = FootballTowerValidator.validate(
+                answerId: suggestion.id,
+                answerName: suggestion.name,
+                question: question,
+                usedIds: run0.usedAnswerIds,
+                nationality: suggestion.nationality,
+                league: suggestion.league,
+                position: suggestion.position
+            )
+        }
+
+        // Re-read state; the floor must be unchanged since we started awaiting.
+        guard var run = state, run.phase == .playing, run.currentFloor == floor else { return }
 
         run.usedAnswerIds.insert(suggestion.id)
         run.answers.append(
@@ -165,11 +198,23 @@ final class FootballTowerViewModel {
 struct FootballTowerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = FootballTowerViewModel()
+    @State private var viewModel: FootballTowerViewModel
     @FocusState private var isSearchFocused: Bool
-    var dailyOnly: Bool = false
-    var allowReplay: Bool = true
+    private let dailyOnly: Bool
+    private let allowReplay: Bool
     var onComplete: () -> Void
+
+    init(
+        dailyOnly: Bool = false,
+        serverPuzzle: FootballTowerPuzzleDTO? = nil,
+        allowReplay: Bool = true,
+        onComplete: @escaping () -> Void
+    ) {
+        _viewModel = State(initialValue: FootballTowerViewModel(serverPuzzle: serverPuzzle))
+        self.dailyOnly = dailyOnly
+        self.allowReplay = allowReplay
+        self.onComplete = onComplete
+    }
 
     var body: some View {
         ZStack {
@@ -592,7 +637,7 @@ private struct FootballTowerSearchSection: View {
                     ForEach(viewModel.searchResults) { suggestion in
                         Button {
                             isSearchFocused.wrappedValue = false
-                            viewModel.submit(suggestion)
+                            Task { await viewModel.submit(suggestion) }
                         } label: {
                             SearchSuggestionRow(
                                 title: suggestion.name,

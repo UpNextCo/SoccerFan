@@ -15,6 +15,7 @@
     "db:seed": "tsx src/db/seed-cli.ts",
     "job:generate-daily": "tsx src/jobs/generate-daily.ts",
     "job:gen-bingo": "tsx src/services/footballBingoGenerator.ts",
+    "job:gen-tower": "tsx src/services/footballTowerGenerator.ts",
     "job:ingest-players": "tsx src/jobs/ingest-players.ts",
     "job:ingest-stats": "tsx src/jobs/ingest-stats.ts",
     "job:ingest-stats-gap": "tsx src/jobs/ingest-stats-gap.ts",

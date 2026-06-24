@@ -682,7 +682,12 @@ struct DailyGameHost: View {
             case .footballGolf:
                 FootballGolfView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
             case .footballTower:
-                FootballTowerView(dailyOnly: true, allowReplay: allowReplay, onComplete: onFinished)
+                FootballTowerView(
+                    dailyOnly: true,
+                    serverPuzzle: dailyBundle?.footballTowerPuzzle,
+                    allowReplay: allowReplay,
+                    onComplete: onFinished
+                )
             case .worldCupXI:
                 WorldCupXIView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
             }

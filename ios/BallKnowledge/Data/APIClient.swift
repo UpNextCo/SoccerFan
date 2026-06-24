@@ -110,6 +110,22 @@ actor APIClient {
         try await request("daily/guess", method: "POST", body: body)
     }
 
+    func validateTowerAnswer(date: String, floor: Int, answerType: String, value: String) async throws -> Bool {
+        struct Body: Encodable {
+            let date: String
+            let floor: Int
+            let answerType: String
+            let value: String
+        }
+        struct Resp: Decodable { let correct: Bool }
+        let resp: Resp = try await request(
+            "daily/tower/validate",
+            method: "POST",
+            body: Body(date: date, floor: floor, answerType: answerType, value: value)
+        )
+        return resp.correct
+    }
+
     func searchPlayers(query: String) async throws -> [PlayerSearchResultDTO] {
         try await request(
             "players/search",

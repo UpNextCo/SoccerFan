@@ -6,6 +6,8 @@ import { getPlayerById } from './playerService.js';
 import { ensureWeeklyMembership, recordXp, weekStartFor } from './leagueService.js';
 import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
+import { generateFootballTowerPuzzle, type TowerFloor } from './footballTowerGenerator.js';
+import { isFootballNation, isPremierLeagueClub, playerSatisfiesRule } from './towerRules.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
 const GAME_MODES = [
@@ -32,6 +34,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'target_man', title: 'TARGET MAN' },
   { modeId: 'blind_rank', title: 'BLIND RANK' },
   { modeId: 'football_bingo', title: 'FOOTBALL BINGO' },
+  { modeId: 'football_tower', title: 'FOOTBALL TOWER' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -118,6 +121,31 @@ async function ensureBingoPuzzle(date: string): Promise<void> {
   }
 }
 
+/** Generate + store today's Football Tower if not present. Best-effort. */
+async function ensureTowerPuzzle(date: string): Promise<void> {
+  const existing = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_tower')))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  try {
+    const { puzzle } = await generateFootballTowerPuzzle(date);
+    if (puzzle.floors.length < 40) {
+      console.warn(`Skipped football_tower for ${date}: only ${puzzle.floors.length} floors`);
+      return;
+    }
+    await db
+      .insert(dailyPuzzles)
+      .values({ date, modeId: 'football_tower', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
+      .onConflictDoNothing();
+    console.log(`Generated football_tower puzzle for ${date}`);
+  } catch (error) {
+    console.warn(`Skipped football_tower for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 async function ensureDailyPuzzles(date: string): Promise<void> {
   const rows = await db
     .select({ modeId: dailyPuzzles.modeId })
@@ -133,6 +161,30 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   if (!existing.has('football_bingo')) {
     await ensureBingoPuzzle(date);
   }
+  if (!existing.has('football_tower')) {
+    await ensureTowerPuzzle(date);
+  }
+}
+
+/** Validate a Football Tower answer against the stored floor's rule. Authoritative. */
+export async function validateTowerAnswer(
+  date: string,
+  floor: number,
+  answerType: 'player' | 'club' | 'country',
+  value: string
+): Promise<boolean> {
+  const rows = await db
+    .select()
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_tower')))
+    .limit(1);
+  const puzzle = rows[0]?.puzzleJson as { floors?: TowerFloor[] } | undefined;
+  const floorDef = puzzle?.floors?.find((f) => f.floor === floor);
+  if (!floorDef) throw new Error('Tower floor not found');
+
+  if (answerType === 'club') return isPremierLeagueClub(value);
+  if (answerType === 'country') return isFootballNation(value);
+  return playerSatisfiesRule(value, floorDef.rule);
 }
 
 export async function getDailyPuzzle(date: string, modeId: string) {

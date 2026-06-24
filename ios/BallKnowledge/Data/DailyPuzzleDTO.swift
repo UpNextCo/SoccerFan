@@ -61,11 +61,27 @@ struct FootballBingoPuzzleDTO: Codable, Equatable {
     let players: [FootballBingoPlayerDTO]
 }
 
+struct FootballTowerFloorDTO: Codable, Equatable {
+    let floor: Int
+    let difficulty: String
+    let prompt: String
+    let answerType: String
+}
+
+struct FootballTowerPuzzleDTO: Codable, Equatable {
+    let modeId: String
+    let puzzleId: String
+    let date: String
+    let title: String
+    let floors: [FootballTowerFloorDTO]
+}
+
 enum DailyPuzzleDTO: Codable, Equatable {
     case guessWho(GuessWhoPuzzleDTO)
     case targetMan(TargetManPuzzleDTO)
     case blindRank(BlindRankPuzzleDTO)
     case footballBingo(FootballBingoPuzzleDTO)
+    case footballTower(FootballTowerPuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
         case modeId
@@ -84,6 +100,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .blindRank(try BlindRankPuzzleDTO(from: decoder))
         case GameModeID.footballBingo.rawValue:
             self = .footballBingo(try FootballBingoPuzzleDTO(from: decoder))
+        case GameModeID.footballTower.rawValue:
+            self = .footballTower(try FootballTowerPuzzleDTO(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .modeId,
@@ -103,6 +121,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .footballBingo(let puzzle):
             try puzzle.encode(to: encoder)
+        case .footballTower(let puzzle):
+            try puzzle.encode(to: encoder)
         }
     }
 
@@ -112,6 +132,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .targetMan: return GameModeID.targetMan.rawValue
         case .blindRank: return GameModeID.blindRank.rawValue
         case .footballBingo: return GameModeID.footballBingo.rawValue
+        case .footballTower: return GameModeID.footballTower.rawValue
         }
     }
 }
@@ -179,6 +200,11 @@ extension DailyBundleDTO {
 
     var footballBingoPuzzle: FootballBingoPuzzleDTO? {
         guard case .footballBingo(let puzzle) = game(for: .footballBingo)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var footballTowerPuzzle: FootballTowerPuzzleDTO? {
+        guard case .footballTower(let puzzle) = game(for: .footballTower)?.puzzle else { return nil }
         return puzzle
     }
 }

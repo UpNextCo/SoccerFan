@@ -90,11 +90,26 @@ export interface FootballBingoPuzzlePublic {
   }>;
 }
 
+export interface FootballTowerPuzzlePublic {
+  modeId: 'football_tower';
+  puzzleId: string;
+  date: string;
+  title: string;
+  floors: Array<{
+    floor: number;
+    difficulty: string;
+    prompt: string;
+    answerType: string;
+    rule: Record<string, unknown>;
+  }>;
+}
+
 export type DailyPuzzlePublic =
   | GuessWhoPuzzlePublic
   | TargetManPuzzlePublic
   | BlindRankPuzzlePublic
-  | FootballBingoPuzzlePublic;
+  | FootballBingoPuzzlePublic
+  | FootballTowerPuzzlePublic;
 
 export interface GuessFeedbackField {
   field: string;

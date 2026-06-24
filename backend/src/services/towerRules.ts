@@ -1,0 +1,119 @@
+/**
+ * Football Tower rule engine. A rule is a small machine-readable object; the SAME
+ * SQL drives both generation-solvability (how many players satisfy it) and answer
+ * validation (does THIS player satisfy it), so the two can never disagree.
+ *
+ * All club / nationality / league strings are the CANONICAL values produced by the
+ * data-consolidation jobs (e.g. "Bayern München", "Manchester United").
+ */
+import { sql } from 'drizzle-orm';
+import { db } from '../db/index.js';
+
+export interface TowerRule {
+  nationality?: string;
+  nonEuropean?: boolean;
+  position?: 'Goalkeeper' | 'Defender';
+  leaguePlayed?: string;
+  playedFor?: string[];
+  minPlApps?: number;
+  minPlAssists?: number;
+  minPlGoals?: number;
+  uclWinner?: boolean;
+  minUclGoals?: number;
+  minUclApps?: number;
+}
+
+/** Canonical European nationalities (for the "non-European" elite rule). */
+const EUROPE = new Set(
+  [
+    'England', 'Scotland', 'Wales', 'Northern Ireland', 'Republic of Ireland', 'Ireland',
+    'France', 'Germany', 'Spain', 'Italy', 'Netherlands', 'Portugal', 'Belgium', 'Switzerland',
+    'Austria', 'Poland', 'Czech Republic', 'Czechia', 'Denmark', 'Sweden', 'Norway', 'Finland',
+    'Iceland', 'Greece', 'Turkey', 'Russia', 'Ukraine', 'Romania', 'Hungary', 'Bulgaria',
+    'Croatia', 'Serbia', 'Slovakia', 'Slovenia', 'Bosnia and Herzegovina', 'Montenegro',
+    'North Macedonia', 'Macedonia', 'Albania', 'Kosovo', 'Belarus', 'Lithuania', 'Latvia',
+    'Estonia', 'Luxembourg', 'Malta', 'Cyprus', 'Georgia', 'Armenia', 'Moldova', 'Andorra',
+    'Faroe Islands', 'Gibraltar', 'San Marino', 'Liechtenstein',
+  ].map((n) => n.toLowerCase())
+);
+
+const PL = 39;
+const UCL = 2;
+
+/** SQL WHERE fragments for a rule, operating on CTE alias `a` (id, nationality, position, pl_*, ucl_*). */
+function ruleConditions(rule: TowerRule) {
+  const c = [] as ReturnType<typeof sql>[];
+  if (rule.nationality) c.push(sql`lower(a.nationality) = ${rule.nationality.toLowerCase()}`);
+  if (rule.nonEuropean) {
+    const list = sql.join([...EUROPE].map((n) => sql`${n}`), sql`, `);
+    c.push(sql`lower(a.nationality) NOT IN (${list})`);
+  }
+  if (rule.position) c.push(sql`a.position = ${rule.position}`);
+  if (typeof rule.minPlApps === 'number') c.push(sql`a.pl_apps >= ${rule.minPlApps}`);
+  if (typeof rule.minPlGoals === 'number') c.push(sql`a.pl_goals >= ${rule.minPlGoals}`);
+  if (typeof rule.minPlAssists === 'number') c.push(sql`a.pl_assists >= ${rule.minPlAssists}`);
+  if (typeof rule.minUclGoals === 'number') c.push(sql`a.ucl_goals >= ${rule.minUclGoals}`);
+  if (typeof rule.minUclApps === 'number') c.push(sql`a.ucl_apps >= ${rule.minUclApps}`);
+  if (rule.leaguePlayed) {
+    c.push(sql`EXISTS (SELECT 1 FROM player_stats s2 WHERE s2.player_id = a.id AND s2.league_name = ${rule.leaguePlayed} AND s2.appearances > 0)`);
+  }
+  for (const club of rule.playedFor ?? []) {
+    c.push(sql`EXISTS (SELECT 1 FROM player_stats s2 WHERE s2.player_id = a.id AND s2.team_name = ${club})`);
+  }
+  if (rule.uclWinner) {
+    c.push(sql`EXISTS (SELECT 1 FROM player_honours h WHERE h.player_id = a.id AND h.competition ILIKE '%champions league%' AND h.placement ILIKE '%winner%')`);
+  }
+  return c.length ? c : [sql`TRUE`];
+}
+
+const AGG = sql`
+  WITH agg AS (
+    SELECT p.id, p.nationality, p.position,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_apps,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_goals,
+      COALESCE(SUM(s.assists)     FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_assists,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = ${UCL}), 0)::int AS ucl_apps,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = ${UCL}), 0)::int AS ucl_goals
+    FROM players p
+    LEFT JOIN player_stats s ON s.player_id = p.id
+    WHERE p.external_id IS NOT NULL
+    GROUP BY p.id, p.nationality, p.position
+  )`;
+
+/** How many players satisfy this rule (for generation solvability). */
+export async function countValidPlayers(rule: TowerRule): Promise<number> {
+  const conds = sql.join(ruleConditions(rule), sql` AND `);
+  const rows = (await db.execute(sql`${AGG} SELECT COUNT(*)::int AS n FROM agg a WHERE ${conds}`)) as unknown as Array<{ n: number }>;
+  return rows[0]?.n ?? 0;
+}
+
+/** Does this specific player satisfy the rule? Same SQL, filtered to one id. */
+export async function playerSatisfiesRule(playerId: string, rule: TowerRule): Promise<boolean> {
+  const conds = sql.join(ruleConditions(rule), sql` AND `);
+  const rows = (await db.execute(sql`${AGG} SELECT 1 FROM agg a WHERE a.id = ${playerId} AND ${conds} LIMIT 1`)) as unknown as unknown[];
+  return rows.length > 0;
+}
+
+function norm(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+let plClubCache: Set<string> | null = null;
+/** Any club that has appeared in the Premier League (ever). */
+export async function isPremierLeagueClub(name: string): Promise<boolean> {
+  if (!plClubCache) {
+    const rows = (await db.execute(sql`SELECT DISTINCT team_name FROM player_stats WHERE league_id = ${PL} AND team_name IS NOT NULL`)) as unknown as Array<{ team_name: string }>;
+    plClubCache = new Set(rows.map((r) => norm(r.team_name)));
+  }
+  return plClubCache.has(norm(name));
+}
+
+let nationCache: Set<string> | null = null;
+/** A recognised football nation (any canonical nationality we hold). */
+export async function isFootballNation(name: string): Promise<boolean> {
+  if (!nationCache) {
+    const rows = (await db.execute(sql`SELECT DISTINCT nationality FROM players WHERE nationality IS NOT NULL AND nationality <> 'Unknown'`)) as unknown as Array<{ nationality: string }>;
+    nationCache = new Set(rows.map((r) => norm(r.nationality)));
+  }
+  return nationCache.has(norm(name));
+}

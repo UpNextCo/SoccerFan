@@ -163,14 +163,13 @@ async function main() {
     const best = ranked[0];
     const uniqueBest = best && (ranked.length === 1 || best.s > ranked[1]!.s);
 
-    let pick: TmRow | undefined;
-    if (best && best.s >= 1 && uniqueBest) {
-      // Shared name token + clear winner — safe for anyone.
-      pick = best.c;
-    } else if (prominent && natMatches.length === 1) {
-      // Famous player, unique DOB+nationality hit — trust even with no shared token.
-      pick = natMatches[0];
-    }
+    // Require a shared name token + clear winner. The "prominent + unique DOB+nat with
+    // NO shared token" path was tried and produced ~47% false matches (API vs TM
+    // birthdate discrepancies put a different same-DOB player on the row), so it's
+    // disabled. True nickname fixes with no shared token (Isco) are handled by the
+    // curated apply-name-overrides list instead.
+    void prominent;
+    const pick: TmRow | undefined = best && best.s >= 1 && uniqueBest ? best.c : undefined;
     if (!pick) continue;
     matched += 1;
 
