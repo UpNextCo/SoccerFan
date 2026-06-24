@@ -14,6 +14,8 @@ ios/*.xcodeproj/xcuserdata/
 ios/DerivedData/
 ios/.derivedData/
 data/transfermarkt/
+backend/transferdata/
+backend/data/
 fbref_backfill.json
 fbref_ucl_backfill.json
 fbref_cl_backfill.json
