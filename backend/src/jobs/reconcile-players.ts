@@ -161,6 +161,7 @@ async function main() {
         await tx.execute(sql`UPDATE player_career SET player_id = ${m.api.id} WHERE player_id = ${m.fromId}`);
         await tx.execute(sql`UPDATE player_honours SET player_id = ${m.api.id} WHERE player_id = ${m.fromId}`);
         await tx.execute(sql`UPDATE player_transfers SET player_id = ${m.api.id} WHERE player_id = ${m.fromId}`);
+        await tx.execute(sql`UPDATE daily_puzzles SET answer_player_id = ${m.api.id} WHERE answer_player_id = ${m.fromId}`);
         await tx.execute(sql`DELETE FROM players WHERE id = ${m.fromId}`);
         await tx.execute(sql`
           UPDATE players

@@ -27,6 +27,7 @@
     "job:import-fbref": "tsx src/jobs/import-fbref.ts",
     "job:reconcile-players": "tsx src/jobs/reconcile-players.ts",
     "job:import-transfermarkt": "tsx src/jobs/import-transfermarkt.ts",
+    "job:dedupe-players": "tsx src/jobs/dedupe-players.ts",
     "job:audit-coverage": "tsx src/jobs/audit-coverage.ts",
     "job:audit-extended": "tsx src/jobs/audit-extended.ts",
     "job:audit-readiness": "tsx src/jobs/audit-readiness.ts",
