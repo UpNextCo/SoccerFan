@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import { resolveIngestLeagues, resolveIngestSeason } from './ingest-config.js';
 import { players } from '../db/schema.js';
 import { db } from '../db/index.js';
+import { canonicalNationality } from '../utils/nationality.js';
 import {
   buildPlayerSearchFields,
   isAbbreviatedName,
@@ -68,8 +69,7 @@ function mapPosition(pos: string | null | undefined): string {
 }
 
 function normalizeNationality(value: string | null | undefined): string {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : 'Unknown';
+  return canonicalNationality(value);
 }
 
 function normalizeAge(value: number | null | undefined): number {

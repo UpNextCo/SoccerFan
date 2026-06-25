@@ -9,6 +9,7 @@ import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { fetchFootballApi, footballApiUrl, getApiCallsUsed } from './ingest-api.js';
+import { canonicalNationality } from '../utils/nationality.js';
 
 interface ApiResp {
   response?: Array<{ player?: { nationality?: string | null } }>;
@@ -40,8 +41,8 @@ async function main() {
     const t = todo[i]!;
     try {
       const data = (await fetchFootballApi(footballApiUrl(`/players?id=${t.ext}&season=${t.season}`))) as ApiResp;
-      const nat = data.response?.[0]?.player?.nationality?.trim();
-      if (nat && nat.length > 0 && nat !== t.nationality) {
+      const nat = canonicalNationality(data.response?.[0]?.player?.nationality?.trim());
+      if (nat && nat !== 'Unknown' && nat !== t.nationality) {
         await db.execute(sql`UPDATE players SET nationality = ${nat} WHERE id = ${t.id}`);
         updated += 1;
       } else {

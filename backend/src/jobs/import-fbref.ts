@@ -14,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { players, playerStats } from '../db/schema.js';
 import { buildPlayerSearchFields, normalizeSearchText } from '../utils/playerSearch.js';
+import { canonicalNationality } from '../utils/nationality.js';
 
 interface FbrefRow {
   player: string;
@@ -49,7 +50,9 @@ const NATION_BY_CODE: Record<string, string> = {
 
 function mapNation(code: string | null): string {
   if (!code) return 'Unknown';
-  return NATION_BY_CODE[code.toUpperCase()] ?? code.toUpperCase();
+  // NATION_BY_CODE covers common codes; canonicalNationality fixes the rest (FIFA codes,
+  // Ireland→Republic of Ireland, Ivory Coast→Côte d'Ivoire) so all sources agree.
+  return canonicalNationality(NATION_BY_CODE[code.toUpperCase()] ?? code.toUpperCase());
 }
 
 function mapPosition(pos: string): string {
