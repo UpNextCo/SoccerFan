@@ -170,6 +170,7 @@ export interface AnswerPlayer {
   id: string;
   name: string;
   mvt: number;
+  pl: number; // Premier League appearances (strongest "this audience knows them" signal)
   big5: number;
   ucl: number;
   total: number;
@@ -184,6 +185,7 @@ export async function enumeratePlayers(rule: TowerRule): Promise<AnswerPlayer[]>
     const ids = sql.join(rule.validIds.map((i) => sql`${i}::uuid`), sql`, `);
     const rows = (await db.execute(sql`
       SELECT p.id, p.name, p.market_value_tier AS mvt,
+        COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 39),0)::int AS pl,
         COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id IN (39,140,135,78,61)),0)::int AS big5,
         COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2),0)::int AS ucl,
         COALESCE(SUM(s.appearances),0)::int AS total
@@ -196,7 +198,7 @@ export async function enumeratePlayers(rule: TowerRule): Promise<AnswerPlayer[]>
   const rows = (await db.execute(sql`
     ${AGG}
     SELECT a.id, (SELECT name FROM players WHERE id = a.id) AS name, a.mvt,
-           a.big5_apps AS big5, a.ucl_apps AS ucl, a.total_apps AS total
+           a.pl_apps AS pl, a.big5_apps AS big5, a.ucl_apps AS ucl, a.total_apps AS total
     FROM agg a WHERE ${conds}
   `)) as unknown as AnswerPlayer[];
   return rows;

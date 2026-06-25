@@ -27,6 +27,10 @@ final class FootballGolfViewModel {
     var showResult = false
     var confettiToken = 0
 
+    // autocomplete
+    var searchResults: [PlayerSearchResultDTO] = []
+    var isSearching = false
+
     enum FootballGolfPhase: Equatable { case playing, holeResult, finished }
 
     init(course: FootballGolfCourse) {
@@ -57,6 +61,7 @@ final class FootballGolfViewModel {
             lastRevealed = answer
             revealToken += 1
             guess = ""
+            searchResults = []
             HapticManager.success()
             if matched.count >= hole.par {
                 completeHole(skipped: false)
@@ -65,6 +70,36 @@ final class FootballGolfViewModel {
             wrongGuesses += 1
             wrongFlashToken += 1
             guess = ""
+            searchResults = []
+            HapticManager.error()
+        }
+    }
+
+    func search() async {
+        guard phase == .playing else { searchResults = []; return }
+        let q = guess.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else { searchResults = []; return }
+        isSearching = true
+        defer { isSearching = false }
+        let results = (try? await APIClient.shared.searchPlayers(query: q)) ?? []
+        let used = matchedIds
+        searchResults = Array(results.filter { !used.contains($0.id) }.prefix(6))
+    }
+
+    /// Tapped an autocomplete suggestion — validate by id against the hole's answers.
+    func pick(_ r: PlayerSearchResultDTO) {
+        guard phase == .playing, let hole = currentHole else { return }
+        searchResults = []
+        guess = ""
+        if let answer = hole.answers.first(where: { $0.id == r.id && !matchedIds.contains($0.id) }) {
+            matched.append(answer)
+            lastRevealed = answer
+            revealToken += 1
+            HapticManager.success()
+            if matched.count >= hole.par { completeHole(skipped: false) }
+        } else {
+            wrongGuesses += 1
+            wrongFlashToken += 1
             HapticManager.error()
         }
     }
@@ -115,6 +150,7 @@ final class FootballGolfViewModel {
         hintsUsed = 0
         revealedHints = []
         guess = ""
+        searchResults = []
         lastRevealed = nil
         phase = .playing
     }
@@ -331,6 +367,32 @@ struct FootballGolfView: View {
 
     private func inputBar(_ vm: FootballGolfViewModel) -> some View {
         VStack(spacing: 10) {
+            if !vm.searchResults.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(vm.searchResults) { r in
+                        Button { withAnimation { vm.pick(r) }; inputFocused = true } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(BKTheme.textMuted)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(r.name.uppercased())
+                                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                                        .foregroundStyle(BKTheme.textPrimary).lineLimit(1)
+                                    Text("\(r.club) · \(r.nationality)")
+                                        .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 11)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if r.id != vm.searchResults.last?.id { Divider().background(BKTheme.cardElevated) }
+                    }
+                }
+                .background(BKTheme.cardElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
             HStack(spacing: 10) {
                 TextField("", text: Binding(get: { vm.guess }, set: { vm.guess = $0 }), prompt:
                     Text("NAME A PLAYER").foregroundStyle(BKTheme.textMuted).font(.system(size: 14, weight: .semibold, design: .rounded)))
@@ -341,10 +403,15 @@ struct FootballGolfView: View {
                     .focused($inputFocused)
                     .submitLabel(.go)
                     .onSubmit { withAnimation { vm.submitGuess() }; inputFocused = true }
+                    .onChange(of: vm.guess) { _, _ in Task { await vm.search() } }
                     .padding(.horizontal, 16).padding(.vertical, 14)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .modifier(ShakeEffect(animatableData: CGFloat(vm.wrongFlashToken)))
+
+                if vm.isSearching {
+                    ProgressView().tint(golfNeon)
+                }
 
                 Button { withAnimation { vm.submitGuess() }; inputFocused = true } label: {
                     Text("GUESS").font(BKFont.headline(14)).foregroundStyle(BKTheme.background)

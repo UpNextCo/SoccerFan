@@ -48,20 +48,26 @@ const PAR_SEQUENCE: Array<2 | 3 | 4 | 5> = [2, 3, 3, 3, 4, 4, 4, 5, 5];
 /** Inverse of fame: a household name is "common", a deep cut is "ultraRare". This is
  *  what powers the satisfying "I found a rarer answer" moment. */
 function rarityFor(p: AnswerPlayer): Rarity {
-  if (p.mvt >= 5 || p.total >= 350 || p.big5 >= 220) return 'common';
-  if (p.mvt >= 4 || p.total >= 160 || p.big5 >= 90 || p.ucl >= 50) return 'uncommon';
-  if (p.mvt >= 3 || p.total >= 60) return 'rare';
+  // Fame = market_value_tier (the validated signal). Career apps are NOT used for the
+  // famous tiers, because long-serving journeymen rack up apps without being nameable —
+  // that's exactly what made niche prompts (e.g. Ivorian-in-Bundesliga) look fair when
+  // they weren't.
+  if (p.mvt >= 5) return 'common';
+  if (p.mvt >= 4) return 'uncommon';
+  if (p.mvt >= 3 || p.big5 >= 120) return 'rare';
   return 'ultraRare';
 }
 
-/** How many answers a typical fan can actually NAME (common/uncommon). Par must be
- *  comfortably below this so a hole is completable from common knowledge — rare/ultra
- *  answers are the bonus that earns birdies/eagles, never required to finish. */
-function famousCount(players: AnswerPlayer[]): number {
-  return players.filter((p) => {
-    const r = rarityFor(p);
-    return r === 'common' || r === 'uncommon';
-  }).length;
+/** Whether THIS audience could name the player: a global megastar (mvt 5), a Premier
+ *  League regular, or a Champions League regular. Crucially NOT "high market value in a
+ *  foreign league" — that's how niche prompts (Ivorian-in-Bundesliga) snuck through. */
+function isNameable(p: AnswerPlayer): boolean {
+  return p.mvt >= 5 || p.pl >= 25 || p.ucl >= 30;
+}
+
+/** Count of answers the audience can actually name. Par is clamped below this. */
+function nameableCount(players: AnswerPlayer[]): number {
+  return players.filter(isNameable).length;
 }
 
 function hashStr(s: string): number {
@@ -153,6 +159,11 @@ export async function generateFootballGolfCourse(date: string): Promise<Football
     // club diversity: no two holes sharing a club
     const clubs = Array.isArray(rule.playedFor) ? rule.playedFor.map((c) => c.toLowerCase()) : [];
     if (clubs.some((c) => usedClubs.has(c))) continue;
+    // A "[foreign nationality] in [a non-PL league]" prompt is niche for this audience
+    // (you might not name one Ivorian in the Bundesliga), even if the DB has many. Allow
+    // nationality prompts only when the league is the Premier League.
+    if (rule.nationality && rule.leaguePlayed && rule.leaguePlayed !== 'Premier League') continue;
+
     // category diversity
     const cat = categoryFor(rule, prompt);
     if ((catCount.get(cat) ?? 0) >= MAX_PER_CATEGORY) continue;
@@ -172,11 +183,11 @@ export async function generateFootballGolfCourse(date: string): Promise<Football
       if (!prev || p.total > prev.total) byName.set(k, p);
     }
     players = [...byName.values()];
-    const famous = famousCount(players);
-    // A fair golf hole needs enough NAMEABLE answers to clear par with room to spare,
-    // and a bounded total so the answer set ships sensibly. This excludes niche prompts
-    // (e.g. "Ivorian in the Bundesliga") whose few nameable answers make par brutal.
-    if (famous < 5 || players.length > 200) continue;
+    const famous = nameableCount(players);
+    // A fair golf hole must be genuinely BROAD for THIS audience — ≥8 answers they could
+    // name (megastars / PL / UCL), so any par (2–5) is reachable and there's depth for
+    // birdies. Excludes niche foreign-league prompts. Bounded total so it ships.
+    if (famous < 8 || players.length > 200) continue;
 
     const aliasMap = await aliasesByIds(players.map((p) => p.id));
     const answers: GolfAnswer[] = players.map((p) => ({
