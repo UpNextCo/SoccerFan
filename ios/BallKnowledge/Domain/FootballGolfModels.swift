@@ -78,17 +78,16 @@ struct FootballGolfHoleResult: Identifiable, Equatable {
     let holeNumber: Int
     let par: Int
     let matched: [FootballGolfAnswer]   // correct answers the player named (in order)
-    let shots: Int                      // every guess + hint taken on the hole
-    let finished: Bool                  // reached par points
+    let shots: Int                      // EFFECTIVE shots: real guesses + skip penalty
+    let skipped: Bool
 
     var pointsReached: Int { matched.reduce(0) { $0 + $1.rarity.points } }
 
-    /// Golf score: shots taken minus par. If the player never cleared par (ran out of
-    /// shots / gave up), it's the worst score (+cap).
-    var relativeToPar: Int { finished ? (shots - par) : footballGolfShotCap }
+    /// Golf score: effective shots minus par (negative is good).
+    var relativeToPar: Int { shots - par }
 
     var label: String {
-        if finished && shots == 1 { return "HOLE IN ONE" }
+        if !skipped && shots == 1 { return "HOLE IN ONE" }
         switch relativeToPar {
         case ...(-3): return "ALBATROSS"
         case -2: return "EAGLE"

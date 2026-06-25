@@ -16,8 +16,6 @@ final class FootballGolfViewModel {
     // current-hole working state
     var matched: [FootballGolfAnswer] = []
     var wrongGuesses = 0
-    var hintsUsed = 0
-    var revealedHints: [String] = []
     var guess = ""
 
     // transient UI signals
@@ -44,26 +42,27 @@ final class FootballGolfViewModel {
     var totalScore: Int { results.map(\.relativeToPar).reduce(0, +) }
     var xpEarned: Int { FootballGolfScoring.xp(total: totalScore) }
 
-    var hintsRemaining: Int {
-        guard let hole = currentHole else { return 0 }
-        return max(0, hole.hints.count - revealedHints.count)
-    }
-
-    // Golf scoring: par is the POINTS target; every guess/hint is a shot.
+    // Golf scoring: par is the POINTS target; every guess is a shot.
     var par: Int { currentHole?.par ?? 0 }
     var points: Int { matched.reduce(0) { $0 + $1.rarity.points } }
-    var shots: Int { matched.count + wrongGuesses + hintsUsed }
+    var shots: Int { matched.count + wrongGuesses }
     var shotsRemaining: Int { max(0, par + footballGolfShotCap - shots) }
 
     private var matchedIds: Set<String> { Set(matched.map(\.id)) }
 
-    /// End the hole if par points are reached, or the shot cap is hit.
+    /// End the hole if par points are reached; the shot cap force-settles the rest.
     private func checkComplete() {
         if points >= par {
-            completeHole(finished: true)
+            completeHole(skipped: false, effectiveShots: shots)
         } else if shots >= par + footballGolfShotCap {
-            completeHole(finished: false)
+            settle()
         }
+    }
+
+    /// Stop the hole and "fill" the remaining points at +2 shots each (the skip penalty).
+    private func settle() {
+        let remaining = max(0, par - points)
+        completeHole(skipped: true, effectiveShots: shots + 2 * remaining)
     }
 
     func submitGuess() {
@@ -117,28 +116,20 @@ final class FootballGolfViewModel {
         checkComplete()
     }
 
-    func useHint() {
-        guard phase == .playing, let hole = currentHole, revealedHints.count < hole.hints.count else { return }
-        revealedHints.append(hole.hints[revealedHints.count])
-        hintsUsed += 1 // a hint costs a shot
-        HapticManager.light()
-        checkComplete()
-    }
-
     func skipHole() {
         guard phase == .playing else { return }
-        completeHole(finished: false)
+        settle()
     }
 
-    private func completeHole(finished: Bool) {
+    private func completeHole(skipped: Bool, effectiveShots: Int) {
         guard let hole = currentHole else { return }
         let result = FootballGolfHoleResult(
             id: hole.id,
             holeNumber: hole.holeNumber,
             par: hole.par,
             matched: matched,
-            shots: shots,
-            finished: finished
+            shots: effectiveShots,
+            skipped: skipped
         )
         results.append(result)
         phase = .holeResult
@@ -158,8 +149,6 @@ final class FootballGolfViewModel {
         currentHoleIndex += 1
         matched = []
         wrongGuesses = 0
-        hintsUsed = 0
-        revealedHints = []
         guess = ""
         searchResults = []
         lastRevealed = nil
@@ -228,17 +217,28 @@ struct FootballGolfView: View {
             VStack(spacing: 0) {
                 FootballGolfScorecardStrip(holes: vm.course.holes, results: vm.results, currentIndex: vm.currentHoleIndex)
 
+                if vm.phase == .playing {
+                    HStack {
+                        Spacer()
+                        Button { withAnimation { vm.skipHole() } } label: {
+                            Text("SKIP HOLE  ·  +2 PER MISSING")
+                                .font(BKFont.caption(10)).tracking(0.5)
+                                .foregroundStyle(BKTheme.wrong)
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(BKTheme.card).clipShape(Capsule())
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.bottom, 4)
+                }
+
                 ScrollView(showsIndicators: false) {
                     if let hole = vm.currentHole, vm.phase != .finished {
-                        VStack(spacing: 18) {
-                            holeHeader(vm, hole)
-                            promptCard(hole)
+                        VStack(spacing: 16) {
+                            promptCard(vm, hole)
                             matchedChips(vm, hole)
-                            if !vm.revealedHints.isEmpty { hintsView(vm) }
-                            statusRow(vm)
                         }
                         .padding(.horizontal, 16)
-                        .padding(.top, 10)
+                        .padding(.top, 8)
                         .padding(.bottom, 24)
                     }
                 }
@@ -282,35 +282,34 @@ struct FootballGolfView: View {
         }
     }
 
-    // MARK: hole header
+    // MARK: consolidated prompt card (hole #, category, par, points, shots)
 
-    private func holeHeader(_ vm: FootballGolfViewModel, _ hole: FootballGolfHole) -> some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("HOLE \(hole.holeNumber) / \(vm.course.holes.count)")
-                    .font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
-                Text(hole.category.uppercased())
-                    .font(BKFont.caption(10)).tracking(0.6).foregroundStyle(golfNeon)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
+    private func promptCard(_ vm: FootballGolfViewModel, _ hole: FootballGolfHole) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("HOLE \(hole.holeNumber) / \(vm.course.holes.count)")
+                        .font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                    Text(hole.category.uppercased())
+                        .font(BKFont.caption(10)).tracking(0.6).foregroundStyle(golfNeon)
+                }
+                Spacer()
                 Text("PAR \(hole.par)").font(BKFont.title(22)).foregroundStyle(golfNeon)
-                Text("\(vm.points)/\(hole.par) pts · \(vm.shotsRemaining) shots left")
-                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
             }
-        }
-    }
 
-    private func promptCard(_ hole: FootballGolfHole) -> some View {
-        Text(hole.prompt)
-            .font(BKFont.headline(20))
-            .foregroundStyle(BKTheme.textPrimary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(18)
-            .background(BKTheme.cardElevated)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(golfNeon.opacity(0.25), lineWidth: 1))
+            Text(hole.prompt)
+                .font(BKFont.headline(19))
+                .foregroundStyle(BKTheme.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("\(vm.points) / \(hole.par) pts  ·  \(vm.shotsRemaining) shots left")
+                .font(BKFont.caption(11)).foregroundStyle(BKTheme.textMuted)
+        }
+        .padding(18)
+        .background(BKTheme.cardElevated)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(golfNeon.opacity(0.25), lineWidth: 1))
     }
 
     // MARK: matched answer chips + empty slots
@@ -338,35 +337,6 @@ struct FootballGolfView: View {
                 }
             }
         }
-    }
-
-    private func hintsView(_ vm: FootballGolfViewModel) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(vm.revealedHints, id: \.self) { hint in
-                HStack(spacing: 8) {
-                    Image(systemName: "lightbulb.fill").font(.system(size: 12)).foregroundStyle(.yellow)
-                    Text(hint).font(BKFont.caption(12)).foregroundStyle(BKTheme.textSecondary)
-                    Spacer(minLength: 0)
-                }
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(BKTheme.card.opacity(0.6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func statusRow(_ vm: FootballGolfViewModel) -> some View {
-        HStack(spacing: 16) {
-            Label("\(vm.wrongGuesses) wrong", systemImage: "xmark.circle")
-                .font(BKFont.caption(11)).foregroundStyle(vm.wrongGuesses > 0 ? BKTheme.wrong : BKTheme.textMuted)
-            Label("\(vm.hintsUsed) hints", systemImage: "lightbulb")
-                .font(BKFont.caption(11)).foregroundStyle(vm.hintsUsed > 0 ? .yellow : BKTheme.textMuted)
-            Spacer()
-            Text("strokes count against par")
-                .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
-        }
-        .padding(.top, 2)
     }
 
     // MARK: input bar
@@ -417,29 +387,6 @@ struct FootballGolfView: View {
 
                 if vm.isSearching {
                     ProgressView().tint(golfNeon)
-                }
-
-                Button { withAnimation { vm.submitGuess() }; inputFocused = true } label: {
-                    Text("GUESS").font(BKFont.headline(14)).foregroundStyle(BKTheme.background)
-                        .padding(.horizontal, 18).padding(.vertical, 14)
-                        .background(golfNeon).clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-            }
-
-            HStack(spacing: 10) {
-                Button { vm.useHint() } label: {
-                    Label("HINT  +1", systemImage: "lightbulb.fill")
-                        .font(BKFont.caption(12)).foregroundStyle(vm.hintsRemaining > 0 ? .yellow : BKTheme.textMuted)
-                        .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .disabled(vm.hintsRemaining == 0)
-
-                Button { withAnimation { vm.skipHole() } } label: {
-                    Label("SKIP  +2", systemImage: "forward.fill")
-                        .font(BKFont.caption(12)).foregroundStyle(BKTheme.wrong)
-                        .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
         }
@@ -559,10 +506,11 @@ private struct FootballGolfHoleResultOverlay: View {
                 Text("\(FootballGolfScoring.scoreLabel(result.relativeToPar)) on Hole \(result.holeNumber) · \(result.shots) shots")
                     .font(BKFont.headline(15)).foregroundStyle(BKTheme.textPrimary)
 
-                if !result.finished {
-                    Text("Out of shots — \(result.pointsReached)/\(result.par) pts")
+                if result.skipped {
+                    Text("Skipped — \(result.pointsReached)/\(result.par) pts (+2 per missing)")
                         .font(BKFont.caption(12)).foregroundStyle(BKTheme.textMuted)
-                } else if !result.matched.isEmpty {
+                }
+                if !result.matched.isEmpty {
                     VStack(spacing: 6) {
                         ForEach(result.matched) { a in
                             HStack {
