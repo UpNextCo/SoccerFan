@@ -38,7 +38,7 @@ final class BlindRankViewModel {
         if practice {
             return BlindRankViewModel(challenge: BlindRankSeed.makePracticeChallenge(), practice: true)
         }
-        let challenge = await DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
+        let challenge = DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
         return BlindRankViewModel(dailyBundle: dailyBundle, practice: false, challenge: challenge)
     }
 
@@ -62,16 +62,14 @@ final class BlindRankViewModel {
     }
 
     func restart() {
-        Task {
-            state = BlindRankGameState(
-                challenge: practice
-                    ? BlindRankSeed.makePracticeChallenge()
-                    : await DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
-            )
-            showResult = false
-            confettiBurstToken = 0
-            activeRevealSlide = nil
-        }
+        state = BlindRankGameState(
+            challenge: practice
+                ? BlindRankSeed.makePracticeChallenge()
+                : DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
+        )
+        showResult = false
+        confettiBurstToken = 0
+        activeRevealSlide = nil
     }
 
     func newPracticeRound() {
@@ -253,7 +251,7 @@ struct BlindRankView: View {
                                 modeId: GameModeID.blindRank.rawValue,
                                 date: dailyDate,
                                 score: viewModel.state.score ?? 0,
-                                won: (viewModel.state.score ?? 0) >= 500,
+                                won: (viewModel.state.score ?? 0) >= 400,
                                 context: modelContext
                             )
                         }
@@ -293,7 +291,8 @@ struct BlindRankView: View {
                 BlindRankOrderRevealView(
                     steps: viewModel.state.revealSteps,
                     revealedCount: viewModel.state.revealedStepCount,
-                    category: viewModel.state.challenge.category,
+                    valueNoun: viewModel.state.challenge.valueNoun,
+                    valuePrefix: viewModel.state.challenge.valuePrefix,
                     activeSlideStep: viewModel.activeRevealSlide,
                     slotCount: viewModel.state.slotCount
                 )
@@ -362,7 +361,8 @@ private struct BlindRankCategoryBanner: View {
 private struct BlindRankOrderRevealView: View {
     let steps: [BlindRankRevealStep]
     let revealedCount: Int
-    let category: BlindRankCategory
+    let valueNoun: String
+    let valuePrefix: String
     let activeSlideStep: Int?
     let slotCount: Int
 
@@ -382,7 +382,8 @@ private struct BlindRankOrderRevealView: View {
             ForEach(steps) { step in
                 BlindRankRevealStepRow(
                     step: step,
-                    category: category,
+                    valueNoun: valueNoun,
+                    valuePrefix: valuePrefix,
                     isVisible: step.rank <= revealedCount,
                     isSliding: activeSlideStep == step.rank
                 )
@@ -393,7 +394,8 @@ private struct BlindRankOrderRevealView: View {
 
 private struct BlindRankRevealStepRow: View {
     let step: BlindRankRevealStep
-    let category: BlindRankCategory
+    let valueNoun: String
+    let valuePrefix: String
     let isVisible: Bool
     let isSliding: Bool
 
@@ -504,8 +506,7 @@ private struct BlindRankRevealStepRow: View {
     }
 
     private func formattedValue(_ value: Int) -> String {
-        let prefix = category.valuePrefix
-        return "\(prefix)\(value) \(category.valueNoun)"
+        "\(valuePrefix)\(value) \(valueNoun)"
     }
 }
 
@@ -745,7 +746,7 @@ private struct BlindRankResultView: View {
                                     .foregroundStyle(BKTheme.textPrimary)
                                     .lineLimit(1)
                                 Spacer(minLength: 0)
-                                Text("\(challenge.category.valuePrefix)\(step.player.statValue)")
+                                Text("\(challenge.valuePrefix)\(step.player.statValue)")
                                     .font(BKFont.caption(10))
                                     .foregroundStyle(BKTheme.textMuted)
                                 if step.isCorrect {

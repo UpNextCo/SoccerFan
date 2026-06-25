@@ -10,11 +10,6 @@ export type TargetManStatCategory =
   | 'foulsCommitted'
   | 'tacklesWon';
 
-export type BlindRankStatCategory =
-  | 'premier_league_goals'
-  | 'premier_league_assists'
-  | 'premier_league_appearances';
-
 export interface FactPackPlayer {
   playerId: string;
   name: string;
@@ -28,9 +23,16 @@ export interface FactPackPlayer {
 export interface DailyFactPack {
   date: string;
   playerCount: number;
-  plTopScorers: FactPackPlayer[];
-  plTopAssists: FactPackPlayer[];
-  plTopAppearances: FactPackPlayer[];
+}
+
+export interface BlindRankPresentationPlayer {
+  id: string;
+  name: string;
+  club: string;
+  league: string;
+  nationality: string;
+  position: string;
+  statValue: number;
 }
 
 export interface GuessWhoPuzzlePublic {
@@ -57,17 +59,12 @@ export interface BlindRankPuzzlePublic {
   modeId: 'blind_rank';
   puzzleId: string;
   date: string;
-  category: BlindRankStatCategory;
+  category: string;
   categoryTitle: string;
   rankHint: string;
-  presentationOrder: Array<{
-    id: string;
-    name: string;
-    club: string;
-    league: string;
-    nationality: string;
-    position: string;
-  }>;
+  valueNoun: string;
+  valuePrefix: string;
+  presentationOrder: BlindRankPresentationPlayer[];
 }
 
 export type DailyPuzzlePublic =

@@ -3,6 +3,15 @@ import Foundation
 enum BlindRankSeed {
     private static let practiceSlotCount = 10
 
+    /// Offline fallback only uses categories whose values come from real seeded
+    /// stats (PL goals/appearances/assists). The fabricated transfer-fee / market-value
+    /// / trophy maps are intentionally excluded so we never show made-up "answers".
+    private static let reliableCategories: [BlindRankCategory] = [
+        .premierLeagueGoals,
+        .premierLeagueAppearances,
+        .premierLeagueAssists,
+    ]
+
     static func makeDailyChallenge(date: String? = nil) -> BlindRankChallenge {
         let dateKey = date ?? todayUTC()
         let seed = stableHash("blind_rank_\(dateKey)")
@@ -98,7 +107,7 @@ enum BlindRankSeed {
         isDaily: Bool,
         date: String?
     ) -> BlindRankChallenge {
-        let category = BlindRankCategory.allCases[seed % BlindRankCategory.allCases.count]
+        let category = reliableCategories[seed % reliableCategories.count]
 
         let valued = roster.map { entry -> BlindRankPlayer in
             BlindRankPlayer(

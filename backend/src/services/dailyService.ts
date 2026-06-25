@@ -9,6 +9,7 @@ import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGen
 import { drawTowerFromBank, generateFootballTowerPuzzle, type TowerFloor } from './footballTowerGenerator.js';
 import { isFootballNation, isPremierLeagueClub, playerSatisfiesRule } from './towerRules.js';
 import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
+import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
 const GAME_MODES = [
@@ -176,7 +177,41 @@ async function ensureOneMorePuzzle(date: string): Promise<void> {
   }
 }
 
+/**
+ * Drop a stored Blind Rank puzzle if it predates the 10-slot / embedded-stat
+ * format so the generator rebuilds it on the next pass. Prevents serving an old
+ * 5-slot puzzle (or one without per-player statValue) to updated clients.
+ */
+async function migrateStaleBlindRank(date: string): Promise<void> {
+  const rows = await db
+    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'blind_rank')))
+    .limit(1);
+
+  const puzzle = rows[0]?.puzzleJson as
+    | { presentationOrder?: Array<{ statValue?: unknown }>; valueNoun?: unknown }
+    | undefined;
+  if (!puzzle) return;
+
+  const order = puzzle.presentationOrder;
+  const stale =
+    !Array.isArray(order) ||
+    order.length !== BLIND_RANK_SLOT_COUNT ||
+    order.some((player) => typeof player?.statValue !== 'number') ||
+    typeof puzzle.valueNoun !== 'string';
+
+  if (stale) {
+    await db
+      .delete(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'blind_rank')));
+    console.log(`Removed stale blind_rank puzzle for ${date} (will regenerate)`);
+  }
+}
+
 async function ensureDailyPuzzles(date: string): Promise<void> {
+  await migrateStaleBlindRank(date);
+
   const rows = await db
     .select({ modeId: dailyPuzzles.modeId })
     .from(dailyPuzzles)

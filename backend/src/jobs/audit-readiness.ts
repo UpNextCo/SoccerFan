@@ -21,7 +21,7 @@ const TARGETS = {
 /** Minimum pool sizes a generator needs to build a puzzle today. */
 const GEN = {
   guessWhoPlayers: 200,
-  blindRankPool: 5, // per PL metric
+  blindRankPool: 10, // distinct-value players needed per category (10 slots)
   targetManPlayersPerLeague: 15,
   bingoNationalities: 6, // nationality categories with enough players
   bingoClubs: 10, // club categories with enough players

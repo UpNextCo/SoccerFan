@@ -64,50 +64,15 @@ export async function topPlayersByLeagueMetric(
 }
 
 export async function buildDailyFactPack(date: string): Promise<DailyFactPack> {
-  const [playerCountRow, plTopScorers, plTopAssists, plTopAppearances] = await Promise.all([
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(players)
-      .where(sql`${players.externalId} IS NOT NULL`),
-    topPlayersByLeagueMetric(PL_LEAGUE_ID, 'goals', 5, 40),
-    topPlayersByLeagueMetric(PL_LEAGUE_ID, 'assists', 3, 40),
-    topPlayersByLeagueMetric(PL_LEAGUE_ID, 'appearances', 20, 40),
-  ]);
+  const playerCountRow = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(players)
+    .where(sql`${players.externalId} IS NOT NULL`);
 
   return {
     date,
     playerCount: playerCountRow[0]?.count ?? 0,
-    plTopScorers,
-    plTopAssists,
-    plTopAppearances,
   };
-}
-
-export function blindRankPoolForCategory(
-  factPack: DailyFactPack,
-  category: 'premier_league_goals' | 'premier_league_assists' | 'premier_league_appearances'
-): FactPackPlayer[] {
-  switch (category) {
-    case 'premier_league_goals':
-      return factPack.plTopScorers;
-    case 'premier_league_assists':
-      return factPack.plTopAssists;
-    case 'premier_league_appearances':
-      return factPack.plTopAppearances;
-  }
-}
-
-export function blindRankCategoryTitle(
-  category: 'premier_league_goals' | 'premier_league_assists' | 'premier_league_appearances'
-): string {
-  switch (category) {
-    case 'premier_league_goals':
-      return 'Premier League Goals';
-    case 'premier_league_assists':
-      return 'Premier League Assists';
-    case 'premier_league_appearances':
-      return 'Premier League Appearances';
-  }
 }
 
 export { PL_LEAGUE_ID };

@@ -73,14 +73,58 @@ enum BlindRankCategory: String, CaseIterable, Codable {
 
 struct BlindRankChallenge: Equatable {
     let id: String
-    let category: BlindRankCategory
+    let categoryTitle: String
+    let rankHint: String
+    let valueNoun: String
+    let valuePrefix: String
     let presentationOrder: [BlindRankPlayer]
     let correctRanking: [String]
     let isDaily: Bool
     let date: String?
 
-    var categoryTitle: String { category.title }
-    var rankHint: String { category.rankHint }
+    init(
+        id: String,
+        categoryTitle: String,
+        rankHint: String,
+        valueNoun: String,
+        valuePrefix: String,
+        presentationOrder: [BlindRankPlayer],
+        correctRanking: [String],
+        isDaily: Bool,
+        date: String?
+    ) {
+        self.id = id
+        self.categoryTitle = categoryTitle
+        self.rankHint = rankHint
+        self.valueNoun = valueNoun
+        self.valuePrefix = valuePrefix
+        self.presentationOrder = presentationOrder
+        self.correctRanking = correctRanking
+        self.isDaily = isDaily
+        self.date = date
+    }
+
+    /// Convenience initializer for offline/seed challenges built from a local category.
+    init(
+        id: String,
+        category: BlindRankCategory,
+        presentationOrder: [BlindRankPlayer],
+        correctRanking: [String],
+        isDaily: Bool,
+        date: String?
+    ) {
+        self.init(
+            id: id,
+            categoryTitle: category.title,
+            rankHint: category.rankHint,
+            valueNoun: category.valueNoun,
+            valuePrefix: category.valuePrefix,
+            presentationOrder: presentationOrder,
+            correctRanking: correctRanking,
+            isDaily: isDaily,
+            date: date
+        )
+    }
 }
 
 enum BlindRankPhase: Equatable {

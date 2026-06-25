@@ -9,6 +9,8 @@ import type {
   TargetManStatCategory,
 } from './dailyPuzzleTypes.js';
 
+export const BLIND_RANK_SLOT_COUNT = 10;
+
 export class PuzzleValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -49,10 +51,11 @@ function assertStrictDescending(values: number[], minSpread: number): void {
 
 export function validateBlindRankSelection(
   selected: FactPackPlayer[],
-  minSpread = 8
+  count = BLIND_RANK_SLOT_COUNT,
+  minSpread = Math.max(8, count - 1)
 ): { correctRanking: string[]; statValues: Record<string, number> } {
-  if (selected.length !== 5) {
-    throw new PuzzleValidationError('Blind rank requires exactly 5 players');
+  if (selected.length !== count) {
+    throw new PuzzleValidationError(`Blind rank requires exactly ${count} players`);
   }
 
   const ids = selected.map((player) => player.playerId);
@@ -65,6 +68,8 @@ export function validateBlindRankSelection(
     return b.statValue - a.statValue;
   });
 
+  // Strictly descending guarantees there are no tied stat values, so every
+  // player "applies to the category in a varying amount".
   assertStrictDescending(
     sorted.map((player) => player.statValue),
     minSpread
@@ -132,23 +137,35 @@ export async function validateGeneratedPuzzle(puzzle: GeneratedDailyPuzzle): Pro
     }
     case 'blind_rank': {
       const playerIds = publicJson.presentationOrder.map((player) => player.id);
-      if (playerIds.length !== 5) {
-        throw new PuzzleValidationError('Blind rank requires 5 presentation players');
+      if (playerIds.length !== BLIND_RANK_SLOT_COUNT) {
+        throw new PuzzleValidationError(
+          `Blind rank requires ${BLIND_RANK_SLOT_COUNT} presentation players`
+        );
       }
       await assertPlayersExist(playerIds);
+
+      const presentationValues = publicJson.presentationOrder.map((player) => player.statValue);
+      if (presentationValues.some((value) => typeof value !== 'number')) {
+        throw new PuzzleValidationError('Blind rank presentation players must include statValue');
+      }
+      if (new Set(presentationValues).size !== presentationValues.length) {
+        throw new PuzzleValidationError('Blind rank presentation values must be unique');
+      }
 
       if (!puzzle.answerJson || puzzle.answerJson.modeId !== 'blind_rank') {
         throw new PuzzleValidationError('Blind rank requires answer payload');
       }
 
       const answer = puzzle.answerJson.answer;
-      if (answer.correctRanking.length !== 5) {
-        throw new PuzzleValidationError('Blind rank answer must contain 5 ids');
+      if (answer.correctRanking.length !== BLIND_RANK_SLOT_COUNT) {
+        throw new PuzzleValidationError(
+          `Blind rank answer must contain ${BLIND_RANK_SLOT_COUNT} ids`
+        );
       }
 
       await assertPlayersExist(answer.correctRanking);
       const values = answer.correctRanking.map((playerId) => answer.statValues[playerId] ?? -1);
-      assertStrictDescending(values, 8);
+      assertStrictDescending(values, Math.max(8, BLIND_RANK_SLOT_COUNT - 1));
       return;
     }
     default:

@@ -54,6 +54,8 @@ export interface BlindRankPuzzlePublic {
   category: string;
   categoryTitle: string;
   rankHint: string;
+  valueNoun: string;
+  valuePrefix: string;
   presentationOrder: Array<{
     id: string;
     name: string;
@@ -61,6 +63,7 @@ export interface BlindRankPuzzlePublic {
     league: string;
     nationality: string;
     position: string;
+    statValue: number;
   }>;
 }
 

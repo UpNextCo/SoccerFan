@@ -19,6 +19,38 @@ struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {
     let league: String
     let nationality: String
     let position: String
+    let statValue: Int
+
+    init(
+        id: String,
+        name: String,
+        club: String,
+        league: String,
+        nationality: String,
+        position: String,
+        statValue: Int
+    ) {
+        self.id = id
+        self.name = name
+        self.club = club
+        self.league = league
+        self.nationality = nationality
+        self.position = position
+        self.statValue = statValue
+    }
+
+    // Tolerate older puzzles that predate embedded stats so a stale row never
+    // crashes the whole daily-bundle decode (the resolver falls back instead).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        club = try c.decode(String.self, forKey: .club)
+        league = try c.decode(String.self, forKey: .league)
+        nationality = try c.decode(String.self, forKey: .nationality)
+        position = try c.decode(String.self, forKey: .position)
+        statValue = try c.decodeIfPresent(Int.self, forKey: .statValue) ?? 0
+    }
 }
 
 struct BlindRankPuzzleDTO: Codable, Equatable {
@@ -28,7 +60,44 @@ struct BlindRankPuzzleDTO: Codable, Equatable {
     let category: String
     let categoryTitle: String
     let rankHint: String
+    let valueNoun: String
+    let valuePrefix: String
     let presentationOrder: [BlindRankPresentationPlayerDTO]
+
+    init(
+        modeId: String,
+        puzzleId: String,
+        date: String,
+        category: String,
+        categoryTitle: String,
+        rankHint: String,
+        valueNoun: String,
+        valuePrefix: String,
+        presentationOrder: [BlindRankPresentationPlayerDTO]
+    ) {
+        self.modeId = modeId
+        self.puzzleId = puzzleId
+        self.date = date
+        self.category = category
+        self.categoryTitle = categoryTitle
+        self.rankHint = rankHint
+        self.valueNoun = valueNoun
+        self.valuePrefix = valuePrefix
+        self.presentationOrder = presentationOrder
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        modeId = try c.decode(String.self, forKey: .modeId)
+        puzzleId = try c.decode(String.self, forKey: .puzzleId)
+        date = try c.decode(String.self, forKey: .date)
+        category = try c.decode(String.self, forKey: .category)
+        categoryTitle = try c.decodeIfPresent(String.self, forKey: .categoryTitle) ?? ""
+        rankHint = try c.decodeIfPresent(String.self, forKey: .rankHint) ?? "Most → least"
+        valueNoun = try c.decodeIfPresent(String.self, forKey: .valueNoun) ?? ""
+        valuePrefix = try c.decodeIfPresent(String.self, forKey: .valuePrefix) ?? ""
+        presentationOrder = try c.decode([BlindRankPresentationPlayerDTO].self, forKey: .presentationOrder)
+    }
 }
 
 struct FootballBingoCategoryDTO: Codable, Equatable {
