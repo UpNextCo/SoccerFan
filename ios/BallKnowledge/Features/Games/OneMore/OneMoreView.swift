@@ -72,9 +72,15 @@ final class OneMoreViewModel {
                 let outcome = try await APIClient.shared.validateOneMoreAnswer(date: date, playerId: player.id)
                 result = outcome.valid
                     ? .valid(statValue: outcome.statValue)
-                    : .notEligible(reason: "Doesn't qualify — need \(state.prompt.minimum)+ \(state.prompt.category.label.lowercased())")
+                    : .notEligible(reason: "Doesn't qualify — need \(state.prompt.minimum)+ \(state.prompt.statNoun)")
             } catch {
-                result = OneMoreMatcher.validate(player, prompt: state.prompt, usedIds: state.usedPlayerIds)
+                // Transient network/validation failure: never bust the run on an
+                // unverified pick. Re-enable input so the user can retry.
+                guard state.phase == .validating else { return }
+                state.phase = .playing
+                lastFeedback = "Couldn't verify — check connection and try again"
+                HapticManager.error()
+                return
             }
         } else {
             result = OneMoreMatcher.validate(player, prompt: state.prompt, usedIds: state.usedPlayerIds)
@@ -333,8 +339,8 @@ private struct OneMorePromptCard: View {
                         .foregroundStyle(BKTheme.textMuted)
                 }
                 Spacer()
-                LeagueBadgeImage(league: prompt.league.rawValue, size: 22) {
-                    Text(GuessWhoDisplay.leagueAbbrev(prompt.league.rawValue))
+                LeagueBadgeImage(league: prompt.leagueName, size: 22) {
+                    Text(GuessWhoDisplay.leagueAbbrev(prompt.leagueName))
                         .font(.system(size: 8, weight: .bold, design: .rounded))
                         .foregroundStyle(BKTheme.textMuted)
                 }
@@ -345,7 +351,7 @@ private struct OneMorePromptCard: View {
                     .font(BKFont.caption(11))
                     .tracking(1)
                     .foregroundStyle(BKTheme.textMuted)
-                Text("\(prompt.minimum)+ \(prompt.league.rawValue.uppercased()) \(prompt.category.label.uppercased())")
+                Text("\(prompt.minimum)+ \(prompt.leagueName.uppercased()) \(prompt.category.label.uppercased())")
                     .font(BKFont.headline(18))
                     .foregroundStyle(BKTheme.textPrimary)
                     .multilineTextAlignment(.center)
@@ -685,7 +691,7 @@ private struct OneMoreResultView: View {
                                     .foregroundStyle(BKTheme.textPrimary)
                                     .lineLimit(1)
                                 Spacer()
-                                Text("\(pick.statValue)G")
+                                Text("\(pick.statValue) \(prompt.statNoun)")
                                     .font(BKFont.caption(10))
                                     .foregroundStyle(BKTheme.textMuted)
                             }

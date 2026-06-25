@@ -32,7 +32,7 @@ enum GameRegistry {
         case GameModeID.blindRank.rawValue:
             return AnyView(BlindRankView(practice: true, onComplete: onComplete))
         case GameModeID.oneMore.rawValue:
-            return AnyView(OneMoreView(onComplete: onComplete))
+            return AnyView(OneMoreView(practice: true, onComplete: onComplete))
         case GameModeID.draftMaster.rawValue:
             return AnyView(DraftMasterView(onComplete: onComplete))
         case GameModeID.footballTower.rawValue:

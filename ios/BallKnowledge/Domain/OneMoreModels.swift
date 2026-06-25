@@ -2,27 +2,22 @@ import Foundation
 
 struct OneMorePrompt: Equatable {
     let id: String
-    let league: TargetManLeague
+    let leagueName: String
+    let leagueId: Int
     let category: TargetManStatCategory
     let minimum: Int
     let isDaily: Bool
     let date: String?
 
+    /// Lowercased noun for the stat (e.g. "goals", "assists", "appearances").
+    var statNoun: String { category.label.lowercased() }
+
     var title: String {
-        switch category {
-        case .goals:
-            return "\(league.rawValue) players with \(minimum)+ goals"
-        case .assists:
-            return "\(league.rawValue) players with \(minimum)+ assists"
-        case .appearances:
-            return "\(league.rawValue) players with \(minimum)+ appearances"
-        default:
-            return "\(league.rawValue) players with \(minimum)+ \(category.label.lowercased())"
-        }
+        "\(leagueName) players with \(minimum)+ \(statNoun)"
     }
 
     var searchHint: String {
-        "Name a \(league.rawValue) player…"
+        "Name a \(leagueName) player…"
     }
 
     var ruleLine: String {

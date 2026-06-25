@@ -1,11 +1,15 @@
 import Foundation
 
 enum OneMoreSeed {
+    /// Offline-only fallback prompt. The seed roster only carries PL goals, so the
+    /// local prompt is always "Premier League goals" — daily play uses the server
+    /// puzzle (any competition/category) validated server-side.
     static func makeDailyPrompt(date: String? = nil) -> OneMorePrompt {
         let dateKey = date ?? todayUTC()
         return OneMorePrompt(
             id: "one_more_daily_\(dateKey)",
-            league: .premierLeague,
+            leagueName: TargetManLeague.premierLeague.rawValue,
+            leagueId: TargetManLeague.premierLeague.apiLeagueId,
             category: .goals,
             minimum: 10,
             isDaily: true,
@@ -14,12 +18,13 @@ enum OneMoreSeed {
     }
 
     /// Build the daily prompt from the server-generated puzzle (validated server-side).
+    /// Works for any competition (including cups) since it carries the raw league name/id.
     static func makeServerPrompt(from dto: OneMorePuzzleDTO) -> OneMorePrompt? {
-        guard let league = TargetManLeague(rawValue: dto.league),
-              let category = TargetManStatCategory(rawValue: dto.category) else { return nil }
+        guard let category = TargetManStatCategory(rawValue: dto.category) else { return nil }
         return OneMorePrompt(
             id: dto.puzzleId,
-            league: league,
+            leagueName: dto.league,
+            leagueId: dto.leagueId,
             category: category,
             minimum: dto.minimum,
             isDaily: true,
@@ -30,7 +35,8 @@ enum OneMoreSeed {
     static func makePracticePrompt() -> OneMorePrompt {
         OneMorePrompt(
             id: "one_more_practice_\(UUID().uuidString.prefix(8))",
-            league: .premierLeague,
+            leagueName: TargetManLeague.premierLeague.rawValue,
+            leagueId: TargetManLeague.premierLeague.apiLeagueId,
             category: .goals,
             minimum: 10,
             isDaily: false,
@@ -46,7 +52,7 @@ enum OneMoreSeed {
                     id: entry.id,
                     name: entry.name,
                     club: entry.club,
-                    league: prompt.league.rawValue,
+                    league: prompt.leagueName,
                     nationality: entry.nationality,
                     position: entry.position,
                     statValue: entry.goals,
