@@ -1,7 +1,80 @@
 import SwiftUI
 
-// Neon green accent per spec (#1AFF1A).
-private let golfNeon = Color(red: 26.0 / 255.0, green: 255.0 / 255.0, blue: 26.0 / 255.0)
+// Single success accent — reuse the app green. No second neon.
+private let golfGreen = BKTheme.accent
+// Warm tier highlight for rare answers (the only non-green "wow" colour besides ultra).
+private let golfGold = Color(hex: "F5C451")
+
+/// One restrained rarity scale: two neutrals → gold → green jackpot.
+private func golfRarityColor(_ rarity: FootballGolfRarity) -> Color {
+    switch rarity {
+    case .common:    return BKTheme.textSecondary
+    case .uncommon:  return BKTheme.textPrimary
+    case .rare:      return golfGold
+    case .ultraRare: return golfGreen
+    }
+}
+
+/// There are many valid answers, so phrase prompts as a plural set rather than
+/// "Name a …". e.g. "Name a footballer who has scored…" → "Footballers who have scored…".
+private func displayPrompt(_ raw: String) -> String {
+    var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    let lower = s.lowercased()
+    if lower.hasPrefix("name an ") {
+        s = String(s.dropFirst("name an ".count))
+    } else if lower.hasPrefix("name a ") {
+        s = String(s.dropFirst("name a ".count))
+    } else {
+        return s // unexpected shape — leave untouched
+    }
+
+    // Split the subject (e.g. "non-European defender") from the clause that follows.
+    let connectors = [" who ", " whose ", " that ", " with "]
+    let boundary = connectors.compactMap { s.range(of: $0)?.lowerBound }.min()
+
+    let subject: String
+    var rest: String
+    if let b = boundary {
+        subject = String(s[s.startIndex..<b])
+        rest = String(s[b...])
+    } else {
+        subject = s
+        rest = ""
+    }
+
+    rest = rest.replacingOccurrences(of: " who has ", with: " who have ")
+               .replacingOccurrences(of: " that has ", with: " that have ")
+
+    var result = pluralizeLastWord(subject) + rest
+    result = result.prefix(1).uppercased() + result.dropFirst()
+    return result
+}
+
+/// The DB only stores coarse buckets (Goalkeeper/Defender/Midfielder/Forward),
+/// so map them to clean codes rather than truncating the full word.
+private func golfPositionAbbrev(_ raw: String) -> String {
+    let p = raw.lowercased()
+    if p.isEmpty { return "—" }
+    if p.contains("goal") || p == "gk" { return "GK" }
+    if p.contains("def") || p.contains("back") { return "DEF" }
+    if p.contains("mid") { return "MID" }
+    if p.contains("forward") || p.contains("attack") || p.contains("strik") || p.contains("wing") { return "FWD" }
+    return String(raw.prefix(3)).uppercased()
+}
+
+private func pluralizeLastWord(_ phrase: String) -> String {
+    var core = phrase
+    var trailing = ""
+    while let last = core.last, ".!?,".contains(last) {
+        trailing = String(last) + trailing
+        core.removeLast()
+    }
+    var words = core.split(separator: " ").map(String.init)
+    guard var last = words.popLast() else { return phrase }
+    if !last.lowercased().hasSuffix("s") { last += "s" }
+    words.append(last)
+    return words.joined(separator: " ") + trailing
+}
 
 // MARK: - ViewModel
 
@@ -46,7 +119,8 @@ final class FootballGolfViewModel {
     var par: Int { currentHole?.par ?? 0 }
     var points: Int { matched.reduce(0) { $0 + $1.rarity.points } }
     var shots: Int { matched.count + wrongGuesses }
-    var shotsRemaining: Int { max(0, par + footballGolfShotCap - shots) }
+    var totalShots: Int { par + footballGolfShotCap }
+    var shotsRemaining: Int { max(0, totalShots - shots) }
 
     private var matchedIds: Set<String> { Set(matched.map(\.id)) }
 
@@ -164,6 +238,7 @@ struct FootballGolfView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: FootballGolfViewModel?
+    @State private var showGiveUp = false
     @FocusState private var inputFocused: Bool
     private let allowReplay: Bool
     private let dailyDate: String?
@@ -195,7 +270,7 @@ struct FootballGolfView: View {
 
     private var unavailableState: some View {
         VStack(spacing: 14) {
-            Image(systemName: "flag.fill").font(.system(size: 34)).foregroundStyle(golfNeon)
+            Image(systemName: "flag.fill").font(.system(size: 34)).foregroundStyle(golfGreen)
             Text("TODAY'S COURSE ISN'T READY")
                 .font(BKFont.headline(16))
                 .foregroundStyle(BKTheme.textPrimary)
@@ -206,7 +281,7 @@ struct FootballGolfView: View {
                 .font(BKFont.headline())
                 .foregroundStyle(BKTheme.background)
                 .padding(.horizontal, 28).padding(.vertical, 12)
-                .background(golfNeon).clipShape(Capsule())
+                .background(golfGreen).clipShape(Capsule())
                 .padding(.top, 8)
         }
     }
@@ -217,28 +292,14 @@ struct FootballGolfView: View {
             VStack(spacing: 0) {
                 FootballGolfScorecardStrip(holes: vm.course.holes, results: vm.results, currentIndex: vm.currentHoleIndex)
 
-                if vm.phase == .playing {
-                    HStack {
-                        Spacer()
-                        Button { withAnimation { vm.skipHole() } } label: {
-                            Text("SKIP HOLE  ·  +2 PER MISSING")
-                                .font(BKFont.caption(10)).tracking(0.5)
-                                .foregroundStyle(BKTheme.wrong)
-                                .padding(.horizontal, 12).padding(.vertical, 7)
-                                .background(BKTheme.card).clipShape(Capsule())
-                        }
-                    }
-                    .padding(.horizontal, 16).padding(.bottom, 4)
-                }
-
                 ScrollView(showsIndicators: false) {
                     if let hole = vm.currentHole, vm.phase != .finished {
-                        VStack(spacing: 16) {
+                        VStack(spacing: 18) {
                             promptCard(vm, hole)
-                            matchedChips(vm, hole)
+                            matchedChips(vm)
                         }
                         .padding(.horizontal, 16)
-                        .padding(.top, 8)
+                        .padding(.top, 14)
                         .padding(.bottom, 24)
                     }
                 }
@@ -255,12 +316,18 @@ struct FootballGolfView: View {
                     }
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("FOOTBALL GOLF").font(BKFont.caption(13)).tracking(1).foregroundStyle(golfNeon)
+                    Text("FOOTBALL GOLF").font(BKFont.caption(13)).tracking(1.5).foregroundStyle(BKTheme.textSecondary)
                 }
             }
             .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { inputFocused = true } }
             .onChange(of: vm.currentHoleIndex) { _, _ in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { inputFocused = true }
+            }
+            .confirmationDialog("Give up this hole?", isPresented: $showGiveUp, titleVisibility: .visible) {
+                Button("Give up", role: .destructive) { withAnimation { vm.skipHole() } }
+                Button("Keep playing", role: .cancel) {}
+            } message: {
+                Text("Each point you're still missing counts as 2 shots.")
             }
         }
         .overlay {
@@ -282,64 +349,67 @@ struct FootballGolfView: View {
         }
     }
 
-    // MARK: consolidated prompt card (hole #, category, par, points, shots)
+    // MARK: prompt card — the hero (league · hole · par, then the prompt)
 
     private func promptCard(_ vm: FootballGolfViewModel, _ hole: FootballGolfHole) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("HOLE \(hole.holeNumber) / \(vm.course.holes.count)")
-                        .font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
-                    Text(hole.category.uppercased())
-                        .font(BKFont.caption(10)).tracking(0.6).foregroundStyle(golfNeon)
-                }
-                Spacer()
-                Text("PAR \(hole.par)").font(BKFont.title(22)).foregroundStyle(golfNeon)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(hole.category.uppercased())
+                    .font(BKFont.caption(11)).tracking(1.4)
+                    .foregroundStyle(BKTheme.textPrimary)
+                Text("HOLE \(hole.holeNumber) / \(vm.course.holes.count)")
+                    .font(BKFont.caption(11)).tracking(1.4)
+                    .foregroundStyle(BKTheme.textMuted)
+                Spacer(minLength: 8)
+                Text("PAR \(hole.par)")
+                    .font(.system(size: 17, weight: .heavy, design: .rounded))
+                    .foregroundStyle(golfGreen)
             }
-
-            Text(hole.prompt)
-                .font(BKFont.headline(19))
+            Text(displayPrompt(hole.prompt))
+                .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundStyle(BKTheme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-
-            Text("\(vm.points) / \(hole.par) pts  ·  \(vm.shotsRemaining) shots left")
-                .font(BKFont.caption(11)).foregroundStyle(BKTheme.textMuted)
+                .lineSpacing(2)
         }
-        .padding(18)
-        .background(BKTheme.cardElevated)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(golfNeon.opacity(0.25), lineWidth: 1))
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
     }
 
-    // MARK: matched answer chips + empty slots
+    // MARK: matched answers — chips appear as you score them
 
-    private func matchedChips(_ vm: FootballGolfViewModel, _ hole: FootballGolfHole) -> some View {
-        VStack(spacing: 12) {
-            // points progress toward par
-            HStack(spacing: 4) {
-                ForEach(0..<hole.par, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(i < vm.points ? golfNeon : BKTheme.cardElevated)
-                        .frame(height: 8)
-                }
-            }
-
-            if vm.matched.isEmpty {
-                Text("NAME PLAYERS TO SCORE POINTS — RARER = MORE")
-                    .font(BKFont.caption(10)).tracking(0.5)
-                    .foregroundStyle(BKTheme.textMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                ForEach(Array(vm.matched.enumerated()), id: \.element.id) { idx, answer in
-                    FootballGolfAnswerChip(answer: answer, justRevealed: idx == vm.matched.count - 1)
-                        .id("\(answer.id)-\(vm.revealToken)")
-                }
+    private func matchedChips(_ vm: FootballGolfViewModel) -> some View {
+        VStack(spacing: 10) {
+            ForEach(Array(vm.matched.enumerated()), id: \.element.id) { idx, answer in
+                FootballGolfAnswerChip(answer: answer, justRevealed: idx == vm.matched.count - 1)
+                    .id("\(answer.id)-\(vm.revealToken)")
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .opacity))
             }
         }
+        .animation(.spring(response: 0.34, dampingFraction: 0.72), value: vm.matched.count)
     }
 
-    // MARK: input bar
+    // Shots remaining as depleting pips — lives above the keyboard.
+    private func shotsCounter(_ vm: FootballGolfViewModel) -> some View {
+        HStack(spacing: 5) {
+            Text("SHOTS").font(BKFont.caption(9)).tracking(0.5).foregroundStyle(BKTheme.textMuted)
+            ForEach(0..<vm.totalShots, id: \.self) { i in
+                Circle()
+                    .fill(i < vm.shotsRemaining
+                          ? (vm.shotsRemaining <= 2 ? BKTheme.wrong : BKTheme.textPrimary)
+                          : BKTheme.cardElevated)
+                    .frame(width: 7, height: 7)
+            }
+        }
+        .animation(.snappy, value: vm.shotsRemaining)
+    }
+
+    // MARK: input bar (dark field with focus border)
 
     private func inputBar(_ vm: FootballGolfViewModel) -> some View {
         VStack(spacing: 10) {
@@ -347,48 +417,64 @@ struct FootballGolfView: View {
                 VStack(spacing: 0) {
                     ForEach(vm.searchResults) { r in
                         Button { withAnimation { vm.pick(r) }; inputFocused = true } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(BKTheme.textMuted)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(r.name.uppercased())
-                                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                                        .foregroundStyle(BKTheme.textPrimary).lineLimit(1)
-                                    Text("\(r.club) · \(r.nationality)")
-                                        .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
-                                }
+                            HStack(spacing: 12) {
+                                Text(golfPositionAbbrev(r.position))
+                                    .font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(0.5)
+                                    .foregroundStyle(BKTheme.textMuted)
+                                    .frame(width: 36, alignment: .leading)
+                                Text(r.name.uppercased())
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(BKTheme.textPrimary).lineLimit(1)
                                 Spacer(minLength: 0)
                             }
-                            .padding(.horizontal, 14).padding(.vertical, 11)
+                            .padding(.horizontal, 16).padding(.vertical, 15)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        if r.id != vm.searchResults.last?.id { Divider().background(BKTheme.cardElevated) }
+                        if r.id != vm.searchResults.last?.id { Divider().background(Color.white.opacity(0.06)) }
                     }
                 }
                 .background(BKTheme.cardElevated)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
             }
 
-            HStack(spacing: 10) {
-                TextField("", text: Binding(get: { vm.guess }, set: { vm.guess = $0 }), prompt:
-                    Text("NAME A PLAYER").foregroundStyle(BKTheme.textMuted).font(.system(size: 14, weight: .semibold, design: .rounded)))
-                    .textFieldStyle(.plain)
-                    .foregroundStyle(BKTheme.background)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.words)
-                    .focused($inputFocused)
-                    .submitLabel(.go)
-                    .onSubmit { withAnimation { vm.submitGuess() }; inputFocused = true }
-                    .onChange(of: vm.guess) { _, _ in Task { await vm.search() } }
-                    .padding(.horizontal, 16).padding(.vertical, 14)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .modifier(ShakeEffect(animatableData: CGFloat(vm.wrongFlashToken)))
-
-                if vm.isSearching {
-                    ProgressView().tint(golfNeon)
+            if vm.searchResults.isEmpty {
+                HStack {
+                    shotsCounter(vm)
+                    Spacer(minLength: 8)
+                    Button { showGiveUp = true } label: {
+                        Text("Give up hole")
+                            .font(BKFont.caption(12))
+                            .foregroundStyle(BKTheme.textMuted)
+                            .underline()
+                    }
                 }
             }
+
+            TextField("", text: Binding(get: { vm.guess }, set: { vm.guess = $0 }), prompt:
+                Text("NAME A PLAYER").foregroundStyle(BKTheme.textMuted).font(.system(size: 14, weight: .semibold, design: .rounded)))
+                .textFieldStyle(.plain)
+                .foregroundStyle(BKTheme.textPrimary)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.words)
+                .focused($inputFocused)
+                .submitLabel(.go)
+                .onSubmit { withAnimation { vm.submitGuess() }; inputFocused = true }
+                .onChange(of: vm.guess) { _, _ in Task { await vm.search() } }
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .padding(.trailing, vm.isSearching ? 28 : 0)
+                .background(BKTheme.cardElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(alignment: .trailing) {
+                    if vm.isSearching {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(BKTheme.textSecondary)
+                            .padding(.trailing, 14)
+                    }
+                }
+                .modifier(ShakeEffect(animatableData: CGFloat(vm.wrongFlashToken)))
         }
         .padding(16)
         .background(BKTheme.background)
@@ -422,7 +508,9 @@ private struct FootballGolfAnswerChip: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(golfNeon)
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(golfGreen)
+                .symbolEffect(.bounce, value: appeared)
             Text(answer.name.uppercased())
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(BKTheme.textPrimary)
@@ -439,22 +527,16 @@ private struct FootballGolfAnswerChip: View {
         .padding(.horizontal, 14).padding(.vertical, 13)
         .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(rarityColor.opacity(0.4), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 12)
+            .strokeBorder(answer.rarity.isStandout ? rarityColor.opacity(0.45) : Color.white.opacity(0.05), lineWidth: 1))
         .scaleEffect(appeared ? 1 : (justRevealed ? 0.85 : 1))
         .onAppear { withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { appeared = true } }
     }
 
-    private var rarityColor: Color {
-        switch answer.rarity {
-        case .common: return BKTheme.textSecondary
-        case .uncommon: return golfNeon
-        case .rare: return .cyan
-        case .ultraRare: return .purple
-        }
-    }
+    private var rarityColor: Color { golfRarityColor(answer.rarity) }
 }
 
-// MARK: - Scorecard strip
+// MARK: - Scorecard strip (the "course map")
 
 private struct FootballGolfScorecardStrip: View {
     let holes: [FootballGolfHole]
@@ -467,25 +549,34 @@ private struct FootballGolfScorecardStrip: View {
                 let result = results.first { $0.holeNumber == hole.holeNumber }
                 VStack(spacing: 4) {
                     Capsule()
-                        .fill(result != nil ? golfNeon : (index == currentIndex ? golfNeon.opacity(0.45) : BKTheme.cardElevated))
+                        .fill(barColor(result, index: index))
                         .frame(height: 4)
-                    Text(cell(result, holeNumber: hole.holeNumber))
+                    Text(cell(result, par: hole.par))
                         .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(color(result, index: index))
+                        .foregroundStyle(textColor(result, index: index))
                 }
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, 16).padding(.vertical, 10)
     }
 
-    private func cell(_ result: FootballGolfHoleResult?, holeNumber: Int) -> String {
-        guard let result else { return "\(holeNumber)" }
+    private func cell(_ result: FootballGolfHoleResult?, par: Int) -> String {
+        guard let result else { return "\(par)" }
         return FootballGolfScoring.scoreLabel(result.relativeToPar)
     }
 
-    private func color(_ result: FootballGolfHoleResult?, index: Int) -> Color {
-        guard let result else { return index == currentIndex ? golfNeon : BKTheme.textMuted }
-        if result.relativeToPar < 0 { return golfNeon }
+    private func barColor(_ result: FootballGolfHoleResult?, index: Int) -> Color {
+        if let result {
+            if result.relativeToPar < 0 { return golfGreen }
+            if result.relativeToPar == 0 { return BKTheme.textSecondary }
+            return BKTheme.wrong.opacity(0.7)
+        }
+        return index == currentIndex ? golfGreen.opacity(0.5) : BKTheme.cardElevated
+    }
+
+    private func textColor(_ result: FootballGolfHoleResult?, index: Int) -> Color {
+        guard let result else { return index == currentIndex ? BKTheme.textPrimary : BKTheme.textMuted }
+        if result.relativeToPar < 0 { return golfGreen }
         if result.relativeToPar == 0 { return BKTheme.textSecondary }
         return BKTheme.wrong
     }
@@ -496,18 +587,21 @@ private struct FootballGolfScorecardStrip: View {
 private struct FootballGolfHoleResultOverlay: View {
     let result: FootballGolfHoleResult
     var onNext: () -> Void
+    @State private var labelIn = false
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.74).ignoresSafeArea().onTapGesture(perform: onNext)
+            Color.black.opacity(0.78).ignoresSafeArea().onTapGesture(perform: onNext)
             VStack(spacing: 16) {
                 Text(result.label)
                     .font(BKFont.title(38)).foregroundStyle(outcomeColor)
+                    .scaleEffect(labelIn ? 1 : 0.7)
+                    .opacity(labelIn ? 1 : 0)
                 Text("\(FootballGolfScoring.scoreLabel(result.relativeToPar)) on Hole \(result.holeNumber) · \(result.shots) shots")
                     .font(BKFont.headline(15)).foregroundStyle(BKTheme.textPrimary)
 
                 if result.skipped {
-                    Text("Skipped — \(result.pointsReached)/\(result.par) pts (+2 per missing)")
+                    Text("Gave up — \(result.pointsReached)/\(result.par) pts")
                         .font(BKFont.caption(12)).foregroundStyle(BKTheme.textMuted)
                 }
                 if !result.matched.isEmpty {
@@ -517,7 +611,7 @@ private struct FootballGolfHoleResultOverlay: View {
                                 Text(a.name).font(BKFont.caption(12)).foregroundStyle(BKTheme.textSecondary)
                                 Spacer()
                                 Text(a.rarity.label).font(.system(size: 9, weight: .heavy, design: .rounded))
-                                    .foregroundStyle(a.rarity.isStandout ? golfNeon : BKTheme.textMuted)
+                                    .foregroundStyle(golfRarityColor(a.rarity))
                             }
                         }
                     }
@@ -527,7 +621,7 @@ private struct FootballGolfHoleResultOverlay: View {
                 Button(action: onNext) {
                     Text("NEXT HOLE").font(BKFont.headline()).foregroundStyle(BKTheme.background)
                         .frame(maxWidth: .infinity).padding(.vertical, 14)
-                        .background(golfNeon).clipShape(RoundedRectangle(cornerRadius: 14))
+                        .background(golfGreen).clipShape(RoundedRectangle(cornerRadius: 14))
                 }
                 .padding(.top, 6)
             }
@@ -535,10 +629,11 @@ private struct FootballGolfHoleResultOverlay: View {
             .background(BKTheme.cardElevated).clipShape(RoundedRectangle(cornerRadius: 20))
             .padding(.horizontal, 24)
         }
+        .onAppear { withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { labelIn = true } }
     }
 
     private var outcomeColor: Color {
-        if result.relativeToPar < 0 { return golfNeon }
+        if result.relativeToPar < 0 { return golfGreen }
         if result.relativeToPar == 0 { return BKTheme.textPrimary }
         return BKTheme.wrong
     }
@@ -561,10 +656,10 @@ private struct FootballGolfFinalView: View {
                     VStack(spacing: 8) {
                         Text("ROUND COMPLETE").font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
                         Text("You finished \(FootballGolfScoring.scoreLabel(totalScore))")
-                            .font(BKFont.title(40)).foregroundStyle(golfNeon)
+                            .font(BKFont.title(40)).foregroundStyle(totalScore <= 0 ? golfGreen : BKTheme.textPrimary)
                         Text(FootballGolfScoring.finishMessage(totalScore))
                             .font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
-                        Text("+\(xpEarned) XP").font(BKFont.headline(15)).foregroundStyle(golfNeon)
+                        Text("+\(xpEarned) XP").font(BKFont.headline(15)).foregroundStyle(golfGreen)
                     }
                     .padding(.top, 28)
 
@@ -575,7 +670,7 @@ private struct FootballGolfFinalView: View {
                                 Text("Par \(result.par)").font(BKFont.caption(10)).foregroundStyle(BKTheme.textSecondary)
                                 Spacer()
                                 Text(result.label).font(BKFont.caption(10))
-                                    .foregroundStyle(result.relativeToPar < 0 ? golfNeon : (result.relativeToPar == 0 ? BKTheme.textSecondary : BKTheme.wrong))
+                                    .foregroundStyle(result.relativeToPar < 0 ? golfGreen : (result.relativeToPar == 0 ? BKTheme.textSecondary : BKTheme.wrong))
                                 Text(FootballGolfScoring.scoreLabel(result.relativeToPar))
                                     .font(BKFont.headline(14)).foregroundStyle(BKTheme.textPrimary).frame(width: 32, alignment: .trailing)
                             }
@@ -588,7 +683,7 @@ private struct FootballGolfFinalView: View {
                     Button(action: onDone) {
                         Text("DONE").font(BKFont.headline()).foregroundStyle(BKTheme.background)
                             .frame(maxWidth: .infinity).padding(.vertical, 16)
-                            .background(golfNeon).clipShape(RoundedRectangle(cornerRadius: 16))
+                            .background(golfGreen).clipShape(RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal, 24).padding(.bottom, 32)
                 }
