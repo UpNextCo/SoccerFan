@@ -71,7 +71,7 @@ export function buildGuessFeedback(
     let hint: 'higher' | 'lower' | undefined;
     if (
       status !== 'correct' &&
-      (field === 'age' || field === 'shirtNumber') &&
+      (field === 'age' || field === 'shirtNumber' || field === 'marketValueTier') &&
       typeof guess === 'number' &&
       typeof answer === 'number'
     ) {

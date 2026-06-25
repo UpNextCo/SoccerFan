@@ -1,4 +1,4 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { dailyPuzzles, players } from '../db/schema.js';
 import { INGEST_LEAGUES } from '../jobs/ingest-config.js';
@@ -224,9 +224,41 @@ export async function generateGuessWhoPuzzle(
     throw new PuzzleValidationError('No players available for Guess Who');
   }
 
-  const eligible = await db.select().from(players).where(isNotNull(players.externalId));
-  const index = hashString(`${date}:guess_who`) % Math.max(eligible.length, 1);
-  const answerPlayer = eligible[index]!;
+  // Restrict the daily answer to recognisable players: currently in a big-5 league
+  // and rated in the top value tiers (market_value_tier is an output-based
+  // percentile rank within position, so 4–5 = elite/very good — a far better fame
+  // signal than raw appearances, which skews toward long-career journeymen).
+  const poolRows = (await db.execute(sql`
+    WITH apps AS (
+      SELECT player_id, SUM(appearances)::int AS a
+      FROM player_stats WHERE league_id IN (39, 140, 135, 78, 61, 2)
+      GROUP BY player_id
+    )
+    SELECT p.id
+    FROM players p
+    LEFT JOIN apps ON apps.player_id = p.id
+    WHERE p.external_id IS NOT NULL
+      AND p.current_league IN ('Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1')
+      AND p.market_value_tier >= 4
+      AND COALESCE(apps.a, 0) >= 40
+    ORDER BY p.market_value_tier DESC, COALESCE(apps.a, 0) DESC
+    LIMIT 1200
+  `)) as unknown as Array<{ id: string }>;
+
+  let ids = poolRows.map((row) => row.id);
+  if (ids.length === 0) {
+    // Fallback: never fail the mode — fall back to any player with an external id.
+    const eligible = await db
+      .select({ id: players.id })
+      .from(players)
+      .where(isNotNull(players.externalId));
+    ids = eligible.map((row) => row.id);
+  }
+  if (ids.length === 0) {
+    throw new PuzzleValidationError('No eligible players for Guess Who');
+  }
+
+  const answerPlayerId = ids[hashString(`${date}:guess_who`) % ids.length]!;
 
   const puzzleJson = {
     modeId: 'guess_who' as const,
@@ -239,8 +271,8 @@ export async function generateGuessWhoPuzzle(
   return {
     modeId: 'guess_who',
     puzzleJson,
-    answerPlayerId: answerPlayer.id,
-    answerJson: { modeId: 'guess_who', answerPlayerId: answerPlayer.id },
+    answerPlayerId,
+    answerJson: { modeId: 'guess_who', answerPlayerId },
   };
 }
 

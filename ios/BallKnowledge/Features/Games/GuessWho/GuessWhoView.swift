@@ -303,7 +303,7 @@ struct GuessWhoProgressBar: View {
 // MARK: - Empty State
 
 struct GuessWhoEmptyStateView: View {
-    private let labels = ["NAT", "LGE", "TEAM", "POS", "AGE", "SHIRT"]
+    private let labels = ["NAT", "LGE", "TEAM", "POS", "AGE", "VALUE"]
 
     var body: some View {
         VStack(spacing: 14) {
@@ -536,7 +536,7 @@ struct GuessWhoBadgeFace: View {
             return GuessWhoDisplay.clubAbbrev(field.value?.display ?? "?")
         case "position":
             return GuessWhoDisplay.positionAbbrev(field.value?.display ?? "?")
-        case "age", "shirtNumber":
+        case "age", "marketValueTier":
             return numericDisplay
         default:
             return field.value?.display ?? "?"
@@ -545,14 +545,13 @@ struct GuessWhoBadgeFace: View {
 
     private var numericDisplay: String {
         let value = field.value?.display ?? "?"
-        guard field.field == "age" || field.field == "shirtNumber" else { return value }
+        guard field.field == "age" || field.field == "marketValueTier" else { return value }
 
-        let prefix = field.field == "shirtNumber" ? "#" : ""
         if let hint = field.hint {
             let arrow = hint == "higher" ? "↑" : "↓"
-            return "\(prefix)\(value)\(arrow)"
+            return "\(value)\(arrow)"
         }
-        return "\(prefix)\(value)"
+        return value
     }
 }
 
