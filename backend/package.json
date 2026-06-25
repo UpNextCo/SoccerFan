@@ -57,7 +57,8 @@
     "job:audit-coverage": "tsx src/jobs/audit-coverage.ts",
     "job:audit-extended": "tsx src/jobs/audit-extended.ts",
     "job:audit-readiness": "tsx src/jobs/audit-readiness.ts",
-    "job:audit-quality": "tsx src/jobs/audit-quality.ts"
+    "job:audit-quality": "tsx src/jobs/audit-quality.ts",
+    "job:audit-conflations": "tsx src/jobs/audit-conflations.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
