@@ -81,7 +81,12 @@ function ruleConditions(rule: TowerRule) {
     )`);
   }
   if (rule.uclWinner) {
-    c.push(sql`EXISTS (SELECT 1 FROM player_honours h WHERE h.player_id = a.id AND h.competition ILIKE '%champions league%' AND h.placement ILIKE '%winner%')`);
+    // player_honours is sparse (e.g. Seedorf has 0 rows), so also accept a Champions League
+    // final WIN from final_appearances (Wikipedia finals import) — a far more complete source.
+    c.push(sql`(
+      EXISTS (SELECT 1 FROM player_honours h WHERE h.player_id = a.id AND h.competition ILIKE '%champions league%' AND h.placement ILIKE '%winner%')
+      OR EXISTS (SELECT 1 FROM final_appearances f WHERE f.player_id = a.id AND f.competition = 'Champions League' AND f.won = true)
+    )`);
   }
   return c.length ? c : [sql`TRUE`];
 }

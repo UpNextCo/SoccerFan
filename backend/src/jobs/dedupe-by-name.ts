@@ -142,10 +142,21 @@ function pickCanon(members: Member[]): Member {
 async function main() {
   console.log(`Dedupe by name (+ Unknown absorber) — ${APPLY ? 'APPLY (writing)' : 'DRY RUN'}\n`);
 
-  // Name-only groups (we sub-group by nationality inside pass 1).
+  // Collapse internal double-spaces in stored names so "Clarence  Seedorf" matches
+  // "Clarence Seedorf" (both for display and dedup grouping).
+  if (APPLY) {
+    await db.execute(sql`
+      UPDATE players SET name = regexp_replace(trim(name), '\\s+', ' ', 'g')
+      WHERE name <> regexp_replace(trim(name), '\\s+', ' ', 'g')
+    `);
+  }
+
+  // Name-only groups (whitespace-collapsed); we sub-group by nationality inside pass 1.
   const groups = (await db.execute(sql`
-    SELECT lower(trim(name)) AS ln, array_agg(id) AS ids
-    FROM players GROUP BY lower(trim(name)) HAVING COUNT(*) > 1
+    SELECT lower(regexp_replace(trim(name), '\\s+', ' ', 'g')) AS ln, array_agg(id) AS ids
+    FROM players
+    GROUP BY lower(regexp_replace(trim(name), '\\s+', ' ', 'g'))
+    HAVING COUNT(*) > 1
   `)) as unknown as Array<{ ln: string; ids: string[] }>;
 
   const allIds = groups.flatMap((g) => g.ids);
@@ -228,9 +239,21 @@ async function main() {
       const sameDob = (c: Member) => Boolean(u.dob && c.dob && u.dob === c.dob);
       const aliasOverlap = (c: Member) => [...u.aliasKeys].some((k) => c.aliasKeys.has(k));
       const qualifies = (c: Member) => sharesRealClub(c) || sameDob(c) || aliasOverlap(c);
-      const targets = specifics.filter((c) => !deleted.has(c.id) && qualifies(c));
-      if (targets.length !== 1) { if (targets.length > 1) kept += 1; continue; } // ambiguous → leave
-      const canon = targets[0]!;
+      const liveSpecifics = specifics.filter((c) => !deleted.has(c.id));
+      const strong = liveSpecifics.filter(qualifies);
+
+      let canon: Member | undefined;
+      if (strong.length === 1) {
+        canon = strong[0];
+      } else if (strong.length === 0 && u.clubsReal.size === 0 && liveSpecifics.length === 1) {
+        // Empty / national-team-only Unknown stub with a single same-name real record
+        // (e.g. the stray "Clarence Seedorf" stub) → safe to fold in.
+        canon = liveSpecifics[0];
+      } else {
+        if (liveSpecifics.length > 1) kept += 1; // ambiguous → leave
+        continue;
+      }
+      if (!canon) continue;
       if (p2ex.length < 12) p2ex.push(`${canon.name} (${canon.nat}) ⇐ Unknown stub [${u.ntNations.size ? [...u.ntNations].join(',') : 'no-club'}]`);
       if (APPLY) await applyMerge(u, canon);
       absorbInto(canon, u);

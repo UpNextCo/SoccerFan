@@ -55,8 +55,15 @@ private func displayPrompt(_ raw: String) -> String {
 
     rest = rest.replacingOccurrences(of: " who has ", with: " who have ")
                .replacingOccurrences(of: " that has ", with: " that have ")
+               // the leading "have" already governs the next verb, so drop the second auxiliary:
+               // "…have scored 10 CL goals and has won…" → "…and won…"
+               .replacingOccurrences(of: " and has ", with: " and ")
+               .replacingOccurrences(of: " and have ", with: " and ")
 
     var result = pluralizeLastWord(subject) + rest
+    // The data uses both "Champions League" and "UEFA Champions League"; normalise so a
+    // prompt mentioning both clauses doesn't read "…Champions League goals … UEFA Champions League".
+    result = result.replacingOccurrences(of: "UEFA Champions League", with: "Champions League")
     result = result.prefix(1).uppercased() + result.dropFirst()
     return result
 }
