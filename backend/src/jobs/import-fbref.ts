@@ -10,6 +10,7 @@
  */
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
+import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { players, playerStats } from '../db/schema.js';
 import { buildPlayerSearchFields, normalizeSearchText } from '../utils/playerSearch.js';
@@ -148,8 +149,17 @@ async function main() {
     })
     .filter((v): v is NonNullable<typeof v> => v !== null);
 
+  // Gap-fill guard: skip any (player, league, season) the player ALREADY has — FBref uses
+  // synthetic team ids, so without this a re-run for years already covered by API-Football
+  // would create a second row and double-count apps. This lets us safely re-scrape ANY
+  // year range to fill holes (e.g. Lampard/Gerrard's missing 2010-2014 league seasons).
+  const existingStats = (await db.execute(sql`SELECT player_id, league_id, season FROM player_stats`)) as unknown as Array<{ player_id: string; league_id: number; season: number }>;
+  const have = new Set(existingStats.map((e) => `${e.player_id}|${e.league_id}|${e.season}`));
+  const fresh = statValues.filter((v) => !have.has(`${v.playerId}|${v.leagueId}|${v.season}`));
+  console.log(`${statValues.length} rows · ${fresh.length} fill gaps (${statValues.length - fresh.length} league-seasons already present)`);
+
   let upserted = 0;
-  for (const batch of chunk(statValues, 500)) {
+  for (const batch of chunk(fresh, 500)) {
     await db.insert(playerStats).values(batch).onConflictDoNothing();
     upserted += batch.length;
   }

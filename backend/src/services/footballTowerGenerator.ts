@@ -294,20 +294,66 @@ export async function generateFootballTowerPuzzle(
  * letting the caller fall back to live generation. Marks the chosen prompts as used.
  */
 export async function drawTowerFromBank(date: string): Promise<FootballTowerPuzzle | null> {
-  const want: Array<[string, number]> = [['medium', 5], ['hard', 6], ['elite', 4]];
+  // [tier, floors, min relationship floors]. Relationship prompts (closed-set teammate /
+  // manager / finals / World Cup) are the "fun" core, so we reserve a few slots per tier
+  // for them, then fill the rest with the wider bank — all least-recently-used.
+  const want: Array<[string, number, number]> = [['medium', 5, 2], ['hard', 6, 2], ['elite', 4, 1]];
   type Row = { id: string; prompt: string; rule: TowerRule; answer_type: AnswerType; tier: Difficulty; difficulty: number };
   const chosen: Row[] = [];
   const usedIds: string[] = [];
+  // Track clubs already featured so two prompts in the same tower don't share a club
+  // (e.g. "Atalanta + City" next to "Toulouse + City").
+  const usedClubs = new Set<string>();
+  const clubsOf = (r: Row): string[] => (Array.isArray(r.rule?.playedFor) ? r.rule.playedFor!.map((c) => c.toLowerCase()) : []);
+  const sharesClub = (r: Row): boolean => clubsOf(r).some((c) => usedClubs.has(c));
+  const take = (r: Row) => {
+    chosen.push(r);
+    usedIds.push(r.id);
+    for (const c of clubsOf(r)) usedClubs.add(c);
+  };
 
-  for (const [tier, n] of want) {
-    const rows = (await db.execute(sql`
-      SELECT id, prompt, rule, answer_type, tier, difficulty FROM tower_prompts
-      WHERE status = 'active' AND tier = ${tier}
-      ORDER BY used_count ASC, last_used_date ASC NULLS FIRST, random()
-      LIMIT ${n}
-    `)) as unknown as Row[];
-    chosen.push(...rows);
-    usedIds.push(...rows.map((r) => r.id));
+  const exclude = () =>
+    usedIds.length ? sql`AND id NOT IN (${sql.join(usedIds.map((id) => sql`${id}`), sql`, `)})` : sql``;
+
+  for (const [tier, n, relMin] of want) {
+    // reserve relationship slots first (over-fetch, then greedily pick avoiding repeats)
+    if (relMin > 0) {
+      const pool = (await db.execute(sql`
+        SELECT id, prompt, rule, answer_type, tier, difficulty FROM tower_prompts
+        WHERE status = 'active' AND tier = ${tier} AND rule ? 'validIds' ${exclude()}
+        ORDER BY used_count ASC, last_used_date ASC NULLS FIRST, random()
+        LIMIT ${relMin * 5}
+      `)) as unknown as Row[];
+      let added = 0;
+      for (const r of pool) {
+        if (added >= relMin) break;
+        if (sharesClub(r)) continue;
+        take(r);
+        added += 1;
+      }
+    }
+    // fill the remainder of the tier from the wider bank, avoiding shared clubs
+    const need = () => n - chosen.filter((c) => c.tier === tier).length;
+    if (need() > 0) {
+      const pool = (await db.execute(sql`
+        SELECT id, prompt, rule, answer_type, tier, difficulty FROM tower_prompts
+        WHERE status = 'active' AND tier = ${tier} ${exclude()}
+        ORDER BY used_count ASC, last_used_date ASC NULLS FIRST, random()
+        LIMIT ${n * 6}
+      `)) as unknown as Row[];
+      // first pass: skip prompts sharing a club with one already chosen
+      for (const r of pool) {
+        if (need() <= 0) break;
+        if (usedIds.includes(r.id) || sharesClub(r)) continue;
+        take(r);
+      }
+      // second pass: if still short (small bank), relax the club constraint
+      for (const r of pool) {
+        if (need() <= 0) break;
+        if (usedIds.includes(r.id)) continue;
+        take(r);
+      }
+    }
   }
 
   // Backfill from any active prompt (hardest first) if a tier was short.

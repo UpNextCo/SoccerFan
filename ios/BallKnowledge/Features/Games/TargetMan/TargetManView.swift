@@ -646,8 +646,10 @@ private struct TargetManResultView: View {
                                     label: distance == 0 ? "ON TARGET" : "OFF BY",
                                     value: offByValue,
                                     subtitle: offBySubtitle,
-                                    accent: distance <= 10,
-                                    warning: distance > 100
+                                    // Color by the percentage-based score, not raw deltas, so
+                                    // the accent/warning matches the points across all magnitudes.
+                                    accent: score >= 600,
+                                    warning: score <= 50
                                 )
                                 .transition(resultTransition)
                             }

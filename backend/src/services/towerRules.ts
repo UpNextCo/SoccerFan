@@ -10,6 +10,12 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 
 export interface TowerRule {
+  /** Closed-set relationship prompts (teammates / managers / finals / World Cup):
+   *  the valid player ids are precomputed at build time (reusing verified helpers),
+   *  so validation is a membership test and counting is the set size. `label` is a
+   *  short human tag for debugging/curation. */
+  validIds?: string[];
+  label?: string;
   nationality?: string;
   nonEuropean?: boolean;
   position?: 'Goalkeeper' | 'Defender';
@@ -90,12 +96,15 @@ const AGG = sql`
       COALESCE(SUM(s.appearances), 0)::int AS total_apps
     FROM players p
     LEFT JOIN player_stats s ON s.player_id = p.id
-    WHERE p.external_id IS NOT NULL
     GROUP BY p.id, p.nationality, p.position, p.market_value_tier, p.peak_market_value_eur, p.record_fee_eur
   )`;
+// NB: previously filtered `WHERE p.external_id IS NOT NULL`, which hid pre-2010 legends
+// (Cannavaro, Emerson…) from counting AND validation — so they were wrongly rejected as
+// answers. Now ALL players are eligible; fame is judged by market_value_tier, not apps.
 
 /** How many players satisfy this rule (for generation solvability). */
 export async function countValidPlayers(rule: TowerRule): Promise<number> {
+  if (rule.validIds) return rule.validIds.length;
   const conds = sql.join(ruleConditions(rule), sql` AND `);
   const rows = (await db.execute(sql`${AGG} SELECT COUNT(*)::int AS n FROM agg a WHERE ${conds}`)) as unknown as Array<{ n: number }>;
   return rows[0]?.n ?? 0;
@@ -130,8 +139,28 @@ export async function countRecallablePlayers(rule: TowerRule): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
+/**
+ * Highest market_value_tier (1–5) among a prompt's answers — the "is there a STAR answer?"
+ * signal. Tier is fully populated (unlike peak market value, ~64% covered) and correctly
+ * rates legends (Cannavaro/Danilo/Emerson = 5), so it's the reliable fame gate. A prompt
+ * whose best answer is only tier ≤3 (e.g. Udinese+Man City journeymen) is "database-hard",
+ * not fun-hard, and should be pruned.
+ */
+export async function bestAnswerTier(rule: TowerRule): Promise<number> {
+  if (rule.validIds) {
+    if (rule.validIds.length === 0) return 0;
+    const ids = sql.join(rule.validIds.map((i) => sql`${i}::uuid`), sql`, `);
+    const rows = (await db.execute(sql`SELECT COALESCE(MAX(market_value_tier),0)::int AS t FROM players WHERE id IN (${ids})`)) as unknown as Array<{ t: number }>;
+    return rows[0]?.t ?? 0;
+  }
+  const conds = sql.join(ruleConditions(rule), sql` AND `);
+  const rows = (await db.execute(sql`${AGG} SELECT COALESCE(MAX(a.mvt),0)::int AS t FROM agg a WHERE ${conds}`)) as unknown as Array<{ t: number }>;
+  return rows[0]?.t ?? 0;
+}
+
 /** Does this specific player satisfy the rule? Same SQL, filtered to one id. */
 export async function playerSatisfiesRule(playerId: string, rule: TowerRule): Promise<boolean> {
+  if (rule.validIds) return rule.validIds.includes(playerId);
   const conds = sql.join(ruleConditions(rule), sql` AND `);
   const rows = (await db.execute(sql`${AGG} SELECT 1 FROM agg a WHERE a.id = ${playerId} AND ${conds} LIMIT 1`)) as unknown as unknown[];
   return rows.length > 0;
@@ -140,6 +169,19 @@ export async function playerSatisfiesRule(playerId: string, rule: TowerRule): Pr
 /** Up to `limit` of the most recognisable players satisfying the rule (real names,
  *  most famous first) — used to let the LLM judge difficulty from concrete answers. */
 export async function sampleFamousPlayers(rule: TowerRule, limit = 6): Promise<string[]> {
+  if (rule.validIds) {
+    if (rule.validIds.length === 0) return [];
+    const ids = sql.join(rule.validIds.map((i) => sql`${i}::uuid`), sql`, `);
+    const rows = (await db.execute(sql`
+      SELECT p.name FROM players p
+      LEFT JOIN player_stats s ON s.player_id = p.id
+      WHERE p.id IN (${ids})
+      GROUP BY p.id, p.name, p.market_value_tier
+      ORDER BY p.market_value_tier DESC, COALESCE(SUM(s.appearances),0) DESC
+      LIMIT ${limit}
+    `)) as unknown as Array<{ name: string }>;
+    return rows.map((r) => r.name).filter(Boolean);
+  }
   const conds = sql.join(ruleConditions(rule), sql` AND `);
   const rows = (await db.execute(sql`
     ${AGG}

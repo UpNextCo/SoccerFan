@@ -308,7 +308,15 @@ export async function generateTargetManPuzzle(
     const combined = chosen.reduce((sum, player) => sum + player.statValue, 0);
     const target = roundTarget(combined, category);
 
-    validateTargetManPuzzle({ leagueId: comp.id, category, target });
+    // A combo whose combined total exceeds the category ceiling must fall through
+    // to the next combo, not abort the whole mode. Only swallow validation errors;
+    // re-throw anything unexpected.
+    try {
+      validateTargetManPuzzle({ leagueId: comp.id, category, target });
+    } catch (error) {
+      if (error instanceof PuzzleValidationError) continue;
+      throw error;
+    }
 
     const puzzleJson = {
       modeId: 'target_man' as const,

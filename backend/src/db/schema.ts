@@ -236,6 +236,87 @@ export const towerPrompts = pgTable(
   ]
 );
 
+/**
+ * Curated club tenures for marquee managers (Ferguson, Mourinho, Guardiola…). Powers
+ * "played under manager X" relationship prompts. Seasons are season-start years
+ * (2008 = 2008/09). season_to NULL = ongoing. Derived against player_stats by club +
+ * season overlap; we only ever curate famous managers, so quality beats scraping.
+ */
+export const managerTenures = pgTable(
+  'manager_tenures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    manager: text('manager').notNull(),
+    managerNorm: text('manager_norm').notNull(),
+    club: text('club').notNull(),
+    clubNorm: text('club_norm').notNull(),
+    seasonFrom: integer('season_from').notNull(),
+    seasonTo: integer('season_to'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('manager_tenures_unique').on(table.managerNorm, table.clubNorm, table.seasonFrom),
+    index('manager_tenures_manager_idx').on(table.managerNorm),
+  ]
+);
+
+/**
+ * Per-player appearances in major finals (Champions League / World Cup / Euro), scraped
+ * from FBref match reports. Powers "scored in a CL final", "started a World Cup final",
+ * "played in a Champions League final", "won the …" relationship prompts. season =
+ * season-start year. `won` = their team won that final.
+ */
+export const finalAppearances = pgTable(
+  'final_appearances',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    playerId: uuid('player_id').references(() => players.id, { onDelete: 'cascade' }),
+    playerName: text('player_name').notNull(),
+    competition: text('competition').notNull(), // Champions League | World Cup | Euro
+    season: integer('season').notNull(),
+    team: text('team').notNull(),
+    started: boolean('started').notNull().default(false),
+    minutes: integer('minutes').notNull().default(0),
+    goals: integer('goals').notNull().default(0),
+    won: boolean('won').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('final_appearances_unique').on(
+      table.competition,
+      table.season,
+      table.playerName,
+      table.team
+    ),
+    index('final_appearances_player_idx').on(table.playerId),
+    index('final_appearances_comp_idx').on(table.competition, table.season),
+  ]
+);
+
+/**
+ * Individual awards scraped from Wikipedia list articles (Ballon d'Or podium, European
+ * Golden Shoe, World Cup Golden Boot, PFA/UEFA Team of the Year, FIFPro World XI, Young
+ * Player…). Powers "won the Golden Boot", "Ballon d'Or podium", "UEFA Team of the Year"
+ * style prompts across modes. placement: winner | 1st | 2nd | 3rd | xi.
+ */
+export const playerAwards = pgTable(
+  'player_awards',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    playerId: uuid('player_id').references(() => players.id, { onDelete: 'cascade' }),
+    playerName: text('player_name').notNull(),
+    award: text('award').notNull(),
+    year: integer('year').notNull(),
+    placement: text('placement').notNull().default('winner'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('player_awards_unique').on(table.award, table.year, table.playerName, table.placement),
+    index('player_awards_player_idx').on(table.playerId),
+    index('player_awards_award_idx').on(table.award),
+  ]
+);
+
 export const dailyCompletions = pgTable(
   'daily_completions',
   {
@@ -315,3 +396,6 @@ export type PlayerHonour = typeof playerHonours.$inferSelect;
 export type PlayerCareerEntry = typeof playerCareer.$inferSelect;
 export type Team = typeof teams.$inferSelect;
 export type DailyPuzzle = typeof dailyPuzzles.$inferSelect;
+export type ManagerTenure = typeof managerTenures.$inferSelect;
+export type FinalAppearance = typeof finalAppearances.$inferSelect;
+export type PlayerAward = typeof playerAwards.$inferSelect;
