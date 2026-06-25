@@ -3,11 +3,12 @@
  * (davidcariboo/player-scores) into players.{market_value_eur, peak_market_value_eur,
  * record_fee_eur}, then re-tier market_value_tier from real peak value.
  *
- * Matches Transfermarkt → our players by normalized name + nationality (unique only),
- * same conservative entity-resolution as the FBref reconciliation.
+ * Peak value comes from the FULL valuation history (player_valuations.csv), and players
+ * are matched Transfermarkt → ours primarily by date of birth + name tokens (robust to
+ * word-order/name variants), then name+nationality, then unique token-subset.
  *
- * Expects CSVs in data/transfermarkt/ (players.csv, transfers.csv).
- * Usage: DATABASE_URL=... npm run job:import-transfermarkt
+ * Expects CSVs in transferdata/ (players.csv, player_valuations.csv, transfers.csv).
+ * Usage: DATABASE_URL=... npx tsx src/jobs/import-transfermarkt.ts transferdata
  */
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
@@ -123,9 +124,23 @@ function chunk<T>(arr: T[], size: number): T[][] {
 interface TmPlayer {
   tmId: string;
   name: string;
+  dob: string | null; // YYYY-MM-DD
   current: number | null;
   peak: number | null;
   toks: Set<string>;
+}
+
+/** Two names share enough tokens to be the same person (order-independent). */
+function tokenCompatible(a: Set<string>, b: Set<string>): boolean {
+  const [small, big] = a.size <= b.size ? [a, b] : [b, a];
+  return small.size >= 2 && isSubset(small, big);
+}
+
+/** Looser check for the DOB path: an exact date of birth is already highly selective,
+ *  so one shared name token is enough — this lets mononyms (Pedro, Marcelo, Raúl…) match. */
+function dobNameMatch(a: Set<string>, b: Set<string>): boolean {
+  const [small, big] = a.size <= b.size ? [a, b] : [b, a];
+  return small.size >= 1 && isSubset(small, big);
 }
 
 async function main() {
@@ -133,20 +148,44 @@ async function main() {
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS peak_market_value_eur integer`);
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS record_fee_eur integer`);
 
-  // --- Transfermarkt players → index by name+nationality (unique only) ---
+  // --- PEAK + current value per TM player from the FULL valuation history ---
+  // players.csv's precomputed columns are frequently blank; the history is far more
+  // complete and is what makes a player like Son (peak ~€90m, lower now) read as elite.
+  console.log('Parsing player_valuations.csv (full history)...');
+  const valuations = parseCsv(readFileSync(`${DIR}/player_valuations.csv`, 'utf8'));
+  // PEAK (max over the player's whole history — captures their prime) + latest value.
+  const peakByTm = new Map<string, number>();
+  const latestByTm = new Map<string, { date: string; value: number }>();
+  for (const v of valuations) {
+    const tmId = v.player_id;
+    const val = toEur(v.market_value_in_eur ?? '');
+    if (!tmId || !val) continue;
+    if (val > (peakByTm.get(tmId) ?? 0)) peakByTm.set(tmId, val);
+    const date = v.date ?? '';
+    const prev = latestByTm.get(tmId);
+    if (!prev || date > prev.date) latestByTm.set(tmId, { date, value: val });
+  }
+  console.log(`${peakByTm.size} TM players have a valuation history`);
+
+  // --- Transfermarkt players → index by DOB and by name+nationality ---
   console.log('Parsing players.csv...');
   const tmPlayers = parseCsv(readFileSync(`${DIR}/players.csv`, 'utf8'));
+  const byDob = new Map<string, TmPlayer[]>(); // keyed by DOB only; disambiguate by name tokens
   const byKey = new Map<string, TmPlayer[]>();
   const byNat = new Map<string, TmPlayer[]>();
   for (const p of tmPlayers) {
     const name = p.name ?? '';
+    const tmId = p.player_id!;
+    const dob = (p.date_of_birth ?? '').slice(0, 10) || null;
     const entry: TmPlayer = {
-      tmId: p.player_id!,
+      tmId,
       name,
-      current: toEur(p.market_value_in_eur ?? ''),
-      peak: toEur(p.highest_market_value_in_eur ?? ''),
+      dob,
+      current: latestByTm.get(tmId)?.value ?? toEur(p.market_value_in_eur ?? ''),
+      peak: peakByTm.get(tmId) ?? toEur(p.highest_market_value_in_eur ?? ''),
       toks: tokens(name),
     };
+    if (dob) (byDob.get(dob) ?? byDob.set(dob, []).get(dob)!).push(entry);
     const k = key(name, p.country_of_citizenship ?? '');
     (byKey.get(k) ?? byKey.set(k, []).get(k)!).push(entry);
     const nat = normNat(p.country_of_citizenship ?? '');
@@ -166,10 +205,10 @@ async function main() {
   }
   console.log(`${recordFee.size} TM players have a recorded fee`);
 
-  // --- Match our players (exact name+nationality, then token-subset fallback) ---
+  // --- Match: DOB + name tokens (strongest), then name+nationality, then token-subset ---
   const ours = (await db.execute(sql`
-    SELECT id, name, nationality, aliases, search_text FROM players
-  `)) as unknown as Array<{ id: string; name: string; nationality: string; aliases: string[]; search_text: string }>;
+    SELECT id, name, nationality, aliases, search_text, birth_date::text AS dob FROM players
+  `)) as unknown as Array<{ id: string; name: string; nationality: string; aliases: string[]; search_text: string; dob: string | null }>;
 
   interface Update {
     id: string;
@@ -181,26 +220,38 @@ async function main() {
     searchText: string;
   }
   const updates: Update[] = [];
+  let viaDob = 0;
   let exact = 0;
   let subset = 0;
   let renamed = 0;
 
   for (const p of ours) {
     let tm: TmPlayer | undefined;
-    const exactHits = byKey.get(key(p.name, p.nationality));
-    if (exactHits && exactHits.length === 1) {
-      tm = exactHits[0];
-      exact += 1;
-    } else if (!exactHits || exactHits.length === 0) {
-      const ourToks = tokens(p.name);
-      if (ourToks.size >= 2) {
-        const cands = (byNat.get(normNat(p.nationality)) ?? []).filter((t) => {
-          const [small, big] = t.toks.size <= ourToks.size ? [t.toks, ourToks] : [ourToks, t.toks];
-          return small.size >= 2 && isSubset(small, big);
-        });
-        if (cands.length === 1) {
-          tm = cands[0];
-          subset += 1;
+    const ourToks = tokens(p.name);
+    const dob = (p.dob ?? '').slice(0, 10);
+
+    // 1) Same date of birth + compatible name tokens — robust to word-order/name variants.
+    if (dob) {
+      const cands = (byDob.get(dob) ?? []).filter((t) => dobNameMatch(t.toks, ourToks));
+      if (cands.length === 1) {
+        tm = cands[0];
+        viaDob += 1;
+      }
+    }
+    // 2) Exact name + nationality (unique).
+    if (!tm) {
+      const exactHits = byKey.get(key(p.name, p.nationality));
+      if (exactHits && exactHits.length === 1) {
+        tm = exactHits[0];
+        exact += 1;
+      } else if (!exactHits || exactHits.length === 0) {
+        // 3) Token-subset within nationality (unique).
+        if (ourToks.size >= 2) {
+          const cands = (byNat.get(normNat(p.nationality)) ?? []).filter((t) => tokenCompatible(t.toks, ourToks));
+          if (cands.length === 1) {
+            tm = cands[0];
+            subset += 1;
+          }
         }
       }
     }
@@ -219,7 +270,7 @@ async function main() {
       searchText: `${p.search_text} ${normalizeSearchText(tm.name)}`.trim(),
     });
   }
-  console.log(`Matched ${updates.length} players (${exact} exact, ${subset} subset) · ${renamed} renamed to common name`);
+  console.log(`Matched ${updates.length} players (${viaDob} dob, ${exact} name+nat, ${subset} subset) · ${renamed} renamed to common name`);
 
   for (const batch of chunk(updates, 300)) {
     const tuples = batch.map(
@@ -239,22 +290,20 @@ async function main() {
   }
   console.log(`Wrote values + fees + common names for ${updates.length} players`);
 
-  // --- Re-tier from REAL peak market value (only where we have it) ---
+  // --- Tier (1-5) from ABSOLUTE peak market value (real €, interpretable, no pool
+  // dilution). compute-fame then lifts legends via achievements so older/uncovered
+  // greats aren't penalised by football's market inflation. ---
   await db.execute(sql`
-    WITH ranked AS (
-      SELECT id, percent_rank() OVER (PARTITION BY position ORDER BY peak_market_value_eur) AS pr
-      FROM players WHERE peak_market_value_eur IS NOT NULL
-    )
-    UPDATE players p SET market_value_tier = CASE
-      WHEN r.pr >= 0.95 THEN 5
-      WHEN r.pr >= 0.80 THEN 4
-      WHEN r.pr >= 0.50 THEN 3
-      WHEN r.pr >= 0.20 THEN 2
+    UPDATE players SET market_value_tier = CASE
+      WHEN peak_market_value_eur >= 70000000 THEN 5
+      WHEN peak_market_value_eur >= 35000000 THEN 4
+      WHEN peak_market_value_eur >= 15000000 THEN 3
+      WHEN peak_market_value_eur >=  5000000 THEN 2
       ELSE 1
     END
-    FROM ranked r WHERE p.id = r.id
+    WHERE peak_market_value_eur IS NOT NULL
   `);
-  console.log('Re-tiered players that have a real market value. Done.');
+  console.log('Re-tiered players from absolute peak market value.');
 
   const sample = (await db.execute(sql`
     SELECT name, peak_market_value_eur, record_fee_eur

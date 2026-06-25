@@ -164,7 +164,7 @@ async function main() {
     upserted += batch.length;
   }
   console.log(`Upserted ${upserted} historical stat rows.`);
-  console.log('Done. Re-run job:market-value to re-tier players with the new history.');
+  console.log('Done. Re-run job:import-transfermarkt + job:compute-fame to refresh fame tiers.');
   process.exit(0);
 }
 

@@ -176,7 +176,7 @@ async function main() {
     }
   }
 
-  console.log(`\nMerged ${merged}, skipped ${skipped}. Re-run job:market-value afterwards.`);
+  console.log(`\nMerged ${merged}, skipped ${skipped}. Re-run job:compute-fame afterwards.`);
   process.exit(0);
 }
 

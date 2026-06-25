@@ -123,7 +123,7 @@ async function main() {
     `${mark(logoPct >= 99)} Team crests  ${logoPct}% logos (${teams.with_logo}/${teams.teams}) · ${teams.with_league} mapped to a league`
   );
   console.log(
-    `${mark(marketPct >= TARGETS.marketValueSpreadPct)} Market value ${marketPct}% tiered (${mv.non_default}/${mv.total} non-default) · run job:market-value if ❌`
+    `${mark(marketPct >= TARGETS.marketValueSpreadPct)} Market value ${marketPct}% tiered (${mv.non_default}/${mv.total} non-default) · run job:compute-fame if ❌`
   );
 
   // ---------- GENERATOR READINESS ----------

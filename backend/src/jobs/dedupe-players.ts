@@ -190,7 +190,7 @@ async function main() {
     }
   }
 
-  console.log(`\nMerged ${merged} groups, skipped ${skipped}. Re-run job:market-value afterwards.`);
+  console.log(`\nMerged ${merged} groups, skipped ${skipped}. Re-run job:compute-fame afterwards.`);
   process.exit(0);
 }
 

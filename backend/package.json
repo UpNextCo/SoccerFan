@@ -29,7 +29,7 @@
     "job:ingest-teams": "tsx src/jobs/ingest-teams.ts",
     "job:ingest-stats-all": "tsx src/jobs/ingest-stats-all.ts",
     "job:refresh-player-search": "tsx src/jobs/refresh-player-search.ts",
-    "job:market-value": "tsx src/jobs/compute-market-value.ts",
+    "job:compute-fame": "tsx src/jobs/compute-fame.ts",
     "job:import-fbref": "tsx src/jobs/import-fbref.ts",
     "job:reconcile-players": "tsx src/jobs/reconcile-players.ts",
     "job:import-transfermarkt": "tsx src/jobs/import-transfermarkt.ts",

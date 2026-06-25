@@ -5,7 +5,6 @@ import Pow
 
 // Single success accent — reuse the app green. No second neon.
 private let golfGreen = BKTheme.accent
-// Warm tier highlight for rare answers (the only non-green "wow" colour besides ultra).
 private let golfGold = Color(hex: "F5C451")
 
 /// One motion vocabulary for the whole screen so animations feel deliberate, not random.
@@ -16,13 +15,14 @@ private enum GolfMotion {
     static let quick = Animation.snappy(duration: 0.22)
 }
 
-/// One restrained rarity scale: two neutrals → gold → green jackpot.
+/// Rarity colour scale (drives the answer tick + badge): green → gold → orange → purple,
+/// climbing from the most common to the rarest answer.
 private func golfRarityColor(_ rarity: FootballGolfRarity) -> Color {
     switch rarity {
-    case .common:    return BKTheme.textSecondary
-    case .uncommon:  return BKTheme.textPrimary
-    case .rare:      return golfGold
-    case .ultraRare: return golfGreen
+    case .common:    return golfGreen
+    case .uncommon:  return golfGold
+    case .rare:      return Color(hex: "FF8A3D")   // orange — hotter than gold
+    case .ultraRare: return Color(hex: "C56BFF")   // purple — the top tier
     }
 }
 
@@ -526,9 +526,14 @@ private struct FootballGolfAnswerChip: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(golfGreen)
-                .symbolEffect(.bounce, value: appeared)
+            ZStack {
+                Circle().fill(rarityColor)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .black))
+                    .foregroundStyle(BKTheme.background)
+                    .symbolEffect(.bounce, value: appeared)
+            }
+            .frame(width: 22, height: 22)
             Text(answer.name.uppercased())
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundStyle(BKTheme.textPrimary)
