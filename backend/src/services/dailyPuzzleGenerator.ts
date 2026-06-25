@@ -71,14 +71,23 @@ const BLIND_RANK_LEAGUES: Array<{ id: number; name: string }> = [
   { id: 61, name: 'Ligue 1' },
 ];
 
+// Continental cups (stats ingested under api-football ids: UCL = 2, Europa = 3).
+const BLIND_RANK_CUPS: Array<{ id: number; name: string }> = [
+  { id: 2, name: 'Champions League' },
+  { id: 3, name: 'Europa League' },
+];
+
 const BLIND_RANK_CATEGORIES: BlindRankCategoryDef[] = [
   ...BLIND_RANK_LEAGUES.flatMap((league) => [
     plMetric(league.id, league.name, 'goals', 5, 'goals'),
     plMetric(league.id, league.name, 'assists', 3, 'assists'),
     plMetric(league.id, league.name, 'appearances', 20, 'apps'),
   ]),
-  plMetric(2, 'Champions League', 'goals', 3, 'goals'),
-  plMetric(2, 'Champions League', 'assists', 2, 'assists'),
+  ...BLIND_RANK_CUPS.flatMap((cup) => [
+    plMetric(cup.id, cup.name, 'goals', 3, 'goals'),
+    plMetric(cup.id, cup.name, 'assists', 2, 'assists'),
+    plMetric(cup.id, cup.name, 'appearances', 15, 'apps'),
+  ]),
 ];
 
 function hashString(input: string): number {
@@ -88,6 +97,23 @@ function hashString(input: string): number {
     hash |= 0;
   }
   return Math.abs(hash);
+}
+
+/** Whole days since the Unix epoch for a YYYY-MM-DD date (UTC). */
+function dayNumber(date: string): number {
+  const ms = Date.parse(`${date}T00:00:00Z`);
+  return Number.isFinite(ms) ? Math.floor(ms / 86_400_000) : 0;
+}
+
+/**
+ * Map a date to a starting category index by stepping through the catalog with a
+ * stride that is coprime to its length. This visits every category exactly once
+ * per cycle (even goals/assists/appearances coverage, no clustering) instead of
+ * relying on a poorly-distributed string hash mod N.
+ */
+function rotatedCategoryIndex(date: string, length: number): number {
+  const stride = 13; // prime; coprime with the catalog length (21)
+  return ((dayNumber(date) * stride) % length + length) % length;
 }
 
 function seededShuffle<T>(array: T[], seed: number): T[] {
@@ -252,7 +278,7 @@ export async function generateBlindRankPuzzle(
   _factPack: DailyFactPack
 ): Promise<GeneratedDailyPuzzle> {
   const seed = hashString(`${date}:blind_rank`);
-  const startIndex = seed % BLIND_RANK_CATEGORIES.length;
+  const startIndex = rotatedCategoryIndex(date, BLIND_RANK_CATEGORIES.length);
 
   // Rotate categories by date, then walk the list so a thin pool for one
   // league/metric falls through to the next instead of failing the whole mode.
