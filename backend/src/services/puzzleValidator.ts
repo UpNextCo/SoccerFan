@@ -95,17 +95,19 @@ export function validateTargetManPuzzle(input: {
     throw new PuzzleValidationError('Target must be positive');
   }
 
+  // Targets are the COMBINED career total of 5 players, so these are sanity
+  // ceilings for a 5-player sum (not per-player limits).
   const maxByCategory: Record<TargetManStatCategory, number> = {
-    goals: 1200,
-    assists: 600,
-    appearances: 600,
-    yellowCards: 200,
-    redCards: 30,
-    cleanSheets: 200,
-    minutesPlayed: 50_000,
-    saves: 1500,
-    foulsCommitted: 400,
-    tacklesWon: 800,
+    goals: 1_500,
+    assists: 900,
+    appearances: 3_500,
+    yellowCards: 900,
+    redCards: 200,
+    cleanSheets: 1_200,
+    minutesPlayed: 350_000,
+    saves: 5_000,
+    foulsCommitted: 4_000,
+    tacklesWon: 5_000,
   };
 
   if (input.target > maxByCategory[input.category]) {

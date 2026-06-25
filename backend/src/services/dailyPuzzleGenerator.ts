@@ -25,7 +25,24 @@ import {
 
 const DAILY_MODES = ['guess_who', 'target_man', 'blind_rank'] as const;
 
-const TARGET_MAN_CATEGORIES: TargetManStatCategory[] = ['goals', 'assists', 'appearances'];
+/** Competitions for Target Man — big-5 plus continental cups (stats under ids 2/3). */
+const TARGET_MAN_COMPETITIONS: Array<{ id: number; name: string }> = [
+  ...INGEST_LEAGUES.map((l) => ({ id: l.id, name: l.name })),
+  { id: 2, name: 'Champions League' },
+  { id: 3, name: 'Europa League' },
+];
+
+/** Data-backed, scorable categories (clean sheets has no data; red cards too sparse). */
+const TARGET_MAN_CATEGORIES: TargetManStatCategory[] = [
+  'goals',
+  'assists',
+  'appearances',
+  'minutesPlayed',
+  'yellowCards',
+  'tacklesWon',
+  'foulsCommitted',
+  'saves',
+];
 
 interface BlindRankCategoryDef {
   id: string;
@@ -232,45 +249,59 @@ export async function generateTargetManPuzzle(
   _factPack: DailyFactPack
 ): Promise<GeneratedDailyPuzzle> {
   const seed = hashString(`${date}:target_man`);
-  const league = INGEST_LEAGUES[seed % INGEST_LEAGUES.length]!;
-  const category = TARGET_MAN_CATEGORIES[Math.floor((seed / 7) % TARGET_MAN_CATEGORIES.length)]!;
-  const metric = metricForTargetCategory(category);
 
-  const ranked = await topPlayersByLeagueMetric(league.id, metric, 1, 25);
-  if (ranked.length < 5) {
-    throw new PuzzleValidationError(`Not enough stat rows for Target Man (${league.name} ${category})`);
+  // Rotate evenly across every competition×category combo with a coprime stride,
+  // then walk the list so a thin pool falls through instead of failing the mode.
+  const combos: Array<{ comp: { id: number; name: string }; category: TargetManStatCategory }> = [];
+  for (const comp of TARGET_MAN_COMPETITIONS) {
+    for (const category of TARGET_MAN_CATEGORIES) combos.push({ comp, category });
+  }
+  const stride = 13; // coprime with 56 combos
+  const start = ((dayNumber(date) * stride) % combos.length + combos.length) % combos.length;
+
+  for (let offset = 0; offset < combos.length; offset += 1) {
+    const { comp, category } = combos[(start + offset) % combos.length]!;
+    const metric = metricForTargetCategory(category);
+
+    const ranked = await topPlayersByLeagueMetric(comp.id, metric, 1, 25);
+    if (ranked.length < 5) continue;
+
+    // Pick 5 from the mid-table so the target is challenging, not just the elite.
+    const middle = ranked.slice(4, 14);
+    const sample = middle.length >= 5 ? middle : ranked.slice(0, 5);
+    const pickOffset = seed % Math.max(sample.length - 4, 1);
+    const chosen = sample.slice(pickOffset, pickOffset + 5);
+    if (chosen.length < 5) continue;
+
+    const combined = chosen.reduce((sum, player) => sum + player.statValue, 0);
+    const target = roundTarget(combined, category);
+
+    validateTargetManPuzzle({ leagueId: comp.id, category, target });
+
+    const puzzleJson = {
+      modeId: 'target_man' as const,
+      puzzleId: `${date}-target_man`,
+      date,
+      league: comp.name,
+      leagueId: comp.id,
+      category,
+      categoryLabel: targetCategoryLabel(category),
+      target,
+      title: `${comp.name} ${targetCategoryLabel(category)}`,
+    };
+
+    return {
+      modeId: 'target_man',
+      puzzleJson,
+      answerPlayerId: null,
+      answerJson: {
+        modeId: 'target_man',
+        answer: { leagueId: comp.id, category, target },
+      },
+    };
   }
 
-  const middle = ranked.slice(4, 14);
-  const sample = middle.length >= 5 ? middle : ranked.slice(0, 5);
-  const pickOffset = seed % Math.max(sample.length - 4, 1);
-  const chosen = sample.slice(pickOffset, pickOffset + 5);
-  const combined = chosen.reduce((sum, player) => sum + player.statValue, 0);
-  const target = roundTarget(combined, category);
-
-  validateTargetManPuzzle({ leagueId: league.id, category, target });
-
-  const puzzleJson = {
-    modeId: 'target_man' as const,
-    puzzleId: `${date}-target_man`,
-    date,
-    league: league.name,
-    leagueId: league.id,
-    category,
-    categoryLabel: targetCategoryLabel(category),
-    target,
-    title: `${league.name} ${targetCategoryLabel(category)}`,
-  };
-
-  return {
-    modeId: 'target_man',
-    puzzleJson,
-    answerPlayerId: null,
-    answerJson: {
-      modeId: 'target_man',
-      answer: { leagueId: league.id, category, target },
-    },
-  };
+  throw new PuzzleValidationError('No target man competition produced a viable target');
 }
 
 export async function generateBlindRankPuzzle(

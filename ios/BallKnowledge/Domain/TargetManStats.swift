@@ -12,7 +12,7 @@ enum TargetManStats {
                 group.addTask {
                     let response = try await APIClient.shared.getPlayerCareerStats(
                         playerId: selection.player.id,
-                        league: challenge.league
+                        leagueId: challenge.apiLeagueId
                     )
                     let value = statValue(from: response.totals, category: challenge.category)
                     return (index, value)

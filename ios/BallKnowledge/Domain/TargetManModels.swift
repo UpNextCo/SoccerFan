@@ -109,14 +109,15 @@ enum TargetManStatCategory: String, CaseIterable, Codable {
 
 struct TargetManChallenge: Equatable {
     let id: String
-    let league: TargetManLeague
+    let leagueName: String
+    let apiLeagueId: Int
     let category: TargetManStatCategory
     let target: Int
     let isDaily: Bool
     let date: String?
 
     var title: String {
-        "\(league.rawValue) \(category.label)"
+        "\(leagueName) \(category.label)"
     }
 }
 
@@ -164,15 +165,18 @@ struct TargetManGameState: Equatable {
 }
 
 enum TargetManScoring {
-    static func points(forDifference difference: Int) -> Int {
+    /// Percentage-of-target accuracy, so categories of any magnitude (a ~300
+    /// assists target and a ~200,000 minutes target) score on the same fair curve.
+    static func points(forDifference difference: Int, target: Int) -> Int {
         let distance = abs(difference)
-        switch distance {
-        case 0: return 1000
-        case 1...5: return 900
-        case 6...10: return 800
-        case 11...25: return 600
-        case 26...50: return 400
-        case 51...100: return 200
+        if distance == 0 { return 1000 }
+        let pct = Double(distance) / Double(max(target, 1))
+        switch pct {
+        case ..<0.02: return 900
+        case ..<0.05: return 750
+        case ..<0.10: return 600
+        case ..<0.15: return 450
+        case ..<0.25: return 250
         default: return 50
         }
     }
@@ -181,23 +185,16 @@ enum TargetManScoring {
         max(10, score / 5)
     }
 
-    static func tierExplanation(forDifference difference: Int) -> String {
-        let distance = abs(difference)
-        switch distance {
-        case 0:
-            return "Exact match — 1,000 point bullseye"
-        case 1...5:
-            return "Within 5 of target — 900 point tier"
-        case 6...10:
-            return "Within 10 of target — 800 point tier"
-        case 11...25:
-            return "Within 25 of target — 600 point tier"
-        case 26...50:
-            return "Within 50 of target — 400 point tier"
-        case 51...100:
-            return "Within 100 of target — 200 point tier"
-        default:
-            return "More than 100 away — 50 point base score"
+    static func tierExplanation(forDifference difference: Int, target: Int) -> String {
+        if difference == 0 { return "Exact match — 1,000 point bullseye" }
+        let pct = Double(abs(difference)) / Double(max(target, 1))
+        switch pct {
+        case ..<0.02: return "Within 2% of target — 900 point tier"
+        case ..<0.05: return "Within 5% of target — 750 point tier"
+        case ..<0.10: return "Within 10% of target — 600 point tier"
+        case ..<0.15: return "Within 15% of target — 450 point tier"
+        case ..<0.25: return "Within 25% of target — 250 point tier"
+        default: return "More than 25% away — 50 point base score"
         }
     }
 

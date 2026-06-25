@@ -133,7 +133,7 @@ final class TargetManViewModel {
 
             let combined = state.selections.compactMap(\.statValue).reduce(0, +)
             let difference = combined - state.challenge.target
-            let score = TargetManScoring.points(forDifference: difference)
+            let score = TargetManScoring.points(forDifference: difference, target: state.challenge.target)
 
             state.combinedTotal = combined
             state.difference = difference
@@ -307,8 +307,8 @@ private struct TargetManChallengeCard: View {
                         .foregroundStyle(BKTheme.textMuted)
                 }
                 Spacer()
-                LeagueBadgeImage(league: challenge.league.rawValue, size: 22) {
-                    Text(GuessWhoDisplay.leagueAbbrev(challenge.league.rawValue))
+                LeagueBadgeImage(league: challenge.leagueName, size: 22) {
+                    Text(GuessWhoDisplay.leagueAbbrev(challenge.leagueName))
                         .font(.system(size: 8, weight: .bold, design: .rounded))
                         .foregroundStyle(BKTheme.textMuted)
                 }
@@ -655,9 +655,9 @@ private struct TargetManResultView: View {
                             if step >= TargetManResultStep.points.rawValue {
                                 VStack(spacing: 8) {
                                     resultRevealRow(
-                                        label: "POINTS",
-                                        value: "\(animatedScore)",
-                                        subtitle: TargetManScoring.tierExplanation(forDifference: difference),
+                                    label: "POINTS",
+                                    value: "\(animatedScore)",
+                                    subtitle: TargetManScoring.tierExplanation(forDifference: difference, target: challenge.target),
                                         accent: true,
                                         large: true
                                     )
@@ -771,7 +771,7 @@ private struct TargetManResultView: View {
     }
 
     private var scoreBreakdownHint: String {
-        "Scoring: exact 1,000 · within 5 → 900 · within 10 → 800 · within 25 → 600 · within 50 → 400 · within 100 → 200 · 100+ away → 50"
+        "Scoring: exact 1,000 · within 2% → 900 · 5% → 750 · 10% → 600 · 15% → 450 · 25% → 250 · further → 50"
     }
 
     private var resultTransition: AnyTransition {

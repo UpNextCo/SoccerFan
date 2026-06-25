@@ -9,14 +9,14 @@ enum DailyChallengeResolver {
     }
 
     static func targetManChallenge(from puzzle: TargetManPuzzleDTO, date: String) -> TargetManChallenge {
-        let league = TargetManLeague.allCases.first { $0.rawValue == puzzle.league }
-            ?? TargetManLeague.allCases.first { $0.apiLeagueId == puzzle.leagueId }
-            ?? .premierLeague
         let category = TargetManStatCategory(rawValue: puzzle.category) ?? .goals
 
+        // Carry the raw league name/id so cups (UCL/Europa) render and fetch the
+        // correct-league stats instead of silently defaulting to the Premier League.
         return TargetManChallenge(
             id: puzzle.puzzleId,
-            league: league,
+            leagueName: puzzle.league,
+            apiLeagueId: puzzle.leagueId,
             category: category,
             target: puzzle.target,
             isDaily: true,

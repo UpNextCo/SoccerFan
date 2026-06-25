@@ -10,7 +10,8 @@ enum TargetManSeed {
 
         return TargetManChallenge(
             id: "target_man_daily_\(dateKey)",
-            league: league,
+            leagueName: league.rawValue,
+            apiLeagueId: league.apiLeagueId,
             category: category,
             target: target,
             isDaily: true,
@@ -25,7 +26,8 @@ enum TargetManSeed {
 
         return TargetManChallenge(
             id: "target_man_practice_\(UUID().uuidString.prefix(8))",
-            league: league,
+            leagueName: league.rawValue,
+            apiLeagueId: league.apiLeagueId,
             category: category,
             target: targetNumber(for: category, seed: seed),
             isDaily: false,
@@ -52,9 +54,10 @@ enum TargetManSeed {
     }
 
     static func resolveStats(for selections: [TargetManSelection], challenge: TargetManChallenge) -> [TargetManSelection] {
-        selections.map { selection in
+        let league = TargetManLeague(rawValue: challenge.leagueName) ?? .premierLeague
+        return selections.map { selection in
             var copy = selection
-            copy.statValue = statValue(for: selection.player, league: challenge.league, category: challenge.category)
+            copy.statValue = statValue(for: selection.player, league: league, category: challenge.category)
             return copy
         }
     }
