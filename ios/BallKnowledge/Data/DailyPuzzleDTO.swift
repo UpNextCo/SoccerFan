@@ -175,12 +175,39 @@ struct OneMorePuzzleDTO: Codable, Equatable {
     let title: String
 }
 
+struct FootballGolfAnswerDTO: Codable, Equatable {
+    let id: String
+    let name: String
+    let aliases: [String]
+    let rarity: String
+}
+
+struct FootballGolfHoleDTO: Codable, Equatable {
+    let id: String
+    let holeNumber: Int
+    let par: Int
+    let prompt: String
+    let category: String
+    let answers: [FootballGolfAnswerDTO]
+    let hints: [String]
+}
+
+struct FootballGolfPuzzleDTO: Codable, Equatable {
+    let modeId: String
+    let puzzleId: String
+    let date: String
+    let title: String
+    let totalPar: Int
+    let holes: [FootballGolfHoleDTO]
+}
+
 enum DailyPuzzleDTO: Codable, Equatable {
     case guessWho(GuessWhoPuzzleDTO)
     case targetMan(TargetManPuzzleDTO)
     case blindRank(BlindRankPuzzleDTO)
     case footballBingo(FootballBingoPuzzleDTO)
     case footballTower(FootballTowerPuzzleDTO)
+    case footballGolf(FootballGolfPuzzleDTO)
     case oneMore(OneMorePuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
@@ -202,6 +229,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .footballBingo(try FootballBingoPuzzleDTO(from: decoder))
         case GameModeID.footballTower.rawValue:
             self = .footballTower(try FootballTowerPuzzleDTO(from: decoder))
+        case GameModeID.footballGolf.rawValue:
+            self = .footballGolf(try FootballGolfPuzzleDTO(from: decoder))
         case GameModeID.oneMore.rawValue:
             self = .oneMore(try OneMorePuzzleDTO(from: decoder))
         default:
@@ -225,6 +254,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .footballTower(let puzzle):
             try puzzle.encode(to: encoder)
+        case .footballGolf(let puzzle):
+            try puzzle.encode(to: encoder)
         case .oneMore(let puzzle):
             try puzzle.encode(to: encoder)
         }
@@ -237,6 +268,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .blindRank: return GameModeID.blindRank.rawValue
         case .footballBingo: return GameModeID.footballBingo.rawValue
         case .footballTower: return GameModeID.footballTower.rawValue
+        case .footballGolf: return GameModeID.footballGolf.rawValue
         case .oneMore: return GameModeID.oneMore.rawValue
         }
     }
@@ -310,6 +342,11 @@ extension DailyBundleDTO {
 
     var footballTowerPuzzle: FootballTowerPuzzleDTO? {
         guard case .footballTower(let puzzle) = game(for: .footballTower)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var footballGolfPuzzle: FootballGolfPuzzleDTO? {
+        guard case .footballGolf(let puzzle) = game(for: .footballGolf)?.puzzle else { return nil }
         return puzzle
     }
 

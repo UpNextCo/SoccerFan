@@ -54,9 +54,14 @@ function rarityFor(p: AnswerPlayer): Rarity {
   return 'ultraRare';
 }
 
-/** How many answers a fan could plausibly find (common/uncommon/rare). Drives min par. */
-function findableCount(answers: AnswerPlayer[]): number {
-  return answers.filter((a) => rarityFor(a) !== 'ultraRare').length;
+/** How many answers a typical fan can actually NAME (common/uncommon). Par must be
+ *  comfortably below this so a hole is completable from common knowledge — rare/ultra
+ *  answers are the bonus that earns birdies/eagles, never required to finish. */
+function famousCount(players: AnswerPlayer[]): number {
+  return players.filter((p) => {
+    const r = rarityFor(p);
+    return r === 'common' || r === 'uncommon';
+  }).length;
 }
 
 function hashStr(s: string): number {
@@ -87,7 +92,7 @@ interface Candidate {
   prompt: string;
   rule: TowerRule;
   answers: GolfAnswer[];
-  findable: number;
+  famous: number;
 }
 
 async function aliasesByIds(ids: string[]): Promise<Map<string, string[]>> {
@@ -167,9 +172,11 @@ export async function generateFootballGolfCourse(date: string): Promise<Football
       if (!prev || p.total > prev.total) byName.set(k, p);
     }
     players = [...byName.values()];
-    const findable = findableCount(players);
-    // Broad enough to be a fair golf hole, but focused enough to ship (and not trivial).
-    if (findable < 6 || players.length > 130) continue;
+    const famous = famousCount(players);
+    // A fair golf hole needs enough NAMEABLE answers to clear par with room to spare,
+    // and a bounded total so the answer set ships sensibly. This excludes niche prompts
+    // (e.g. "Ivorian in the Bundesliga") whose few nameable answers make par brutal.
+    if (famous < 5 || players.length > 200) continue;
 
     const aliasMap = await aliasesByIds(players.map((p) => p.id));
     const answers: GolfAnswer[] = players.map((p) => ({
@@ -178,7 +185,7 @@ export async function generateFootballGolfCourse(date: string): Promise<Football
       aliases: aliasMap.get(p.id) ?? [],
       rarity: rarityFor(p),
     }));
-    candidates.push({ prompt, rule, answers, findable });
+    candidates.push({ prompt, rule, answers, famous });
     for (const c of clubs) usedClubs.add(c);
     catCount.set(cat, (catCount.get(cat) ?? 0) + 1);
   }
@@ -187,10 +194,14 @@ export async function generateFootballGolfCourse(date: string): Promise<Football
     throw new Error(`Only ${candidates.length} golf candidates for ${date} (need ${HOLES})`);
   }
 
-  // Assign pars: broadest prompts get the highest pars (so par <= findable always holds).
-  const chosen = candidates.slice(0, HOLES).sort((a, b) => b.findable - a.findable);
+  // Assign pars: broadest prompts get the highest pars, and every par is CLAMPED to
+  // (famous − 2) so the hole is always completable from common knowledge.
+  const chosen = candidates.slice(0, HOLES).sort((a, b) => b.famous - a.famous);
   const parsDesc = [...PAR_SEQUENCE].sort((a, b) => b - a); // [5,5,4,4,4,3,3,3,2]
-  const withPar = chosen.map((c, i) => ({ ...c, par: parsDesc[i]! }));
+  const withPar = chosen.map((c, i) => ({
+    ...c,
+    par: Math.max(2, Math.min(parsDesc[i]!, c.famous - 2)) as 2 | 3 | 4 | 5,
+  }));
 
   // Re-order holes for the round (deterministic), so pars aren't monotonic.
   withPar.sort((a, b) => hashStr(`${seed}:order:${a.prompt}`) - hashStr(`${seed}:order:${b.prompt}`));
@@ -216,8 +227,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.log(`\n=== FOOTBALL GOLF ${date} · Par ${puz.totalPar} ===\n`);
       for (const h of puz.holes) {
         const byR = (r: Rarity) => h.answers.filter((a) => a.rarity === r).length;
+        const famous = byR('common') + byR('uncommon');
         console.log(`Hole ${h.holeNumber} · Par ${h.par} · [${h.category}]  ${h.prompt}`);
-        console.log(`   answers ${h.answers.length} (C${byR('common')}/U${byR('uncommon')}/R${byR('rare')}/UR${byR('ultraRare')})  hint: ${h.hints[0] ?? '—'}`);
+        console.log(`   ${h.answers.length} answers · ${famous} nameable (C${byR('common')}/U${byR('uncommon')}/R${byR('rare')}/UR${byR('ultraRare')})  hint: ${h.hints[0] ?? '—'}`);
         const common = h.answers.filter((a) => a.rarity === 'common').slice(0, 4).map((a) => a.name);
         const rare = h.answers.filter((a) => a.rarity === 'rare' || a.rarity === 'ultraRare').slice(0, 3).map((a) => a.name);
         console.log(`   e.g. common: ${common.join(', ')}${rare.length ? `  ·  rare: ${rare.join(', ')}` : ''}`);

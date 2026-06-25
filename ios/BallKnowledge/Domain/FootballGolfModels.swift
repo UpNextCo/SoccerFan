@@ -1,151 +1,207 @@
 import Foundation
 
-enum FootballGolfAnswerType: String, Codable {
-    case player
-    case team
-    case country
-    case manager
-    case stadium
-}
+// MARK: - Rarity
 
-enum FootballGolfHoleOutcome: String, Codable, Equatable {
-    case birdie
-    case par
-    case bogey
+enum FootballGolfRarity: String, Codable, Equatable, CaseIterable {
+    case common
+    case uncommon
+    case rare
+    case ultraRare
 
-    var score: Int {
-        switch self {
-        case .birdie: return -1
-        case .par: return 0
-        case .bogey: return 1
+    init(serverValue: String) {
+        switch serverValue {
+        case "common": self = .common
+        case "uncommon": self = .uncommon
+        case "rare": self = .rare
+        case "ultraRare", "ultra_rare": self = .ultraRare
+        default: self = .common
         }
     }
 
     var label: String {
         switch self {
-        case .birdie: return "BIRDIE"
-        case .par: return "PAR"
-        case .bogey: return "BOGEY"
+        case .common: return "COMMON"
+        case .uncommon: return "UNCOMMON"
+        case .rare: return "RARE"
+        case .ultraRare: return "ULTRA RARE"
         }
     }
+
+    /// A rare/ultra-rare answer earns "depth" toward birdie/eagle.
+    var isStandout: Bool { self == .rare || self == .ultraRare }
+}
+
+// MARK: - Course model
+
+struct FootballGolfAnswer: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let aliases: [String]
+    let rarity: FootballGolfRarity
 }
 
 struct FootballGolfHole: Identifiable, Equatable {
     let id: String
     let holeNumber: Int
     let par: Int
-    let question: String
-    let answerType: FootballGolfAnswerType
-    let correctAnswers: [String]
-    let aliases: [String: [String]]
+    let prompt: String
+    let category: String
+    let answers: [FootballGolfAnswer]
+    let hints: [String]
 }
 
 struct FootballGolfCourse: Identifiable, Equatable {
     let id: String
+    let date: String
     let title: String
-    let theme: String
-    let weekId: String
     let holes: [FootballGolfHole]
 
     var totalPar: Int { holes.map(\.par).reduce(0, +) }
 }
 
+// MARK: - Per-hole result
+
+enum FootballGolfOutcome: Equatable {
+    case eagle      // -2
+    case birdie     // -1
+    case par        // 0
+    case bogey      // +1
+    case doubleBogey // +2
+    case worse(Int)  // +3 or more
+
+    init(relativeToPar: Int) {
+        switch relativeToPar {
+        case ...(-2): self = .eagle
+        case -1: self = .birdie
+        case 0: self = .par
+        case 1: self = .bogey
+        case 2: self = .doubleBogey
+        default: self = .worse(relativeToPar)
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .eagle: return "EAGLE"
+        case .birdie: return "BIRDIE"
+        case .par: return "PAR"
+        case .bogey: return "BOGEY"
+        case .doubleBogey: return "DOUBLE BOGEY"
+        case .worse: return "OVER PAR"
+        }
+    }
+}
+
 struct FootballGolfHoleResult: Identifiable, Equatable {
     let id: String
-    let holeId: String
     let holeNumber: Int
     let par: Int
-    let submittedAnswers: [String]
-    let matchedAnswers: [String]
-    let correctCount: Int
-    let outcome: FootballGolfHoleOutcome
+    let matched: [FootballGolfAnswer]   // correct answers the player named (in order)
+    let wrongGuesses: Int
+    let hintsUsed: Int
+    let skipped: Bool
 
-    var score: Int { outcome.score }
+    /// Strokes relative to par for this hole (golf convention; negative is good).
+    var relativeToPar: Int {
+        if skipped { return 2 } // double bogey
+        let standouts = matched.filter { $0.rarity.isStandout }.count
+        let rarityBonus = standouts >= 2 ? -2 : (standouts == 1 ? -1 : 0)
+        return rarityBonus + wrongGuesses + hintsUsed
+    }
+
+    var outcome: FootballGolfOutcome { FootballGolfOutcome(relativeToPar: relativeToPar) }
 }
 
-enum FootballGolfPhase: Equatable {
-    case playing
-    case holeResult
-    case finished
-}
-
-struct FootballGolfGameState: Equatable {
-    let course: FootballGolfCourse
-    var currentHoleIndex: Int
-    var draftAnswers: [String]
-    var holeResults: [FootballGolfHoleResult]
-    var lastHoleResult: FootballGolfHoleResult?
-    var phase: FootballGolfPhase
-
-    init(course: FootballGolfCourse) {
-        self.course = course
-        currentHoleIndex = 0
-        draftAnswers = Array(repeating: "", count: course.holes.first?.par ?? 3)
-        holeResults = []
-        lastHoleResult = nil
-        phase = .playing
-    }
-
-    var currentHole: FootballGolfHole? {
-        guard course.holes.indices.contains(currentHoleIndex) else { return nil }
-        return course.holes[currentHoleIndex]
-    }
-
-    var totalScore: Int {
-        holeResults.map(\.score).reduce(0, +)
-    }
-
-    var holesRemaining: Int {
-        max(0, course.holes.count - holeResults.count)
-    }
-
-    var isRoundComplete: Bool {
-        holeResults.count >= course.holes.count
-    }
-}
+// MARK: - Scoring helpers
 
 enum FootballGolfScoring {
-    static func outcome(correctCount: Int, par: Int) -> FootballGolfHoleOutcome {
-        if correctCount >= par {
-            return .birdie
-        }
-        if correctCount == par - 1 {
-            return .par
-        }
-        return .bogey
-    }
-
     static func scoreLabel(_ total: Int) -> String {
         if total == 0 { return "E" }
-        if total > 0 { return "+\(total)" }
-        return "\(total)"
+        return total > 0 ? "+\(total)" : "\(total)"
     }
 
-    static func relativeToParLabel(total: Int, par: Int) -> String {
-        let relative = total
-        if relative == 0 { return "Level par" }
-        if relative < 0 { return "\(abs(relative)) under par" }
-        return "\(relative) over par"
+    static func relativeToParLabel(_ total: Int) -> String {
+        if total == 0 { return "Level par" }
+        if total < 0 { return "\(abs(total)) under par" }
+        return "\(total) over par"
     }
 
-    static func xp(from totalScore: Int, par: Int) -> Int {
-        let relative = totalScore
-        if relative <= -4 { return 120 }
-        if relative <= -2 { return 90 }
-        if relative <= 0 { return 70 }
-        if relative <= 2 { return 45 }
-        return 25
+    static func finishMessage(_ total: Int) -> String {
+        switch total {
+        case ...(-4): return "Elite ball knowledge"
+        case -3, -2: return "Seriously sharp"
+        case -1, 0: return "Solid round"
+        case 1, 2: return "Not bad"
+        default: return "Room to improve"
+        }
+    }
+
+    static func xp(total: Int) -> Int {
+        switch total {
+        case ...(-4): return 120
+        case -3, -2: return 95
+        case -1, 0: return 70
+        case 1, 2: return 50
+        default: return 30
+        }
     }
 }
 
-struct FootballGolfLeaderboardEntry: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let score: Int
-    let isUser: Bool
+// MARK: - Local answer matching (validate against the hole's shipped answers)
+
+enum FootballGolfMatcher {
+    static func normalize(_ value: String) -> String {
+        value
+            .lowercased()
+            .folding(options: .diacriticInsensitive, locale: .current)
+            .replacingOccurrences(of: "[^a-z0-9 ]", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Returns the matched answer for a guess, tolerating accents, punctuation and
+    /// "surname only" entries when unambiguous.
+    static func match(guess: String, in answers: [FootballGolfAnswer], alreadyMatched: Set<String>) -> FootballGolfAnswer? {
+        let g = normalize(guess)
+        guard g.count >= 2 else { return nil }
+
+        // exact / alias match first
+        for a in answers where !alreadyMatched.contains(a.id) {
+            if normalize(a.name) == g { return a }
+            if a.aliases.contains(where: { normalize($0) == g }) { return a }
+        }
+        // surname-only match (e.g. "henry" -> "Thierry Henry") when it's unambiguous
+        let surnameHits = answers.filter { a in
+            guard !alreadyMatched.contains(a.id) else { return false }
+            let parts = normalize(a.name).split(separator: " ")
+            return parts.last.map(String.init) == g
+        }
+        if surnameHits.count == 1 { return surnameHits.first }
+        return nil
+    }
 }
 
-enum FootballGolfTiming {
-    static let holeResultDelay: Double = 1.6
-    static let holeResultAutoAdvance: Double = 2.2
+// MARK: - DTO mapping
+
+extension FootballGolfCourse {
+    init(dto: FootballGolfPuzzleDTO) {
+        self.init(
+            id: dto.puzzleId,
+            date: dto.date,
+            title: dto.title,
+            holes: dto.holes.map { h in
+                FootballGolfHole(
+                    id: h.id,
+                    holeNumber: h.holeNumber,
+                    par: h.par,
+                    prompt: h.prompt,
+                    category: h.category,
+                    answers: h.answers.map {
+                        FootballGolfAnswer(id: $0.id, name: $0.name, aliases: $0.aliases, rarity: FootballGolfRarity(serverValue: $0.rarity))
+                    },
+                    hints: h.hints
+                )
+            }
+        )
+    }
 }

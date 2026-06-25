@@ -54,7 +54,6 @@ enum DailyPlayOrder {
         .draftMaster,
         .worldCupXI,
         .footballGolf,
-        .footballTower,
     ]
 
     static func completedCount(in bundle: DailyBundleDTO) -> Int {

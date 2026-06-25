@@ -1,213 +1,125 @@
 import SwiftUI
 
+// Neon green accent per spec (#1AFF1A).
+private let golfNeon = Color(red: 26.0 / 255.0, green: 255.0 / 255.0, blue: 26.0 / 255.0)
+
 // MARK: - ViewModel
 
 @MainActor
 @Observable
 final class FootballGolfViewModel {
-    var state: FootballGolfGameState
+    let course: FootballGolfCourse
+    var currentHoleIndex = 0
+    var results: [FootballGolfHoleResult] = []
+    var phase: FootballGolfPhase = .playing
+
+    // current-hole working state
+    var matched: [FootballGolfAnswer] = []
+    var wrongGuesses = 0
+    var hintsUsed = 0
+    var revealedHints: [String] = []
+    var guess = ""
+
+    // transient UI signals
+    var lastRevealed: FootballGolfAnswer?
+    var wrongFlashToken = 0
+    var revealToken = 0
     var showResult = false
-    var confettiBurstToken = 0
-    var searchQuery = ""
-    var searchResults: [FootballGolfAnswerSuggestion] = []
-    var isSearching = false
-    var activeSlotIndex = 0
+    var confettiToken = 0
 
-    init(course: FootballGolfCourse = FootballGolfSeed.weeklyCourse()) {
-        self.state = FootballGolfGameState(course: course)
+    enum FootballGolfPhase: Equatable { case playing, holeResult, finished }
+
+    init(course: FootballGolfCourse) {
+        self.course = course
     }
 
-    var xpEarned: Int {
-        FootballGolfScoring.xp(from: state.totalScore, par: state.course.totalPar)
+    var currentHole: FootballGolfHole? {
+        course.holes.indices.contains(currentHoleIndex) ? course.holes[currentHoleIndex] : nil
     }
 
-    var leaderboard: [FootballGolfLeaderboardEntry] {
-        FootballGolfSeed.mockLeaderboard(userScore: state.totalScore)
+    var totalScore: Int { results.map(\.relativeToPar).reduce(0, +) }
+    var xpEarned: Int { FootballGolfScoring.xp(total: totalScore) }
+
+    var hintsRemaining: Int {
+        guard let hole = currentHole else { return 0 }
+        return max(0, hole.hints.count - revealedHints.count)
     }
 
-    var searchPlaceholder: String {
-        guard let hole = state.currentHole else { return "SEARCH" }
-        return "ANSWER \(activeSlotIndex + 1) OF \(hole.par)"
-    }
+    private var matchedIds: Set<String> { Set(matched.map(\.id)) }
 
-    var canSubmitHole: Bool {
-        guard state.phase == .playing, let hole = state.currentHole else { return false }
-        guard state.draftAnswers.count == hole.par else { return false }
-        return state.draftAnswers.allSatisfy {
-            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-    }
+    func submitGuess() {
+        guard phase == .playing, let hole = currentHole else { return }
+        let trimmed = guess.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
 
-    func restart() {
-        state = FootballGolfGameState(course: FootballGolfSeed.weeklyCourse())
-        showResult = false
-        confettiBurstToken = 0
-        resetSearch(for: state.currentHole)
-    }
-
-    func resetSearch(for hole: FootballGolfHole?) {
-        searchQuery = ""
-        searchResults = []
-        activeSlotIndex = 0
-        if let hole {
-            if state.draftAnswers.count != hole.par {
-                state.draftAnswers = Array(repeating: "", count: hole.par)
-            }
-        }
-    }
-
-    func activateSlot(_ index: Int) {
-        activeSlotIndex = index
-        searchQuery = ""
-        searchResults = []
-    }
-
-    func clearSlot(_ index: Int) {
-        while state.draftAnswers.count <= index {
-            state.draftAnswers.append("")
-        }
-        state.draftAnswers[index] = ""
-        activateSlot(index)
-    }
-
-    func search() async {
-        guard state.phase == .playing, state.currentHole != nil else {
-            searchResults = []
-            return
-        }
-
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard query.count >= 2 else {
-            searchResults = []
-            return
-        }
-
-        isSearching = true
-        defer { isSearching = false }
-
-        guard let hole = state.currentHole else { return }
-        let results = await FootballGolfAnswerSearch.search(query: query, answerType: hole.answerType)
-        let used = usedAnswerNames(excluding: activeSlotIndex)
-        searchResults = results
-            .filter { !used.contains(normalizedToken($0.name)) }
-            .prefix(5)
-            .map { $0 }
-    }
-
-    /// Returns true when search focus should remain open for the next slot.
-    func selectSuggestion(_ suggestion: FootballGolfAnswerSuggestion) -> Bool {
-        let slotIndex = activeSlotIndex
-        while state.draftAnswers.count <= slotIndex {
-            state.draftAnswers.append("")
-        }
-        state.draftAnswers[slotIndex] = suggestion.name
-        searchQuery = ""
-        searchResults = []
-        HapticManager.light()
-
-        if let next = nextEmptyField(after: slotIndex) {
-            activeSlotIndex = next
-            return true
-        }
-        return false
-    }
-
-    func submitHole() {
-        guard canSubmitHole, let hole = state.currentHole else { return }
-        searchQuery = ""
-        searchResults = []
-
-        let grading = FootballGolfMatcher.grade(hole: hole, submittedAnswers: state.draftAnswers)
-        let outcome = FootballGolfScoring.outcome(correctCount: grading.correctCount, par: hole.par)
-
-        let result = FootballGolfHoleResult(
-            id: hole.id,
-            holeId: hole.id,
-            holeNumber: hole.holeNumber,
-            par: hole.par,
-            submittedAnswers: state.draftAnswers.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) },
-            matchedAnswers: grading.matched,
-            correctCount: grading.correctCount,
-            outcome: outcome
-        )
-
-        state.holeResults.append(result)
-        state.lastHoleResult = result
-        state.phase = .holeResult
-
-        switch outcome {
-        case .birdie:
+        if let answer = FootballGolfMatcher.match(guess: trimmed, in: hole.answers, alreadyMatched: matchedIds) {
+            matched.append(answer)
+            lastRevealed = answer
+            revealToken += 1
+            guess = ""
             HapticManager.success()
-        case .par:
-            HapticManager.light()
-        case .bogey:
+            if matched.count >= hole.par {
+                completeHole(skipped: false)
+            }
+        } else {
+            wrongGuesses += 1
+            wrongFlashToken += 1
+            guess = ""
             HapticManager.error()
         }
+    }
 
-        Task {
-            try? await Task.sleep(for: .seconds(FootballGolfTiming.holeResultAutoAdvance))
-            advanceFromHoleResult()
+    func useHint() {
+        guard phase == .playing, let hole = currentHole, revealedHints.count < hole.hints.count else { return }
+        revealedHints.append(hole.hints[revealedHints.count])
+        hintsUsed += 1
+        HapticManager.light()
+    }
+
+    func skipHole() {
+        guard phase == .playing else { return }
+        completeHole(skipped: true)
+    }
+
+    private func completeHole(skipped: Bool) {
+        guard let hole = currentHole else { return }
+        let result = FootballGolfHoleResult(
+            id: hole.id,
+            holeNumber: hole.holeNumber,
+            par: hole.par,
+            matched: matched,
+            wrongGuesses: wrongGuesses,
+            hintsUsed: hintsUsed,
+            skipped: skipped
+        )
+        results.append(result)
+        phase = .holeResult
+        switch result.outcome {
+        case .eagle, .birdie: HapticManager.success()
+        case .par: HapticManager.light()
+        default: HapticManager.error()
         }
     }
 
-    func advanceFromHoleResult() {
-        guard state.phase == .holeResult else { return }
-
-        if state.holeResults.count >= state.course.holes.count {
-            state.phase = .finished
-            if state.totalScore <= -3 {
-                confettiBurstToken += 1
-                HapticManager.success()
-            }
+    func advance() {
+        guard phase == .holeResult else { return }
+        if results.count >= course.holes.count {
+            phase = .finished
+            if totalScore <= -2 { confettiToken += 1 }
             showResult = true
             return
         }
-
-        state.currentHoleIndex += 1
-        resetSearch(for: state.currentHole)
-        state.lastHoleResult = nil
-        state.phase = .playing
+        currentHoleIndex += 1
+        matched = []
+        wrongGuesses = 0
+        hintsUsed = 0
+        revealedHints = []
+        guess = ""
+        lastRevealed = nil
+        phase = .playing
     }
 
-    private func usedAnswerNames(excluding index: Int) -> Set<String> {
-        Set(
-            state.draftAnswers.enumerated().compactMap { fieldIndex, answer in
-                guard fieldIndex != index else { return nil }
-                let trimmed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return nil }
-                return normalizedToken(trimmed)
-            }
-        )
-    }
-
-    private func nextEmptyField(after index: Int) -> Int? {
-        guard let hole = state.currentHole else { return nil }
-
-        if index + 1 < hole.par {
-            for fieldIndex in (index + 1)..<hole.par {
-                if !filled(fieldIndex) { return fieldIndex }
-            }
-        }
-
-        for fieldIndex in 0..<index where !filled(fieldIndex) {
-            return fieldIndex
-        }
-
-        return nil
-    }
-
-    private func filled(_ fieldIndex: Int) -> Bool {
-        guard state.draftAnswers.indices.contains(fieldIndex) else { return false }
-        return !state.draftAnswers[fieldIndex].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func normalizedToken(_ value: String) -> String {
-        value
-            .lowercased()
-            .folding(options: .diacriticInsensitive, locale: .current)
-            .replacingOccurrences(of: "[^a-z0-9 ]", with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    var lastResult: FootballGolfHoleResult? { results.last }
 }
 
 // MARK: - Main View
@@ -215,704 +127,467 @@ final class FootballGolfViewModel {
 struct FootballGolfView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var viewModel: FootballGolfViewModel
-    @FocusState private var isSearchFocused: Bool
+    @State private var viewModel: FootballGolfViewModel?
+    @FocusState private var inputFocused: Bool
     private let allowReplay: Bool
     private let dailyDate: String?
+    private let serverPuzzle: FootballGolfPuzzleDTO?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: FootballGolfViewModel())
+    init(dailyDate: String? = nil, serverPuzzle: FootballGolfPuzzleDTO? = nil, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
         self.dailyDate = dailyDate
+        self.serverPuzzle = serverPuzzle
         self.allowReplay = allowReplay
         self.onComplete = onComplete
+        if let serverPuzzle {
+            _viewModel = State(initialValue: FootballGolfViewModel(course: FootballGolfCourse(dto: serverPuzzle)))
+        } else {
+            _viewModel = State(initialValue: nil)
+        }
     }
 
     var body: some View {
         ZStack {
-            NavigationStack {
-                VStack(spacing: 0) {
-                    FootballGolfProgressBar(
-                        holes: viewModel.state.course.holes,
-                        completedResults: viewModel.state.holeResults,
-                        currentHoleIndex: viewModel.state.currentHoleIndex
-                    )
-                    .onTapGesture { isSearchFocused = false }
+            BKTheme.background.ignoresSafeArea()
+            if let viewModel {
+                content(viewModel)
+            } else {
+                unavailableState
+            }
+        }
+    }
 
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 20) {
-                            FootballGolfCourseHeader(course: viewModel.state.course)
+    private var unavailableState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "flag.fill").font(.system(size: 34)).foregroundStyle(golfNeon)
+            Text("TODAY'S COURSE ISN'T READY")
+                .font(BKFont.headline(16))
+                .foregroundStyle(BKTheme.textPrimary)
+            Text("Pull the daily again in a moment.")
+                .font(BKFont.caption(12))
+                .foregroundStyle(BKTheme.textMuted)
+            Button("CLOSE") { dismiss() }
+                .font(BKFont.headline())
+                .foregroundStyle(BKTheme.background)
+                .padding(.horizontal, 28).padding(.vertical, 12)
+                .background(golfNeon).clipShape(Capsule())
+                .padding(.top, 8)
+        }
+    }
 
-                            if let hole = viewModel.state.currentHole, viewModel.state.phase == .playing {
-                                FootballGolfHoleCard(
-                                    hole: hole,
-                                    answers: viewModel.state.draftAnswers,
-                                    activeSlotIndex: viewModel.activeSlotIndex,
-                                    onActivateSlot: { index in
-                                        viewModel.activateSlot(index)
-                                        isSearchFocused = true
-                                    },
-                                    onClearSlot: { index in
-                                        viewModel.clearSlot(index)
-                                        isSearchFocused = true
-                                    }
-                                )
-                            }
+    @ViewBuilder
+    private func content(_ vm: FootballGolfViewModel) -> some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                FootballGolfScorecardStrip(holes: vm.course.holes, results: vm.results, currentIndex: vm.currentHoleIndex)
+
+                ScrollView(showsIndicators: false) {
+                    if let hole = vm.currentHole, vm.phase != .finished {
+                        VStack(spacing: 18) {
+                            holeHeader(vm, hole)
+                            promptCard(hole)
+                            matchedChips(vm, hole)
+                            if !vm.revealedHints.isEmpty { hintsView(vm) }
+                            statusRow(vm)
                         }
                         .padding(.horizontal, 16)
-                        .padding(.top, 8)
+                        .padding(.top, 10)
                         .padding(.bottom, 24)
                     }
-                    .scrollDismissesKeyboard(.interactively)
-                    .contentShape(Rectangle())
-                    .onTapGesture { isSearchFocused = false }
+                }
+                .scrollDismissesKeyboard(.interactively)
 
-                    if viewModel.state.phase == .playing {
-                        if viewModel.canSubmitHole {
-                            FootballGolfSubmitButton(
-                                enabled: true,
-                                label: "SUBMIT HOLE"
-                            ) {
-                                isSearchFocused = false
-                                viewModel.submitHole()
-                            }
-                        } else {
-                            FootballGolfSearchSection(
-                                viewModel: viewModel,
-                                isSearchFocused: $isSearchFocused
-                            )
-                        }
+                if vm.phase == .playing { inputBar(vm) }
+            }
+            .background(BKTheme.background)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: {
+                        Ph.x.bold.color(BKTheme.textPrimary).frame(width: 15, height: 15)
                     }
                 }
-                .background(BKTheme.background)
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        isSearchFocused = true
-                    }
-                }
-                .onChange(of: viewModel.state.currentHoleIndex) { _, _ in
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        isSearchFocused = true
-                    }
-                }
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button { dismiss() } label: {
-                            Ph.x.bold
-                                .color(BKTheme.textPrimary)
-                                .frame(width: 15, height: 15)
-                        }
-                    }
-                    ToolbarItem(placement: .principal) {
-                        Text("FOOTBALL GOLF")
-                            .font(BKFont.caption(13))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.accent)
-                    }
+                ToolbarItem(placement: .principal) {
+                    Text("FOOTBALL GOLF").font(BKFont.caption(13)).tracking(1).foregroundStyle(golfNeon)
                 }
             }
-
-            if viewModel.state.phase == .holeResult, let result = viewModel.state.lastHoleResult {
-                FootballGolfHoleResultOverlay(result: result) {
-                    viewModel.advanceFromHoleResult()
-                }
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                .zIndex(10)
+            .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { inputFocused = true } }
+            .onChange(of: vm.currentHoleIndex) { _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { inputFocused = true }
             }
-
-            FootballConfettiView(burstToken: viewModel.confettiBurstToken)
-                .zIndex(999)
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: viewModel.state.phase)
-        .fullScreenCover(isPresented: $viewModel.showResult) {
-            FootballGolfScorecardView(
-                course: viewModel.state.course,
-                results: viewModel.state.holeResults,
-                totalScore: viewModel.state.totalScore,
-                xpEarned: viewModel.xpEarned,
-                leaderboard: viewModel.leaderboard,
-                showPlayAgain: allowReplay,
-                onPlayAgain: {
-                    viewModel.showResult = false
-                    viewModel.restart()
-                },
-                onHome: {
-                    if !allowReplay, let dailyDate {
-                        Task {
-                            await DailyCompletionService.recordCompletion(
-                                modeId: GameModeID.footballGolf.rawValue,
-                                date: dailyDate,
-                                score: max(0, 72 - viewModel.state.totalScore),
-                                won: viewModel.state.totalScore <= viewModel.state.course.totalPar,
-                                context: modelContext
-                            )
-                        }
-                    }
-                    viewModel.showResult = false
-                    onComplete()
-                    dismiss()
-                }
+        .overlay {
+            if vm.phase == .holeResult, let result = vm.lastResult {
+                FootballGolfHoleResultOverlay(result: result, onNext: { withAnimation { vm.advance() } })
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
+        }
+        .overlay { FootballConfettiView(burstToken: vm.confettiToken).allowsHitTesting(false) }
+        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: vm.phase)
+        .fullScreenCover(isPresented: Binding(get: { vm.showResult }, set: { vm.showResult = $0 })) {
+            FootballGolfFinalView(
+                course: vm.course,
+                results: vm.results,
+                totalScore: vm.totalScore,
+                xpEarned: vm.xpEarned,
+                onDone: { finish(vm) }
             )
         }
     }
-}
 
-// MARK: - Progress
+    // MARK: hole header
 
-private struct FootballGolfProgressBar: View {
-    let holes: [FootballGolfHole]
-    let completedResults: [FootballGolfHoleResult]
-    let currentHoleIndex: Int
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(holes.enumerated()), id: \.element.id) { index, hole in
-                VStack(spacing: 4) {
-                    Capsule()
-                        .fill(fillColor(for: index))
-                        .frame(height: 4)
-
-                    if let result = completedResults.first(where: { $0.holeNumber == hole.holeNumber }) {
-                        Text(result.outcome == .birdie ? "-1" : result.outcome == .par ? "0" : "+1")
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .foregroundStyle(outcomeColor(result.outcome))
-                    } else {
-                        Text("\(hole.holeNumber)")
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .foregroundStyle(index == currentHoleIndex ? BKTheme.accent : BKTheme.textMuted)
-                    }
-                }
+    private func holeHeader(_ vm: FootballGolfViewModel, _ hole: FootballGolfHole) -> some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("HOLE \(hole.holeNumber) / \(vm.course.holes.count)")
+                    .font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                Text(hole.category.uppercased())
+                    .font(BKFont.caption(10)).tracking(0.6).foregroundStyle(golfNeon)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("PAR \(hole.par)").font(BKFont.title(22)).foregroundStyle(golfNeon)
+                Text("\(vm.matched.count)/\(hole.par) named")
+                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
     }
 
-    private func fillColor(for index: Int) -> Color {
-        if completedResults.contains(where: { $0.holeNumber == holes[index].holeNumber }) {
-            return BKTheme.accent
-        }
-        if index == currentHoleIndex {
-            return BKTheme.accent.opacity(0.45)
-        }
-        return BKTheme.cardElevated
+    private func promptCard(_ hole: FootballGolfHole) -> some View {
+        Text(hole.prompt)
+            .font(BKFont.headline(20))
+            .foregroundStyle(BKTheme.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(18)
+            .background(BKTheme.cardElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(golfNeon.opacity(0.25), lineWidth: 1))
     }
 
-    private func outcomeColor(_ outcome: FootballGolfHoleOutcome) -> Color {
-        switch outcome {
-        case .birdie: return BKTheme.accent
-        case .par: return BKTheme.textSecondary
-        case .bogey: return BKTheme.wrong
-        }
-    }
-}
+    // MARK: matched answer chips + empty slots
 
-// MARK: - Course Header
-
-private struct FootballGolfCourseHeader: View {
-    let course: FootballGolfCourse
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("WEEKLY COURSE")
-                .font(BKFont.caption(10))
-                .tracking(0.8)
-                .foregroundStyle(BKTheme.accent)
-            Text(course.title.uppercased())
-                .font(BKFont.headline(18))
-                .foregroundStyle(BKTheme.textPrimary)
-            Text(course.theme)
-                .font(BKFont.caption(11))
-                .foregroundStyle(BKTheme.textMuted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(BKTheme.cardElevated.opacity(0.9))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-// MARK: - Hole Card
-
-private struct FootballGolfHoleCard: View {
-    let hole: FootballGolfHole
-    let answers: [String]
-    let activeSlotIndex: Int
-    var onActivateSlot: (Int) -> Void
-    var onClearSlot: (Int) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("HOLE \(hole.holeNumber)")
-                    .font(BKFont.caption(11))
-                    .tracking(0.8)
-                    .foregroundStyle(BKTheme.textMuted)
-                Spacer()
-                Text("PAR \(hole.par)")
-                    .font(BKFont.caption(11))
-                    .tracking(0.8)
-                    .foregroundStyle(BKTheme.accent)
-            }
-
-            Text(hole.question)
-                .font(BKFont.body(15))
-                .foregroundStyle(BKTheme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(spacing: 10) {
-                ForEach(0..<hole.par, id: \.self) { index in
-                    FootballGolfSlotRow(
-                        index: index,
-                        answer: answers.indices.contains(index) ? answers[index] : "",
-                        isActive: activeSlotIndex == index,
-                        onActivate: { onActivateSlot(index) },
-                        onClear: { onClearSlot(index) }
-                    )
-                }
-            }
-        }
-        .padding(16)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-private struct FootballGolfSlotRow: View {
-    let index: Int
-    let answer: String
-    let isActive: Bool
-    var onActivate: () -> Void
-    var onClear: () -> Void
-
-    private var isFilled: Bool {
-        !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Button(action: onActivate) {
-                HStack(spacing: 10) {
-                    Text("\(index + 1)")
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundStyle(BKTheme.background)
-                        .frame(width: 22, height: 22)
-                        .background(isActive ? BKTheme.accent : BKTheme.accent.opacity(0.55))
-                        .clipShape(Circle())
-
-                    Text(isFilled ? answer.uppercased() : "SELECT ANSWER \(index + 1)")
-                        .font(.system(size: isFilled ? 13 : 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(isFilled ? BKTheme.textPrimary : BKTheme.textMuted)
-                        .lineLimit(1)
-
-                    Spacer()
-
-                    if isActive && !isFilled {
-                        Text("ACTIVE")
-                            .font(BKFont.caption(9))
-                            .foregroundStyle(BKTheme.accent)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-
-            if isFilled {
-                Button(action: onClear) {
-                    Ph.x.bold
-                        .color(BKTheme.textMuted)
-                        .frame(width: 10, height: 10)
-                        .padding(8)
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(isActive ? BKTheme.cardElevated : BKTheme.card.opacity(0.55))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(isActive ? BKTheme.accent.opacity(0.45) : Color.clear, lineWidth: 1)
-        )
-    }
-}
-
-// MARK: - Search (Guess Who layout)
-
-private struct FootballGolfSearchSection: View {
-    @Bindable var viewModel: FootballGolfViewModel
-    var isSearchFocused: FocusState<Bool>.Binding
-
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 10) {
-                HStack(spacing: 12) {
-                    TextField("", text: $viewModel.searchQuery, prompt:
-                        Text(viewModel.searchPlaceholder)
+    private func matchedChips(_ vm: FootballGolfViewModel, _ hole: FootballGolfHole) -> some View {
+        VStack(spacing: 10) {
+            ForEach(0..<hole.par, id: \.self) { i in
+                if vm.matched.indices.contains(i) {
+                    FootballGolfAnswerChip(answer: vm.matched[i], justRevealed: i == vm.matched.count - 1)
+                        .id("\(vm.matched[i].id)-\(vm.revealToken)")
+                } else {
+                    HStack(spacing: 10) {
+                        Text("\(i + 1)")
+                            .font(.system(size: 12, weight: .heavy, design: .rounded))
                             .foregroundStyle(BKTheme.textMuted)
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .frame(width: 26, height: 26)
+                            .background(BKTheme.card).clipShape(Circle())
+                        Text("TAP TO NAME ANSWER \(i + 1)")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(BKTheme.textMuted)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 14)
+                    .background(BKTheme.card.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(i == vm.matched.count ? golfNeon.opacity(0.5) : Color.clear, style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     )
+                }
+            }
+        }
+    }
+
+    private func hintsView(_ vm: FootballGolfViewModel) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(vm.revealedHints, id: \.self) { hint in
+                HStack(spacing: 8) {
+                    Image(systemName: "lightbulb.fill").font(.system(size: 12)).foregroundStyle(.yellow)
+                    Text(hint).font(BKFont.caption(12)).foregroundStyle(BKTheme.textSecondary)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(BKTheme.card.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func statusRow(_ vm: FootballGolfViewModel) -> some View {
+        HStack(spacing: 16) {
+            Label("\(vm.wrongGuesses) wrong", systemImage: "xmark.circle")
+                .font(BKFont.caption(11)).foregroundStyle(vm.wrongGuesses > 0 ? BKTheme.wrong : BKTheme.textMuted)
+            Label("\(vm.hintsUsed) hints", systemImage: "lightbulb")
+                .font(BKFont.caption(11)).foregroundStyle(vm.hintsUsed > 0 ? .yellow : BKTheme.textMuted)
+            Spacer()
+            Text("strokes count against par")
+                .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
+        }
+        .padding(.top, 2)
+    }
+
+    // MARK: input bar
+
+    private func inputBar(_ vm: FootballGolfViewModel) -> some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                TextField("", text: Binding(get: { vm.guess }, set: { vm.guess = $0 }), prompt:
+                    Text("NAME A PLAYER").foregroundStyle(BKTheme.textMuted).font(.system(size: 14, weight: .semibold, design: .rounded)))
                     .textFieldStyle(.plain)
                     .foregroundStyle(BKTheme.background)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.words)
-                    .focused(isSearchFocused)
-                    .submitLabel(.search)
-                    .onChange(of: viewModel.searchQuery) { _, _ in
-                        Task { await viewModel.search() }
-                    }
+                    .focused($inputFocused)
+                    .submitLabel(.go)
+                    .onSubmit { withAnimation { vm.submitGuess() }; inputFocused = true }
+                    .padding(.horizontal, 16).padding(.vertical, 14)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .modifier(ShakeEffect(animatableData: CGFloat(vm.wrongFlashToken)))
 
-                    if viewModel.isSearching {
-                        ProgressView()
-                            .tint(BKTheme.accent)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5)
-                )
-
-                if !viewModel.searchResults.isEmpty {
-                    SearchResultsContainer {
-                        ForEach(viewModel.searchResults) { suggestion in
-                            Button {
-                                let keepFocus = viewModel.selectSuggestion(suggestion)
-                                isSearchFocused.wrappedValue = keepFocus
-                            } label: {
-                                HStack(spacing: 12) {
-                                    FootballGolfSuggestionIcon(suggestion: suggestion)
-
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(suggestion.name.uppercased())
-                                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                                            .foregroundStyle(BKTheme.textPrimary)
-                                        if let subtitle = suggestion.subtitle {
-                                            Text(subtitle)
-                                                .font(BKFont.caption(11))
-                                                .foregroundStyle(BKTheme.textMuted)
-                                        }
-                                    }
-
-                                    Spacer(minLength: 0)
-
-                                    Ph.caretRight.bold
-                                        .color(BKTheme.textMuted)
-                                        .frame(width: 12, height: 12)
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
-                            }
-
-                            if suggestion.id != viewModel.searchResults.last?.id {
-                                Divider().background(BKTheme.cardElevated)
-                            }
-                        }
-                    }
+                Button { withAnimation { vm.submitGuess() }; inputFocused = true } label: {
+                    Text("GUESS").font(BKFont.headline(14)).foregroundStyle(BKTheme.background)
+                        .padding(.horizontal, 18).padding(.vertical, 14)
+                        .background(golfNeon).clipShape(RoundedRectangle(cornerRadius: 12))
                 }
             }
-            .padding(16)
-            .background(BKTheme.background)
+
+            HStack(spacing: 10) {
+                Button { vm.useHint() } label: {
+                    Label("HINT  +1", systemImage: "lightbulb.fill")
+                        .font(BKFont.caption(12)).foregroundStyle(vm.hintsRemaining > 0 ? .yellow : BKTheme.textMuted)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .disabled(vm.hintsRemaining == 0)
+
+                Button { withAnimation { vm.skipHole() } } label: {
+                    Label("SKIP  +2", systemImage: "forward.fill")
+                        .font(BKFont.caption(12)).foregroundStyle(BKTheme.wrong)
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
         }
+        .padding(16)
+        .background(BKTheme.background)
+    }
+
+    private func finish(_ vm: FootballGolfViewModel) {
+        if !allowReplay, let dailyDate {
+            let total = vm.totalScore
+            Task {
+                await DailyCompletionService.recordCompletion(
+                    modeId: GameModeID.footballGolf.rawValue,
+                    date: dailyDate,
+                    score: max(0, 40 - total * 4),
+                    won: total <= 0,
+                    context: modelContext
+                )
+            }
+        }
+        vm.showResult = false
+        onComplete()
+        dismiss()
     }
 }
 
-private struct FootballGolfSuggestionIcon: View {
-    let suggestion: FootballGolfAnswerSuggestion
+// MARK: - Answer chip (with rarity reveal)
+
+private struct FootballGolfAnswerChip: View {
+    let answer: FootballGolfAnswer
+    let justRevealed: Bool
+    @State private var appeared = false
 
     var body: some View {
-        Group {
-            switch suggestion.answerType {
-            case .player:
-                if let player = suggestion.player {
-                    PlayerTeamBadge(player: player, size: 28) {
-                        playerFallback
-                    }
-                } else {
-                    playerFallback
-                }
-            case .team:
-                TeamBadgeImage(club: suggestion.club ?? suggestion.name, league: suggestion.league ?? "Premier League", size: 28) {
-                    abbrevFallback(suggestion.club ?? suggestion.name)
-                }
-            case .country:
-                Text(GuessWhoDisplay.nationalityFlag(suggestion.country ?? suggestion.name))
-                    .font(.system(size: 22))
-                    .frame(width: 28, height: 28)
-            case .manager:
-                if let country = suggestion.country {
-                    Text(GuessWhoDisplay.nationalityFlag(country))
-                        .font(.system(size: 22))
-                        .frame(width: 28, height: 28)
-                } else {
-                    Ph.users.fill
-                        .color(BKTheme.textSecondary)
-                        .frame(width: 22, height: 22)
-                        .frame(width: 28, height: 28)
-                }
-            case .stadium:
-                Ph.soccerBall.fill
-                    .color(BKTheme.accent)
-                    .frame(width: 20, height: 20)
-                    .frame(width: 28, height: 28)
-            }
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(golfNeon)
+            Text(answer.name.uppercased())
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(BKTheme.textPrimary)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(answer.rarity.label)
+                .font(.system(size: 9, weight: .heavy, design: .rounded))
+                .tracking(0.5)
+                .foregroundStyle(rarityColor)
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(rarityColor.opacity(0.15))
+                .clipShape(Capsule())
         }
+        .padding(.horizontal, 14).padding(.vertical, 13)
+        .background(BKTheme.cardElevated)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(rarityColor.opacity(0.4), lineWidth: 1))
+        .scaleEffect(appeared ? 1 : (justRevealed ? 0.85 : 1))
+        .onAppear { withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { appeared = true } }
     }
 
-    private var playerFallback: some View {
-        Circle()
-            .fill(BKTheme.cardElevated)
-            .frame(width: 28, height: 28)
-            .overlay(
-                Text(GuessWhoDisplay.clubAbbrev(suggestion.club ?? suggestion.name))
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(BKTheme.textMuted)
-            )
-    }
-
-    private func abbrevFallback(_ label: String) -> some View {
-        Circle()
-            .fill(BKTheme.cardElevated)
-            .frame(width: 28, height: 28)
-            .overlay(
-                Text(GuessWhoDisplay.clubAbbrev(label))
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(BKTheme.textMuted)
-            )
+    private var rarityColor: Color {
+        switch answer.rarity {
+        case .common: return BKTheme.textSecondary
+        case .uncommon: return golfNeon
+        case .rare: return .cyan
+        case .ultraRare: return .purple
+        }
     }
 }
 
-// MARK: - Hole Result Overlay
+// MARK: - Scorecard strip
+
+private struct FootballGolfScorecardStrip: View {
+    let holes: [FootballGolfHole]
+    let results: [FootballGolfHoleResult]
+    let currentIndex: Int
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(Array(holes.enumerated()), id: \.element.id) { index, hole in
+                let result = results.first { $0.holeNumber == hole.holeNumber }
+                VStack(spacing: 4) {
+                    Capsule()
+                        .fill(result != nil ? golfNeon : (index == currentIndex ? golfNeon.opacity(0.45) : BKTheme.cardElevated))
+                        .frame(height: 4)
+                    Text(cell(result, holeNumber: hole.holeNumber))
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(color(result, index: index))
+                }
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    private func cell(_ result: FootballGolfHoleResult?, holeNumber: Int) -> String {
+        guard let result else { return "\(holeNumber)" }
+        return FootballGolfScoring.scoreLabel(result.relativeToPar)
+    }
+
+    private func color(_ result: FootballGolfHoleResult?, index: Int) -> Color {
+        guard let result else { return index == currentIndex ? golfNeon : BKTheme.textMuted }
+        if result.relativeToPar < 0 { return golfNeon }
+        if result.relativeToPar == 0 { return BKTheme.textSecondary }
+        return BKTheme.wrong
+    }
+}
+
+// MARK: - Hole result overlay
 
 private struct FootballGolfHoleResultOverlay: View {
     let result: FootballGolfHoleResult
-    var onContinue: () -> Void
+    var onNext: () -> Void
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.72)
-                .ignoresSafeArea()
-                .onTapGesture(perform: onContinue)
-
-            VStack(spacing: 18) {
+            Color.black.opacity(0.74).ignoresSafeArea().onTapGesture(perform: onNext)
+            VStack(spacing: 16) {
                 Text(result.outcome.label)
-                    .font(BKFont.title(36))
-                    .foregroundStyle(outcomeColor)
+                    .font(BKFont.title(38)).foregroundStyle(outcomeColor)
+                Text("\(FootballGolfScoring.scoreLabel(result.relativeToPar)) on Hole \(result.holeNumber)")
+                    .font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
 
-                Text("\(result.correctCount)/\(result.par) correct")
-                    .font(BKFont.headline(18))
-                    .foregroundStyle(BKTheme.textPrimary)
-
-                Text(holeScoreLabel)
-                    .font(BKFont.caption(12))
-                    .foregroundStyle(BKTheme.textSecondary)
-
-                if !result.matchedAnswers.isEmpty {
+                if result.skipped {
+                    Text("Skipped").font(BKFont.caption(12)).foregroundStyle(BKTheme.textMuted)
+                } else if !result.matched.isEmpty {
                     VStack(spacing: 6) {
-                        Text("MATCHED")
-                            .font(BKFont.caption(10))
-                            .foregroundStyle(BKTheme.textMuted)
-                        ForEach(result.matchedAnswers, id: \.self) { answer in
-                            Text(answer.uppercased())
-                                .font(BKFont.caption(11))
-                                .foregroundStyle(BKTheme.accent)
+                        ForEach(result.matched) { a in
+                            HStack {
+                                Text(a.name).font(BKFont.caption(12)).foregroundStyle(BKTheme.textSecondary)
+                                Spacer()
+                                Text(a.rarity.label).font(.system(size: 9, weight: .heavy, design: .rounded))
+                                    .foregroundStyle(a.rarity.isStandout ? golfNeon : BKTheme.textMuted)
+                            }
                         }
                     }
+                    .frame(maxWidth: 240)
                 }
 
-                Button(action: onContinue) {
-                    Text("NEXT HOLE")
-                        .font(BKFont.headline())
-                        .foregroundStyle(BKTheme.background)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(BKTheme.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                if result.wrongGuesses > 0 || result.hintsUsed > 0 {
+                    Text("\(result.wrongGuesses) wrong · \(result.hintsUsed) hints")
+                        .font(BKFont.caption(11)).foregroundStyle(BKTheme.textMuted)
                 }
-                .padding(.top, 8)
+
+                Button(action: onNext) {
+                    Text("NEXT HOLE").font(BKFont.headline()).foregroundStyle(BKTheme.background)
+                        .frame(maxWidth: .infinity).padding(.vertical, 14)
+                        .background(golfNeon).clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+                .padding(.top, 6)
             }
-            .padding(24)
-            .frame(maxWidth: 320)
-            .background(BKTheme.cardElevated)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .padding(24).frame(maxWidth: 320)
+            .background(BKTheme.cardElevated).clipShape(RoundedRectangle(cornerRadius: 20))
             .padding(.horizontal, 24)
         }
     }
 
     private var outcomeColor: Color {
         switch result.outcome {
-        case .birdie: return BKTheme.accent
+        case .eagle, .birdie: return golfNeon
         case .par: return BKTheme.textPrimary
-        case .bogey: return BKTheme.wrong
-        }
-    }
-
-    private var holeScoreLabel: String {
-        switch result.outcome {
-        case .birdie: return "Hole score: -1"
-        case .par: return "Hole score: E"
-        case .bogey: return "Hole score: +1"
+        default: return BKTheme.wrong
         }
     }
 }
 
-// MARK: - Submit
+// MARK: - Final scorecard
 
-private struct FootballGolfSubmitButton: View {
-    let enabled: Bool
-    let label: String
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(BKFont.headline())
-                .foregroundStyle(BKTheme.background)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(enabled ? BKTheme.accent : BKTheme.cardElevated)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-        .disabled(!enabled)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-        .background(BKTheme.background)
-    }
-}
-
-// MARK: - Scorecard
-
-private struct FootballGolfScorecardView: View {
+private struct FootballGolfFinalView: View {
     let course: FootballGolfCourse
     let results: [FootballGolfHoleResult]
     let totalScore: Int
     let xpEarned: Int
-    let leaderboard: [FootballGolfLeaderboardEntry]
-    var showPlayAgain = true
-    var onPlayAgain: () -> Void
-    var onHome: () -> Void
+    var onDone: () -> Void
 
     var body: some View {
         ZStack {
             BKTheme.background.ignoresSafeArea()
-
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     VStack(spacing: 8) {
-                        Text("ROUND COMPLETE")
-                            .font(BKFont.caption(11))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.textMuted)
-                        Text(FootballGolfScoring.scoreLabel(totalScore))
-                            .font(BKFont.title(48))
-                            .foregroundStyle(BKTheme.accent)
-                        Text(FootballGolfScoring.relativeToParLabel(total: totalScore, par: course.totalPar))
-                            .font(BKFont.body())
-                            .foregroundStyle(BKTheme.textSecondary)
-                        Text("+\(xpEarned) XP")
-                            .font(BKFont.headline(18))
-                            .foregroundStyle(BKTheme.accent)
+                        Text("ROUND COMPLETE").font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                        Text("You finished \(FootballGolfScoring.scoreLabel(totalScore))")
+                            .font(BKFont.title(40)).foregroundStyle(golfNeon)
+                        Text(FootballGolfScoring.finishMessage(totalScore))
+                            .font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
+                        Text("+\(xpEarned) XP").font(BKFont.headline(15)).foregroundStyle(golfNeon)
                     }
-                    .padding(.top, 24)
+                    .padding(.top, 28)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("SCORECARD")
-                            .font(BKFont.caption(11))
-                            .tracking(0.8)
-                            .foregroundStyle(BKTheme.textMuted)
-
+                    VStack(spacing: 8) {
                         ForEach(results) { result in
                             HStack {
-                                Text("HOLE \(result.holeNumber)")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textMuted)
-                                    .frame(width: 56, alignment: .leading)
-                                Text("Par \(result.par)")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textSecondary)
+                                Text("HOLE \(result.holeNumber)").font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted).frame(width: 56, alignment: .leading)
+                                Text("Par \(result.par)").font(BKFont.caption(10)).foregroundStyle(BKTheme.textSecondary)
                                 Spacer()
-                                Text(result.outcome.label)
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(outcomeColor(result.outcome))
-                                Text(result.outcome == .birdie ? "-1" : result.outcome == .par ? "E" : "+1")
-                                    .font(BKFont.headline(14))
-                                    .foregroundStyle(BKTheme.textPrimary)
-                                    .frame(width: 28, alignment: .trailing)
+                                Text(result.outcome.label).font(BKFont.caption(10))
+                                    .foregroundStyle(result.relativeToPar < 0 ? golfNeon : (result.relativeToPar == 0 ? BKTheme.textSecondary : BKTheme.wrong))
+                                Text(FootballGolfScoring.scoreLabel(result.relativeToPar))
+                                    .font(BKFont.headline(14)).foregroundStyle(BKTheme.textPrimary).frame(width: 32, alignment: .trailing)
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(BKTheme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .padding(.horizontal, 14).padding(.vertical, 11)
+                            .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
                     .padding(.horizontal, 20)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("LEADERBOARD")
-                            .font(BKFont.caption(11))
-                            .tracking(0.8)
-                            .foregroundStyle(BKTheme.textMuted)
-
-                        ForEach(Array(leaderboard.enumerated()), id: \.element.id) { index, entry in
-                            HStack {
-                                Text("\(index + 1)")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textMuted)
-                                    .frame(width: 20, alignment: .leading)
-                                Text(entry.name.uppercased())
-                                    .font(BKFont.caption(11))
-                                    .foregroundStyle(entry.isUser ? BKTheme.accent : BKTheme.textPrimary)
-                                Spacer()
-                                Text(FootballGolfScoring.scoreLabel(entry.score))
-                                    .font(BKFont.headline(14))
-                                    .foregroundStyle(entry.isUser ? BKTheme.accent : BKTheme.textPrimary)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(entry.isUser ? BKTheme.accent.opacity(0.12) : BKTheme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
+                    Button(action: onDone) {
+                        Text("DONE").font(BKFont.headline()).foregroundStyle(BKTheme.background)
+                            .frame(maxWidth: .infinity).padding(.vertical, 16)
+                            .background(golfNeon).clipShape(RoundedRectangle(cornerRadius: 16))
                     }
-                    .padding(.horizontal, 20)
-
-                    VStack(spacing: 12) {
-                        if showPlayAgain {
-                            Button(action: onPlayAgain) {
-                                Text("PLAY AGAIN")
-                                    .font(BKFont.headline())
-                                    .foregroundStyle(BKTheme.background)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .background(BKTheme.accent)
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                            }
-                        }
-
-                        Button(action: onHome) {
-                            Text(showPlayAgain ? "BACK HOME" : "DONE")
-                                .font(BKFont.headline())
-                                .foregroundStyle(BKTheme.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(BKTheme.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 32)
+                    .padding(.horizontal, 24).padding(.bottom, 32)
                 }
             }
         }
     }
+}
 
-    private func outcomeColor(_ outcome: FootballGolfHoleOutcome) -> Color {
-        switch outcome {
-        case .birdie: return BKTheme.accent
-        case .par: return BKTheme.textSecondary
-        case .bogey: return BKTheme.wrong
-        }
+// MARK: - Shake effect for wrong guesses
+
+private struct ShakeEffect: GeometryEffect {
+    var animatableData: CGFloat
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let translation = 6 * sin(animatableData * .pi * 4)
+        return ProjectionTransform(CGAffineTransform(translationX: translation, y: 0))
     }
 }
