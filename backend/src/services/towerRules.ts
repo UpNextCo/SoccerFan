@@ -166,6 +166,42 @@ export async function playerSatisfiesRule(playerId: string, rule: TowerRule): Pr
   return rows.length > 0;
 }
 
+export interface AnswerPlayer {
+  id: string;
+  name: string;
+  mvt: number;
+  big5: number;
+  ucl: number;
+  total: number;
+}
+
+/** EVERY player satisfying the rule, with fame fields — the full answer set for a
+ *  Football Golf hole (and rarity derivation). Works for closed-set (validIds) and
+ *  rule-based prompts alike. */
+export async function enumeratePlayers(rule: TowerRule): Promise<AnswerPlayer[]> {
+  if (rule.validIds) {
+    if (rule.validIds.length === 0) return [];
+    const ids = sql.join(rule.validIds.map((i) => sql`${i}::uuid`), sql`, `);
+    const rows = (await db.execute(sql`
+      SELECT p.id, p.name, p.market_value_tier AS mvt,
+        COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id IN (39,140,135,78,61)),0)::int AS big5,
+        COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2),0)::int AS ucl,
+        COALESCE(SUM(s.appearances),0)::int AS total
+      FROM players p LEFT JOIN player_stats s ON s.player_id = p.id
+      WHERE p.id IN (${ids}) GROUP BY p.id, p.name, p.market_value_tier
+    `)) as unknown as AnswerPlayer[];
+    return rows;
+  }
+  const conds = sql.join(ruleConditions(rule), sql` AND `);
+  const rows = (await db.execute(sql`
+    ${AGG}
+    SELECT a.id, (SELECT name FROM players WHERE id = a.id) AS name, a.mvt,
+           a.big5_apps AS big5, a.ucl_apps AS ucl, a.total_apps AS total
+    FROM agg a WHERE ${conds}
+  `)) as unknown as AnswerPlayer[];
+  return rows;
+}
+
 /** Up to `limit` of the most recognisable players satisfying the rule (real names,
  *  most famous first) — used to let the LLM judge difficulty from concrete answers. */
 export async function sampleFamousPlayers(rule: TowerRule, limit = 6): Promise<string[]> {

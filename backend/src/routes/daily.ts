@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
-import { completeDaily, getDailyBundle, getDailyPuzzle, validateGuess, validateTowerAnswer, validateOneMoreAnswer } from '../services/dailyService.js';
+import { completeDaily, getDailyBundle, getDailyPuzzle, validateGuess, validateOneMoreAnswer } from '../services/dailyService.js';
 
 export const dailyRouter = Router();
 
@@ -70,33 +70,6 @@ dailyRouter.post('/guess', requireAuth, async (req, res) => {
     sendSuccess(res, result);
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Guess failed', 400);
-  }
-});
-
-const towerSchema = z.object({
-  date: z.string(),
-  floor: z.number().int().min(1),
-  answerType: z.enum(['player', 'club', 'country']),
-  value: z.string().min(1),
-});
-
-dailyRouter.post('/tower/validate', requireAuth, async (req, res) => {
-  const parsed = towerSchema.safeParse(req.body);
-  if (!parsed.success) {
-    sendError(res, 'Invalid request body', 400);
-    return;
-  }
-
-  try {
-    const correct = await validateTowerAnswer(
-      parsed.data.date,
-      parsed.data.floor,
-      parsed.data.answerType,
-      parsed.data.value
-    );
-    sendSuccess(res, { correct });
-  } catch (err) {
-    sendError(res, err instanceof Error ? err.message : 'Tower validation failed', 400);
   }
 });
 

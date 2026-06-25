@@ -96,17 +96,20 @@ export interface FootballBingoPuzzlePublic {
   }>;
 }
 
-export interface FootballTowerPuzzlePublic {
-  modeId: 'football_tower';
+export interface FootballGolfPuzzlePublic {
+  modeId: 'football_golf';
   puzzleId: string;
   date: string;
   title: string;
-  floors: Array<{
-    floor: number;
-    difficulty: string;
+  totalPar: number;
+  holes: Array<{
+    id: string;
+    holeNumber: number;
+    par: number;
     prompt: string;
-    answerType: string;
-    rule: Record<string, unknown>;
+    category: string;
+    answers: Array<{ id: string; name: string; aliases: string[]; rarity: string }>;
+    hints: string[];
   }>;
 }
 
@@ -126,7 +129,7 @@ export type DailyPuzzlePublic =
   | TargetManPuzzlePublic
   | BlindRankPuzzlePublic
   | FootballBingoPuzzlePublic
-  | FootballTowerPuzzlePublic
+  | FootballGolfPuzzlePublic
   | OneMorePuzzlePublic;
 
 export interface GuessFeedbackField {

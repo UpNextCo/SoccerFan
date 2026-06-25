@@ -6,8 +6,7 @@ import { getPlayerById } from './playerService.js';
 import { ensureWeeklyMembership, recordXp, weekStartFor } from './leagueService.js';
 import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
-import { drawTowerFromBank, generateFootballTowerPuzzle, type TowerFloor } from './footballTowerGenerator.js';
-import { isFootballNation, isPremierLeagueClub, playerSatisfiesRule } from './towerRules.js';
+import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
@@ -17,11 +16,10 @@ const GAME_MODES = [
   { id: 'one_more', title: 'ONE MORE', subtitle: 'Risk it for points', playerCount: 6400, isAvailable: true },
   { id: 'target_man', title: 'TARGET MAN', subtitle: 'Hit the stat target', playerCount: 15200, isAvailable: true },
   { id: 'guess_who', title: 'GUESS WHO?', subtitle: 'Wordle-style player guess', playerCount: 22100, isAvailable: true },
-  { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9-hole trivia par', playerCount: 7600, isAvailable: true },
+  { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9 holes, name the answers', playerCount: 7600, isAvailable: true },
   { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
   { id: 'draft_master', title: 'DRAFT MASTER', subtitle: 'Build the best XI', playerCount: 11300, isAvailable: true },
   { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Guess the World Cup year', playerCount: 8900, isAvailable: true },
-  { id: 'football_tower', title: 'FOOTBALL TOWER', subtitle: 'Climb the tower', playerCount: 8700, isAvailable: true },
 ];
 
 const DAILY_PUZZLE_MODES = [
@@ -36,7 +34,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'target_man', title: 'TARGET MAN' },
   { modeId: 'blind_rank', title: 'BLIND RANK' },
   { modeId: 'football_bingo', title: 'FOOTBALL BINGO' },
-  { modeId: 'football_tower', title: 'FOOTBALL TOWER' },
+  { modeId: 'football_golf', title: 'FOOTBALL GOLF' },
   { modeId: 'one_more', title: 'ONE MORE' },
 ] as const;
 
@@ -50,7 +48,6 @@ export const DAILY_PLAYABLE_MODES = [
   'draft_master',
   'world_cup_xi',
   'football_golf',
-  'football_tower',
 ] as const;
 
 const CLIENT_SEED_MODES = new Set<string>([
@@ -59,7 +56,6 @@ const CLIENT_SEED_MODES = new Set<string>([
   'draft_master',
   'world_cup_xi',
   'football_golf',
-  'football_tower',
 ]);
 
 function todayUTC(): string {
@@ -85,7 +81,6 @@ function computeClientModeXp(modeId: string, score: number, won: boolean): numbe
     one_more: 40,
     draft_master: 45,
     football_golf: 55,
-    football_tower: 40,
     target_man: 50,
     blind_rank: 50,
   };
@@ -124,31 +119,28 @@ async function ensureBingoPuzzle(date: string): Promise<void> {
   }
 }
 
-/** Generate + store today's Football Tower if not present. Best-effort. */
-async function ensureTowerPuzzle(date: string): Promise<void> {
+/** Generate + store today's Football Golf course if not present. Best-effort. */
+async function ensureGolfPuzzle(date: string): Promise<void> {
   const existing = await db
     .select({ modeId: dailyPuzzles.modeId })
     .from(dailyPuzzles)
-    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_tower')))
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_golf')))
     .limit(1);
   if (existing.length > 0) return;
 
   try {
-    // Prefer the reviewed bank (instant, no LLM, no repeats). Fall back to fast static
-    // generation only if the bank isn't built/large enough yet.
-    const fromBank = await drawTowerFromBank(date);
-    const puzzle = fromBank ?? (await generateFootballTowerPuzzle(date, { llm: false })).puzzle;
-    if (puzzle.floors.length < 15) {
-      console.warn(`Skipped football_tower for ${date}: only ${puzzle.floors.length} floors`);
+    const puzzle = await generateFootballGolfCourse(date);
+    if (puzzle.holes.length < 9) {
+      console.warn(`Skipped football_golf for ${date}: only ${puzzle.holes.length} holes`);
       return;
     }
     await db
       .insert(dailyPuzzles)
-      .values({ date, modeId: 'football_tower', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
+      .values({ date, modeId: 'football_golf', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
       .onConflictDoNothing();
-    console.log(`Generated football_tower puzzle for ${date}`);
+    console.log(`Generated football_golf puzzle for ${date}`);
   } catch (error) {
-    console.warn(`Skipped football_tower for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(`Skipped football_golf for ${date}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -226,8 +218,8 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   if (!existing.has('football_bingo')) {
     await ensureBingoPuzzle(date);
   }
-  if (!existing.has('football_tower')) {
-    await ensureTowerPuzzle(date);
+  if (!existing.has('football_golf')) {
+    await ensureGolfPuzzle(date);
   }
   if (!existing.has('one_more')) {
     await ensureOneMorePuzzle(date);
@@ -251,27 +243,6 @@ export async function validateOneMoreAnswer(
 
   const statValue = await oneMoreStatValue(playerId, puzzle.leagueId, puzzle.category);
   return { valid: statValue >= puzzle.minimum, statValue };
-}
-
-/** Validate a Football Tower answer against the stored floor's rule. Authoritative. */
-export async function validateTowerAnswer(
-  date: string,
-  floor: number,
-  answerType: 'player' | 'club' | 'country',
-  value: string
-): Promise<boolean> {
-  const rows = await db
-    .select()
-    .from(dailyPuzzles)
-    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_tower')))
-    .limit(1);
-  const puzzle = rows[0]?.puzzleJson as { floors?: TowerFloor[] } | undefined;
-  const floorDef = puzzle?.floors?.find((f) => f.floor === floor);
-  if (!floorDef) throw new Error('Tower floor not found');
-
-  if (answerType === 'club') return isPremierLeagueClub(value);
-  if (answerType === 'country') return isFootballNation(value);
-  return playerSatisfiesRule(value, floorDef.rule);
 }
 
 export async function getDailyPuzzle(date: string, modeId: string) {
