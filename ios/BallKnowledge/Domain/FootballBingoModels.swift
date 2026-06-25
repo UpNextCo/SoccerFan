@@ -14,6 +14,7 @@ enum FootballBingoCategoryType: String, Codable {
     case playedWithPlayer
     case managedByManager
     case statThreshold
+    case position
 }
 
 enum FootballBingoIconType: String, Codable {
@@ -37,12 +38,15 @@ struct FootballBingoPlayer: Identifiable, Equatable {
     let id: String
     let name: String
     let nationality: String
+    let position: String
     let clubs: [String]
     let leagues: [String]
     let trophies: [String]
     let teammates: [String]
     let managers: [String]
     let premierLeagueApps: Int?
+    let topLeagueGoals: Int?
+    let topLeagueApps: Int?
 }
 
 struct FootballBingoGame: Equatable {

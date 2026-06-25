@@ -84,12 +84,15 @@ export interface FootballBingoPuzzlePublic {
     id: string;
     name: string;
     nationality: string;
+    position: string;
     clubs: string[];
     leagues: string[];
     trophies: string[];
     teammates: string[];
     managers: string[];
     premierLeagueApps: number | null;
+    topLeagueGoals: number | null;
+    topLeagueApps: number | null;
   }>;
 }
 

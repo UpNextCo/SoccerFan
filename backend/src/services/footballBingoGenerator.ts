@@ -17,22 +17,72 @@ const MIN_POOL_MATCHERS = 6; // a category must have this many matchers in the p
 const MATCHERS_PER_CATEGORY = 5; // how many of each we seed into the queue
 const MAX_QUEUE = 55;
 
-/** Club competitions worth quizzing on (exact strings as stored in player_honours). */
-const TROPHY_WHITELIST = new Set([
-  'UEFA Champions League',
-  'UEFA Europa League',
-  'Premier League',
-  'La Liga',
-  'Serie A',
-  'Bundesliga',
-  'Ligue 1',
-  'FA Cup',
-  'Copa del Rey',
-  'DFB Pokal',
-  'Coppa Italia',
-]);
+/**
+ * Canonical trophy categories → the raw competition strings (as stored in
+ * player_honours by API-Football) that map onto them. API naming drifts
+ * ("FIFA World Cup" vs "World Cup"), so we canonicalize at pool-load time and the
+ * client keeps matching on the canonical name with simple string equality.
+ */
+const TROPHY_CANONICAL: Array<{ name: string; aliases: string[] }> = [
+  // Continental club
+  { name: 'Champions League', aliases: ['UEFA Champions League'] },
+  { name: 'Europa League', aliases: ['UEFA Europa League'] },
+  { name: 'UEFA Super Cup', aliases: ['UEFA Super Cup'] },
+  { name: 'Club World Cup', aliases: ['FIFA Club World Cup', 'FIFA Intercontinental Cup', 'Intercontinental Cup', 'Inter Continental Cup'] },
+  // International
+  { name: 'World Cup', aliases: ['FIFA World Cup', 'World Cup'] },
+  { name: 'European Championship', aliases: ['UEFA European Championship', 'European Championship'] },
+  { name: 'Copa América', aliases: ['CONMEBOL Copa America', 'Copa America', 'Copa América'] },
+  { name: 'Nations League', aliases: ['UEFA Nations League'] },
+  // Domestic leagues
+  { name: 'Premier League', aliases: ['Premier League'] },
+  { name: 'La Liga', aliases: ['La Liga'] },
+  { name: 'Serie A', aliases: ['Serie A'] },
+  { name: 'Bundesliga', aliases: ['Bundesliga'] },
+  { name: 'Ligue 1', aliases: ['Ligue 1'] },
+  // Domestic cups
+  { name: 'FA Cup', aliases: ['FA Cup'] },
+  { name: 'League Cup', aliases: ['League Cup', 'EFL Cup', 'Carabao Cup'] },
+  { name: 'Community Shield', aliases: ['Community Shield'] },
+  { name: 'Copa del Rey', aliases: ['Copa del Rey'] },
+  { name: 'Coppa Italia', aliases: ['Coppa Italia'] },
+  { name: 'DFB Pokal', aliases: ['DFB Pokal'] },
+  { name: 'Coupe de France', aliases: ['Coupe de France'] },
+  { name: 'Trophée des Champions', aliases: ['Trophée des Champions', 'Trophee des Champions'] },
+];
+
+/** Normalized raw competition string → canonical trophy name. */
+const TROPHY_ALIAS_LOOKUP = new Map<string, string>();
+const TROPHY_CANONICAL_SET = new Set<string>();
+for (const trophy of TROPHY_CANONICAL) {
+  TROPHY_CANONICAL_SET.add(trophy.name);
+  for (const alias of trophy.aliases) TROPHY_ALIAS_LOOKUP.set(norm(alias), trophy.name);
+}
+
+function canonicalTrophy(raw: string): string | null {
+  return TROPHY_ALIAS_LOOKUP.get(norm(raw)) ?? null;
+}
 
 const LEAGUES = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1', 'UEFA Champions League'];
+
+/** Outfield/keeper buckets as stored in players.position. */
+const POSITIONS: Array<{ rule: string; title: string; abbrev: string }> = [
+  { rule: 'Goalkeeper', title: 'Goalkeeper', abbrev: 'GK' },
+  { rule: 'Defender', title: 'Defender', abbrev: 'DEF' },
+  { rule: 'Midfielder', title: 'Midfielder', abbrev: 'MID' },
+  { rule: 'Attacker', title: 'Attacker', abbrev: 'ATT' },
+];
+
+/** Stat-threshold categories. Rule grammar: `<stat>>=<n>` where stat is one of
+ *  pl_apps (PL appearances), goals (big-5 career goals), apps (big-5 career apps). */
+const STAT_DEFS: Array<{ rule: string; title: string; icon: string }> = [
+  { rule: 'pl_apps>=100', title: '100+ PL Apps', icon: '100+' },
+  { rule: 'pl_apps>=200', title: '200+ PL Apps', icon: '200+' },
+  { rule: 'pl_apps>=300', title: '300+ PL Apps', icon: '300+' },
+  { rule: 'goals>=50', title: '50+ Top-5 Goals', icon: '50+' },
+  { rule: 'goals>=100', title: '100+ Top-5 Goals', icon: '100+' },
+  { rule: 'apps>=400', title: '400+ Top-5 Apps', icon: '400+' },
+];
 
 /** Marquee clubs (normalized) preferred for "played for" categories. */
 const BIG_CLUBS = new Set([
@@ -42,7 +92,7 @@ const BIG_CLUBS = new Set([
   'ajax', 'porto', 'benfica', 'sevilla', 'valencia', 'lazio',
 ]);
 
-type CatType = 'nationality' | 'playedForClub' | 'playedInLeague' | 'wonCompetition' | 'statThreshold';
+type CatType = 'nationality' | 'playedForClub' | 'playedInLeague' | 'wonCompetition' | 'statThreshold' | 'position';
 
 interface BingoCategory {
   id: string;
@@ -57,12 +107,15 @@ interface BingoPlayer {
   id: string;
   name: string;
   nationality: string;
+  position: string;
   clubs: string[];
   leagues: string[];
   trophies: string[];
   teammates: string[];
   managers: string[];
   premierLeagueApps: number | null;
+  topLeagueGoals: number | null;
+  topLeagueApps: number | null;
 }
 
 export interface FootballBingoPuzzle {
@@ -88,9 +141,18 @@ function matches(p: BingoPlayer, c: BingoCategory): boolean {
       return p.leagues.some((x) => norm(x) === norm(c.matchingRule));
     case 'wonCompetition':
       return p.trophies.some((x) => norm(x) === norm(c.matchingRule));
+    case 'position':
+      return norm(p.position) === norm(c.matchingRule);
     case 'statThreshold': {
-      const thr = Number(c.matchingRule.replace('pl_apps>=', '')) || 0;
-      return (p.premierLeagueApps ?? 0) >= thr;
+      const [statKey, thrStr] = c.matchingRule.split('>=');
+      const thr = Number(thrStr) || 0;
+      const value =
+        statKey === 'goals'
+          ? p.topLeagueGoals ?? 0
+          : statKey === 'apps'
+            ? p.topLeagueApps ?? 0
+            : p.premierLeagueApps ?? 0; // default: pl_apps
+      return value >= thr;
     }
   }
 }
@@ -145,9 +207,19 @@ async function loadPool(): Promise<BingoPlayer[]> {
   if (ids.length === 0) return [];
   const idList = sql.join(ids.map((id) => sql`${id}`), sql`, `);
 
-  const base = await rows<{ id: string; name: string; nationality: string; pl_apps: number }>(sql`
-    SELECT p.id, p.name, p.nationality,
-           COALESCE((SELECT SUM(appearances) FROM player_stats s WHERE s.player_id = p.id AND s.league_id = 39), 0)::int AS pl_apps
+  const base = await rows<{
+    id: string;
+    name: string;
+    nationality: string;
+    position: string;
+    pl_apps: number;
+    top_goals: number;
+    top_apps: number;
+  }>(sql`
+    SELECT p.id, p.name, p.nationality, COALESCE(p.position, '') AS position,
+           COALESCE((SELECT SUM(appearances) FROM player_stats s WHERE s.player_id = p.id AND s.league_id = 39), 0)::int AS pl_apps,
+           COALESCE((SELECT SUM(goals) FROM player_stats s WHERE s.player_id = p.id AND s.league_id IN (39, 140, 135, 78, 61)), 0)::int AS top_goals,
+           COALESCE((SELECT SUM(appearances) FROM player_stats s WHERE s.player_id = p.id AND s.league_id IN (39, 140, 135, 78, 61)), 0)::int AS top_apps
     FROM players p WHERE p.id IN (${idList})
   `);
 
@@ -172,17 +244,30 @@ async function loadPool(): Promise<BingoPlayer[]> {
   const leaguesById = new Map(leagueRows.map((r) => [r.player_id, r.leagues]));
   const trophiesById = new Map(trophyRows.map((r) => [r.player_id, r.trophies]));
 
-  return base.map((b) => ({
-    id: b.id,
-    name: b.name,
-    nationality: b.nationality,
-    clubs: clubsById.get(b.id) ?? [],
-    leagues: leaguesById.get(b.id) ?? [],
-    trophies: (trophiesById.get(b.id) ?? []).filter((t) => TROPHY_WHITELIST.has(t)),
-    teammates: [],
-    managers: [],
-    premierLeagueApps: b.pl_apps,
-  }));
+  return base.map((b) => {
+    // Canonicalize + dedupe trophies so fragmented API names collapse to one tile.
+    const trophies = [
+      ...new Set(
+        (trophiesById.get(b.id) ?? [])
+          .map((t) => canonicalTrophy(t))
+          .filter((t): t is string => t !== null)
+      ),
+    ];
+    return {
+      id: b.id,
+      name: b.name,
+      nationality: b.nationality,
+      position: b.position,
+      clubs: clubsById.get(b.id) ?? [],
+      leagues: leaguesById.get(b.id) ?? [],
+      trophies,
+      teammates: [],
+      managers: [],
+      premierLeagueApps: b.pl_apps,
+      topLeagueGoals: b.top_goals,
+      topLeagueApps: b.top_apps,
+    };
+  });
 }
 
 function countMatchers(pool: BingoPlayer[], cat: BingoCategory): number {
@@ -207,15 +292,26 @@ function buildCandidates(pool: BingoPlayer[], clubLeagues: Map<string, string>):
   const leagues = LEAGUES.map((l): BingoCategory => ({ id: `lge_${norm(l)}`, title: l, type: 'playedInLeague', iconType: 'league', iconValue: l, matchingRule: l }))
     .filter((c) => countMatchers(pool, c) >= MIN_POOL_MATCHERS);
 
-  const trophies = [...TROPHY_WHITELIST]
+  const trophies = [...TROPHY_CANONICAL_SET]
     .map((t): BingoCategory => ({ id: `trophy_${norm(t)}`, title: `${t} Winner`, type: 'wonCompetition', iconType: 'trophy', iconValue: t, matchingRule: t }))
     .filter((c) => countMatchers(pool, c) >= MIN_POOL_MATCHERS);
 
-  const stats = [100, 200, 300]
-    .map((n): BingoCategory => ({ id: `pl${n}`, title: `${n}+ PL Apps`, type: 'statThreshold', iconType: 'custom', iconValue: `${n}+`, matchingRule: `pl_apps>=${n}` }))
+  const stats = STAT_DEFS
+    .map((s): BingoCategory => ({ id: `stat_${norm(s.rule)}`, title: s.title, type: 'statThreshold', iconType: 'custom', iconValue: s.icon, matchingRule: s.rule }))
     .filter((c) => countMatchers(pool, c) >= MIN_POOL_MATCHERS);
 
-  return { nationality: nats, playedForClub: clubs, playedInLeague: leagues, wonCompetition: trophies, statThreshold: stats };
+  const positions = POSITIONS
+    .map((p): BingoCategory => ({ id: `pos_${norm(p.rule)}`, title: p.title, type: 'position', iconType: 'custom', iconValue: p.abbrev, matchingRule: p.rule }))
+    .filter((c) => countMatchers(pool, c) >= MIN_POOL_MATCHERS);
+
+  return {
+    nationality: nats,
+    playedForClub: clubs,
+    playedInLeague: leagues,
+    wonCompetition: trophies,
+    statThreshold: stats,
+    position: positions,
+  };
 }
 
 export async function generateFootballBingoPuzzle(date: string): Promise<FootballBingoPuzzle> {
@@ -227,11 +323,12 @@ export async function generateFootballBingoPuzzle(date: string): Promise<Footbal
 
   // Target mix (falls back to whatever's available to reach GRID).
   const target: Array<[CatType, number]> = [
-    ['nationality', 4],
+    ['nationality', 3],
     ['playedForClub', 4],
-    ['playedInLeague', 3],
+    ['playedInLeague', 2],
     ['wonCompetition', 3],
     ['statThreshold', 2],
+    ['position', 2],
   ];
 
   const chosen: BingoCategory[] = [];

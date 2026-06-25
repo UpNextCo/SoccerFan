@@ -484,8 +484,8 @@ private struct FootballBingoCategoryIcon: View {
             Ph.users.fill
                 .color(BKTheme.textSecondary)
                 .frame(width: 22, height: 22)
-        } else if category.type == .statThreshold {
-            Text("100+")
+        } else if category.type == .statThreshold || category.type == .position {
+            Text(category.iconValue)
                 .font(.system(size: 12, weight: .black, design: .rounded))
                 .foregroundStyle(BKTheme.accent)
         } else {

@@ -113,12 +113,31 @@ struct FootballBingoPlayerDTO: Codable, Equatable {
     let id: String
     let name: String
     let nationality: String
+    let position: String
     let clubs: [String]
     let leagues: [String]
     let trophies: [String]
     let teammates: [String]
     let managers: [String]
     let premierLeagueApps: Int?
+    let topLeagueGoals: Int?
+    let topLeagueApps: Int?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        nationality = try c.decode(String.self, forKey: .nationality)
+        position = try c.decodeIfPresent(String.self, forKey: .position) ?? ""
+        clubs = try c.decodeIfPresent([String].self, forKey: .clubs) ?? []
+        leagues = try c.decodeIfPresent([String].self, forKey: .leagues) ?? []
+        trophies = try c.decodeIfPresent([String].self, forKey: .trophies) ?? []
+        teammates = try c.decodeIfPresent([String].self, forKey: .teammates) ?? []
+        managers = try c.decodeIfPresent([String].self, forKey: .managers) ?? []
+        premierLeagueApps = try c.decodeIfPresent(Int.self, forKey: .premierLeagueApps)
+        topLeagueGoals = try c.decodeIfPresent(Int.self, forKey: .topLeagueGoals)
+        topLeagueApps = try c.decodeIfPresent(Int.self, forKey: .topLeagueApps)
+    }
 }
 
 struct FootballBingoPuzzleDTO: Codable, Equatable {

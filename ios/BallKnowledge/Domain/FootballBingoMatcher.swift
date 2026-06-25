@@ -21,10 +21,20 @@ enum FootballBingoMatcher {
         case .managedByManager:
             return player.managers.contains { normalize($0) == normalize(category.matchingRule) }
 
+        case .position:
+            return normalize(player.position) == normalize(category.matchingRule)
+
         case .statThreshold:
-            guard category.matchingRule.hasPrefix("pl_apps>=") else { return false }
-            let threshold = Int(category.matchingRule.replacingOccurrences(of: "pl_apps>=", with: "")) ?? 0
-            return (player.premierLeagueApps ?? 0) >= threshold
+            // Rule grammar: `<stat>>=<n>` where stat is pl_apps | goals | apps.
+            let parts = category.matchingRule.components(separatedBy: ">=")
+            guard parts.count == 2, let threshold = Int(parts[1]) else { return false }
+            let value: Int
+            switch parts[0] {
+            case "goals": value = player.topLeagueGoals ?? 0
+            case "apps": value = player.topLeagueApps ?? 0
+            default: value = player.premierLeagueApps ?? 0 // pl_apps
+            }
+            return value >= threshold
         }
     }
 

@@ -34,12 +34,15 @@ enum FootballBingoSeed {
                 id: p.id,
                 name: p.name,
                 nationality: p.nationality,
+                position: p.position,
                 clubs: p.clubs,
                 leagues: p.leagues,
                 trophies: p.trophies,
                 teammates: p.teammates,
                 managers: p.managers,
-                premierLeagueApps: p.premierLeagueApps
+                premierLeagueApps: p.premierLeagueApps,
+                topLeagueGoals: p.topLeagueGoals,
+                topLeagueApps: p.topLeagueApps
             )
         }
         return FootballBingoGame(
@@ -151,12 +154,15 @@ enum FootballBingoSeed {
             id: id,
             name: name,
             nationality: nationality,
+            position: "",
             clubs: clubs,
             leagues: leagues,
             trophies: trophies,
             teammates: teammates,
             managers: managers,
-            premierLeagueApps: plApps
+            premierLeagueApps: plApps,
+            topLeagueGoals: nil,
+            topLeagueApps: nil
         )
     }
 
