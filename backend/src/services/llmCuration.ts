@@ -10,9 +10,7 @@ import type { TowerRule } from './towerRules.js';
 export interface CurationItem {
   id: string;
   prompt: string;
-  totalAnswers: number; // -1 = closed set (e.g. "name a PL club")
-  famousAnswers: number; // -1 = closed set
-  samples: string[]; // real, most-famous-first example answers
+  samples: string[]; // real, most-famous-first example answers (the difficulty signal)
 }
 
 const MODEL = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
@@ -32,7 +30,9 @@ export interface ProposedPrompt {
  */
 export async function proposeTowerPrompts(
   vocab: { clubs: string[]; nationalities: string[] },
-  count = 45
+  avoid: string[] = [],
+  count = 60,
+  focus: 'all' | 'hard' = 'all'
 ): Promise<ProposedPrompt[] | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
@@ -55,26 +55,64 @@ export async function proposeTowerPrompts(
     '  leaguePlayed: one of "Premier League","La Liga","Serie A","Bundesliga","Ligue 1"',
     '  playedFor: string[] (clubs from the allowed list; player must have played for ALL of them)',
     '',
+    '  minPlApps / minPlGoals / minPlAssists: integer (Premier League career totals)',
+    '  minPlYellowCards: integer (PL career yellow cards — disciplinary prompts)',
+    '  minPlCleanSheets: integer (PL career clean sheets — goalkeepers)',
+    '  minUclGoals / minUclApps: integer (Champions League career totals)',
+    '  uclWinner: boolean',
+    '  minPeakValueEur: integer (career-peak market value in EUROS, e.g. 100000000 = €100m)',
+    '  minRecordFeeEur: integer (biggest career transfer fee in EUROS, e.g. 80000000 = €80m)',
+    '',
     'CRITICAL: rules can only express AND, never OR. Never write "or" in a prompt (no',
     '"Barcelona or Real Madrid", no "Spanish or Italian"). Each prompt must read as a single',
     'unambiguous condition that exactly matches its rule.',
-    '  minPlApps / minPlGoals / minPlAssists: integer (Premier League career totals)',
-    '  minUclGoals / minUclApps: integer (Champions League career totals)',
-    '  uclWinner: boolean',
+    '',
+    'VARIETY IS ESSENTIAL: do NOT make most prompts "played in league X". Spread prompt types',
+    'across nationalities, club combinations, goal/assist/appearance/yellow-card/clean-sheet',
+    'thresholds, big market values (€80m+ peak), record transfer fees (€60m+), Champions',
+    'League stats, and sensible COMBINATIONS (e.g. "a defender with 100+ PL apps who has won',
+    'the Champions League").',
+    '',
+    ...(focus === 'hard'
+      ? [
+          'Generate ONLY genuinely HARD and ELITE prompts — every prompt\'s MOST famous valid',
+          'answer must be a player a casual fan would NOT instantly know. Use niche nationality ×',
+          'a NON-Premier-League league (Scottish in La Liga, Ghanaian in the Bundesliga), small-',
+          'nation goalkeepers/defenders abroad, lower-profile club pairings, or 3-constraint',
+          'combinations. Do NOT produce accessible prompts (famous nationality in the PL, iconic',
+          'club pairings) — we already have plenty of those.',
+        ]
+      : [
+          'GIVE A FULL, EVEN SPREAD across difficulty — roughly a third ACCESSIBLE, a third HARD,',
+          'a third ELITE:',
+          '- Accessible (a casual fan names one within seconds): a famous nationality in the Premier',
+          '  League (Senegalese, Ivorian, Argentine in the PL), or an iconic club pairing.',
+          '- Hard: niche nationality × a NON-Premier-League league (Scottish in La Liga, Ghanaian in',
+          '  the Bundesliga), or 2-constraint combinations.',
+          '- Elite: even the MOST famous valid answer is a player casual fans would NOT know —',
+          '  small-nation goalkeepers/defenders abroad, or 3-constraint combinations.',
+          'We need enough of EACH tier to build a 15-floor climb that starts accessible and ends',
+          'genuinely elite.',
+        ]),
     '',
     'The natural-language "prompt" MUST exactly match its rule. Only reference the allowed',
     'clubs and nationalities. Stat data only covers 2010+ for PL/UCL, so keep thresholds',
-    'reasonable (PL apps up to ~300, PL goals up to ~150, UCL goals up to ~60).',
+    'reasonable (PL apps ~300, PL goals ~150, PL assists ~120, PL yellows ~80, UCL goals ~60,',
+    'peak value ~€200m, fee ~€220m).',
     'Return ONLY JSON.',
   ].join('\n');
+
+  const avoidBlock = avoid.length
+    ? `\nThese prompts were used on recent days — DO NOT reuse or lightly reword them; create genuinely different ones:\n${avoid.slice(0, 80).map((p) => `- ${p}`).join('\n')}\n`
+    : '';
 
   const user = [
     `Allowed clubs: ${vocab.clubs.join(', ')}`,
     `Allowed nationalities: ${vocab.nationalities.join(', ')}`,
-    '',
+    avoidBlock,
     `Produce ${count} prompts. Return JSON exactly:`,
     '{"prompts":[{"prompt":"...","rule":{...},"difficulty":0-100}]}',
-    'Ensure a smooth spread of difficulty values and minimal repetition of themes.',
+    'Ensure a smooth spread of difficulty values and strong variety from the recent prompts above.',
   ].join('\n');
 
   try {
@@ -118,22 +156,29 @@ export async function rateTowerDifficulty(items: CurationItem[]): Promise<Map<st
 
   const system = [
     'You are a football-quiz difficulty expert for a daily game called "Football Tower".',
-    'On each floor the player must NAME someone matching a prompt. Rate how HARD each',
-    'prompt is for a typical engaged football fan, from 0 (trivially easy) to 100 (very hard).',
+    'On each floor the player must NAME ONE footballer matching the prompt. Rate how HARD',
+    'each prompt is for a typical engaged football fan, 0 (trivially easy) to 100 (very hard).',
     '',
-    'Judge by how easily a fan can RECALL a valid answer — driven by how ICONIC/famous the',
-    'answers are — NOT by how many answers exist. Example: "played for both Arsenal and',
-    'Chelsea" has few answers but they are iconic (Ashley Cole, Petr Cech, Willian) so it is',
-    'EASY. Obscure stat thresholds, niche nationalities, or prompts whose sample answers are',
-    'unfamiliar should score HIGH. Use the provided sample answers to gauge fame.',
+    'THE KEY QUESTION: how quickly could a fan name AT LEAST ONE valid answer? Difficulty is',
+    'driven by the FAME OF THE MOST OBVIOUS ANSWER, not by how many answers exist. We list the',
+    'real answers most-famous-first — look at the TOP ones:',
+    '- If the most famous answer is a household name, the prompt is EASY — EVEN IF IT IS THE',
+    '  ONLY ANSWER. e.g. "Slovak defender in the Premier League" → Škrtel (10 years at',
+    '  Liverpool) is instantly obvious, so EASY (~20), despite being basically the only answer.',
+    '- "Ghanaian defender in the Premier League" → Schlupp/Amartey/Lamptey obvious → EASY.',
+    '- "Uruguayan in the Premier League" → Suárez/Cavani/Núñez → EASY (~15).',
+    '- "Played for both Arsenal and Chelsea" → Cole/Cech/Willian → EASY-MEDIUM.',
+    'A prompt is only HARD/ELITE when EVEN ITS MOST FAMOUS ANSWER would stump a typical fan —',
+    'i.e. the best answer is an obscure journeyman a casual fan has never heard of. Do NOT rate',
+    'something hard just because it has few answers; rate it hard only because the answers',
+    'themselves are unfamiliar.',
     '',
     'Return ONLY JSON, no prose.',
   ].join('\n');
 
   const lines = items.map((i) => {
-    const meta = i.totalAnswers < 0 ? 'closed set' : `${i.totalAnswers} total answers, ${i.famousAnswers} well-known`;
-    const examples = i.samples.length ? i.samples.join(', ') : 'n/a';
-    return `[${i.id}] "${i.prompt}" — ${meta}; example answers (famous first): ${examples}`;
+    const examples = i.samples.length ? i.samples.join(', ') : '(closed set — a club/nation, very easy)';
+    return `[${i.id}] "${i.prompt}" — most famous valid answers: ${examples}`;
   });
   const user = `Rate every prompt below.\n\n${lines.join('\n')}\n\nReturn JSON exactly: {"ratings":[{"id":"<id>","difficulty":<0-100>}]} covering all ids.`;
 
@@ -142,6 +187,7 @@ export async function rateTowerDifficulty(items: CurationItem[]): Promise<Map<st
     const resp = await client.messages.create({
       model: MODEL,
       max_tokens: 3000,
+      temperature: 0, // deterministic, consistent difficulty calibration
       system,
       messages: [{ role: 'user', content: user }],
     });

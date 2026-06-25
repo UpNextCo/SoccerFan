@@ -18,9 +18,13 @@ export interface TowerRule {
   minPlApps?: number;
   minPlAssists?: number;
   minPlGoals?: number;
+  minPlYellowCards?: number;
+  minPlCleanSheets?: number;
   uclWinner?: boolean;
   minUclGoals?: number;
   minUclApps?: number;
+  minPeakValueEur?: number; // career-peak market value in euros
+  minRecordFeeEur?: number; // biggest transfer fee in euros
 }
 
 /** Canonical European nationalities (for the "non-European" elite rule). */
@@ -52,8 +56,12 @@ function ruleConditions(rule: TowerRule) {
   if (typeof rule.minPlApps === 'number') c.push(sql`a.pl_apps >= ${rule.minPlApps}`);
   if (typeof rule.minPlGoals === 'number') c.push(sql`a.pl_goals >= ${rule.minPlGoals}`);
   if (typeof rule.minPlAssists === 'number') c.push(sql`a.pl_assists >= ${rule.minPlAssists}`);
+  if (typeof rule.minPlYellowCards === 'number') c.push(sql`a.pl_yellows >= ${rule.minPlYellowCards}`);
+  if (typeof rule.minPlCleanSheets === 'number') c.push(sql`a.pl_clean_sheets >= ${rule.minPlCleanSheets}`);
   if (typeof rule.minUclGoals === 'number') c.push(sql`a.ucl_goals >= ${rule.minUclGoals}`);
   if (typeof rule.minUclApps === 'number') c.push(sql`a.ucl_apps >= ${rule.minUclApps}`);
+  if (typeof rule.minPeakValueEur === 'number') c.push(sql`a.peak_value >= ${rule.minPeakValueEur}`);
+  if (typeof rule.minRecordFeeEur === 'number') c.push(sql`a.record_fee >= ${rule.minRecordFeeEur}`);
   if (rule.leaguePlayed) {
     c.push(sql`EXISTS (SELECT 1 FROM player_stats s2 WHERE s2.player_id = a.id AND s2.league_name = ${rule.leaguePlayed} AND s2.appearances > 0)`);
   }
@@ -69,16 +77,21 @@ function ruleConditions(rule: TowerRule) {
 const AGG = sql`
   WITH agg AS (
     SELECT p.id, p.nationality, p.position, p.market_value_tier AS mvt,
-      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_apps,
-      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_goals,
-      COALESCE(SUM(s.assists)     FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_assists,
-      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = ${UCL}), 0)::int AS ucl_apps,
-      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = ${UCL}), 0)::int AS ucl_goals,
+      COALESCE(p.peak_market_value_eur, 0)::bigint AS peak_value,
+      COALESCE(p.record_fee_eur, 0)::bigint AS record_fee,
+      COALESCE(SUM(s.appearances)   FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_apps,
+      COALESCE(SUM(s.goals)         FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_goals,
+      COALESCE(SUM(s.assists)       FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_assists,
+      COALESCE(SUM(s.yellow_cards)  FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_yellows,
+      COALESCE(SUM(s.clean_sheets)  FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_clean_sheets,
+      COALESCE(SUM(s.appearances)   FILTER (WHERE s.league_id = ${UCL}), 0)::int AS ucl_apps,
+      COALESCE(SUM(s.goals)         FILTER (WHERE s.league_id = ${UCL}), 0)::int AS ucl_goals,
+      COALESCE(SUM(s.appearances)   FILTER (WHERE s.league_id IN (39,140,135,78,61)), 0)::int AS big5_apps,
       COALESCE(SUM(s.appearances), 0)::int AS total_apps
     FROM players p
     LEFT JOIN player_stats s ON s.player_id = p.id
     WHERE p.external_id IS NOT NULL
-    GROUP BY p.id, p.nationality, p.position, p.market_value_tier
+    GROUP BY p.id, p.nationality, p.position, p.market_value_tier, p.peak_market_value_eur, p.record_fee_eur
   )`;
 
 /** How many players satisfy this rule (for generation solvability). */
@@ -98,6 +111,21 @@ export async function countFamousPlayers(rule: TowerRule): Promise<number> {
   const rows = (await db.execute(sql`
     ${AGG} SELECT COUNT(*)::int AS n FROM agg a
     WHERE ${conds} AND (a.mvt >= 4 OR a.total_apps >= 250)
+  `)) as unknown as Array<{ n: number }>;
+  return rows[0]?.n ?? 0;
+}
+
+/**
+ * How many answers a knowledgeable fan could plausibly NAME — the true difficulty signal.
+ * "Recallable" = a player with real top-flight exposure (big-5 apps / UCL apps) OR an
+ * elite market value. A journeyman with 150 Premier League games (e.g. Schlupp) counts;
+ * a one-cap obscurity does not. Fewer recallable answers ⇒ genuinely harder prompt.
+ */
+export async function countRecallablePlayers(rule: TowerRule): Promise<number> {
+  const conds = sql.join(ruleConditions(rule), sql` AND `);
+  const rows = (await db.execute(sql`
+    ${AGG} SELECT COUNT(*)::int AS n FROM agg a
+    WHERE ${conds} AND (a.mvt >= 4 OR a.big5_apps >= 60 OR a.ucl_apps >= 35)
   `)) as unknown as Array<{ n: number }>;
   return rows[0]?.n ?? 0;
 }

@@ -208,6 +208,34 @@ export const dailyPuzzles = pgTable(
   ]
 );
 
+/**
+ * Reviewed bank of Football Tower prompts. Built offline in batches (Claude proposes →
+ * DB verifies → Claude rates), manually QA'd via `status`, then the daily puzzle draws
+ * from here WITHOUT replacement (least-recently-used) so days never repeat for a long time.
+ */
+export const towerPrompts = pgTable(
+  'tower_prompts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    prompt: text('prompt').notNull(),
+    promptNorm: text('prompt_norm').notNull(),
+    rule: jsonb('rule').notNull(),
+    answerType: text('answer_type').notNull(),
+    tier: text('tier').notNull(), // easy | medium | hard | elite
+    difficulty: integer('difficulty').notNull(), // 0-100
+    validAnswers: integer('valid_answers').notNull(),
+    sampleAnswers: jsonb('sample_answers').$type<string[]>().notNull().default([]),
+    status: text('status').notNull().default('active'), // active | rejected
+    usedCount: integer('used_count').notNull().default(0),
+    lastUsedDate: date('last_used_date'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('tower_prompts_norm_unique').on(table.promptNorm),
+    index('tower_prompts_tier_status_idx').on(table.tier, table.status),
+  ]
+);
+
 export const dailyCompletions = pgTable(
   'daily_completions',
   {

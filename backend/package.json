@@ -17,6 +17,8 @@
     "job:gen-bingo": "tsx src/services/footballBingoGenerator.ts",
     "job:gen-tower": "tsx src/services/footballTowerGenerator.ts",
     "job:tower-daily": "tsx src/services/footballTowerGenerator.ts store",
+    "job:build-tower-bank": "tsx src/jobs/build-tower-bank.ts",
+    "job:tower-bank-review": "tsx src/jobs/tower-bank-review.ts",
     "job:gen-onemore": "tsx src/services/oneMoreGenerator.ts",
     "job:ingest-players": "tsx src/jobs/ingest-players.ts",
     "job:ingest-stats": "tsx src/jobs/ingest-stats.ts",

@@ -6,7 +6,7 @@ import { getPlayerById } from './playerService.js';
 import { ensureWeeklyMembership, recordXp, weekStartFor } from './leagueService.js';
 import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
-import { generateFootballTowerPuzzle, type TowerFloor } from './footballTowerGenerator.js';
+import { drawTowerFromBank, generateFootballTowerPuzzle, type TowerFloor } from './footballTowerGenerator.js';
 import { isFootballNation, isPremierLeagueClub, playerSatisfiesRule } from './towerRules.js';
 import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
@@ -133,10 +133,11 @@ async function ensureTowerPuzzle(date: string): Promise<void> {
   if (existing.length > 0) return;
 
   try {
-    // Fast static path here so the bundle request never blocks on the LLM. The rich
-    // Claude-curated version is produced ahead of time by `npm run job:gen-tower store`.
-    const { puzzle } = await generateFootballTowerPuzzle(date, { llm: false });
-    if (puzzle.floors.length < 40) {
+    // Prefer the reviewed bank (instant, no LLM, no repeats). Fall back to fast static
+    // generation only if the bank isn't built/large enough yet.
+    const fromBank = await drawTowerFromBank(date);
+    const puzzle = fromBank ?? (await generateFootballTowerPuzzle(date, { llm: false })).puzzle;
+    if (puzzle.floors.length < 15) {
       console.warn(`Skipped football_tower for ${date}: only ${puzzle.floors.length} floors`);
       return;
     }

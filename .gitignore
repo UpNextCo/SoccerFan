@@ -16,6 +16,7 @@ ios/.derivedData/
 data/transfermarkt/
 backend/transferdata/
 backend/data/
+tower_bank_review.csv
 fbref_backfill.json
 fbref_ucl_backfill.json
 fbref_cl_backfill.json

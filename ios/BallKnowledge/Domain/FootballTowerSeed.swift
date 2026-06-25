@@ -4,12 +4,12 @@ enum FootballTowerSeed {
     static func makeDailyTower(date: String? = nil) -> [FootballTowerQuestion] {
         let dateKey = date ?? todayUTC()
         let seed = stableHash("football_tower_\(dateKey)")
-        return buildTower(seed: seed, dateKey: dateKey, count: 40)
+        return buildTower(seed: seed, dateKey: dateKey, count: 15)
     }
 
     static func makeFreePlayTower() -> [FootballTowerQuestion] {
         let seed = Int.random(in: 0...999_999)
-        return buildTower(seed: seed, dateKey: "free", count: 40)
+        return buildTower(seed: seed, dateKey: "free", count: 15)
     }
 
     /// Build the daily tower from server-generated floors (answers validated server-side).
