@@ -72,7 +72,13 @@ function ruleConditions(rule: TowerRule) {
     c.push(sql`EXISTS (SELECT 1 FROM player_stats s2 WHERE s2.player_id = a.id AND s2.league_name = ${rule.leaguePlayed} AND s2.appearances > 0)`);
   }
   for (const club of rule.playedFor ?? []) {
-    c.push(sql`EXISTS (SELECT 1 FROM player_stats s2 WHERE s2.player_id = a.id AND s2.team_name = ${club})`);
+    // Club affiliation = an appearance row OR a transfer in/out of the club. Transfers
+    // (Transfermarkt) catch academy/reserve/loan spells that top-5-league appearance data
+    // misses — e.g. Pablo Sarabia at Real Madrid (Castilla + a UCL sub, no La Liga apps).
+    c.push(sql`(
+      EXISTS (SELECT 1 FROM player_stats s2 WHERE s2.player_id = a.id AND s2.team_name = ${club})
+      OR EXISTS (SELECT 1 FROM player_transfers t2 WHERE t2.player_id = a.id AND (t2.from_team_name = ${club} OR t2.to_team_name = ${club}))
+    )`);
   }
   if (rule.uclWinner) {
     c.push(sql`EXISTS (SELECT 1 FROM player_honours h WHERE h.player_id = a.id AND h.competition ILIKE '%champions league%' AND h.placement ILIKE '%winner%')`);

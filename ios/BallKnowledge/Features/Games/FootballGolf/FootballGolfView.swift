@@ -1,9 +1,20 @@
 import SwiftUI
+#if canImport(Pow)
+import Pow
+#endif
 
 // Single success accent — reuse the app green. No second neon.
 private let golfGreen = BKTheme.accent
 // Warm tier highlight for rare answers (the only non-green "wow" colour besides ultra).
 private let golfGold = Color(hex: "F5C451")
+
+/// One motion vocabulary for the whole screen so animations feel deliberate, not random.
+/// `layout` = structural changes, `pop` = celebratory emphasis, `quick` = small state ticks.
+private enum GolfMotion {
+    static let layout = Animation.spring(response: 0.34, dampingFraction: 0.82)
+    static let pop = Animation.spring(response: 0.32, dampingFraction: 0.6)
+    static let quick = Animation.snappy(duration: 0.22)
+}
 
 /// One restrained rarity scale: two neutrals → gold → green jackpot.
 private func golfRarityColor(_ rarity: FootballGolfRarity) -> Color {
@@ -337,7 +348,7 @@ struct FootballGolfView: View {
             }
         }
         .overlay { FootballConfettiView(burstToken: vm.confettiToken).allowsHitTesting(false) }
-        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: vm.phase)
+        .animation(GolfMotion.layout, value: vm.phase)
         .fullScreenCover(isPresented: Binding(get: { vm.showResult }, set: { vm.showResult = $0 })) {
             FootballGolfFinalView(
                 course: vm.course,
@@ -391,7 +402,7 @@ struct FootballGolfView: View {
                         removal: .opacity))
             }
         }
-        .animation(.spring(response: 0.34, dampingFraction: 0.72), value: vm.matched.count)
+        .animation(GolfMotion.layout, value: vm.matched.count)
     }
 
     // Shots remaining as depleting pips — lives above the keyboard.
@@ -406,7 +417,7 @@ struct FootballGolfView: View {
                     .frame(width: 7, height: 7)
             }
         }
-        .animation(.snappy, value: vm.shotsRemaining)
+        .animation(GolfMotion.quick, value: vm.shotsRemaining)
     }
 
     // MARK: input bar (dark field with focus border)
@@ -530,10 +541,54 @@ private struct FootballGolfAnswerChip: View {
         .overlay(RoundedRectangle(cornerRadius: 12)
             .strokeBorder(answer.rarity.isStandout ? rarityColor.opacity(0.45) : Color.white.opacity(0.05), lineWidth: 1))
         .scaleEffect(appeared ? 1 : (justRevealed ? 0.85 : 1))
-        .onAppear { withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { appeared = true } }
+        .modifier(GolfRarityReward(rarity: answer.rarity, trigger: appeared))
+        .onAppear { withAnimation(GolfMotion.pop) { appeared = true } }
     }
 
     private var rarityColor: Color { golfRarityColor(answer.rarity) }
+}
+
+// MARK: - Rare/ultra answer reward (Pow spray, with a built-in glow fallback)
+
+private struct GolfRarityReward: ViewModifier {
+    let rarity: FootballGolfRarity
+    let trigger: Bool
+
+    func body(content: Content) -> some View {
+        #if canImport(Pow)
+        if rarity.isStandout {
+            content.changeEffect(
+                .spray(origin: UnitPoint(x: 0.5, y: 0.5)) {
+                    Image(systemName: rarity == .ultraRare ? "star.fill" : "sparkle")
+                        .foregroundStyle(golfRarityColor(rarity))
+                },
+                value: trigger)
+        } else {
+            content
+        }
+        #else
+        content.modifier(GolfGlowPulse(active: rarity.isStandout, color: golfRarityColor(rarity)))
+        #endif
+    }
+}
+
+/// Built-in stand-in for Pow: a quick coloured glow flash on standout answers.
+private struct GolfGlowPulse: ViewModifier {
+    let active: Bool
+    let color: Color
+    @State private var glow = false
+
+    func body(content: Content) -> some View {
+        content
+            .shadow(color: glow ? color.opacity(0.7) : .clear, radius: glow ? 14 : 0)
+            .onAppear {
+                guard active else { return }
+                withAnimation(.easeOut(duration: 0.22)) { glow = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    withAnimation(.easeIn(duration: 0.6)) { glow = false }
+                }
+            }
+    }
 }
 
 // MARK: - Scorecard strip (the "course map")
@@ -629,7 +684,7 @@ private struct FootballGolfHoleResultOverlay: View {
             .background(BKTheme.cardElevated).clipShape(RoundedRectangle(cornerRadius: 20))
             .padding(.horizontal, 24)
         }
-        .onAppear { withAnimation(.spring(response: 0.4, dampingFraction: 0.55)) { labelIn = true } }
+        .onAppear { withAnimation(GolfMotion.pop) { labelIn = true } }
     }
 
     private var outcomeColor: Color {
