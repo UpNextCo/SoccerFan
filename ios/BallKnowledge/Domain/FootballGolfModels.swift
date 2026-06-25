@@ -27,7 +27,16 @@ enum FootballGolfRarity: String, Codable, Equatable, CaseIterable {
         }
     }
 
-    /// A rare/ultra-rare answer earns "depth" toward birdie/eagle.
+    /// Points this answer scores toward clearing the hole's par.
+    var points: Int {
+        switch self {
+        case .common: return 1
+        case .uncommon: return 2
+        case .rare: return 3
+        case .ultraRare: return 4
+        }
+    }
+
     var isStandout: Bool { self == .rare || self == .ultraRare }
 }
 
@@ -61,55 +70,36 @@ struct FootballGolfCourse: Identifiable, Equatable {
 
 // MARK: - Per-hole result
 
-enum FootballGolfOutcome: Equatable {
-    case eagle      // -2
-    case birdie     // -1
-    case par        // 0
-    case bogey      // +1
-    case doubleBogey // +2
-    case worse(Int)  // +3 or more
-
-    init(relativeToPar: Int) {
-        switch relativeToPar {
-        case ...(-2): self = .eagle
-        case -1: self = .birdie
-        case 0: self = .par
-        case 1: self = .bogey
-        case 2: self = .doubleBogey
-        default: self = .worse(relativeToPar)
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .eagle: return "EAGLE"
-        case .birdie: return "BIRDIE"
-        case .par: return "PAR"
-        case .bogey: return "BOGEY"
-        case .doubleBogey: return "DOUBLE BOGEY"
-        case .worse: return "OVER PAR"
-        }
-    }
-}
+/// Max shots over par before the hole is force-ended (no unlimited guessing).
+let footballGolfShotCap = 4
 
 struct FootballGolfHoleResult: Identifiable, Equatable {
     let id: String
     let holeNumber: Int
     let par: Int
     let matched: [FootballGolfAnswer]   // correct answers the player named (in order)
-    let wrongGuesses: Int
-    let hintsUsed: Int
-    let skipped: Bool
+    let shots: Int                      // every guess + hint taken on the hole
+    let finished: Bool                  // reached par points
 
-    /// Strokes relative to par for this hole (golf convention; negative is good).
-    var relativeToPar: Int {
-        if skipped { return 2 } // double bogey
-        let standouts = matched.filter { $0.rarity.isStandout }.count
-        let rarityBonus = standouts >= 2 ? -2 : (standouts == 1 ? -1 : 0)
-        return rarityBonus + wrongGuesses + hintsUsed
+    var pointsReached: Int { matched.reduce(0) { $0 + $1.rarity.points } }
+
+    /// Golf score: shots taken minus par. If the player never cleared par (ran out of
+    /// shots / gave up), it's the worst score (+cap).
+    var relativeToPar: Int { finished ? (shots - par) : footballGolfShotCap }
+
+    var label: String {
+        if finished && shots == 1 { return "HOLE IN ONE" }
+        switch relativeToPar {
+        case ...(-3): return "ALBATROSS"
+        case -2: return "EAGLE"
+        case -1: return "BIRDIE"
+        case 0: return "PAR"
+        case 1: return "BOGEY"
+        case 2: return "DOUBLE BOGEY"
+        case 3: return "TRIPLE BOGEY"
+        default: return "+\(relativeToPar)"
+        }
     }
-
-    var outcome: FootballGolfOutcome { FootballGolfOutcome(relativeToPar: relativeToPar) }
 }
 
 // MARK: - Scoring helpers
