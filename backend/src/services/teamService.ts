@@ -13,6 +13,8 @@ export type TeamLogoMatch = {
   logoUrl: string;
 };
 
+const TOP5_LEAGUE_IDS = new Set([39, 140, 135, 78, 61]);
+
 function pairKey(club: string, league: string): string {
   return `${normalizeTeamName(club)}|${normalizeSearchText(league)}`;
 }
@@ -75,11 +77,15 @@ export async function lookupTeamLogos(
     const candidates = byNorm.get(pair.nameNorm) ?? [];
     if (candidates.length === 0) continue;
 
+    // Prefer the exact league match; otherwise favour a real (top-5) league club over a
+    // league-less duplicate, since name collisions like "Athletic Club" (Bilbao vs an obscure
+    // Brazilian side with no league) would otherwise resolve to the wrong, unrecognisable crest.
     const match =
       (pair.leagueId != null
         ? candidates.find((row) => row.leagueId === pair.leagueId)
         : undefined) ??
-      candidates.find((row) => row.leagueId == null) ??
+      candidates.find((row) => row.leagueId != null && TOP5_LEAGUE_IDS.has(row.leagueId)) ??
+      candidates.find((row) => row.leagueId != null) ??
       candidates[0];
 
     result.set(key, { teamId: match.id, logoUrl: match.logoUrl });

@@ -113,13 +113,18 @@ struct GuessWhoGameState: Equatable {
 
     /// Attribute fields the player has already locked in green — either from a correct guess or a prior hint.
     var knownFields: [String] {
-        var fields = Set<String>()
+        Array(knownGreenValues.keys)
+    }
+
+    /// The correct value for every field already locked in green, so hints can re-show them.
+    var knownGreenValues: [String: StringOrNumber] {
+        var map: [String: StringOrNumber] = [:]
         for row in guesses {
             for f in row.feedback where f.status == "correct" {
-                fields.insert(f.field)
+                if let v = f.value { map[f.field] = v }
             }
         }
-        return Array(fields)
+        return map
     }
 
     /// Whether a hint can still help: there's an unrevealed attribute and room to use it without ending the game.
@@ -144,14 +149,22 @@ struct GuessWhoGameState: Equatable {
         }
     }
 
-    /// Spend a guess to reveal one attribute: that field shows green, the rest of the row stays hidden.
+    /// Spend a guess to reveal one attribute: the newly revealed field plus everything already
+    /// locked in green show green, only the still-unknown fields stay hidden.
     mutating func addHint(field: String, value: StringOrNumber?) {
+        let known = knownGreenValues
         let feedback = GuessWhoField.allCases.map { gf -> GuessFeedbackFieldDTO in
-            gf.rawValue == field
-                ? GuessFeedbackFieldDTO(field: gf.rawValue, value: value, status: "correct", hint: nil)
-                : GuessFeedbackFieldDTO(field: gf.rawValue, value: nil, status: "hidden", hint: nil)
+            if gf.rawValue == field {
+                return GuessFeedbackFieldDTO(field: gf.rawValue, value: value, status: "correct", hint: nil)
+            } else if let knownValue = known[gf.rawValue] {
+                return GuessFeedbackFieldDTO(field: gf.rawValue, value: knownValue, status: "correct", hint: nil)
+            } else {
+                return GuessFeedbackFieldDTO(field: gf.rawValue, value: nil, status: "hidden", hint: nil)
+            }
         }
-        let hintPlayer = PlayerSearchResultDTO(id: "hint-\(UUID().uuidString)", name: "Hint", club: "", league: "", nationality: "", position: "")
+        // Carry the league (if known/just-revealed) so the club crest resolves to the right team.
+        let knownLeague = field == GuessWhoField.league.rawValue ? value?.display : known[GuessWhoField.league.rawValue]?.display
+        let hintPlayer = PlayerSearchResultDTO(id: "hint-\(UUID().uuidString)", name: "Hint", club: "", league: knownLeague ?? "", nationality: "", position: "")
         guesses.append(GuessWhoGuessRow(player: hintPlayer, feedback: feedback, isCorrect: false, isHint: true))
         if guesses.count >= puzzle.maxGuesses {
             isComplete = true
