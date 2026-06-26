@@ -98,6 +98,7 @@ struct GuessWhoGuessRow: Identifiable, Equatable {
     let player: PlayerSearchResultDTO
     let feedback: [GuessFeedbackFieldDTO]
     let isCorrect: Bool
+    var isHint: Bool = false
 }
 
 struct GuessWhoGameState: Equatable {
@@ -110,8 +111,25 @@ struct GuessWhoGameState: Equatable {
         max(0, puzzle.maxGuesses - guesses.count)
     }
 
+    /// Attribute fields the player has already locked in green — either from a correct guess or a prior hint.
+    var knownFields: [String] {
+        var fields = Set<String>()
+        for row in guesses {
+            for f in row.feedback where f.status == "correct" {
+                fields.insert(f.field)
+            }
+        }
+        return Array(fields)
+    }
+
+    /// Whether a hint can still help: there's an unrevealed attribute and room to use it without ending the game.
+    var canHint: Bool {
+        !isComplete && guessesRemaining > 1 && knownFields.count < GuessWhoField.allCases.count
+    }
+
     var shareGrid: String {
         guesses.map { row in
+            if row.isHint { return "💡" }
             if row.isCorrect { return "🟩" }
             let hasPartial = row.feedback.contains { $0.status == "partial" }
             return hasPartial ? "🟨" : "🟥"
@@ -125,15 +143,31 @@ struct GuessWhoGameState: Equatable {
             won = correct
         }
     }
+
+    /// Spend a guess to reveal one attribute: that field shows green, the rest of the row stays hidden.
+    mutating func addHint(field: String, value: StringOrNumber?) {
+        let feedback = GuessWhoField.allCases.map { gf -> GuessFeedbackFieldDTO in
+            gf.rawValue == field
+                ? GuessFeedbackFieldDTO(field: gf.rawValue, value: value, status: "correct", hint: nil)
+                : GuessFeedbackFieldDTO(field: gf.rawValue, value: nil, status: "hidden", hint: nil)
+        }
+        let hintPlayer = PlayerSearchResultDTO(id: "hint-\(UUID().uuidString)", name: "Hint", club: "", league: "", nationality: "", position: "")
+        guesses.append(GuessWhoGuessRow(player: hintPlayer, feedback: feedback, isCorrect: false, isHint: true))
+        if guesses.count >= puzzle.maxGuesses {
+            isComplete = true
+            won = false
+        }
+    }
 }
 
 enum FeedbackStatus {
-    case correct, partial, wrong
+    case correct, partial, wrong, hidden
 
     init(raw: String) {
         switch raw {
         case "correct": self = .correct
         case "partial": self = .partial
+        case "hidden": self = .hidden
         default: self = .wrong
         }
     }
@@ -143,6 +177,7 @@ enum FeedbackStatus {
         case .correct: return BKTheme.guessCorrect
         case .partial: return BKTheme.guessPartial
         case .wrong: return BKTheme.guessWrong
+        case .hidden: return BKTheme.cardElevated
         }
     }
 
@@ -150,6 +185,7 @@ enum FeedbackStatus {
         switch self {
         case .correct: return BKTheme.background
         case .partial, .wrong: return BKTheme.textPrimary
+        case .hidden: return BKTheme.textMuted
         }
     }
 }

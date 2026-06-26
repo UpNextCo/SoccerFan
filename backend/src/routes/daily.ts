@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
-import { completeDaily, getDailyBundle, getDailyPuzzle, validateGuess, validateOneMoreAnswer } from '../services/dailyService.js';
+import { completeDaily, getDailyBundle, getDailyPuzzle, guessWhoHint, revealGuessWhoAnswer, validateGuess, validateOneMoreAnswer } from '../services/dailyService.js';
 
 export const dailyRouter = Router();
 
@@ -70,6 +70,31 @@ dailyRouter.post('/guess', requireAuth, async (req, res) => {
     sendSuccess(res, result);
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Guess failed', 400);
+  }
+});
+
+// Reveal the answer player after a lost Guess Who game.
+dailyRouter.get('/guesswho/answer', requireAuth, async (req, res) => {
+  try {
+    const date = typeof req.query.date === 'string' ? req.query.date : new Date().toISOString().slice(0, 10);
+    sendSuccess(res, await revealGuessWhoAnswer(date));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to reveal answer', 404);
+  }
+});
+
+// Reveal one not-yet-known attribute as a Guess Who hint.
+const hintSchema = z.object({ date: z.string(), known: z.array(z.string()).default([]) });
+dailyRouter.post('/guesswho/hint', requireAuth, async (req, res) => {
+  const parsed = hintSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    sendSuccess(res, await guessWhoHint(parsed.data.date, parsed.data.known));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Hint failed', 400);
   }
 });
 

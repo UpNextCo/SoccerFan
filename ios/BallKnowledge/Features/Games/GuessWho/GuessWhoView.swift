@@ -15,6 +15,8 @@ final class GuessWhoViewModel {
     var completionResult: DailyCompleteResponseDTO?
     var showShare = false
     var confettiBurstToken = 0
+    var isHinting = false
+    var revealedAnswer: GuessWhoAnswerDTO?
 
     private let date: String
 
@@ -86,7 +88,44 @@ final class GuessWhoViewModel {
         }
     }
 
+    func requestHint(context: ModelContext) async {
+        guard state.canHint, !isHinting, !isSubmitting else { return }
+        isHinting = true
+        defer { isHinting = false }
+        do {
+            let hint = try await APIClient.shared.guessWhoHint(date: date, known: state.knownFields)
+            guard let field = hint.field else { return }
+            HapticManager.light()
+            state.addHint(field: field, value: hint.value)
+            if state.isComplete {
+                await completeGame(context: context)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// A synthetic green row revealing the answer player, shown after a loss.
+    var revealRow: GuessWhoGuessRow? {
+        guard let answer = revealedAnswer else { return nil }
+        let feedback = GuessWhoField.allCases.map { gf in
+            GuessFeedbackFieldDTO(field: gf.rawValue, value: answer.attributes[gf.rawValue], status: "correct", hint: nil)
+        }
+        let player = PlayerSearchResultDTO(
+            id: answer.id,
+            name: answer.name,
+            club: answer.attributes["club"]?.display ?? "",
+            league: answer.attributes["league"]?.display ?? "",
+            nationality: answer.attributes["nationality"]?.display ?? "",
+            position: answer.attributes["position"]?.display ?? ""
+        )
+        return GuessWhoGuessRow(player: player, feedback: feedback, isCorrect: true)
+    }
+
     private func completeGame(context: ModelContext?) async {
+        if !state.won, revealedAnswer == nil {
+            revealedAnswer = try? await APIClient.shared.revealGuessWhoAnswer(date: date)
+        }
         let score = state.won ? max(10, 100 - (state.guesses.count - 1) * 10) : 0
         let request = DailyCompleteRequestDTO(
             modeId: state.puzzle.modeId,
@@ -228,6 +267,24 @@ struct GuessWhoView: View {
                             .tracking(1)
                             .foregroundStyle(BKTheme.accent)
                     }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        if viewModel.state.canHint {
+                            Button {
+                                isSearchFocused = false
+                                Task { await viewModel.requestHint(context: modelContext) }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "lightbulb.fill")
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text("HINT")
+                                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                                        .tracking(0.5)
+                                }
+                                .foregroundStyle(viewModel.isHinting ? BKTheme.textMuted : BKTheme.accent)
+                            }
+                            .disabled(viewModel.isHinting)
+                        }
+                    }
                 }
             }
 
@@ -260,6 +317,16 @@ struct GuessWhoView: View {
             Text(viewModel.state.won ? "Got it!" : "Better luck tomorrow")
                 .font(BKFont.title(22))
                 .foregroundStyle(BKTheme.textPrimary)
+
+            if !viewModel.state.won, let revealRow = viewModel.revealRow {
+                VStack(spacing: 8) {
+                    Text("THE ANSWER WAS")
+                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .tracking(1)
+                        .foregroundStyle(BKTheme.textMuted)
+                    GuessWhoGuessCard(row: revealRow, animateFlip: false)
+                }
+            }
 
             if let result = viewModel.completionResult {
                 Text("+\(result.xpEarned) XP")
@@ -303,7 +370,7 @@ struct GuessWhoProgressBar: View {
 // MARK: - Empty State
 
 struct GuessWhoEmptyStateView: View {
-    private let labels = ["NAT", "LGE", "TEAM", "POS", "AGE", "VALUE"]
+    private let labels = ["NAT", "LGE", "TEAM", "POS", "AGE", "FOOT"]
 
     var body: some View {
         VStack(spacing: 14) {
@@ -368,13 +435,24 @@ struct GuessWhoGuessCard: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Text(row.player.name.uppercased())
-                .font(.system(size: 15, weight: .heavy, design: .rounded))
-                .tracking(0.5)
-                .foregroundStyle(BKTheme.textPrimary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
+            if row.isHint {
+                HStack(spacing: 6) {
+                    Image(systemName: "lightbulb.fill")
+                        .font(.system(size: 12, weight: .bold))
+                    Text("HINT")
+                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .tracking(0.5)
+                }
+                .foregroundStyle(BKTheme.accent)
+            } else {
+                Text(row.player.name.uppercased())
+                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .tracking(0.5)
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+            }
 
             HStack(spacing: 0) {
                 ForEach(Array(fields.enumerated()), id: \.element.field) { index, field in
@@ -484,7 +562,11 @@ struct GuessWhoBadgeFace: View {
 
     @ViewBuilder
     private var badgeInner: some View {
-        if field.field == "club" {
+        if status == .hidden {
+            Text("?")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(status.badgeText)
+        } else if field.field == "club" {
             TeamBadgeImage(
                 club: field.value?.display ?? "",
                 league: playerLeague,

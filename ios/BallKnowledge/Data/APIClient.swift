@@ -110,6 +110,15 @@ actor APIClient {
         try await request("daily/guess", method: "POST", body: body)
     }
 
+    func revealGuessWhoAnswer(date: String) async throws -> GuessWhoAnswerDTO {
+        try await request("daily/guesswho/answer", queryItems: [URLQueryItem(name: "date", value: date)])
+    }
+
+    func guessWhoHint(date: String, known: [String]) async throws -> GuessWhoHintDTO {
+        struct Body: Encodable { let date: String; let known: [String] }
+        return try await request("daily/guesswho/hint", method: "POST", body: Body(date: date, known: known))
+    }
+
     func validateTowerAnswer(date: String, floor: Int, answerType: String, value: String) async throws -> Bool {
         struct Body: Encodable {
             let date: String

@@ -193,6 +193,19 @@ struct GuessResultDTO: Codable {
     let correct: Bool
 }
 
+/// The answer player, revealed after a lost Guess Who game. `attributes` is keyed by field name.
+struct GuessWhoAnswerDTO: Codable, Equatable {
+    let id: String
+    let name: String
+    let attributes: [String: StringOrNumber]
+}
+
+/// A hint: one not-yet-known attribute (field + its correct value). `field` is nil if none remain.
+struct GuessWhoHintDTO: Codable, Equatable {
+    let field: String?
+    let value: StringOrNumber?
+}
+
 struct DailyCompleteRequestDTO: Encodable {
     let modeId: String
     let date: String

@@ -438,4 +438,54 @@ export async function validateGuess(
   };
 }
 
+/** The deduction attributes a Guess Who hint can reveal, by their feedback `field` name. */
+const GUESS_WHO_FIELDS = ['nationality', 'league', 'club', 'position', 'age', 'foot'] as const;
+type GuessWhoField = (typeof GUESS_WHO_FIELDS)[number];
+
+function guessWhoAttributes(p: NonNullable<Awaited<ReturnType<typeof getPlayerById>>>): Record<GuessWhoField, string | number> {
+  return {
+    nationality: p.nationality ?? '—',
+    league: p.currentLeague ?? '—',
+    club: p.currentClub ?? '—',
+    position: p.position ?? '—',
+    age: p.age ?? '—',
+    foot: p.foot ?? '—',
+  };
+}
+
+async function loadGuessWhoAnswer(date: string) {
+  const puzzle = await db
+    .select()
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'guess_who')))
+    .limit(1);
+  if (!puzzle[0]?.answerPlayerId) throw new Error('Guess Who puzzle not found');
+  const answer = await getPlayerById(puzzle[0].answerPlayerId);
+  if (!answer) throw new Error('Answer player not found');
+  return answer;
+}
+
+/** Reveal the answer player at the end of a lost game (the client never holds it). */
+export async function revealGuessWhoAnswer(date: string): Promise<{
+  id: string; name: string; attributes: Record<GuessWhoField, string | number>;
+}> {
+  const answer = await loadGuessWhoAnswer(date);
+  return { id: answer.id, name: answer.name, attributes: guessWhoAttributes(answer) };
+}
+
+/**
+ * Reveal ONE attribute the player hasn't already nailed: pick a random field not in `known`,
+ * return its (correct) value. The client renders it as a green "hint" row.
+ */
+export async function guessWhoHint(
+  date: string,
+  known: string[]
+): Promise<{ field: GuessWhoField; value: string | number } | { field: null; value: null }> {
+  const answer = await loadGuessWhoAnswer(date);
+  const remaining = GUESS_WHO_FIELDS.filter((f) => !known.includes(f));
+  if (remaining.length === 0) return { field: null, value: null };
+  const field = remaining[Math.floor(Math.random() * remaining.length)]!;
+  return { field, value: guessWhoAttributes(answer)[field] };
+}
+
 export { todayUTC, GAME_MODES, generateDailyPuzzleForMode };
