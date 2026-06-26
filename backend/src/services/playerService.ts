@@ -88,7 +88,13 @@ export function isCorrectGuess(
   return guessPlayer.id === answerPlayer.id;
 }
 
-export async function searchPlayers(query: string, limit?: number): Promise<PlayerSearchResult[]> {
+const TOP5_LEAGUE_NAMES = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1'];
+
+export async function searchPlayers(
+  query: string,
+  limit?: number,
+  opts?: { currentTop5?: boolean }
+): Promise<PlayerSearchResult[]> {
   const normalized = normalizeSearchText(query);
 
   if (normalized.length < 2) return [];
@@ -98,6 +104,9 @@ export async function searchPlayers(query: string, limit?: number): Promise<Play
   const prefixPattern = `${normalized}%`;
   const wordPattern = `% ${normalized}%`;
   const containsPattern = `%${normalized}%`;
+  const top5Filter = opts?.currentTop5
+    ? sql`AND p.current_league IN (${sql.join(TOP5_LEAGUE_NAMES.map((n) => sql`${n}`), sql`, `)})`
+    : sql``;
 
   const rows = (await db.execute(sql`
     SELECT
@@ -142,6 +151,7 @@ export async function searchPlayers(query: string, limit?: number): Promise<Play
         WHERE lower(alias) LIKE ${containsPattern}
       )
     )
+    ${top5Filter}
     ORDER BY search_score DESC, lower(p.name) ASC
     LIMIT ${fetchLimit}
   `)) as SearchRow[];

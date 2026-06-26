@@ -16,7 +16,8 @@ export const gamesRouter = Router();
 
 playersRouter.get('/search', requireAuth, async (req, res) => {
   const q = String(req.query.q ?? '');
-  const results = await searchPlayers(q);
+  const currentTop5 = req.query.currentTop5 === '1' || req.query.currentTop5 === 'true';
+  const results = await searchPlayers(q, undefined, { currentTop5 });
   sendSuccess(res, results);
 });
 

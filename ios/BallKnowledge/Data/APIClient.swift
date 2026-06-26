@@ -152,11 +152,12 @@ actor APIClient {
         return (resp.valid, resp.statValue)
     }
 
-    func searchPlayers(query: String) async throws -> [PlayerSearchResultDTO] {
-        try await request(
-            "players/search",
-            queryItems: [URLQueryItem(name: "q", value: query)]
-        )
+    func searchPlayers(query: String, currentTop5: Bool = false) async throws -> [PlayerSearchResultDTO] {
+        var items = [URLQueryItem(name: "q", value: query)]
+        if currentTop5 {
+            items.append(URLQueryItem(name: "currentTop5", value: "1"))
+        }
+        return try await request("players/search", queryItems: items)
     }
 
     func teamLogo(club: String, league: String) async -> TeamLogoDTO? {

@@ -45,7 +45,7 @@ final class GuessWhoViewModel {
         isSearching = true
         defer { isSearching = false }
         do {
-            searchResults = try await APIClient.shared.searchPlayers(query: q)
+            searchResults = try await APIClient.shared.searchPlayers(query: q, currentTop5: true)
         } catch {
             searchResults = []
         }
