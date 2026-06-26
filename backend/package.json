@@ -64,6 +64,8 @@
     "job:import-fbref-penalties": "tsx src/jobs/import-fbref-penalties.ts",
     "job:backfill-assists-tm": "tsx src/jobs/backfill-assists-tm.ts",
     "job:backfill-assists-fbref": "tsx src/jobs/backfill-assists-fbref.ts",
+    "job:import-wc-awards": "tsx src/jobs/import-wc-awards.ts",
+    "job:import-wc-squads": "tsx src/jobs/import-wc-squads.ts",
     "job:normalize-nationalities": "tsx src/jobs/normalize-nationalities.ts",
     "job:dedupe-stat-rows": "tsx src/jobs/dedupe-stat-rows.ts",
     "job:refresh-current-club": "tsx src/jobs/refresh-current-club.ts"

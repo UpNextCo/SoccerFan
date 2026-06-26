@@ -350,6 +350,34 @@ export const playerExtraStats = pgTable('player_extra_stats', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * World Cup squads scraped from Wikipedia "YYYY FIFA World Cup squads" — one row per player
+ * per tournament, with position, club, shirt number, caps, captaincy and the team's coach.
+ * Powers World Cup XI generation (real squads + positions), captain/manager clues, and a
+ * date-of-birth top-up for `players`. Built offline by `job:import-wc-squads`.
+ */
+export const wcSquads = pgTable(
+  'wc_squads',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    year: integer('year').notNull(),
+    country: text('country').notNull(),
+    playerId: uuid('player_id').references(() => players.id, { onDelete: 'set null' }),
+    playerName: text('player_name').notNull(),
+    position: text('position').notNull().default(''),
+    shirtNumber: integer('shirt_number'),
+    club: text('club'),
+    caps: integer('caps'),
+    isCaptain: boolean('is_captain').notNull().default(false),
+    coach: text('coach'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('wc_squads_unique').on(table.year, table.country, table.playerName),
+    index('wc_squads_player_idx').on(table.playerId),
+  ]
+);
+
 export const dailyCompletions = pgTable(
   'daily_completions',
   {
@@ -433,3 +461,4 @@ export type ManagerTenure = typeof managerTenures.$inferSelect;
 export type FinalAppearance = typeof finalAppearances.$inferSelect;
 export type PlayerAward = typeof playerAwards.$inferSelect;
 export type PlayerExtraStats = typeof playerExtraStats.$inferSelect;
+export type WcSquad = typeof wcSquads.$inferSelect;

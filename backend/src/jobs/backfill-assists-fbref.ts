@@ -43,10 +43,11 @@ async function main() {
   }
   console.log(`${fb.size} FBref (league,season,name) assist totals`);
 
-  // Broken (league, season) pairs.
+  // Broken (league, season) pairs. league 1 = World Cup, 4 = Euro (international tournaments
+  // also have the same assist holes); their FBref data comes from fbref_intl_scrape.py.
   const ratioRows = (await db.execute(sql`
     SELECT league_id, season, SUM(assists)::int AS a, SUM(goals)::int AS g FROM player_stats
-    WHERE league_id IN (39, 140, 135, 78, 61, 2, 3)
+    WHERE league_id IN (39, 140, 135, 78, 61, 2, 3, 1, 4)
     GROUP BY league_id, season
     HAVING SUM(goals) > 50 AND SUM(assists) < 0.2 * SUM(goals)
   `)) as unknown as Array<{ league_id: number; season: number; a: number; g: number }>;
@@ -57,7 +58,7 @@ async function main() {
   const rows = (await db.execute(sql`
     SELECT s.id, s.player_id, s.league_id, s.season, s.appearances, p.name
     FROM player_stats s JOIN players p ON p.id = s.player_id
-    WHERE s.league_id IN (39, 140, 135, 78, 61, 2, 3)
+    WHERE s.league_id IN (39, 140, 135, 78, 61, 2, 3, 1, 4)
   `)) as unknown as Array<{ id: string; player_id: string; league_id: number; season: number; appearances: number; name: string }>;
 
   // For each (league, season, normName) keep the row with the most apps.
