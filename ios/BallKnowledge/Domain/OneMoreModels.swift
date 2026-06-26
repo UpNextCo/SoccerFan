@@ -16,19 +16,23 @@ struct OneMoreRound: Equatable {
 
 struct OneMorePrompt: Equatable {
     let id: String
-    let leagueName: String
-    let leagueId: Int
-    let category: TargetManStatCategory
+    let metricTitle: String   // e.g. "Premier League goals", "career penalty goals"
+    let valueNoun: String     // reveal unit, e.g. "goals", "pens", "caps"
     let minimum: Int
     let rounds: [OneMoreRound]
     let isDaily: Bool
     let date: String?
 
-    /// Lowercased noun for the stat (e.g. "goals", "assists", "appearances").
-    var statNoun: String { category.label.lowercased() }
+    var statNoun: String { valueNoun }
 
+    /// Full prompt line, e.g. "Players with 50+ Premier League goals".
     var title: String {
-        "\(leagueName) players with \(minimum)+ \(statNoun)"
+        "Players with \(minimum)+ \(metricTitle)"
+    }
+
+    /// Big card headline, e.g. "WHO HAS 50+ PREMIER LEAGUE GOALS?"
+    var question: String {
+        "WHO HAS \(minimum)+ \(metricTitle.uppercased())?"
     }
 
     var ruleLine: String {

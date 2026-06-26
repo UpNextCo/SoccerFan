@@ -4,7 +4,6 @@ enum OneMoreSeed {
     /// Build the daily prompt from the server-generated puzzle. The server embeds the full set
     /// of binary rounds (each with two options + their real stat values), so play is offline-safe.
     static func makeServerPrompt(from dto: OneMorePuzzleDTO) -> OneMorePrompt? {
-        guard let category = TargetManStatCategory(rawValue: dto.category) else { return nil }
         let rounds = dto.rounds.compactMap { round -> OneMoreRound? in
             guard round.options.count == 2 else { return nil }
             return OneMoreRound(options: round.options.map {
@@ -14,9 +13,8 @@ enum OneMoreSeed {
         guard rounds.count >= 3 else { return nil } // too thin → caller falls back
         return OneMorePrompt(
             id: dto.puzzleId,
-            leagueName: dto.league,
-            leagueId: dto.leagueId,
-            category: category,
+            metricTitle: dto.title,
+            valueNoun: dto.valueNoun,
             minimum: dto.minimum,
             rounds: rounds,
             isDaily: true,
@@ -49,9 +47,8 @@ enum OneMoreSeed {
         }
         return OneMorePrompt(
             id: id,
-            leagueName: TargetManLeague.premierLeague.rawValue,
-            leagueId: TargetManLeague.premierLeague.apiLeagueId,
-            category: .goals,
+            metricTitle: "Premier League goals",
+            valueNoun: "goals",
             minimum: minimum,
             rounds: rounds,
             isDaily: isDaily,

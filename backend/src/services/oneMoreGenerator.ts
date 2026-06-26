@@ -1,55 +1,52 @@
 /**
- * One More generator. Picks a daily "name a {league} player with {min}+ {stat}" prompt
- * from real career data, choosing a minimum that yields a healthy pool (challenging but
- * playable). Answers are validated server-side against the same career sums.
+ * One More generator (binary pick). Picks a daily METRIC (e.g. "career penalty goals",
+ * "Champions League knockout goals", "Premier League goals") and a threshold that yields a
+ * healthy pool, then pre-builds ~20 ramped binary rounds: each pairs a genuine qualifier
+ * (>= threshold) with a tempting distractor (< threshold but believable). The deliberate move
+ * away from "Champions League appearances"-style prompts toward richer, match-level categories.
  *
- * Dry run: DATABASE_URL=... npm run job:gen-onemore [date]
+ * Match-level metrics come from player_extra_stats (the Transfermarkt events ingest).
+ * Dry run: DATABASE_URL=... npx tsx src/services/oneMoreGenerator.ts [date]
  */
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 
-type Category = 'goals' | 'assists' | 'appearances';
-const CATEGORIES: Category[] = ['goals', 'assists', 'appearances'];
+const TARGET_POOL = 50;
+const MIN_POOL = 20;
+const MAX_POOL = 200;
+const ROUND_TARGET = 20;
+const MIN_ROUNDS = 10;
 
-interface Competition {
-  id: number;
-  name: string;
-  minimums: Record<Category, number[]>;
+const BIG6 = ['Manchester United', 'Manchester City', 'Chelsea', 'Arsenal', 'Liverpool', 'Tottenham'];
+const big6Sql = sql.join(BIG6.map((t) => sql`${t}`), sql`, `);
+
+interface Metric {
+  id: string;
+  title: string;   // shown as "WHO HAS {min}+ {title}?"
+  noun: string;    // reveal unit, e.g. "goals", "pens", "caps"
+  col: string;     // value column in AGG
+  part: string;    // participation column (must be > 0 to appear) in AGG
+  ladder: number[];
+  goalLike: boolean; // exclude goalkeepers from distractors when true
 }
 
-/** Domestic-league career-total ladders (full-length careers → high thresholds). */
-const DOMESTIC_MINIMUMS: Record<Category, number[]> = {
-  goals: [20, 30, 40, 50, 60, 75],
-  assists: [15, 20, 25, 30, 40],
-  appearances: [100, 150, 200, 250, 300],
-};
-
-/** Continental-cup ladders — far fewer games per season, so lower thresholds. */
-const CUP_MINIMUMS: Record<Category, number[]> = {
-  goals: [10, 15, 20, 25, 30],
-  assists: [6, 8, 10, 15],
-  appearances: [30, 50, 75, 100],
-};
-
-const COMPETITIONS: Competition[] = [
-  { id: 39, name: 'Premier League', minimums: DOMESTIC_MINIMUMS },
-  { id: 140, name: 'La Liga', minimums: DOMESTIC_MINIMUMS },
-  { id: 135, name: 'Serie A', minimums: DOMESTIC_MINIMUMS },
-  { id: 78, name: 'Bundesliga', minimums: DOMESTIC_MINIMUMS },
-  { id: 61, name: 'Ligue 1', minimums: DOMESTIC_MINIMUMS },
-  { id: 2, name: 'Champions League', minimums: CUP_MINIMUMS },
-  { id: 3, name: 'Europa League', minimums: CUP_MINIMUMS },
+const METRICS: Metric[] = [
+  { id: 'pl_goals', title: 'Premier League goals', noun: 'goals', col: 'pl_goals', part: 'pl_apps', ladder: [20, 30, 40, 50, 60, 75], goalLike: true },
+  { id: 'pl_assists', title: 'Premier League assists', noun: 'assists', col: 'pl_assists', part: 'pl_apps', ladder: [15, 20, 30, 40, 50], goalLike: false },
+  { id: 'laliga_goals', title: 'La Liga goals', noun: 'goals', col: 'liga_goals', part: 'liga_apps', ladder: [20, 30, 40, 50, 75], goalLike: true },
+  { id: 'seriea_goals', title: 'Serie A goals', noun: 'goals', col: 'seriea_goals', part: 'seriea_apps', ladder: [20, 30, 40, 50, 75], goalLike: true },
+  { id: 'cl_goals', title: 'Champions League goals', noun: 'goals', col: 'cl_goals', part: 'cl_apps', ladder: [10, 15, 20, 25, 30], goalLike: true },
+  { id: 'cl_knockout_goals', title: 'Champions League knockout goals', noun: 'goals', col: 'ucl_ko_goals', part: 'cl_apps', ladder: [3, 5, 8, 12, 18], goalLike: true },
+  { id: 'penalty_goals', title: 'career penalty goals', noun: 'pens', col: 'penalty_goals', part: 'total_apps', ladder: [15, 20, 30, 40, 50], goalLike: true },
+  { id: 'hattricks', title: 'career hat-tricks', noun: 'hat-tricks', col: 'hattricks', part: 'total_apps', ladder: [3, 5, 8, 10, 15], goalLike: true },
+  { id: 'intl_caps', title: 'international caps', noun: 'caps', col: 'intl_caps', part: 'total_apps', ladder: [30, 50, 75, 100, 125], goalLike: false },
+  { id: 'goals_before_21', title: 'goals before turning 21', noun: 'goals', col: 'goals_u21', part: 'total_apps', ladder: [5, 8, 12, 18, 25], goalLike: true },
+  { id: 'weak_foot_goals', title: 'weak-foot goals', noun: 'goals', col: 'weak_foot_goals', part: 'total_apps', ladder: [15, 25, 40, 60], goalLike: true },
+  { id: 'non_big6_pl_goals', title: 'Premier League goals for a non–Big Six club', noun: 'goals', col: 'pl_nonbig6_goals', part: 'pl_apps', ladder: [20, 30, 40, 50, 60], goalLike: true },
+  { id: 'seriea_ligue1_goals', title: 'Serie A and Ligue 1 goals combined', noun: 'goals', col: 'seriea_ligue1_goals', part: 'seriea_ligue1_apps', ladder: [30, 50, 75, 100], goalLike: true },
 ];
 
-const TARGET_POOL = 60;
-const MIN_POOL = 25;
-const MAX_POOL = 160;
-
-const ROUND_TARGET = 20; // how many binary rounds we try to pre-build per day
-const MIN_ROUNDS = 10;   // below this, the combo is too thin — try another
-
-/** One pickable name in a round; `value` is its career total of the category in the league. */
 export interface OneMoreOption {
   id: string;
   name: string;
@@ -57,141 +54,132 @@ export interface OneMoreOption {
   position: string;
   value: number;
 }
-
-/** A binary round: exactly two options, one of which clears the day's threshold. */
 export interface OneMoreRound {
   options: [OneMoreOption, OneMoreOption];
 }
-
 export interface OneMorePuzzle {
   modeId: 'one_more';
   puzzleId: string;
   date: string;
-  leagueId: number;
-  league: string;
-  category: Category;
-  minimum: number;
   title: string;
+  valueNoun: string;
+  minimum: number;
   rounds: OneMoreRound[];
 }
 
-/** Whole days since the Unix epoch for a YYYY-MM-DD date (UTC). */
 function dayNumber(date: string): number {
   const ms = Date.parse(`${date}T00:00:00Z`);
   return Number.isFinite(ms) ? Math.floor(ms / 86_400_000) : 0;
 }
-
-async function countQualifying(leagueId: number, category: Category, min: number): Promise<number> {
-  const col = sql.raw(category); // safe: category is from a fixed union
-  const rows = (await db.execute(sql`
-    SELECT COUNT(*)::int AS n FROM (
-      SELECT player_id, SUM(${col})::int AS total
-      FROM player_stats WHERE league_id = ${leagueId}
-      GROUP BY player_id
-    ) t WHERE total >= ${min}
-  `)) as unknown as Array<{ n: number }>;
-  return rows[0]?.n ?? 0;
+function makeRng(seed: number): () => number {
+  let s = (seed ^ 0x9e3779b9) >>> 0;
+  return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 0x100000000; };
 }
 
-/** Stat total for one player in a league (for validation). */
-export async function oneMoreStatValue(playerId: string, leagueId: number, category: Category): Promise<number> {
-  const col = sql.raw(category);
+/** Legacy per-pick validator (kept for the old /onemore/validate route; play is now client-side). */
+export async function oneMoreStatValue(playerId: string, leagueId: number, category: string): Promise<number> {
+  const col = sql.raw(['goals', 'assists', 'appearances'].includes(category) ? category : 'goals');
   const rows = (await db.execute(sql`
-    SELECT COALESCE(SUM(${col}), 0)::int AS total
-    FROM player_stats WHERE player_id = ${playerId} AND league_id = ${leagueId}
+    SELECT COALESCE(SUM(${col}), 0)::int AS total FROM player_stats WHERE player_id = ${playerId} AND league_id = ${leagueId}
   `)) as unknown as Array<{ total: number }>;
   return rows[0]?.total ?? 0;
 }
 
-function titleFor(league: string, category: Category, minimum: number): string {
-  return `${league} players with ${minimum}+ ${category}`;
-}
+const AGG = sql`
+  WITH agg AS (
+    SELECT p.id, p.name, p.position,
+      (p.market_value_tier * 10 + LEAST(COALESCE(fa.finals, 0), 6) * 4 + LEAST(COALESCE(aw.awards, 0), 4) * 6)::int AS prestige,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39), 0)::int AS pl_goals,
+      COALESCE(SUM(s.assists)     FILTER (WHERE s.league_id = 39), 0)::int AS pl_assists,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 39), 0)::int AS pl_apps,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 140), 0)::int AS liga_goals,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 140), 0)::int AS liga_apps,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 135), 0)::int AS seriea_goals,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 135), 0)::int AS seriea_apps,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 2), 0)::int AS cl_goals,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2), 0)::int AS cl_apps,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39 AND s.team_name NOT IN (${big6Sql})), 0)::int AS pl_nonbig6_goals,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id IN (135, 61)), 0)::int AS seriea_ligue1_goals,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id IN (135, 61)), 0)::int AS seriea_ligue1_apps,
+      COALESCE(SUM(s.appearances), 0)::int AS total_apps,
+      COALESCE(MAX(e.penalty_goals), 0)::int AS penalty_goals,
+      COALESCE(MAX(e.career_hattricks), 0)::int AS hattricks,
+      COALESCE(MAX(e.ucl_knockout_goals), 0)::int AS ucl_ko_goals,
+      COALESCE(MAX(e.weak_foot_goals), 0)::int AS weak_foot_goals,
+      COALESCE(MAX(e.goals_before_21), 0)::int AS goals_u21,
+      COALESCE(MAX(e.intl_caps), 0)::int AS intl_caps
+    FROM players p
+      LEFT JOIN player_stats s ON s.player_id = p.id
+      LEFT JOIN player_extra_stats e ON e.player_id = p.id
+      LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
+      LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
+    GROUP BY p.id, p.name, p.position, p.market_value_tier, fa.finals, aw.awards
+  )`;
 
-interface Candidate {
-  id: string;
-  name: string;
-  position: string;
-  value: number;        // category total in THIS league
-  careerValue: number;  // category total across all club leagues (fame-elsewhere signal)
-  prestige: number;
-}
+interface Candidate { id: string; name: string; position: string; prestige: number; value: number; }
 
-/** Deterministic per-day RNG so the round sequence is identical for everyone. */
-function makeRng(seed: number): () => number {
-  let s = (seed ^ 0x9e3779b9) >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 0x100000000;
-  };
-}
-
-/** Top clubs (by appearances, excluding national teams) for a set of players. */
 async function clubsByPlayer(ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
   const list = sql.join(ids.map((i) => sql`${i}::uuid`), sql`, `);
   const rows = (await db.execute(sql`
     SELECT s.player_id, s.team_name, SUM(s.appearances)::int AS apps
     FROM player_stats s JOIN players p ON p.id = s.player_id
-    WHERE s.player_id IN (${list}) AND s.league_id <> 1 AND s.team_name IS NOT NULL
-      AND s.team_name <> p.nationality
+    WHERE s.player_id IN (${list}) AND s.league_id <> 1 AND s.team_name IS NOT NULL AND s.team_name <> p.nationality
     GROUP BY s.player_id, s.team_name ORDER BY apps DESC
   `)) as unknown as Array<{ player_id: string; team_name: string }>;
   const top = new Map<string, string[]>();
-  for (const r of rows) {
-    const arr = top.get(r.player_id) ?? [];
-    if (arr.length < 2) arr.push(r.team_name);
-    top.set(r.player_id, arr);
-  }
-  return new Map([...top].map(([id, clubs]) => [id, clubs.join(' · ')]));
+  for (const r of rows) { const a = top.get(r.player_id) ?? []; if (a.length < 2) a.push(r.team_name); top.set(r.player_id, a); }
+  return new Map([...top].map(([id, c]) => [id, c.join(' · ')]));
 }
 
-/**
- * Build the day's binary rounds. Pairs a genuine qualifier (>= minimum) with a *tempting*
- * distractor (< minimum but plausible — close to the line, famous elsewhere, or a big name with
- * modest output here). Rounds ramp easy → hard: early rounds are an obvious star vs an obvious
- * dud; later rounds are a lesser qualifier vs a very tempting trap. Returns null if too thin.
- */
-async function buildRounds(
-  comp: Competition, category: Category, minimum: number, date: string
-): Promise<OneMoreRound[] | null> {
-  const col = sql.raw(category); // safe: fixed union
+export async function generateOneMorePuzzle(date: string): Promise<{ puzzle: OneMorePuzzle; pool: number }> {
+  const stride = 7; // coprime with metric count
+  const start = ((dayNumber(date) * stride) % METRICS.length + METRICS.length) % METRICS.length;
+
+  let fallback: { puzzle: OneMorePuzzle; pool: number } | null = null;
+  for (let offset = 0; offset < METRICS.length; offset += 1) {
+    const metric = METRICS[(start + offset) % METRICS.length]!;
+    const built = await assembleMetric(metric, date);
+    if (!built) continue;
+    if (built.pool >= MIN_POOL) return built;
+    if (!fallback || built.pool > fallback.pool) fallback = built;
+  }
+  if (fallback) return fallback;
+  throw new Error('One More: no metric produced a viable round');
+}
+
+/** Build the metric's candidate pool + ramped rounds, with clubs attached. */
+async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: OneMorePuzzle; pool: number } | null> {
   const rows = (await db.execute(sql`
-    WITH agg AS (
-      SELECT p.id, p.name, p.position, p.market_value_tier AS mvt,
-        COALESCE(fa.finals, 0) AS finals,
-        COALESCE(aw.awards, 0) AS awards,
-        COALESCE(SUM(s.${col})       FILTER (WHERE s.league_id = ${comp.id}), 0)::int AS value,
-        COALESCE(SUM(s.appearances)  FILTER (WHERE s.league_id = ${comp.id}), 0)::int AS league_apps,
-        COALESCE(SUM(s.${col})       FILTER (WHERE s.league_id <> 1), 0)::int AS career_value
-      FROM players p
-        LEFT JOIN player_stats s ON s.player_id = p.id
-        LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
-        LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
-      GROUP BY p.id, p.name, p.position, p.market_value_tier, fa.finals, aw.awards
-    )
-    SELECT id, name, position, value, career_value,
-      (mvt * 10 + LEAST(finals, 6) * 4 + LEAST(awards, 4) * 6)::int AS prestige
-    FROM agg WHERE league_apps > 0
+    ${AGG}
+    SELECT id, name, position, prestige, ${sql.raw(metric.col)} AS value
+    FROM agg WHERE ${sql.raw(metric.part)} > 0
   `)) as unknown as Candidate[];
 
-  // Qualifiers: recognisable first.
-  const qualifiers = rows.filter((r) => r.value >= minimum).sort((a, b) => b.prestige - a.prestige);
+  let chosenMin: number | null = null;
+  let chosenPool = 0;
+  let fbMin = 0;
+  let fbPool = -1;
+  for (const min of metric.ladder) {
+    const pool = rows.filter((r) => r.value >= min).length;
+    if (pool > fbPool) { fbPool = pool; fbMin = min; }
+    if (pool >= MIN_POOL && pool <= MAX_POOL && (chosenMin === null || Math.abs(pool - TARGET_POOL) < Math.abs(chosenPool - TARGET_POOL))) {
+      chosenMin = min; chosenPool = pool;
+    }
+  }
+  const minimum = chosenMin ?? fbMin;
+  const pool = chosenMin ? chosenPool : fbPool;
 
-  // Distractors must be BELIEVABLE — either close to the line OR a genuinely recognisable name
-  // (prestige). This excludes the long tail of unknowns sitting just over the plausibility floor,
-  // which would make the pick obvious. "Temptation" = how much it LOOKS like it qualifies.
-  const temptation = (r: Candidate) =>
-    r.prestige + (r.value / minimum) * 45 + (r.careerValue >= minimum ? 15 : 0);
+  const qualifiers = rows.filter((r) => r.value >= minimum).sort((a, b) => b.prestige - a.prestige);
+  const temptation = (r: Candidate) => r.prestige + (r.value / minimum) * 45;
   const distractors = rows
     .filter((r) => r.value < minimum && (r.value >= minimum * 0.5 || r.prestige >= 44))
-    // A keeper in a goals/assists round is an obvious "no" — keep distractors tempting.
-    .filter((r) => category === 'appearances' || r.position !== 'Goalkeeper')
-    .sort((a, b) => temptation(a) - temptation(b)); // least → most tempting
+    .filter((r) => !metric.goalLike || r.position !== 'Goalkeeper')
+    .sort((a, b) => temptation(a) - temptation(b));
 
   const n = Math.min(ROUND_TARGET, qualifiers.length, distractors.length);
   if (n < MIN_ROUNDS) return null;
 
-  // Even-spread the distractors across their temptation range so rounds ramp easy → hard.
   const chosenD: Candidate[] = [];
   let last = -1;
   for (let i = 0; i < n; i += 1) {
@@ -201,95 +189,26 @@ async function buildRounds(
     chosenD.push(distractors[idx]!);
     last = idx;
   }
-  const rounds_n = Math.min(n, chosenD.length);
-  if (rounds_n < MIN_ROUNDS) return null;
+  const roundsN = Math.min(n, chosenD.length);
+  if (roundsN < MIN_ROUNDS) return null;
 
-  const rng = makeRng(dayNumber(date) + comp.id * 31 + category.length);
-  const ids = [...qualifiers.slice(0, rounds_n), ...chosenD].map((c) => c.id);
+  const rng = makeRng(dayNumber(date) + metric.id.length * 31);
+  const ids = [...qualifiers.slice(0, roundsN), ...chosenD].map((c) => c.id);
   const clubs = await clubsByPlayer(ids);
   const toOption = (c: Candidate): OneMoreOption => ({
     id: c.id, name: c.name, clubs: clubs.get(c.id) ?? '', position: c.position, value: c.value,
   });
 
   const rounds: OneMoreRound[] = [];
-  for (let i = 0; i < rounds_n; i += 1) {
-    const q = toOption(qualifiers[i]!);          // famous → less famous as rounds progress
-    const d = toOption(chosenD[i]!);             // least → most tempting
-    // Randomise which side the qualifier sits on so it isn't always the same position.
+  for (let i = 0; i < roundsN; i += 1) {
+    const q = toOption(qualifiers[i]!);
+    const d = toOption(chosenD[i]!);
     rounds.push({ options: rng() < 0.5 ? [q, d] : [d, q] });
   }
-  return rounds;
-}
 
-/** Best minimum for a competition+category: pool closest to target within range,
- *  else the largest available pool (so the caller can still compare/fallback). */
-async function bestMinimum(
-  comp: Competition,
-  category: Category
-): Promise<{ min: number; pool: number } | null> {
-  let inRange: { min: number; pool: number } | null = null;
-  let largest: { min: number; pool: number } | null = null;
-
-  for (const min of comp.minimums[category]) {
-    const pool = await countQualifying(comp.id, category, min);
-    if (!largest || pool > largest.pool) largest = { min, pool };
-    if (pool >= MIN_POOL && pool <= MAX_POOL) {
-      if (!inRange || Math.abs(pool - TARGET_POOL) < Math.abs(inRange.pool - TARGET_POOL)) {
-        inRange = { min, pool };
-      }
-    }
-  }
-
-  return inRange ?? largest;
-}
-
-export async function generateOneMorePuzzle(date: string): Promise<{ puzzle: OneMorePuzzle; pool: number }> {
-  // Build every competition×category combo and rotate through them with a stride
-  // coprime to the count, so days cycle evenly across all prompts (no clustering).
-  const combos: Array<{ comp: Competition; category: Category }> = [];
-  for (const comp of COMPETITIONS) {
-    for (const category of CATEGORIES) combos.push({ comp, category });
-  }
-  const stride = 13; // coprime with 21 combos
-  const start = ((dayNumber(date) * stride) % combos.length + combos.length) % combos.length;
-
-  let fallback: { puzzle: OneMorePuzzle; pool: number } | null = null;
-
-  for (let offset = 0; offset < combos.length; offset += 1) {
-    const { comp, category } = combos[(start + offset) % combos.length]!;
-    const best = await bestMinimum(comp, category);
-    if (!best) continue;
-
-    // Need a healthy pool AND enough buildable rounds for this combo.
-    if (best.pool < MIN_POOL) {
-      if (!fallback || best.pool > fallback.pool) {
-        const rounds = await buildRounds(comp, category, best.min, date);
-        if (rounds) fallback = { puzzle: assemble(comp, category, best.min, date, rounds), pool: best.pool };
-      }
-      continue;
-    }
-    const rounds = await buildRounds(comp, category, best.min, date);
-    if (!rounds) continue;
-    return { puzzle: assemble(comp, category, best.min, date, rounds), pool: best.pool };
-  }
-
-  if (fallback) return fallback;
-  throw new Error('One More: no competition produced a viable prompt');
-}
-
-function assemble(
-  comp: Competition, category: Category, minimum: number, date: string, rounds: OneMoreRound[]
-): OneMorePuzzle {
   return {
-    modeId: 'one_more',
-    puzzleId: `${date}-one_more`,
-    date,
-    leagueId: comp.id,
-    league: comp.name,
-    category,
-    minimum,
-    title: titleFor(comp.name, category, minimum),
-    rounds,
+    puzzle: { modeId: 'one_more', puzzleId: `${date}-one_more`, date, title: metric.title, valueNoun: metric.noun, minimum, rounds },
+    pool,
   };
 }
 
@@ -297,17 +216,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const date = process.argv[2] ?? new Date().toISOString().slice(0, 10);
   generateOneMorePuzzle(date)
     .then(({ puzzle, pool }) => {
-      console.log(`\n=== ONE MORE ${date} ===`);
-      console.log(`  ${puzzle.title}  (${puzzle.rounds.length} rounds · pool ${pool})`);
+      console.log(`\n=== ONE MORE ${date} === ${puzzle.minimum}+ ${puzzle.title} (${puzzle.rounds.length} rounds · pool ${pool})`);
       for (const [i, r] of puzzle.rounds.entries()) {
-        const [a, b] = r.options;
-        const tag = (o: typeof a) => `${o.name} ${o.value >= puzzle.minimum ? '✅' : '❌'}(${o.value})`;
-        console.log(`  ${String(i + 1).padStart(2)}. ${tag(a)}   vs   ${tag(b)}`);
+        const tag = (o: OneMoreOption) => `${o.name} ${o.value >= puzzle.minimum ? '✅' : '❌'}(${o.value})`;
+        console.log(`  ${String(i + 1).padStart(2)}. ${tag(r.options[0])}  vs  ${tag(r.options[1])}`);
       }
       process.exit(0);
     })
-    .catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
+    .catch((err) => { console.error(err); process.exit(1); });
 }

@@ -205,20 +205,17 @@ struct OneMorePuzzleDTO: Codable, Equatable {
     let modeId: String
     let puzzleId: String
     let date: String
-    let leagueId: Int
-    let league: String
-    let category: String
-    let minimum: Int
     let title: String
+    let valueNoun: String
+    let minimum: Int
     let rounds: [OneMoreRoundDTO]
 
     init(
-        modeId: String, puzzleId: String, date: String, leagueId: Int, league: String,
-        category: String, minimum: Int, title: String, rounds: [OneMoreRoundDTO] = []
+        modeId: String, puzzleId: String, date: String, title: String,
+        valueNoun: String, minimum: Int, rounds: [OneMoreRoundDTO] = []
     ) {
-        self.modeId = modeId; self.puzzleId = puzzleId; self.date = date; self.leagueId = leagueId
-        self.league = league; self.category = category; self.minimum = minimum; self.title = title
-        self.rounds = rounds
+        self.modeId = modeId; self.puzzleId = puzzleId; self.date = date; self.title = title
+        self.valueNoun = valueNoun; self.minimum = minimum; self.rounds = rounds
     }
 
     init(from decoder: Decoder) throws {
@@ -226,11 +223,9 @@ struct OneMorePuzzleDTO: Codable, Equatable {
         modeId = try c.decode(String.self, forKey: .modeId)
         puzzleId = try c.decode(String.self, forKey: .puzzleId)
         date = try c.decode(String.self, forKey: .date)
-        leagueId = try c.decode(Int.self, forKey: .leagueId)
-        league = try c.decode(String.self, forKey: .league)
-        category = try c.decode(String.self, forKey: .category)
-        minimum = try c.decode(Int.self, forKey: .minimum)
         title = try c.decode(String.self, forKey: .title)
+        valueNoun = try c.decodeIfPresent(String.self, forKey: .valueNoun) ?? "goals"
+        minimum = try c.decode(Int.self, forKey: .minimum)
         rounds = try c.decodeIfPresent([OneMoreRoundDTO].self, forKey: .rounds) ?? []
     }
 }

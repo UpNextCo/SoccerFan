@@ -132,11 +132,9 @@ export interface OneMorePuzzlePublic {
   modeId: 'one_more';
   puzzleId: string;
   date: string;
-  leagueId: number;
-  league: string;
-  category: string;
-  minimum: number;
   title: string;
+  valueNoun: string;
+  minimum: number;
   rounds: OneMoreRoundPublic[];
 }
 

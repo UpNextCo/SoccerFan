@@ -317,6 +317,29 @@ export const playerAwards = pgTable(
   ]
 );
 
+/**
+ * Per-player aggregates derived from the Transfermarkt match-level dump (appearances +
+ * game_events + games), which our season-total ingest can't express. Built offline by
+ * `job:ingest-tm-events`. Powers categories like penalty goals, CL knockout goals, hat-tricks,
+ * goals vs English clubs in the CL, weak-foot goals, and exact-age milestones.
+ */
+export const playerExtraStats = pgTable('player_extra_stats', {
+  playerId: uuid('player_id')
+    .primaryKey()
+    .references(() => players.id, { onDelete: 'cascade' }),
+  penaltyGoals: integer('penalty_goals').notNull().default(0),
+  weakFootGoals: integer('weak_foot_goals').notNull().default(0),
+  careerHattricks: integer('career_hattricks').notNull().default(0),
+  uclKnockoutGoals: integer('ucl_knockout_goals').notNull().default(0),
+  uclGoalsVsEnglish: integer('ucl_goals_vs_english').notNull().default(0),
+  uclRedCards: integer('ucl_red_cards').notNull().default(0),
+  goalsBefore21: integer('goals_before_21').notNull().default(0),
+  firstGoalAgeDays: integer('first_goal_age_days'),
+  debutAgeDays: integer('debut_age_days'),
+  intlCaps: integer('intl_caps').notNull().default(0),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const dailyCompletions = pgTable(
   'daily_completions',
   {
@@ -399,3 +422,4 @@ export type DailyPuzzle = typeof dailyPuzzles.$inferSelect;
 export type ManagerTenure = typeof managerTenures.$inferSelect;
 export type FinalAppearance = typeof finalAppearances.$inferSelect;
 export type PlayerAward = typeof playerAwards.$inferSelect;
+export type PlayerExtraStats = typeof playerExtraStats.$inferSelect;

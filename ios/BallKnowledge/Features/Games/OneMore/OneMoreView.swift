@@ -267,34 +267,19 @@ private struct OneMorePromptCard: View {
     let prompt: OneMorePrompt
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text(prompt.isDaily ? "DAILY CHALLENGE" : "PRACTICE")
-                    .font(BKFont.caption(10))
-                    .tracking(0.8)
-                    .foregroundStyle(BKTheme.textMuted)
-                Spacer()
-                LeagueBadgeImage(league: prompt.leagueName, size: 22) {
-                    Text(GuessWhoDisplay.leagueAbbrev(prompt.leagueName))
-                        .font(.system(size: 8, weight: .bold, design: .rounded))
-                        .foregroundStyle(BKTheme.textMuted)
-                }
-            }
-
-            VStack(spacing: 8) {
-                Text("WHO HAS")
-                    .font(BKFont.caption(11))
-                    .tracking(1)
-                    .foregroundStyle(BKTheme.textMuted)
-                Text("\(prompt.minimum)+ \(prompt.leagueName.uppercased()) \(prompt.category.label.uppercased())?")
-                    .font(BKFont.headline(18))
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .multilineTextAlignment(.center)
-                Text(prompt.ruleLine.uppercased())
-                    .font(BKFont.caption(10))
-                    .tracking(0.5)
-                    .foregroundStyle(BKTheme.textMuted)
-            }
+        VStack(spacing: 8) {
+            Text(prompt.isDaily ? "DAILY CHALLENGE" : "PRACTICE")
+                .font(BKFont.caption(10))
+                .tracking(0.8)
+                .foregroundStyle(BKTheme.textMuted)
+            Text(prompt.question)
+                .font(BKFont.headline(18))
+                .foregroundStyle(BKTheme.textPrimary)
+                .multilineTextAlignment(.center)
+            Text(prompt.ruleLine.uppercased())
+                .font(BKFont.caption(10))
+                .tracking(0.5)
+                .foregroundStyle(BKTheme.textMuted)
         }
         .padding(16)
         .frame(maxWidth: .infinity)

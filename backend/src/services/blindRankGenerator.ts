@@ -61,7 +61,17 @@ const CATEGORIES: Record<string, Category> = {
   premier_league_assists: { title: 'Premier League Assists', subtitle: 'Rank by Premier League assists', col: 'pl_assists', min: 10, noun: 'assists', prefix: '' },
   premier_league_appearances: { title: 'Premier League Appearances', subtitle: 'Rank by Premier League appearances', col: 'pl_apps', min: 50, noun: 'apps', prefix: '' },
   champions_league_goals: { title: 'Champions League Goals', subtitle: 'Rank by Champions League goals', col: 'cl_goals', min: 5, noun: 'goals', prefix: '' },
-  champions_league_appearances: { title: 'Champions League Appearances', subtitle: 'Rank by Champions League appearances', col: 'cl_apps', min: 20, noun: 'apps', prefix: '' },
+  // Match-level / curated categories (the interesting ones).
+  penalty_goals: { title: 'Penalty Goals', subtitle: 'Rank by career penalty goals', col: 'penalty_goals', min: 1, noun: 'pens', prefix: '' },
+  career_hattricks: { title: 'Career Hat-tricks', subtitle: 'Rank by career hat-tricks', col: 'hattricks', min: 1, noun: 'hat-tricks', prefix: '' },
+  champions_league_knockout_goals: { title: 'Champions League Knockout Goals', subtitle: 'Rank by Champions League knockout goals', col: 'ucl_ko_goals', min: 1, noun: 'goals', prefix: '' },
+  champions_league_goals_vs_english: { title: 'CL Goals vs English Clubs', subtitle: 'Rank by Champions League goals against English clubs', col: 'ucl_vs_eng', min: 1, noun: 'goals', prefix: '' },
+  weak_foot_goals: { title: 'Weak-foot Goals', subtitle: 'Rank by career weak-foot goals', col: 'weak_foot_goals', min: 1, noun: 'goals', prefix: '' },
+  goals_before_21: { title: 'Goals Before 21', subtitle: 'Rank by goals scored before turning 21', col: 'goals_u21', min: 1, noun: 'goals', prefix: '' },
+  international_caps: { title: 'International Caps', subtitle: 'Rank by international caps', col: 'intl_caps', min: 1, noun: 'caps', prefix: '' },
+  non_big6_pl_goals: { title: 'Premier League Goals (non–Big Six)', subtitle: 'Rank by Premier League goals for clubs outside the Big Six', col: 'pl_nonbig6_goals', min: 1, noun: 'goals', prefix: '' },
+  london_goals: { title: 'Goals for London Clubs', subtitle: 'Rank by goals for London clubs', col: 'london_goals', min: 1, noun: 'goals', prefix: '' },
+  london_appearances: { title: 'Appearances for London Clubs', subtitle: 'Rank by appearances for London clubs', col: 'london_apps', min: 1, noun: 'apps', prefix: '' },
 };
 
 interface Theme {
@@ -77,14 +87,14 @@ interface Theme {
 // meaningless ("Scholes < Gibbs-White"). They're ONLY used on Current Superstars (single era);
 // every historical/mixed-era theme ranks by on-pitch stats, which don't inflate.
 const THEMES: Theme[] = [
-  { id: 'premier_league_legends', title: 'Premier League Legends', structure: sql`a.pl_apps >= 150`, cats: ['premier_league_goals', 'premier_league_assists', 'premier_league_appearances', 'career_goals'] },
-  { id: 'champions_league_legends', title: 'Champions League Legends', structure: sql`a.cl_apps >= 40`, cats: ['champions_league_goals', 'champions_league_appearances', 'career_goals'] },
-  { id: 'current_superstars', title: 'Current Superstars', structure: sql`a.peak_m >= 40`, cats: ['peak_market_value', 'biggest_transfer_fee', 'career_goals', 'career_assists', 'champions_league_goals'] },
-  { id: 'football_icons', title: 'Football Icons', structure: sql`a.total_apps >= 300 AND a.peak_m >= 40`, cats: ['career_goals', 'career_assists', 'champions_league_appearances'] },
-  { id: 'premier_league_strikers', title: 'Premier League Strikers', structure: sql`a.position = 'Attacker' AND a.pl_apps >= 100`, cats: ['premier_league_goals', 'career_goals', 'champions_league_goals'] },
-  { id: 'premier_league_midfielders', title: 'Premier League Midfielders', structure: sql`a.position = 'Midfielder' AND a.pl_apps >= 150`, cats: ['premier_league_assists', 'career_assists', 'premier_league_appearances'] },
-  { id: 'premier_league_defenders', title: 'Premier League Defenders', structure: sql`a.position = 'Defender' AND a.pl_apps >= 150`, cats: ['premier_league_appearances', 'champions_league_appearances', 'career_goals'] },
-  { id: 'world_cup_heroes', title: 'World Cup Heroes', structure: sql`a.wc = true`, cats: ['career_goals', 'career_assists', 'champions_league_appearances'] },
+  { id: 'premier_league_legends', title: 'Premier League Legends', structure: sql`a.pl_apps >= 150`, cats: ['premier_league_goals', 'premier_league_assists', 'career_goals', 'penalty_goals', 'career_hattricks', 'goals_before_21', 'london_appearances'] },
+  { id: 'champions_league_legends', title: 'Champions League Legends', structure: sql`a.cl_apps >= 40`, cats: ['champions_league_goals', 'champions_league_knockout_goals', 'champions_league_goals_vs_english', 'career_goals', 'penalty_goals'] },
+  { id: 'current_superstars', title: 'Current Superstars', structure: sql`a.peak_m >= 40`, cats: ['peak_market_value', 'biggest_transfer_fee', 'career_goals', 'career_assists', 'champions_league_goals', 'penalty_goals', 'goals_before_21', 'career_hattricks'] },
+  { id: 'football_icons', title: 'Football Icons', structure: sql`a.total_apps >= 300 AND a.peak_m >= 40`, cats: ['career_goals', 'career_assists', 'penalty_goals', 'career_hattricks', 'international_caps', 'weak_foot_goals'] },
+  { id: 'premier_league_strikers', title: 'Premier League Strikers', structure: sql`a.position = 'Attacker' AND a.pl_apps >= 100`, cats: ['premier_league_goals', 'career_goals', 'champions_league_goals', 'penalty_goals', 'career_hattricks', 'goals_before_21', 'non_big6_pl_goals', 'london_goals'] },
+  { id: 'premier_league_midfielders', title: 'Premier League Midfielders', structure: sql`a.position = 'Midfielder' AND a.pl_apps >= 150`, cats: ['premier_league_assists', 'career_assists', 'premier_league_appearances', 'penalty_goals', 'goals_before_21'] },
+  { id: 'premier_league_defenders', title: 'Premier League Defenders', structure: sql`a.position = 'Defender' AND a.pl_apps >= 150`, cats: ['premier_league_appearances', 'career_goals', 'international_caps'] },
+  { id: 'world_cup_heroes', title: 'World Cup Heroes', structure: sql`a.wc = true`, cats: ['career_goals', 'career_assists', 'international_caps', 'penalty_goals', 'goals_before_21', 'career_hattricks'] },
 ];
 
 // How many of the most prestigious theme members we keep as the round's pool. Everyone in here
@@ -104,6 +114,11 @@ const STINKER_CHANCE = 3; // out of 5
  */
 const PRESTIGE = sql.raw('(a.mvt * 10 + LEAST(a.finals, 6) * 4 + LEAST(a.awards, 4) * 6)');
 
+const BIG6 = ['Manchester United', 'Manchester City', 'Chelsea', 'Arsenal', 'Liverpool', 'Tottenham'];
+const LONDON = ['Arsenal', 'Chelsea', 'Tottenham', 'West Ham', 'Fulham', 'Crystal Palace', 'Brentford', 'Charlton Athletic', 'QPR', 'Wimbledon'];
+const big6Sql = sql.join(BIG6.map((t) => sql`${t}`), sql`, `);
+const londonSql = sql.join(LONDON.map((t) => sql`${t}`), sql`, `);
+
 const AGG = sql`
   WITH agg AS (
     SELECT p.id, p.name, p.nationality, p.position, p.market_value_tier AS mvt,
@@ -118,11 +133,22 @@ const AGG = sql`
       COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2), 0)::int AS cl_apps,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id <> 1), 0)::int AS career_goals,
       COALESCE(SUM(s.assists)     FILTER (WHERE s.league_id <> 1), 0)::int AS career_assists,
-      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 1), 0)::int AS intl_caps,
       COALESCE(SUM(s.appearances), 0)::int AS total_apps,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39 AND s.team_name NOT IN (${big6Sql})), 0)::int AS pl_nonbig6_goals,
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id <> 1 AND s.team_name IN (${londonSql})), 0)::int AS london_goals,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id <> 1 AND s.team_name IN (${londonSql})), 0)::int AS london_apps,
+      -- Match-level aggregates (penalties, knockout goals, etc.) from the Transfermarkt ingest.
+      COALESCE(MAX(e.penalty_goals), 0)::int AS penalty_goals,
+      COALESCE(MAX(e.career_hattricks), 0)::int AS hattricks,
+      COALESCE(MAX(e.ucl_knockout_goals), 0)::int AS ucl_ko_goals,
+      COALESCE(MAX(e.ucl_goals_vs_english), 0)::int AS ucl_vs_eng,
+      COALESCE(MAX(e.weak_foot_goals), 0)::int AS weak_foot_goals,
+      COALESCE(MAX(e.goals_before_21), 0)::int AS goals_u21,
+      COALESCE(MAX(e.intl_caps), 0)::int AS intl_caps,
       EXISTS (SELECT 1 FROM final_appearances f WHERE f.player_id = p.id AND f.competition = 'World Cup') AS wc
     FROM players p
       LEFT JOIN player_stats s ON s.player_id = p.id
+      LEFT JOIN player_extra_stats e ON e.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
     GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier, p.peak_market_value_eur, p.record_fee_eur, fa.finals, aw.awards
