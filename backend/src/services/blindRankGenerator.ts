@@ -50,6 +50,9 @@ interface Category {
   min: number;
   noun: string;
   prefix: string;
+  /** Derived from Transfermarkt match events (only complete ~2010+). When true, the universe is
+   *  gated to players born >= 1990 so pre-coverage legends aren't undercounted and mis-ranked. */
+  eventGated?: boolean;
 }
 
 const CATEGORIES: Record<string, Category> = {
@@ -61,13 +64,14 @@ const CATEGORIES: Record<string, Category> = {
   premier_league_assists: { title: 'Premier League Assists', subtitle: 'Rank by Premier League assists', col: 'pl_assists', min: 10, noun: 'assists', prefix: '' },
   premier_league_appearances: { title: 'Premier League Appearances', subtitle: 'Rank by Premier League appearances', col: 'pl_apps', min: 50, noun: 'apps', prefix: '' },
   champions_league_goals: { title: 'Champions League Goals', subtitle: 'Rank by Champions League goals', col: 'cl_goals', min: 5, noun: 'goals', prefix: '' },
-  // Match-level / curated categories (the interesting ones).
-  penalty_goals: { title: 'Penalty Goals', subtitle: 'Rank by career penalty goals', col: 'penalty_goals', min: 1, noun: 'pens', prefix: '' },
-  career_hattricks: { title: 'Career Hat-tricks', subtitle: 'Rank by career hat-tricks', col: 'hattricks', min: 1, noun: 'hat-tricks', prefix: '' },
-  champions_league_knockout_goals: { title: 'Champions League Knockout Goals', subtitle: 'Rank by Champions League knockout goals', col: 'ucl_ko_goals', min: 1, noun: 'goals', prefix: '' },
-  champions_league_goals_vs_english: { title: 'CL Goals vs English Clubs', subtitle: 'Rank by Champions League goals against English clubs', col: 'ucl_vs_eng', min: 1, noun: 'goals', prefix: '' },
-  weak_foot_goals: { title: 'Weak-foot Goals', subtitle: 'Rank by career weak-foot goals', col: 'weak_foot_goals', min: 1, noun: 'goals', prefix: '' },
-  goals_before_21: { title: 'Goals Before 21', subtitle: 'Rank by goals scored before turning 21', col: 'goals_u21', min: 1, noun: 'goals', prefix: '' },
+  // Match-level / curated categories (the interesting ones). Event-derived ones are gated to the
+  // covered era (born >= 1990) so undercounted pre-2010 legends aren't mis-ranked.
+  penalty_goals: { title: 'Penalty Goals', subtitle: 'Rank by career penalty goals', col: 'penalty_goals', min: 1, noun: 'pens', prefix: '', eventGated: true },
+  career_hattricks: { title: 'Career Hat-tricks', subtitle: 'Rank by career hat-tricks', col: 'hattricks', min: 1, noun: 'hat-tricks', prefix: '', eventGated: true },
+  champions_league_knockout_goals: { title: 'Champions League Knockout Goals', subtitle: 'Rank by Champions League knockout goals', col: 'ucl_ko_goals', min: 1, noun: 'goals', prefix: '', eventGated: true },
+  champions_league_goals_vs_english: { title: 'CL Goals vs English Clubs', subtitle: 'Rank by Champions League goals against English clubs', col: 'ucl_vs_eng', min: 1, noun: 'goals', prefix: '', eventGated: true },
+  weak_foot_goals: { title: 'Weak-foot Goals', subtitle: 'Rank by career weak-foot goals', col: 'weak_foot_goals', min: 1, noun: 'goals', prefix: '', eventGated: true },
+  goals_before_21: { title: 'Goals Before 21', subtitle: 'Rank by goals scored before turning 21', col: 'goals_u21', min: 1, noun: 'goals', prefix: '', eventGated: true },
   international_caps: { title: 'International Caps', subtitle: 'Rank by international caps', col: 'intl_caps', min: 1, noun: 'caps', prefix: '' },
   non_big6_pl_goals: { title: 'Premier League Goals (non–Big Six)', subtitle: 'Rank by Premier League goals for clubs outside the Big Six', col: 'pl_nonbig6_goals', min: 1, noun: 'goals', prefix: '' },
   london_goals: { title: 'Goals for London Clubs', subtitle: 'Rank by goals for London clubs', col: 'london_goals', min: 1, noun: 'goals', prefix: '' },
@@ -122,6 +126,7 @@ const londonSql = sql.join(LONDON.map((t) => sql`${t}`), sql`, `);
 const AGG = sql`
   WITH agg AS (
     SELECT p.id, p.name, p.nationality, p.position, p.market_value_tier AS mvt,
+      EXTRACT(YEAR FROM p.birth_date)::int AS birth_year,
       ROUND(COALESCE(p.peak_market_value_eur, 0) / 1000000.0)::int AS peak_m,
       ROUND(COALESCE(p.record_fee_eur, 0) / 1000000.0)::int AS fee_m,
       COALESCE(fa.finals, 0)::int AS finals,
@@ -151,7 +156,7 @@ const AGG = sql`
       LEFT JOIN player_extra_stats e ON e.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
-    GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier, p.peak_market_value_eur, p.record_fee_eur, fa.finals, aw.awards
+    GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier, p.birth_date, p.peak_market_value_eur, p.record_fee_eur, fa.finals, aw.awards
   )`;
 
 interface PoolRow { id: string; name: string; nationality: string; position: string; stat: number; }
@@ -329,6 +334,7 @@ export async function generateBlindRankPuzzle(date: string): Promise<GeneratedDa
       SELECT a.id, a.name, a.nationality, a.position, ${PRESTIGE} AS prestige, a.${sql.raw(category.col)} AS stat
       FROM agg a
       WHERE ${theme.structure} AND a.${sql.raw(category.col)} >= 1
+        AND ${category.eventGated ? sql`a.birth_year >= 1990` : sql`TRUE`}
       ORDER BY prestige DESC, stat DESC, a.id
       LIMIT ${POOL_SIZE}
     `)) as unknown as UniverseRow[];

@@ -25,7 +25,8 @@ interface Metric {
   col: string;     // value column in AGG
   part: string;    // participation column (must be > 0 to appear) in AGG
   ladder: number[];
-  goalLike: boolean; // exclude goalkeepers from distractors when true
+  goalLike: boolean;   // exclude goalkeepers from distractors when true
+  eventBased?: boolean; // Transfermarkt-event metric (only complete ~2010+) → see gating below
 }
 
 const METRICS: Metric[] = [
@@ -34,12 +35,12 @@ const METRICS: Metric[] = [
   { id: 'laliga_goals', title: 'La Liga goals', noun: 'goals', col: 'liga_goals', part: 'liga_apps', ladder: [20, 30, 40, 50, 75], goalLike: true },
   { id: 'seriea_goals', title: 'Serie A goals', noun: 'goals', col: 'seriea_goals', part: 'seriea_apps', ladder: [20, 30, 40, 50, 75], goalLike: true },
   { id: 'cl_goals', title: 'Champions League goals', noun: 'goals', col: 'cl_goals', part: 'cl_apps', ladder: [10, 15, 20, 25, 30], goalLike: true },
-  { id: 'cl_knockout_goals', title: 'Champions League knockout goals', noun: 'goals', col: 'ucl_ko_goals', part: 'cl_apps', ladder: [3, 5, 8, 12, 18], goalLike: true },
-  { id: 'penalty_goals', title: 'career penalty goals', noun: 'pens', col: 'penalty_goals', part: 'total_apps', ladder: [15, 20, 30, 40, 50], goalLike: true },
-  { id: 'hattricks', title: 'career hat-tricks', noun: 'hat-tricks', col: 'hattricks', part: 'total_apps', ladder: [3, 5, 8, 10, 15], goalLike: true },
+  { id: 'cl_knockout_goals', title: 'Champions League knockout goals', noun: 'goals', col: 'ucl_ko_goals', part: 'cl_apps', ladder: [3, 5, 8, 12, 18], goalLike: true, eventBased: true },
+  { id: 'penalty_goals', title: 'career penalty goals', noun: 'pens', col: 'penalty_goals', part: 'total_apps', ladder: [15, 20, 30, 40, 50], goalLike: true, eventBased: true },
+  { id: 'hattricks', title: 'career hat-tricks', noun: 'hat-tricks', col: 'hattricks', part: 'total_apps', ladder: [3, 5, 8, 10, 15], goalLike: true, eventBased: true },
   { id: 'intl_caps', title: 'international caps', noun: 'caps', col: 'intl_caps', part: 'total_apps', ladder: [30, 50, 75, 100, 125], goalLike: false },
-  { id: 'goals_before_21', title: 'goals before turning 21', noun: 'goals', col: 'goals_u21', part: 'total_apps', ladder: [5, 8, 12, 18, 25], goalLike: true },
-  { id: 'weak_foot_goals', title: 'weak-foot goals', noun: 'goals', col: 'weak_foot_goals', part: 'total_apps', ladder: [15, 25, 40, 60], goalLike: true },
+  { id: 'goals_before_21', title: 'goals before turning 21', noun: 'goals', col: 'goals_u21', part: 'total_apps', ladder: [5, 8, 12, 18, 25], goalLike: true, eventBased: true },
+  { id: 'weak_foot_goals', title: 'weak-foot goals', noun: 'goals', col: 'weak_foot_goals', part: 'total_apps', ladder: [15, 25, 40, 60], goalLike: true, eventBased: true },
   { id: 'non_big6_pl_goals', title: 'Premier League goals for a non–Big Six club', noun: 'goals', col: 'pl_nonbig6_goals', part: 'pl_apps', ladder: [20, 30, 40, 50, 60], goalLike: true },
   { id: 'seriea_ligue1_goals', title: 'Serie A and Ligue 1 goals combined', noun: 'goals', col: 'seriea_ligue1_goals', part: 'seriea_ligue1_apps', ladder: [30, 50, 75, 100], goalLike: true },
 ];
@@ -85,6 +86,7 @@ export async function oneMoreStatValue(playerId: string, leagueId: number, categ
 const AGG = sql`
   WITH agg AS (
     SELECT p.id, p.name, p.position,
+      EXTRACT(YEAR FROM p.birth_date)::int AS birth_year,
       (p.market_value_tier * 10 + LEAST(COALESCE(fa.finals, 0), 6) * 4 + LEAST(COALESCE(aw.awards, 0), 4) * 6)::int AS prestige,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39), 0)::int AS pl_goals,
       COALESCE(SUM(s.assists)     FILTER (WHERE s.league_id = 39), 0)::int AS pl_assists,
@@ -110,10 +112,10 @@ const AGG = sql`
       LEFT JOIN player_extra_stats e ON e.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
-    GROUP BY p.id, p.name, p.position, p.market_value_tier, fa.finals, aw.awards
+    GROUP BY p.id, p.name, p.position, p.market_value_tier, p.birth_date, fa.finals, aw.awards
   )`;
 
-interface Candidate { id: string; name: string; position: string; prestige: number; value: number; }
+interface Candidate { id: string; name: string; position: string; prestige: number; value: number; birth_year: number | null; }
 
 async function clubsByPlayer(ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
@@ -151,17 +153,20 @@ export async function generateOneMorePuzzle(date: string): Promise<{ puzzle: One
  * "pick the famous one" or "pick the megastar". Bands widen / fame floor drops only if a tight
  * pairing can't fill the round.
  */
-function nearPools(rows: Candidate[], min: number, above: number, below: number, floor: number, goalLike: boolean) {
-  const ok = (r: Candidate) => r.prestige >= floor && (!goalLike || r.position !== 'Goalkeeper');
+function nearPools(rows: Candidate[], min: number, above: number, below: number, floor: number, metric: Metric) {
+  const ok = (r: Candidate) => r.prestige >= floor && (!metric.goalLike || r.position !== 'Goalkeeper');
   const Q = rows.filter((r) => r.value >= min && r.value <= min + above && ok(r));
-  const D = rows.filter((r) => r.value < min && r.value >= min - below && ok(r));
+  // Distractors on event-based metrics must be in the covered era (born >= 1990): we never want to
+  // present a pre-2010 legend whose total we've undercounted as a wrong "doesn't qualify".
+  const covered = (r: Candidate) => !metric.eventBased || (r.birth_year ?? 0) >= 1990;
+  const D = rows.filter((r) => r.value < min && r.value >= min - below && ok(r) && covered(r));
   return { Q, D };
 }
 
 async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: OneMorePuzzle; pool: number } | null> {
   const rows = (await db.execute(sql`
     ${AGG}
-    SELECT id, name, position, prestige, ${sql.raw(metric.col)} AS value
+    SELECT id, name, position, birth_year, prestige, ${sql.raw(metric.col)} AS value
     FROM agg WHERE ${sql.raw(metric.part)} > 0
   `)) as unknown as Candidate[];
 
@@ -171,7 +176,7 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
   let minimum = 0;
   let best = -1;
   for (const min of metric.ladder) {
-    const { Q, D } = nearPools(rows, min, band(min), band(min), 44, metric.goalLike);
+    const { Q, D } = nearPools(rows, min, band(min), band(min), 44, metric);
     const pairs = Math.min(Q.length, D.length);
     if (pairs > best) { best = pairs; minimum = min; }
   }
@@ -181,23 +186,27 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
   let above = band(minimum);
   let below = band(minimum);
   let floor = 44;
-  let { Q, D } = nearPools(rows, minimum, above, below, floor, metric.goalLike);
+  let { Q, D } = nearPools(rows, minimum, above, below, floor, metric);
   for (let guard = 0; (Q.length < ROUND_TARGET || D.length < ROUND_TARGET) && guard < 6; guard += 1) {
     above = Math.round(above * 1.5);
     below = Math.round(below * 1.5);
     if (guard >= 2) floor = Math.max(floor - 6, 30);
-    ({ Q, D } = nearPools(rows, minimum, above, below, floor, metric.goalLike));
+    ({ Q, D } = nearPools(rows, minimum, above, below, floor, metric));
   }
 
   const n = Math.min(ROUND_TARGET, Q.length, D.length);
   if (n < MIN_ROUNDS) return null;
 
   // Pair by fame rank → each round has two similarly-famous players (so fame can't give it away;
-  // sometimes the famous one is the WRONG one). Then order easy→hard by the value gap.
+  // sometimes the famous one is the WRONG one). Order rounds by FAME, most recognisable first:
+  // you open with household names (Giroud-tier) and only meet the deep cuts (Gameiro, Pjanić,
+  // Salvio…) deeper into the run, where the stakes are higher anyway.
   Q.sort((a, b) => b.prestige - a.prestige);
   D.sort((a, b) => b.prestige - a.prestige);
   const pairs = Array.from({ length: n }, (_, i) => ({ q: Q[i]!, d: D[i]! }));
-  pairs.sort((a, b) => (b.q.value - b.d.value) - (a.q.value - a.d.value)); // bigger gap first (easier)
+  pairs.sort((a, b) =>
+    (b.q.prestige + b.d.prestige) - (a.q.prestige + a.d.prestige)
+    || (b.q.value - b.d.value) - (a.q.value - a.d.value));
 
   const rng = makeRng(dayNumber(date) + metric.id.length * 31);
   const ids = pairs.flatMap((p) => [p.q.id, p.d.id]);
