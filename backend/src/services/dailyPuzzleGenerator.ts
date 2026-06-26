@@ -71,35 +71,46 @@ export async function generateGuessWhoPuzzle(
     throw new PuzzleValidationError('No players available for Guess Who');
   }
 
-  // Restrict the daily answer to recognisable players: currently in a big-5 league
-  // and rated in the top value tiers (market_value_tier is an output-based
-  // percentile rank within position, so 4–5 = elite/very good — a far better fame
-  // signal than raw appearances, which skews toward long-career journeymen).
+  // The answer must be recognisable AND CURRENTLY ACTIVE. We require recent big-5 minutes
+  // (season >= 2024): that keeps the deduction attributes (club/league/age) current AND drops
+  // retired players whose stale `current_league` would otherwise leak them in (e.g. Koscielny,
+  // David Silva). Within that, gate by a PRESTIGE score (value tier + major finals + individual
+  // awards, like Blind Rank) so it's a known name, and order by prestige so the pool is the ~500
+  // most recognisable current players — good variety, never an obscure random.
+  const PRESTIGE = sql`(p.market_value_tier * 10 + LEAST(COALESCE(fa.finals, 0), 6) * 4 + LEAST(COALESCE(aw.awards, 0), 4) * 6)`;
   const poolRows = (await db.execute(sql`
-    WITH apps AS (
+    WITH recent AS (
       SELECT player_id, SUM(appearances)::int AS a
-      FROM player_stats WHERE league_id IN (39, 140, 135, 78, 61, 2)
+      FROM player_stats WHERE league_id IN (39, 140, 135, 78, 61) AND season >= 2024
       GROUP BY player_id
-    )
-    SELECT p.id
+    ),
+    fa AS (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id),
+    aw AS (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id)
+    SELECT p.id, ${PRESTIGE} AS prestige
     FROM players p
-    LEFT JOIN apps ON apps.player_id = p.id
+      JOIN recent r ON r.player_id = p.id AND r.a >= 10
+      LEFT JOIN fa ON fa.player_id = p.id
+      LEFT JOIN aw ON aw.player_id = p.id
     WHERE p.external_id IS NOT NULL
       AND p.current_league IN ('Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1')
-      AND p.market_value_tier >= 4
-      AND COALESCE(apps.a, 0) >= 40
-    ORDER BY p.market_value_tier DESC, COALESCE(apps.a, 0) DESC
-    LIMIT 1200
+      AND ${PRESTIGE} >= 40
+    ORDER BY prestige DESC, r.a DESC, p.id
+    LIMIT 500
   `)) as unknown as Array<{ id: string }>;
 
   let ids = poolRows.map((row) => row.id);
   if (ids.length === 0) {
-    // Fallback: never fail the mode — fall back to any player with an external id.
-    const eligible = await db
-      .select({ id: players.id })
-      .from(players)
-      .where(isNotNull(players.externalId));
-    ids = eligible.map((row) => row.id);
+    // Safe fallback: the most valuable currently-active big-5 players — NEVER an obscure random.
+    const fb = (await db.execute(sql`
+      WITH recent AS (
+        SELECT player_id, SUM(appearances)::int AS a
+        FROM player_stats WHERE league_id IN (39, 140, 135, 78, 61) AND season >= 2024 GROUP BY player_id
+      )
+      SELECT p.id FROM players p JOIN recent r ON r.player_id = p.id AND r.a >= 5
+      WHERE p.external_id IS NOT NULL AND p.market_value_tier >= 4
+      ORDER BY p.market_value_tier DESC, p.id LIMIT 200
+    `)) as unknown as Array<{ id: string }>;
+    ids = fb.map((row) => row.id);
   }
   if (ids.length === 0) {
     throw new PuzzleValidationError('No eligible players for Guess Who');
