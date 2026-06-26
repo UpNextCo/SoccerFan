@@ -337,6 +337,15 @@ export const playerExtraStats = pgTable('player_extra_stats', {
   firstGoalAgeDays: integer('first_goal_age_days'),
   debutAgeDays: integer('debut_age_days'),
   intlCaps: integer('intl_caps').notNull().default(0),
+  /** Penalty goals PER LEAGUE from FBref (all eras), so categories can be precise and accurate
+   *  ("Premier League penalties") rather than a fuzzy, undercounted all-competitions "career"
+   *  total. fbrefPenalties (Big-5 sum) is retained but no longer drives a category. */
+  fbrefPenalties: integer('fbref_penalties').notNull().default(0),
+  plPenalties: integer('pl_penalties').notNull().default(0),
+  laligaPenalties: integer('laliga_penalties').notNull().default(0),
+  serieaPenalties: integer('seriea_penalties').notNull().default(0),
+  bundesligaPenalties: integer('bundesliga_penalties').notNull().default(0),
+  ligue1Penalties: integer('ligue1_penalties').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

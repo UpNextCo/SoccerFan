@@ -36,10 +36,12 @@ const METRICS: Metric[] = [
   { id: 'seriea_goals', title: 'Serie A goals', noun: 'goals', col: 'seriea_goals', part: 'seriea_apps', ladder: [20, 30, 40, 50, 75], goalLike: true },
   { id: 'cl_goals', title: 'Champions League goals', noun: 'goals', col: 'cl_goals', part: 'cl_apps', ladder: [10, 15, 20, 25, 30], goalLike: true },
   { id: 'cl_knockout_goals', title: 'Champions League knockout goals', noun: 'goals', col: 'ucl_ko_goals', part: 'cl_apps', ladder: [3, 5, 8, 12, 18], goalLike: true, eventBased: true },
-  { id: 'penalty_goals', title: 'career penalty goals', noun: 'pens', col: 'penalty_goals', part: 'total_apps', ladder: [15, 20, 30, 40, 50], goalLike: true, eventBased: true },
+  { id: 'pl_penalties', title: 'Premier League penalty goals', noun: 'pens', col: 'pl_penalties', part: 'pl_apps', ladder: [10, 15, 20, 30, 40], goalLike: true },
+  { id: 'laliga_penalties', title: 'La Liga penalty goals', noun: 'pens', col: 'laliga_penalties', part: 'liga_apps', ladder: [10, 15, 20, 30], goalLike: true },
+  { id: 'seriea_penalties', title: 'Serie A penalty goals', noun: 'pens', col: 'seriea_penalties', part: 'seriea_apps', ladder: [10, 15, 20, 30], goalLike: true },
   { id: 'hattricks', title: 'career hat-tricks', noun: 'hat-tricks', col: 'hattricks', part: 'total_apps', ladder: [3, 5, 8, 10, 15], goalLike: true, eventBased: true },
   { id: 'intl_caps', title: 'international caps', noun: 'caps', col: 'intl_caps', part: 'total_apps', ladder: [30, 50, 75, 100, 125], goalLike: false },
-  { id: 'goals_before_21', title: 'goals before turning 21', noun: 'goals', col: 'goals_u21', part: 'total_apps', ladder: [5, 8, 12, 18, 25], goalLike: true, eventBased: true },
+  { id: 'goals_before_21', title: 'goals before turning 21', noun: 'goals', col: 'goals_u21', part: 'total_apps', ladder: [5, 8, 12, 18, 25], goalLike: true },
   { id: 'weak_foot_goals', title: 'weak-foot goals', noun: 'goals', col: 'weak_foot_goals', part: 'total_apps', ladder: [15, 25, 40, 60], goalLike: true, eventBased: true },
   { id: 'non_big6_pl_goals', title: 'Premier League goals for a non–Big Six club', noun: 'goals', col: 'pl_nonbig6_goals', part: 'pl_apps', ladder: [20, 30, 40, 50, 60], goalLike: true },
   { id: 'seriea_ligue1_goals', title: 'Serie A and Ligue 1 goals combined', noun: 'goals', col: 'seriea_ligue1_goals', part: 'seriea_ligue1_apps', ladder: [30, 50, 75, 100], goalLike: true },
@@ -101,11 +103,14 @@ const AGG = sql`
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id IN (135, 61)), 0)::int AS seriea_ligue1_goals,
       COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id IN (135, 61)), 0)::int AS seriea_ligue1_apps,
       COALESCE(SUM(s.appearances), 0)::int AS total_apps,
-      COALESCE(MAX(e.penalty_goals), 0)::int AS penalty_goals,
+      COALESCE(MAX(e.pl_penalties), 0)::int AS pl_penalties,
+      COALESCE(MAX(e.laliga_penalties), 0)::int AS laliga_penalties,
+      COALESCE(MAX(e.seriea_penalties), 0)::int AS seriea_penalties,
       COALESCE(MAX(e.career_hattricks), 0)::int AS hattricks,
       COALESCE(MAX(e.ucl_knockout_goals), 0)::int AS ucl_ko_goals,
       COALESCE(MAX(e.weak_foot_goals), 0)::int AS weak_foot_goals,
-      COALESCE(MAX(e.goals_before_21), 0)::int AS goals_u21,
+      -- Goals before turning 21, from season totals + DOB → covers all eras (not just TM events).
+      COALESCE(SUM(s.goals) FILTER (WHERE s.league_id <> 1 AND p.birth_date IS NOT NULL AND s.season <= EXTRACT(YEAR FROM p.birth_date) + 20), 0)::int AS goals_u21,
       COALESCE(MAX(e.intl_caps), 0)::int AS intl_caps
     FROM players p
       LEFT JOIN player_stats s ON s.player_id = p.id

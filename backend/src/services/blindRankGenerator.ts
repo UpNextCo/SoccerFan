@@ -66,12 +66,14 @@ const CATEGORIES: Record<string, Category> = {
   champions_league_goals: { title: 'Champions League Goals', subtitle: 'Rank by Champions League goals', col: 'cl_goals', min: 5, noun: 'goals', prefix: '' },
   // Match-level / curated categories (the interesting ones). Event-derived ones are gated to the
   // covered era (born >= 1990) so undercounted pre-2010 legends aren't mis-ranked.
-  penalty_goals: { title: 'Penalty Goals', subtitle: 'Rank by career penalty goals', col: 'penalty_goals', min: 1, noun: 'pens', prefix: '', eventGated: true },
+  premier_league_penalties: { title: 'Premier League Penalties', subtitle: 'Rank by Premier League penalty goals', col: 'pl_penalties', min: 1, noun: 'pens', prefix: '' },
+  la_liga_penalties: { title: 'La Liga Penalties', subtitle: 'Rank by La Liga penalty goals', col: 'laliga_penalties', min: 1, noun: 'pens', prefix: '' },
+  serie_a_penalties: { title: 'Serie A Penalties', subtitle: 'Rank by Serie A penalty goals', col: 'seriea_penalties', min: 1, noun: 'pens', prefix: '' },
   career_hattricks: { title: 'Career Hat-tricks', subtitle: 'Rank by career hat-tricks', col: 'hattricks', min: 1, noun: 'hat-tricks', prefix: '', eventGated: true },
   champions_league_knockout_goals: { title: 'Champions League Knockout Goals', subtitle: 'Rank by Champions League knockout goals', col: 'ucl_ko_goals', min: 1, noun: 'goals', prefix: '', eventGated: true },
   champions_league_goals_vs_english: { title: 'CL Goals vs English Clubs', subtitle: 'Rank by Champions League goals against English clubs', col: 'ucl_vs_eng', min: 1, noun: 'goals', prefix: '', eventGated: true },
   weak_foot_goals: { title: 'Weak-foot Goals', subtitle: 'Rank by career weak-foot goals', col: 'weak_foot_goals', min: 1, noun: 'goals', prefix: '', eventGated: true },
-  goals_before_21: { title: 'Goals Before 21', subtitle: 'Rank by goals scored before turning 21', col: 'goals_u21', min: 1, noun: 'goals', prefix: '', eventGated: true },
+  goals_before_21: { title: 'Goals Before 21', subtitle: 'Rank by goals scored before turning 21', col: 'goals_u21', min: 1, noun: 'goals', prefix: '' },
   international_caps: { title: 'International Caps', subtitle: 'Rank by international caps', col: 'intl_caps', min: 1, noun: 'caps', prefix: '' },
   non_big6_pl_goals: { title: 'Premier League Goals (non–Big Six)', subtitle: 'Rank by Premier League goals for clubs outside the Big Six', col: 'pl_nonbig6_goals', min: 1, noun: 'goals', prefix: '' },
   london_goals: { title: 'Goals for London Clubs', subtitle: 'Rank by goals for London clubs', col: 'london_goals', min: 1, noun: 'goals', prefix: '' },
@@ -91,14 +93,14 @@ interface Theme {
 // meaningless ("Scholes < Gibbs-White"). They're ONLY used on Current Superstars (single era);
 // every historical/mixed-era theme ranks by on-pitch stats, which don't inflate.
 const THEMES: Theme[] = [
-  { id: 'premier_league_legends', title: 'Premier League Legends', structure: sql`a.pl_apps >= 150`, cats: ['premier_league_goals', 'premier_league_assists', 'career_goals', 'penalty_goals', 'career_hattricks', 'goals_before_21', 'london_appearances'] },
-  { id: 'champions_league_legends', title: 'Champions League Legends', structure: sql`a.cl_apps >= 40`, cats: ['champions_league_goals', 'champions_league_knockout_goals', 'champions_league_goals_vs_english', 'career_goals', 'penalty_goals'] },
-  { id: 'current_superstars', title: 'Current Superstars', structure: sql`a.peak_m >= 40`, cats: ['peak_market_value', 'biggest_transfer_fee', 'career_goals', 'career_assists', 'champions_league_goals', 'penalty_goals', 'goals_before_21', 'career_hattricks'] },
-  { id: 'football_icons', title: 'Football Icons', structure: sql`a.total_apps >= 300 AND a.peak_m >= 40`, cats: ['career_goals', 'career_assists', 'penalty_goals', 'career_hattricks', 'international_caps', 'weak_foot_goals'] },
-  { id: 'premier_league_strikers', title: 'Premier League Strikers', structure: sql`a.position = 'Attacker' AND a.pl_apps >= 100`, cats: ['premier_league_goals', 'career_goals', 'champions_league_goals', 'penalty_goals', 'career_hattricks', 'goals_before_21', 'non_big6_pl_goals', 'london_goals'] },
-  { id: 'premier_league_midfielders', title: 'Premier League Midfielders', structure: sql`a.position = 'Midfielder' AND a.pl_apps >= 150`, cats: ['premier_league_assists', 'career_assists', 'premier_league_appearances', 'penalty_goals', 'goals_before_21'] },
+  { id: 'premier_league_legends', title: 'Premier League Legends', structure: sql`a.pl_apps >= 150`, cats: ['premier_league_goals', 'premier_league_assists', 'career_goals', 'premier_league_penalties', 'career_hattricks', 'goals_before_21', 'london_appearances'] },
+  { id: 'champions_league_legends', title: 'Champions League Legends', structure: sql`a.cl_apps >= 40`, cats: ['champions_league_goals', 'champions_league_knockout_goals', 'champions_league_goals_vs_english', 'career_goals'] },
+  { id: 'current_superstars', title: 'Current Superstars', structure: sql`a.peak_m >= 40`, cats: ['peak_market_value', 'biggest_transfer_fee', 'career_goals', 'career_assists', 'champions_league_goals', 'la_liga_penalties', 'goals_before_21', 'career_hattricks'] },
+  { id: 'football_icons', title: 'Football Icons', structure: sql`a.total_apps >= 300 AND a.peak_m >= 40`, cats: ['career_goals', 'career_assists', 'la_liga_penalties', 'serie_a_penalties', 'career_hattricks', 'international_caps', 'weak_foot_goals'] },
+  { id: 'premier_league_strikers', title: 'Premier League Strikers', structure: sql`a.position = 'Attacker' AND a.pl_apps >= 100`, cats: ['premier_league_goals', 'career_goals', 'champions_league_goals', 'premier_league_penalties', 'career_hattricks', 'goals_before_21', 'non_big6_pl_goals', 'london_goals'] },
+  { id: 'premier_league_midfielders', title: 'Premier League Midfielders', structure: sql`a.position = 'Midfielder' AND a.pl_apps >= 150`, cats: ['premier_league_assists', 'career_assists', 'premier_league_appearances', 'premier_league_penalties', 'goals_before_21'] },
   { id: 'premier_league_defenders', title: 'Premier League Defenders', structure: sql`a.position = 'Defender' AND a.pl_apps >= 150`, cats: ['premier_league_appearances', 'career_goals', 'international_caps'] },
-  { id: 'world_cup_heroes', title: 'World Cup Heroes', structure: sql`a.wc = true`, cats: ['career_goals', 'career_assists', 'international_caps', 'penalty_goals', 'goals_before_21', 'career_hattricks'] },
+  { id: 'world_cup_heroes', title: 'World Cup Heroes', structure: sql`a.wc = true`, cats: ['career_goals', 'career_assists', 'international_caps', 'goals_before_21', 'career_hattricks'] },
 ];
 
 // How many of the most prestigious theme members we keep as the round's pool. Everyone in here
@@ -142,13 +144,18 @@ const AGG = sql`
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39 AND s.team_name NOT IN (${big6Sql})), 0)::int AS pl_nonbig6_goals,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id <> 1 AND s.team_name IN (${londonSql})), 0)::int AS london_goals,
       COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id <> 1 AND s.team_name IN (${londonSql})), 0)::int AS london_apps,
-      -- Match-level aggregates (penalties, knockout goals, etc.) from the Transfermarkt ingest.
-      COALESCE(MAX(e.penalty_goals), 0)::int AS penalty_goals,
+      -- Penalties PER LEAGUE from FBref (accurate + era-complete) — precise categories beat a
+      -- fuzzy, undercounted all-competitions "career" total.
+      COALESCE(MAX(e.pl_penalties), 0)::int AS pl_penalties,
+      COALESCE(MAX(e.laliga_penalties), 0)::int AS laliga_penalties,
+      COALESCE(MAX(e.seriea_penalties), 0)::int AS seriea_penalties,
       COALESCE(MAX(e.career_hattricks), 0)::int AS hattricks,
       COALESCE(MAX(e.ucl_knockout_goals), 0)::int AS ucl_ko_goals,
       COALESCE(MAX(e.ucl_goals_vs_english), 0)::int AS ucl_vs_eng,
       COALESCE(MAX(e.weak_foot_goals), 0)::int AS weak_foot_goals,
-      COALESCE(MAX(e.goals_before_21), 0)::int AS goals_u21,
+      -- Goals before turning 21, derived from season totals (back to 1992) + DOB so it covers
+      -- ALL eras, not just the TM-event window. Counts club seasons up to the one they turn 21.
+      COALESCE(SUM(s.goals) FILTER (WHERE s.league_id <> 1 AND p.birth_date IS NOT NULL AND s.season <= EXTRACT(YEAR FROM p.birth_date) + 20), 0)::int AS goals_u21,
       COALESCE(MAX(e.intl_caps), 0)::int AS intl_caps,
       EXISTS (SELECT 1 FROM final_appearances f WHERE f.player_id = p.id AND f.competition = 'World Cup') AS wc
     FROM players p

@@ -61,6 +61,7 @@
     "job:audit-conflations": "tsx src/jobs/audit-conflations.ts",
     "job:build-stinker-bank": "tsx src/jobs/build-stinker-bank.ts",
     "job:ingest-tm-events": "tsx src/jobs/ingest-tm-events.ts",
+    "job:import-fbref-penalties": "tsx src/jobs/import-fbref-penalties.ts",
     "job:normalize-nationalities": "tsx src/jobs/normalize-nationalities.ts",
     "job:dedupe-stat-rows": "tsx src/jobs/dedupe-stat-rows.ts",
     "job:refresh-current-club": "tsx src/jobs/refresh-current-club.ts"

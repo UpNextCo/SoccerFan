@@ -89,6 +89,7 @@ def extract_rows(df, lid, lname, start_year, league_filter=None):
     c_min = find_col(cols, "Playing Time_Min", "Min")
     c_gls = find_col(cols, "Performance_Gls", "Gls")
     c_ast = find_col(cols, "Performance_Ast", "Ast")
+    c_pk = find_col(cols, "Performance_PK", "PK")  # penalty kicks MADE
     c_cy = find_col(cols, "Performance_CrdY", "CrdY")
     c_cr = find_col(cols, "Performance_CrdR", "CrdR")
 
@@ -113,6 +114,7 @@ def extract_rows(df, lid, lname, start_year, league_filter=None):
                 "minutes": to_int(r.get(c_min)) if c_min else 0,
                 "goals": to_int(r.get(c_gls)) if c_gls else 0,
                 "assists": to_int(r.get(c_ast)) if c_ast else 0,
+                "penalties": to_int(r.get(c_pk)) if c_pk else 0,
                 "yellow": to_int(r.get(c_cy)) if c_cy else 0,
                 "red": to_int(r.get(c_cr)) if c_cr else 0,
             }
@@ -165,9 +167,10 @@ def main():
             rows.extend(extracted)
             print(f"  Combined Serie A {season}: {len(extracted)} players", file=sys.stderr)
 
-    with open(OUT_PATH, "w") as f:
+    out_path = sys.argv[3] if len(sys.argv) > 3 else OUT_PATH
+    with open(out_path, "w") as f:
         json.dump(rows, f)
-    print(f"Wrote {len(rows)} rows to {OUT_PATH}")
+    print(f"Wrote {len(rows)} rows to {out_path}")
 
 
 if __name__ == "__main__":
