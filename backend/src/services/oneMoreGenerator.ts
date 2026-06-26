@@ -12,9 +12,6 @@ import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 
-const TARGET_POOL = 50;
-const MIN_POOL = 20;
-const MAX_POOL = 200;
 const ROUND_TARGET = 20;
 const MIN_ROUNDS = 10;
 
@@ -141,14 +138,26 @@ export async function generateOneMorePuzzle(date: string): Promise<{ puzzle: One
     const metric = METRICS[(start + offset) % METRICS.length]!;
     const built = await assembleMetric(metric, date);
     if (!built) continue;
-    if (built.pool >= MIN_POOL) return built;
+    if (built.pool >= MIN_ROUNDS) return built;
     if (!fallback || built.pool > fallback.pool) fallback = built;
   }
   if (fallback) return fallback;
   throw new Error('One More: no metric produced a viable round');
 }
 
-/** Build the metric's candidate pool + ramped rounds, with clubs attached. */
+/**
+ * Recognisable players NEAR the threshold on each side. The whole point: both options are known
+ * names AND both sit close to the line (one just over, one just under), so you can't win by
+ * "pick the famous one" or "pick the megastar". Bands widen / fame floor drops only if a tight
+ * pairing can't fill the round.
+ */
+function nearPools(rows: Candidate[], min: number, above: number, below: number, floor: number, goalLike: boolean) {
+  const ok = (r: Candidate) => r.prestige >= floor && (!goalLike || r.position !== 'Goalkeeper');
+  const Q = rows.filter((r) => r.value >= min && r.value <= min + above && ok(r));
+  const D = rows.filter((r) => r.value < min && r.value >= min - below && ok(r));
+  return { Q, D };
+}
+
 async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: OneMorePuzzle; pool: number } | null> {
   const rows = (await db.execute(sql`
     ${AGG}
@@ -156,59 +165,53 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
     FROM agg WHERE ${sql.raw(metric.part)} > 0
   `)) as unknown as Candidate[];
 
-  let chosenMin: number | null = null;
-  let chosenPool = 0;
-  let fbMin = 0;
-  let fbPool = -1;
+  // Pick the threshold that yields the most CLOSE, recognisable pairs (one just over, one just
+  // under), using a tight band around the line — that's what makes each round genuinely hard.
+  const band = (min: number) => Math.max(Math.round(min * 0.45), 8);
+  let minimum = 0;
+  let best = -1;
   for (const min of metric.ladder) {
-    const pool = rows.filter((r) => r.value >= min).length;
-    if (pool > fbPool) { fbPool = pool; fbMin = min; }
-    if (pool >= MIN_POOL && pool <= MAX_POOL && (chosenMin === null || Math.abs(pool - TARGET_POOL) < Math.abs(chosenPool - TARGET_POOL))) {
-      chosenMin = min; chosenPool = pool;
-    }
+    const { Q, D } = nearPools(rows, min, band(min), band(min), 44, metric.goalLike);
+    const pairs = Math.min(Q.length, D.length);
+    if (pairs > best) { best = pairs; minimum = min; }
   }
-  const minimum = chosenMin ?? fbMin;
-  const pool = chosenMin ? chosenPool : fbPool;
+  if (minimum === 0) return null;
 
-  const qualifiers = rows.filter((r) => r.value >= minimum).sort((a, b) => b.prestige - a.prestige);
-  const temptation = (r: Candidate) => r.prestige + (r.value / minimum) * 45;
-  const distractors = rows
-    .filter((r) => r.value < minimum && (r.value >= minimum * 0.5 || r.prestige >= 44))
-    .filter((r) => !metric.goalLike || r.position !== 'Goalkeeper')
-    .sort((a, b) => temptation(a) - temptation(b));
+  // Build the tight near-line pools, widening bands / lowering the fame floor only if needed.
+  let above = band(minimum);
+  let below = band(minimum);
+  let floor = 44;
+  let { Q, D } = nearPools(rows, minimum, above, below, floor, metric.goalLike);
+  for (let guard = 0; (Q.length < ROUND_TARGET || D.length < ROUND_TARGET) && guard < 6; guard += 1) {
+    above = Math.round(above * 1.5);
+    below = Math.round(below * 1.5);
+    if (guard >= 2) floor = Math.max(floor - 6, 30);
+    ({ Q, D } = nearPools(rows, minimum, above, below, floor, metric.goalLike));
+  }
 
-  const n = Math.min(ROUND_TARGET, qualifiers.length, distractors.length);
+  const n = Math.min(ROUND_TARGET, Q.length, D.length);
   if (n < MIN_ROUNDS) return null;
 
-  const chosenD: Candidate[] = [];
-  let last = -1;
-  for (let i = 0; i < n; i += 1) {
-    let idx = Math.round((i * (distractors.length - 1)) / Math.max(1, n - 1));
-    if (idx <= last) idx = last + 1;
-    if (idx >= distractors.length) break;
-    chosenD.push(distractors[idx]!);
-    last = idx;
-  }
-  const roundsN = Math.min(n, chosenD.length);
-  if (roundsN < MIN_ROUNDS) return null;
+  // Pair by fame rank → each round has two similarly-famous players (so fame can't give it away;
+  // sometimes the famous one is the WRONG one). Then order easy→hard by the value gap.
+  Q.sort((a, b) => b.prestige - a.prestige);
+  D.sort((a, b) => b.prestige - a.prestige);
+  const pairs = Array.from({ length: n }, (_, i) => ({ q: Q[i]!, d: D[i]! }));
+  pairs.sort((a, b) => (b.q.value - b.d.value) - (a.q.value - a.d.value)); // bigger gap first (easier)
 
   const rng = makeRng(dayNumber(date) + metric.id.length * 31);
-  const ids = [...qualifiers.slice(0, roundsN), ...chosenD].map((c) => c.id);
+  const ids = pairs.flatMap((p) => [p.q.id, p.d.id]);
   const clubs = await clubsByPlayer(ids);
   const toOption = (c: Candidate): OneMoreOption => ({
     id: c.id, name: c.name, clubs: clubs.get(c.id) ?? '', position: c.position, value: c.value,
   });
 
-  const rounds: OneMoreRound[] = [];
-  for (let i = 0; i < roundsN; i += 1) {
-    const q = toOption(qualifiers[i]!);
-    const d = toOption(chosenD[i]!);
-    rounds.push({ options: rng() < 0.5 ? [q, d] : [d, q] });
-  }
+  const rounds: OneMoreRound[] = pairs.map(({ q, d }) =>
+    ({ options: (rng() < 0.5 ? [toOption(q), toOption(d)] : [toOption(d), toOption(q)]) as [OneMoreOption, OneMoreOption] }));
 
   return {
     puzzle: { modeId: 'one_more', puzzleId: `${date}-one_more`, date, title: metric.title, valueNoun: metric.noun, minimum, rounds },
-    pool,
+    pool: n,
   };
 }
 
