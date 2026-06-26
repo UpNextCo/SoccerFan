@@ -176,6 +176,31 @@ struct FootballTowerPuzzleDTO: Codable, Equatable {
     let floors: [FootballTowerFloorDTO]
 }
 
+struct OneMoreOptionDTO: Codable, Equatable {
+    let id: String
+    let name: String
+    let clubs: String
+    let position: String
+    let value: Int
+
+    init(id: String, name: String, clubs: String = "", position: String = "", value: Int) {
+        self.id = id; self.name = name; self.clubs = clubs; self.position = position; self.value = value
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        clubs = try c.decodeIfPresent(String.self, forKey: .clubs) ?? ""
+        position = try c.decodeIfPresent(String.self, forKey: .position) ?? ""
+        value = try c.decodeIfPresent(Int.self, forKey: .value) ?? 0
+    }
+}
+
+struct OneMoreRoundDTO: Codable, Equatable {
+    let options: [OneMoreOptionDTO]
+}
+
 struct OneMorePuzzleDTO: Codable, Equatable {
     let modeId: String
     let puzzleId: String
@@ -185,6 +210,29 @@ struct OneMorePuzzleDTO: Codable, Equatable {
     let category: String
     let minimum: Int
     let title: String
+    let rounds: [OneMoreRoundDTO]
+
+    init(
+        modeId: String, puzzleId: String, date: String, leagueId: Int, league: String,
+        category: String, minimum: Int, title: String, rounds: [OneMoreRoundDTO] = []
+    ) {
+        self.modeId = modeId; self.puzzleId = puzzleId; self.date = date; self.leagueId = leagueId
+        self.league = league; self.category = category; self.minimum = minimum; self.title = title
+        self.rounds = rounds
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        modeId = try c.decode(String.self, forKey: .modeId)
+        puzzleId = try c.decode(String.self, forKey: .puzzleId)
+        date = try c.decode(String.self, forKey: .date)
+        leagueId = try c.decode(Int.self, forKey: .leagueId)
+        league = try c.decode(String.self, forKey: .league)
+        category = try c.decode(String.self, forKey: .category)
+        minimum = try c.decode(Int.self, forKey: .minimum)
+        title = try c.decode(String.self, forKey: .title)
+        rounds = try c.decodeIfPresent([OneMoreRoundDTO].self, forKey: .rounds) ?? []
+    }
 }
 
 struct FootballGolfAnswerDTO: Codable, Equatable {

@@ -1,11 +1,26 @@
 import Foundation
 
+/// One pickable name in a round; `value` is its career total of the category in the league.
+struct OneMoreOption: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let clubs: String
+    let position: String
+    let value: Int
+}
+
+/// A binary round: exactly two options, one of which clears the day's threshold.
+struct OneMoreRound: Equatable {
+    let options: [OneMoreOption]
+}
+
 struct OneMorePrompt: Equatable {
     let id: String
     let leagueName: String
     let leagueId: Int
     let category: TargetManStatCategory
     let minimum: Int
+    let rounds: [OneMoreRound]
     let isDaily: Bool
     let date: String?
 
@@ -16,27 +31,26 @@ struct OneMorePrompt: Equatable {
         "\(leagueName) players with \(minimum)+ \(statNoun)"
     }
 
-    var searchHint: String {
-        "Name a \(leagueName) player…"
+    var ruleLine: String {
+        "One wrong pick loses everything"
     }
 
-    var ruleLine: String {
-        "One wrong answer loses everything"
-    }
+    /// Whether an option clears the day's threshold (exactly one per round does).
+    func qualifies(_ option: OneMoreOption) -> Bool { option.value >= minimum }
 }
 
 struct OneMorePick: Identifiable, Equatable {
     let id = UUID()
-    let player: PlayerSearchResultDTO
+    let name: String
     let statValue: Int
     let pointsAfter: Int
 }
 
 enum OneMorePhase: Equatable {
     case playing
-    case validating
+    case revealing   // showing both stat values right after a pick
     case busted
-    case cashedOut
+    case cashedOut   // cashed out OR cleared every round
 }
 
 struct OneMoreGameState: Equatable {
@@ -45,7 +59,10 @@ struct OneMoreGameState: Equatable {
     var streak: Int
     var bankedScore: Int
     var picks: [OneMorePick]
-    var bustPick: OneMorePick?
+    var roundIndex: Int
+    var chosenOptionId: String?     // the option tapped this round (for reveal highlight)
+    var bustPick: OneMorePick?      // the wrong option chosen
+    var bustCorrect: OneMoreOption? // the option they should have picked
 
     init(prompt: OneMorePrompt) {
         self.prompt = prompt
@@ -53,11 +70,18 @@ struct OneMoreGameState: Equatable {
         streak = 0
         bankedScore = 0
         picks = []
+        roundIndex = 0
+        chosenOptionId = nil
         bustPick = nil
+        bustCorrect = nil
     }
 
     var isActive: Bool {
-        phase == .playing || phase == .validating
+        phase == .playing || phase == .revealing
+    }
+
+    var currentRound: OneMoreRound? {
+        prompt.rounds.indices.contains(roundIndex) ? prompt.rounds[roundIndex] : nil
     }
 
     var currentScore: Int {
@@ -67,16 +91,6 @@ struct OneMoreGameState: Equatable {
     var nextPickPoints: Int {
         OneMoreScoring.points(forPick: streak + 1)
     }
-
-    var usedPlayerIds: Set<String> {
-        Set(picks.map(\.player.id))
-    }
-}
-
-enum OneMoreValidationResult: Equatable {
-    case valid(statValue: Int)
-    case alreadyUsed
-    case notEligible(reason: String)
 }
 
 enum OneMoreScoring {
@@ -106,8 +120,7 @@ enum OneMoreScoring {
 }
 
 enum OneMoreTiming {
-    static let correctPulse: Double = 0.35
-    static let bustFlash: Double = 0.55
+    static let reveal: Double = 0.9       // how long both stat values show after a pick
     static let bustHold: Double = 1.4
     static let cashOutDelay: Double = 0.25
     static let confettiThreshold = 5

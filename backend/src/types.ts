@@ -116,6 +116,18 @@ export interface FootballGolfPuzzlePublic {
   }>;
 }
 
+export interface OneMoreOptionPublic {
+  id: string;
+  name: string;
+  clubs: string;
+  position: string;
+  value: number;
+}
+
+export interface OneMoreRoundPublic {
+  options: [OneMoreOptionPublic, OneMoreOptionPublic];
+}
+
 export interface OneMorePuzzlePublic {
   modeId: 'one_more';
   puzzleId: string;
@@ -125,6 +137,7 @@ export interface OneMorePuzzlePublic {
   category: string;
   minimum: number;
   title: string;
+  rounds: OneMoreRoundPublic[];
 }
 
 export type DailyPuzzlePublic =

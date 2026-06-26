@@ -1,89 +1,69 @@
 import Foundation
 
 enum OneMoreSeed {
-    /// Offline-only fallback prompt. The seed roster only carries PL goals, so the
-    /// local prompt is always "Premier League goals" — daily play uses the server
-    /// puzzle (any competition/category) validated server-side.
-    static func makeDailyPrompt(date: String? = nil) -> OneMorePrompt {
-        let dateKey = date ?? todayUTC()
-        return OneMorePrompt(
-            id: "one_more_daily_\(dateKey)",
-            leagueName: TargetManLeague.premierLeague.rawValue,
-            leagueId: TargetManLeague.premierLeague.apiLeagueId,
-            category: .goals,
-            minimum: 10,
-            isDaily: true,
-            date: dateKey
-        )
-    }
-
-    /// Build the daily prompt from the server-generated puzzle (validated server-side).
-    /// Works for any competition (including cups) since it carries the raw league name/id.
+    /// Build the daily prompt from the server-generated puzzle. The server embeds the full set
+    /// of binary rounds (each with two options + their real stat values), so play is offline-safe.
     static func makeServerPrompt(from dto: OneMorePuzzleDTO) -> OneMorePrompt? {
         guard let category = TargetManStatCategory(rawValue: dto.category) else { return nil }
+        let rounds = dto.rounds.compactMap { round -> OneMoreRound? in
+            guard round.options.count == 2 else { return nil }
+            return OneMoreRound(options: round.options.map {
+                OneMoreOption(id: $0.id, name: $0.name, clubs: $0.clubs, position: $0.position, value: $0.value)
+            })
+        }
+        guard rounds.count >= 3 else { return nil } // too thin → caller falls back
         return OneMorePrompt(
             id: dto.puzzleId,
             leagueName: dto.league,
             leagueId: dto.leagueId,
             category: category,
             minimum: dto.minimum,
+            rounds: rounds,
             isDaily: true,
             date: dto.date
         )
     }
 
+    /// Offline / practice fallback: a "Premier League goals" prompt with rounds built from the
+    /// local roster (one qualifier vs one short-of-the-line name per round).
+    static func makeDailyPrompt(date: String? = nil) -> OneMorePrompt {
+        makeLocalPrompt(id: "one_more_daily_\(date ?? todayUTC())", isDaily: true, date: date ?? todayUTC())
+    }
+
     static func makePracticePrompt() -> OneMorePrompt {
-        OneMorePrompt(
-            id: "one_more_practice_\(UUID().uuidString.prefix(8))",
+        makeLocalPrompt(id: "one_more_practice_\(UUID().uuidString.prefix(8))", isDaily: false, date: nil)
+    }
+
+    // MARK: - Local round building
+
+    private static func makeLocalPrompt(id: String, isDaily: Bool, date: String?) -> OneMorePrompt {
+        let minimum = 50
+        let qualifiers = roster.filter { $0.goals >= minimum }.shuffled()
+        let distractors = roster.filter { $0.goals < minimum }.sorted { $0.goals > $1.goals }
+        let n = min(12, qualifiers.count, distractors.count)
+        var rounds: [OneMoreRound] = []
+        for i in 0..<n {
+            let q = option(qualifiers[i])
+            let d = option(distractors[i])
+            rounds.append(OneMoreRound(options: Bool.random() ? [q, d] : [d, q]))
+        }
+        return OneMorePrompt(
+            id: id,
             leagueName: TargetManLeague.premierLeague.rawValue,
             leagueId: TargetManLeague.premierLeague.apiLeagueId,
             category: .goals,
-            minimum: 10,
-            isDaily: false,
-            date: nil
+            minimum: minimum,
+            rounds: rounds,
+            isDaily: isDaily,
+            date: date
         )
     }
 
-    static func eligiblePlayers(for prompt: OneMorePrompt) -> [OneMoreEligiblePlayer] {
-        roster
-            .filter { $0.goals >= prompt.minimum }
-            .map { entry in
-                OneMoreEligiblePlayer(
-                    id: entry.id,
-                    name: entry.name,
-                    club: entry.club,
-                    league: prompt.leagueName,
-                    nationality: entry.nationality,
-                    position: entry.position,
-                    statValue: entry.goals,
-                    aliases: entry.aliases
-                )
-            }
+    private static func option(_ e: RosterEntry) -> OneMoreOption {
+        OneMoreOption(id: e.id, name: e.name, clubs: e.club, position: e.position, value: e.goals)
     }
 
-    // MARK: - Private
-
-    struct OneMoreEligiblePlayer: Equatable {
-        let id: String
-        let name: String
-        let club: String
-        let league: String
-        let nationality: String
-        let position: String
-        let statValue: Int
-        let aliases: [String]
-
-        var searchDTO: PlayerSearchResultDTO {
-            PlayerSearchResultDTO(
-                id: id,
-                name: name,
-                club: club,
-                league: league,
-                nationality: nationality,
-                position: position
-            )
-        }
-    }
+    // MARK: - Private roster
 
     private struct RosterEntry {
         let id: String
@@ -92,108 +72,48 @@ enum OneMoreSeed {
         let nationality: String
         let position: String
         let goals: Int
-        let aliases: [String]
     }
 
     private static let roster: [RosterEntry] = [
         e("om_salah", "Mohamed Salah", "Liverpool", "Egypt", "RW", 118),
-        e("om_kane", "Harry Kane", "Bayern Munich", "England", "ST", 213),
-        e("om_haaland", "Erling Haaland", "Manchester City", "Norway", "ST", 82),
-        e("om_son", "Son Heung-min", "Tottenham", "South Korea", "LW", 104, ["Son Heung Min", "Heung-min Son"]),
-        e("om_sterling", "Raheem Sterling", "Chelsea", "England", "LW", 112),
-        e("om_bruno", "Bruno Fernandes", "Manchester United", "Portugal", "AM", 78),
-        e("om_kdb", "Kevin De Bruyne", "Manchester City", "Belgium", "AM", 72, ["De Bruyne"]),
-        e("om_rashford", "Marcus Rashford", "Manchester United", "England", "LW", 82),
-        e("om_saka", "Bukayo Saka", "Arsenal", "England", "RW", 58),
-        e("om_palmer", "Cole Palmer", "Chelsea", "England", "AM", 36),
-        e("om_isak", "Alexander Isak", "Newcastle", "Sweden", "ST", 42),
-        e("om_nunez", "Darwin Núñez", "Liverpool", "Uruguay", "ST", 34, ["Darwin Nunez"]),
-        e("om_odegaard", "Martin Ødegaard", "Arsenal", "Norway", "AM", 28, ["Martin Odegaard", "Odegaard"]),
-        e("om_grealish", "Jack Grealish", "Manchester City", "England", "LW", 18),
-        e("om_rodri", "Rodri", "Manchester City", "Spain", "DM", 18),
-        e("om_joelinton", "Joelinton", "Newcastle", "Brazil", "CM", 24),
-        e("om_bernardo", "Bernardo Silva", "Manchester City", "Portugal", "AM", 42),
-        e("om_gundogan", "Ilkay Gündogan", "Barcelona", "Germany", "CM", 34, ["Ilkay Gundogan", "Gundogan"]),
-        e("om_milner", "James Milner", "Brighton", "England", "CM", 24),
-        e("om_taa", "Trent Alexander-Arnold", "Liverpool", "England", "RB", 16, ["Alexander-Arnold"]),
-        e("om_vvd", "Virgil van Dijk", "Liverpool", "Netherlands", "CB", 18, ["Van Dijk"]),
-        e("om_gabriel", "Gabriel Magalhães", "Arsenal", "Brazil", "CB", 14, ["Gabriel"]),
-        e("om_eriksen", "Christian Eriksen", "Manchester United", "Denmark", "CM", 12),
-        e("om_watkins", "Ollie Watkins", "Aston Villa", "England", "ST", 68),
-        e("om_bowen", "Jarrod Bowen", "West Ham", "England", "RW", 48),
-        e("om_foden", "Phil Foden", "Manchester City", "England", "AM", 52),
-        e("om_wilson", "Callum Wilson", "Newcastle", "England", "ST", 46),
+        e("om_kane", "Harry Kane", "Tottenham", "England", "ST", 213),
         e("om_vardy", "Jamie Vardy", "Leicester", "England", "ST", 123),
-        e("om_mane", "Sadio Mané", "Al-Nassr", "Senegal", "LW", 111, ["Sadio Mane", "Mane"]),
-        e("om_jesus", "Gabriel Jesus", "Arsenal", "Brazil", "ST", 58),
-        e("om_martial", "Anthony Martial", "Manchester United", "France", "ST", 55),
-        e("om_mount", "Mason Mount", "Manchester United", "England", "AM", 27),
-        e("om_maddison", "James Maddison", "Tottenham", "England", "AM", 44),
+        e("om_sterling", "Raheem Sterling", "Chelsea", "England", "LW", 112),
+        e("om_son", "Son Heung-min", "Tottenham", "South Korea", "LW", 104),
+        e("om_mane", "Sadio Mané", "Liverpool", "Senegal", "LW", 90),
+        e("om_haaland", "Erling Haaland", "Manchester City", "Norway", "ST", 82),
+        e("om_rashford", "Marcus Rashford", "Manchester United", "England", "LW", 82),
+        e("om_aubameyang", "Pierre-Emerick Aubameyang", "Arsenal", "Gabon", "ST", 68),
+        e("om_watkins", "Ollie Watkins", "Aston Villa", "England", "ST", 68),
         e("om_zaha", "Wilfried Zaha", "Crystal Palace", "Ivory Coast", "LW", 68),
-        e("om_aubameyang", "Pierre-Emerick Aubameyang", "Chelsea", "Gabon", "ST", 68, ["Aubameyang"]),
+        e("om_mahrez", "Riyad Mahrez", "Manchester City", "Algeria", "RW", 63),
+        e("om_jesus", "Gabriel Jesus", "Arsenal", "Brazil", "ST", 58),
+        e("om_saka", "Bukayo Saka", "Arsenal", "England", "RW", 58),
+        e("om_martial", "Anthony Martial", "Manchester United", "France", "ST", 55),
         e("om_lacazette", "Alexandre Lacazette", "Arsenal", "France", "ST", 54),
-        e("om_ings", "Danny Ings", "West Ham", "England", "ST", 46),
-        e("om_toney", "Ivan Toney", "Brentford", "England", "ST", 36),
-        e("om_mahrez", "Riyad Mahrez", "Al-Ahli", "Algeria", "RW", 63, ["Mahrez"]),
-        e("om_gordon", "Anthony Gordon", "Newcastle", "England", "LW", 14),
-        e("om_antonio", "Michail Antonio", "West Ham", "Jamaica", "ST", 68),
-        e("om_calvert", "Dominic Calvert-Lewin", "Everton", "England", "ST", 48, ["Calvert-Lewin"]),
+        e("om_foden", "Phil Foden", "Manchester City", "England", "AM", 52),
+        // Below 50 — plausible distractors (good names, just short)
+        e("om_bowen", "Jarrod Bowen", "West Ham", "England", "RW", 48),
+        e("om_wilson", "Callum Wilson", "Newcastle", "England", "ST", 46),
+        e("om_maddison", "James Maddison", "Tottenham", "England", "AM", 44),
+        e("om_isak", "Alexander Isak", "Newcastle", "Sweden", "ST", 42),
+        e("om_bernardo", "Bernardo Silva", "Manchester City", "Portugal", "AM", 42),
+        e("om_palmer", "Cole Palmer", "Chelsea", "England", "AM", 36),
+        e("om_nunez", "Darwin Núñez", "Liverpool", "Uruguay", "ST", 34),
+        e("om_kdb", "Kevin De Bruyne", "Manchester City", "Belgium", "AM", 30),
+        e("om_odegaard", "Martin Ødegaard", "Arsenal", "Norway", "AM", 28),
+        e("om_grealish", "Jack Grealish", "Manchester City", "England", "LW", 18),
+        e("om_vvd", "Virgil van Dijk", "Liverpool", "Netherlands", "CB", 18),
+        e("om_taa", "Trent Alexander-Arnold", "Liverpool", "England", "RB", 16),
     ]
 
     private static func e(
-        _ id: String,
-        _ name: String,
-        _ club: String,
-        _ nationality: String,
-        _ position: String,
-        _ goals: Int,
-        _ aliases: [String] = []
+        _ id: String, _ name: String, _ club: String, _ nationality: String, _ position: String, _ goals: Int
     ) -> RosterEntry {
-        RosterEntry(id: id, name: name, club: club, nationality: nationality, position: position, goals: goals, aliases: aliases)
+        RosterEntry(id: id, name: name, club: club, nationality: nationality, position: position, goals: goals)
     }
 
     private static func todayUTC() -> String {
         String(ISO8601DateFormatter().string(from: Date()).prefix(10))
-    }
-}
-
-enum OneMoreMatcher {
-    static func validate(
-        _ player: PlayerSearchResultDTO,
-        prompt: OneMorePrompt,
-        usedIds: Set<String>
-    ) -> OneMoreValidationResult {
-        if usedIds.contains(player.id) {
-            return .alreadyUsed
-        }
-
-        let eligible = OneMoreSeed.eligiblePlayers(for: prompt)
-        let normalizedQuery = normalized(player.name)
-
-        guard let match = eligible.first(where: { entry in
-            entry.id == player.id
-                || normalized(entry.name) == normalizedQuery
-                || entry.aliases.contains(where: { normalized($0) == normalizedQuery })
-                || fuzzyMatch(entry.name, normalizedQuery)
-        }) else {
-            return .notEligible(reason: "Doesn't qualify — need \(prompt.minimum)+ PL goals")
-        }
-
-        return .valid(statValue: match.statValue)
-    }
-
-    private static func fuzzyMatch(_ candidate: String, _ query: String) -> Bool {
-        let a = normalized(candidate)
-        let b = query
-        guard b.count >= 4 else { return false }
-        return a.contains(b) || b.contains(a)
-    }
-
-    private static func normalized(_ value: String) -> String {
-        value.lowercased()
-            .folding(options: .diacriticInsensitive, locale: .current)
-            .replacingOccurrences(of: "[^a-z0-9 ]", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

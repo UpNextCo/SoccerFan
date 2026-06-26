@@ -6,9 +6,6 @@ import SwiftUI
 @Observable
 final class OneMoreViewModel {
     var state: OneMoreGameState
-    var searchQuery = ""
-    var searchResults: [PlayerSearchResultDTO] = []
-    var isSearching = false
     var showResult = false
     var showBustOverlay = false
     var confettiBurstToken = 0
@@ -16,12 +13,10 @@ final class OneMoreViewModel {
     var lastFeedback: String?
 
     private let practice: Bool
-    private let serverPrompt: Bool
 
     init(practice: Bool = false, dailyDate: String? = nil, serverPuzzle: OneMorePuzzleDTO? = nil) {
         self.practice = practice
         let serverDaily = practice ? nil : serverPuzzle.flatMap(OneMoreSeed.makeServerPrompt)
-        self.serverPrompt = serverDaily != nil
         let prompt = practice
             ? OneMoreSeed.makePracticePrompt()
             : (serverDaily ?? OneMoreSeed.makeDailyPrompt(date: dailyDate))
@@ -37,70 +32,54 @@ final class OneMoreViewModel {
         state.phase == .playing && state.streak > 0
     }
 
-    var atRiskScore: Int {
-        state.currentScore
-    }
-
-    func search() async {
-        let query = searchQuery.trimmingCharacters(in: .whitespaces)
-        guard query.count >= 2 else {
-            searchResults = []
-            return
-        }
-        isSearching = true
-        defer { isSearching = false }
-        do {
-            searchResults = try await APIClient.shared.searchPlayers(query: query)
-        } catch {
-            searchResults = []
+    /// Tap an option → reveal both values briefly → resolve.
+    func choose(_ option: OneMoreOption) {
+        guard state.phase == .playing, let round = state.currentRound else { return }
+        state.chosenOptionId = option.id
+        state.phase = .revealing
+        HapticManager.light()
+        Task {
+            try? await Task.sleep(for: .seconds(OneMoreTiming.reveal))
+            resolve(option, in: round)
         }
     }
 
-    func submitPlayer(_ player: PlayerSearchResultDTO) async {
-        guard state.phase == .playing else { return }
+    private func resolve(_ option: OneMoreOption, in round: OneMoreRound) {
+        guard state.phase == .revealing else { return }
 
-        if state.usedPlayerIds.contains(player.id) {
-            rejectPick(player: player, reason: "Already named")
-            return
-        }
-
-        state.phase = .validating
-
-        var result: OneMoreValidationResult
-        if serverPrompt, let date = state.prompt.date {
-            do {
-                let outcome = try await APIClient.shared.validateOneMoreAnswer(date: date, playerId: player.id)
-                result = outcome.valid
-                    ? .valid(statValue: outcome.statValue)
-                    : .notEligible(reason: "Doesn't qualify — need \(state.prompt.minimum)+ \(state.prompt.statNoun)")
-            } catch {
-                // Transient network/validation failure: never bust the run on an
-                // unverified pick. Re-enable input so the user can retry.
-                guard state.phase == .validating else { return }
+        if state.prompt.qualifies(option) {
+            state.streak += 1
+            state.picks.append(OneMorePick(name: option.name, statValue: option.value, pointsAfter: state.currentScore))
+            lastFeedback = "+\(OneMoreScoring.points(forPick: state.streak)) pts"
+            HapticManager.success()
+            scorePulseToken += 1
+            state.chosenOptionId = nil
+            state.roundIndex += 1
+            if state.currentRound == nil {
+                cashOut(cleared: true) // ran out of rounds → you cleared it
+            } else {
                 state.phase = .playing
-                lastFeedback = "Couldn't verify — check connection and try again"
-                HapticManager.error()
-                return
             }
         } else {
-            result = OneMoreMatcher.validate(player, prompt: state.prompt, usedIds: state.usedPlayerIds)
-        }
-
-        // Phase may have changed while awaiting; only proceed if still validating this turn.
-        guard state.phase == .validating else { return }
-
-        switch result {
-        case .valid(let statValue):
-            acceptPick(player: player, statValue: statValue)
-        case .alreadyUsed:
-            rejectPick(player: player, reason: "Already named")
-        case .notEligible(let reason):
-            rejectPick(player: player, reason: reason)
+            let correct = round.options.first { state.prompt.qualifies($0) }
+            state.bustPick = OneMorePick(name: option.name, statValue: option.value, pointsAfter: state.currentScore)
+            state.bustCorrect = correct
+            state.streak = 0
+            state.bankedScore = 0
+            state.phase = .busted
+            lastFeedback = correct.map { "\($0.name) had \($0.value)" } ?? "Wrong pick"
+            HapticManager.error()
+            showBustOverlay = true
+            Task {
+                try? await Task.sleep(for: .seconds(OneMoreTiming.bustHold))
+                showBustOverlay = false
+                showResult = true
+            }
         }
     }
 
-    func cashOut() {
-        guard canCashOut else { return }
+    func cashOut(cleared: Bool = false) {
+        guard cleared || canCashOut else { return }
         HapticManager.success()
         state.bankedScore = state.currentScore
         state.phase = .cashedOut
@@ -116,57 +95,20 @@ final class OneMoreViewModel {
     func restart() {
         let prompt = practice ? OneMoreSeed.makePracticePrompt() : OneMoreSeed.makeDailyPrompt()
         state = OneMoreGameState(prompt: prompt)
-        searchQuery = ""
-        searchResults = []
+        resetTransient()
+    }
+
+    func newPracticeRound() {
+        state = OneMoreGameState(prompt: OneMoreSeed.makePracticePrompt())
+        resetTransient()
+    }
+
+    private func resetTransient() {
         showResult = false
         showBustOverlay = false
         confettiBurstToken = 0
         scorePulseToken = 0
         lastFeedback = nil
-    }
-
-    func newPracticeRound() {
-        state = OneMoreGameState(prompt: OneMoreSeed.makePracticePrompt())
-        searchQuery = ""
-        searchResults = []
-        showResult = false
-        showBustOverlay = false
-        lastFeedback = nil
-    }
-
-    private func acceptPick(player: PlayerSearchResultDTO, statValue: Int) {
-        state.streak += 1
-        let pointsAfter = state.currentScore
-        state.picks.append(OneMorePick(player: player, statValue: statValue, pointsAfter: pointsAfter))
-        searchQuery = ""
-        searchResults = []
-        lastFeedback = "+\(OneMoreScoring.points(forPick: state.streak)) pts"
-        state.phase = .playing
-        HapticManager.success()
-        scorePulseToken += 1
-    }
-
-    private func rejectPick(player: PlayerSearchResultDTO, reason: String) {
-        let lostScore = state.currentScore
-        state.bustPick = OneMorePick(
-            player: player,
-            statValue: 0,
-            pointsAfter: lostScore
-        )
-        state.streak = 0
-        state.bankedScore = 0
-        state.phase = .busted
-        lastFeedback = reason
-        searchQuery = ""
-        searchResults = []
-        HapticManager.error()
-        showBustOverlay = true
-
-        Task {
-            try? await Task.sleep(for: .seconds(OneMoreTiming.bustHold))
-            showBustOverlay = false
-            showResult = true
-        }
     }
 }
 
@@ -176,7 +118,6 @@ struct OneMoreView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: OneMoreViewModel
-    @FocusState private var isSearchFocused: Bool
     private let allowReplay: Bool
     private let dailyDate: String?
     var onComplete: () -> Void
@@ -214,7 +155,7 @@ struct OneMoreView: View {
                             if !viewModel.state.picks.isEmpty {
                                 OneMorePickHistory(
                                     picks: viewModel.state.picks,
-                                    statLabel: viewModel.state.prompt.category.label.lowercased()
+                                    statLabel: viewModel.state.prompt.statNoun
                                 )
                             }
                         }
@@ -222,12 +163,9 @@ struct OneMoreView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 16)
                     }
-                    .scrollDismissesKeyboard(.interactively)
-                    .onTapGesture { isSearchFocused = false }
 
                     if viewModel.canCashOut {
                         OneMoreCashOutButton(score: viewModel.state.currentScore) {
-                            isSearchFocused = false
                             viewModel.cashOut()
                         }
                         .padding(.horizontal, 16)
@@ -235,10 +173,13 @@ struct OneMoreView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
-                    if viewModel.state.isActive {
-                        OneMoreSearchSection(
-                            viewModel: viewModel,
-                            isSearchFocused: $isSearchFocused
+                    if let round = viewModel.state.currentRound, viewModel.state.isActive {
+                        OneMoreChoiceSection(
+                            round: round,
+                            prompt: viewModel.state.prompt,
+                            phase: viewModel.state.phase,
+                            chosenId: viewModel.state.chosenOptionId,
+                            onPick: { viewModel.choose($0) }
                         )
                     }
                 }
@@ -257,8 +198,8 @@ struct OneMoreView: View {
                     ToolbarItem(placement: .principal) {
                         Text("ONE MORE")
                             .font(BKFont.caption(13))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.accent)
+                            .tracking(1.5)
+                            .foregroundStyle(BKTheme.textSecondary)
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         if allowReplay, viewModel.state.phase == .playing {
@@ -275,7 +216,7 @@ struct OneMoreView: View {
             if viewModel.showBustOverlay {
                 OneMoreBustOverlay(
                     lostScore: viewModel.state.bustPick?.pointsAfter ?? 0,
-                    reason: viewModel.lastFeedback ?? "Wrong answer"
+                    reason: viewModel.lastFeedback ?? "Wrong pick"
                 )
                 .transition(.opacity)
                 .zIndex(50)
@@ -290,6 +231,7 @@ struct OneMoreView: View {
                 outcome: viewModel.state.phase,
                 picks: viewModel.state.picks,
                 bustPick: viewModel.state.bustPick,
+                bustCorrect: viewModel.state.bustCorrect,
                 finalScore: viewModel.state.phase == .busted ? 0 : viewModel.state.bankedScore,
                 streak: viewModel.state.picks.count,
                 xpEarned: viewModel.xpEarned,
@@ -327,17 +269,10 @@ private struct OneMorePromptCard: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                if prompt.isDaily {
-                    Text("DAILY CHALLENGE")
-                        .font(BKFont.caption(10))
-                        .tracking(0.8)
-                        .foregroundStyle(BKTheme.accent)
-                } else {
-                    Text("PRACTICE")
-                        .font(BKFont.caption(10))
-                        .tracking(0.8)
-                        .foregroundStyle(BKTheme.textMuted)
-                }
+                Text(prompt.isDaily ? "DAILY CHALLENGE" : "PRACTICE")
+                    .font(BKFont.caption(10))
+                    .tracking(0.8)
+                    .foregroundStyle(BKTheme.textMuted)
                 Spacer()
                 LeagueBadgeImage(league: prompt.leagueName, size: 22) {
                     Text(GuessWhoDisplay.leagueAbbrev(prompt.leagueName))
@@ -347,24 +282,132 @@ private struct OneMorePromptCard: View {
             }
 
             VStack(spacing: 8) {
-                Text("NAME PLAYERS WITH")
+                Text("WHO HAS")
                     .font(BKFont.caption(11))
                     .tracking(1)
                     .foregroundStyle(BKTheme.textMuted)
-                Text("\(prompt.minimum)+ \(prompt.leagueName.uppercased()) \(prompt.category.label.uppercased())")
+                Text("\(prompt.minimum)+ \(prompt.leagueName.uppercased()) \(prompt.category.label.uppercased())?")
                     .font(BKFont.headline(18))
                     .foregroundStyle(BKTheme.textPrimary)
                     .multilineTextAlignment(.center)
                 Text(prompt.ruleLine.uppercased())
                     .font(BKFont.caption(10))
                     .tracking(0.5)
-                    .foregroundStyle(BKTheme.wrong.opacity(0.9))
+                    .foregroundStyle(BKTheme.textMuted)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .background(BKTheme.cardElevated.opacity(0.9))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+    }
+}
+
+// MARK: - Choice Section
+
+private struct OneMoreChoiceSection: View {
+    let round: OneMoreRound
+    let prompt: OneMorePrompt
+    let phase: OneMorePhase
+    let chosenId: String?
+    var onPick: (OneMoreOption) -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text(phase == .revealing ? " " : "TAP THE ONE WHO QUALIFIES")
+                .font(BKFont.caption(10))
+                .tracking(0.8)
+                .foregroundStyle(BKTheme.textMuted)
+
+            ForEach(round.options) { option in
+                OneMoreChoiceCard(
+                    option: option,
+                    qualifies: prompt.qualifies(option),
+                    statNoun: prompt.statNoun,
+                    revealed: phase == .revealing,
+                    isChosen: chosenId == option.id,
+                    onTap: { onPick(option) }
+                )
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 14)
+        .background(BKTheme.background)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: phase)
+    }
+}
+
+private struct OneMoreChoiceCard: View {
+    let option: OneMoreOption
+    let qualifies: Bool
+    let statNoun: String
+    let revealed: Bool
+    let isChosen: Bool
+    var onTap: () -> Void
+
+    private var subtitle: String {
+        [option.clubs, option.position].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(option.name)
+                        .font(BKFont.headline(17))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(1)
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(BKFont.caption(11))
+                            .foregroundStyle(BKTheme.textMuted)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if revealed {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("\(option.value)")
+                                .font(BKFont.headline(18))
+                                .foregroundStyle(qualifies ? BKTheme.accent : BKTheme.wrong)
+                                .contentTransition(.numericText())
+                            Text(statNoun)
+                                .font(BKFont.caption(9))
+                                .foregroundStyle(BKTheme.textMuted)
+                        }
+                        (qualifies ? Ph.checkCircle.fill : Ph.xCircle.fill)
+                            .color(qualifies ? BKTheme.accent : BKTheme.wrong)
+                            .frame(width: 20, height: 20)
+                    }
+                    .transition(.opacity.combined(with: .scale))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(background)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(borderColor, lineWidth: revealed ? 1.5 : 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(revealed)
+    }
+
+    private var background: Color {
+        guard revealed else { return BKTheme.cardElevated }
+        if qualifies { return BKTheme.accent.opacity(0.12) }
+        return isChosen ? BKTheme.wrong.opacity(0.12) : BKTheme.cardElevated
+    }
+
+    private var borderColor: Color {
+        guard revealed else { return Color.white.opacity(0.06) }
+        if qualifies { return BKTheme.accent.opacity(0.55) }
+        return isChosen ? BKTheme.wrong.opacity(0.5) : Color.white.opacity(0.06)
     }
 }
 
@@ -409,7 +452,7 @@ private struct OneMoreScoreHero: View {
 
             Text("\(currentScore)")
                 .font(BKFont.title(52))
-                .foregroundStyle(BKTheme.accent)
+                .foregroundStyle(streak > 0 ? BKTheme.accent : BKTheme.textPrimary)
                 .scaleEffect(pulseScale)
                 .contentTransition(.numericText())
                 .animation(.spring(response: 0.32, dampingFraction: 0.55), value: currentScore)
@@ -429,7 +472,7 @@ private struct OneMoreScoreHero: View {
                 .stroke(
                     LinearGradient(
                         colors: [
-                            BKTheme.accent.opacity(0.15 + dangerLevel * 0.45),
+                            BKTheme.accent.opacity(0.10 + dangerLevel * 0.45),
                             BKTheme.wrong.opacity(dangerLevel * 0.35),
                         ],
                         startPoint: .topLeading,
@@ -462,13 +505,13 @@ private struct OneMorePickHistory: View {
 
             ForEach(Array(picks.enumerated().reversed()), id: \.element.id) { index, pick in
                 HStack(spacing: 10) {
-                    Text("#\(picks.count - index)")
+                    Text("#\(index + 1)")
                         .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.accent)
+                        .foregroundStyle(BKTheme.textMuted)
                         .frame(width: 24, alignment: .leading)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(pick.player.name)
+                        Text(pick.name)
                             .font(BKFont.headline(14))
                             .foregroundStyle(BKTheme.textPrimary)
                             .lineLimit(1)
@@ -479,7 +522,7 @@ private struct OneMorePickHistory: View {
 
                     Spacer(minLength: 0)
 
-                    Text("+\(OneMoreScoring.points(forPick: picks.count - index))")
+                    Text("+\(OneMoreScoring.points(forPick: index + 1))")
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.accent)
                 }
@@ -528,67 +571,6 @@ private struct OneMoreCashOutButton: View {
                 glow = true
             }
         }
-    }
-}
-
-// MARK: - Search
-
-private struct OneMoreSearchSection: View {
-    @Bindable var viewModel: OneMoreViewModel
-    var isSearchFocused: FocusState<Bool>.Binding
-
-    var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                TextField("", text: $viewModel.searchQuery, prompt:
-                    Text(viewModel.state.prompt.searchHint)
-                        .foregroundStyle(BKTheme.textMuted)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                )
-                .textFieldStyle(.plain)
-                .foregroundStyle(BKTheme.background)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .focused(isSearchFocused)
-                .submitLabel(.search)
-                .disabled(viewModel.state.phase == .validating)
-                .onChange(of: viewModel.searchQuery) { _, _ in
-                    Task { await viewModel.search() }
-                }
-
-                if viewModel.isSearching || viewModel.state.phase == .validating {
-                    ProgressView().tint(BKTheme.accent)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5)
-            )
-
-            if let feedback = viewModel.lastFeedback, viewModel.state.phase == .playing {
-                Text(feedback.uppercased())
-                    .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.accent)
-            }
-
-            if !viewModel.searchResults.isEmpty {
-                PlayerSearchResultsList(
-                    players: viewModel.searchResults,
-                    isDisabled: { viewModel.state.usedPlayerIds.contains($0.id) },
-                    onSelect: { player in
-                        isSearchFocused.wrappedValue = false
-                        Task { await viewModel.submitPlayer(player) }
-                    }
-                )
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(BKTheme.background)
     }
 }
 
@@ -642,6 +624,7 @@ private struct OneMoreResultView: View {
     let outcome: OneMorePhase
     let picks: [OneMorePick]
     let bustPick: OneMorePick?
+    let bustCorrect: OneMoreOption?
     let finalScore: Int
     let streak: Int
     let xpEarned: Int
@@ -661,7 +644,7 @@ private struct OneMoreResultView: View {
                         Text("ONE MORE")
                             .font(BKFont.caption(11))
                             .tracking(1)
-                            .foregroundStyle(BKTheme.accent)
+                            .foregroundStyle(BKTheme.textMuted)
                         Text(isBusted ? "RUN OVER" : "CASHED OUT")
                             .font(BKFont.title(28))
                             .foregroundStyle(isBusted ? BKTheme.wrong : BKTheme.textPrimary)
@@ -676,7 +659,7 @@ private struct OneMoreResultView: View {
                         .font(BKFont.title(52))
                         .foregroundStyle(isBusted ? BKTheme.textMuted : BKTheme.accent)
 
-                    Text(isBusted ? "0 points banked" : "\(streak) correct · streak complete")
+                    Text(isBusted ? "0 points banked" : "\(streak) correct in a row")
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textMuted)
 
@@ -686,7 +669,7 @@ private struct OneMoreResultView: View {
                                 Ph.checkCircle.fill
                                     .color(BKTheme.accent)
                                     .frame(width: 14, height: 14)
-                                Text(pick.player.name)
+                                Text(pick.name)
                                     .font(BKFont.body(13))
                                     .foregroundStyle(BKTheme.textPrimary)
                                     .lineLimit(1)
@@ -706,12 +689,20 @@ private struct OneMoreResultView: View {
                                 Ph.xCircle.fill
                                     .color(BKTheme.wrong)
                                     .frame(width: 14, height: 14)
-                                Text(bustPick.player.name)
-                                    .font(BKFont.body(13))
-                                    .foregroundStyle(BKTheme.wrong)
-                                    .lineLimit(1)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(bustPick.name)
+                                        .font(BKFont.body(13))
+                                        .foregroundStyle(BKTheme.wrong)
+                                        .lineLimit(1)
+                                    if let bustCorrect {
+                                        Text("Answer: \(bustCorrect.name) (\(bustCorrect.value) \(prompt.statNoun))")
+                                            .font(BKFont.caption(10))
+                                            .foregroundStyle(BKTheme.textMuted)
+                                            .lineLimit(1)
+                                    }
+                                }
                                 Spacer()
-                                Text("BUST")
+                                Text("\(bustPick.statValue) \(prompt.statNoun)")
                                     .font(BKFont.caption(10))
                                     .foregroundStyle(BKTheme.wrong)
                             }
