@@ -275,6 +275,29 @@ struct FootballGolfPuzzleDTO: Codable, Equatable {
     let holes: [FootballGolfHoleDTO]
 }
 
+struct WorldCupXISlotDTO: Codable, Equatable {
+    let id: String
+    let label: String
+    let x: Double
+    let y: Double
+    let expectedName: String
+    let clues: [String]
+}
+
+struct WorldCupXIPuzzleDTO: Codable, Equatable {
+    let modeId: String
+    let puzzleId: String
+    let date: String
+    let country: String
+    let year: Int
+    let formation: String
+    let manager: String
+    let captain: String
+    let hostNation: String
+    let topScorerClue: String
+    let slots: [WorldCupXISlotDTO]
+}
+
 enum DailyPuzzleDTO: Codable, Equatable {
     case guessWho(GuessWhoPuzzleDTO)
     case targetMan(TargetManPuzzleDTO)
@@ -283,6 +306,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
     case footballTower(FootballTowerPuzzleDTO)
     case footballGolf(FootballGolfPuzzleDTO)
     case oneMore(OneMorePuzzleDTO)
+    case worldCupXI(WorldCupXIPuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
         case modeId
@@ -307,6 +331,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .footballGolf(try FootballGolfPuzzleDTO(from: decoder))
         case GameModeID.oneMore.rawValue:
             self = .oneMore(try OneMorePuzzleDTO(from: decoder))
+        case GameModeID.worldCupXI.rawValue:
+            self = .worldCupXI(try WorldCupXIPuzzleDTO(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .modeId,
@@ -332,6 +358,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .oneMore(let puzzle):
             try puzzle.encode(to: encoder)
+        case .worldCupXI(let puzzle):
+            try puzzle.encode(to: encoder)
         }
     }
 
@@ -344,6 +372,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .footballTower: return GameModeID.footballTower.rawValue
         case .footballGolf: return GameModeID.footballGolf.rawValue
         case .oneMore: return GameModeID.oneMore.rawValue
+        case .worldCupXI: return GameModeID.worldCupXI.rawValue
         }
     }
 }
@@ -426,6 +455,11 @@ extension DailyBundleDTO {
 
     var oneMorePuzzle: OneMorePuzzleDTO? {
         guard case .oneMore(let puzzle) = game(for: .oneMore)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var worldCupXIPuzzle: WorldCupXIPuzzleDTO? {
+        guard case .worldCupXI(let puzzle) = game(for: .worldCupXI)?.puzzle else { return nil }
         return puzzle
     }
 }

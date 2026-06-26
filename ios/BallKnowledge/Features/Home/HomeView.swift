@@ -699,7 +699,7 @@ struct DailyGameHost: View {
                     onComplete: onFinished
                 )
             case .worldCupXI:
-                WorldCupXIView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
+                WorldCupXIView(dailyDate: dailyBundle?.date, dailyBundle: dailyBundle, allowReplay: allowReplay, onComplete: onFinished)
             }
         }
     }

@@ -16,12 +16,22 @@ final class WorldCupXIViewModel {
     var selectedYear = 2018
 
     private let practice: Bool
+    private let dailyBundle: DailyBundleDTO?
+    private let dailyDate: String?
 
-    init(practice: Bool = false, dailyDate: String? = nil) {
+    init(practice: Bool = false, dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil) {
         self.practice = practice
-        let puzzle = practice ? WorldCupXISeed.practicePuzzle() : WorldCupXISeed.puzzle(for: dailyDate)
-        self.state = WorldCupXIGameState(puzzle: puzzle)
+        self.dailyBundle = dailyBundle
+        self.dailyDate = dailyDate
+        self.state = WorldCupXIGameState(puzzle: Self.resolvePuzzle(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
         self.selectedYear = 2010
+    }
+
+    /// Prefer the server-generated puzzle; fall back to the local seed (practice or offline).
+    private static func resolvePuzzle(practice: Bool, dailyDate: String?, dailyBundle: DailyBundleDTO?) -> WorldCupXIPuzzle {
+        if practice { return WorldCupXISeed.practicePuzzle() }
+        if let server = DailyChallengeResolver.worldCupXIPuzzle(from: dailyBundle) { return server }
+        return WorldCupXISeed.puzzle(for: dailyDate)
     }
 
     var activeSlot: WorldCupXISlot? {
@@ -111,7 +121,7 @@ final class WorldCupXIViewModel {
     }
 
     func restart() {
-        let puzzle = practice ? WorldCupXISeed.practicePuzzle() : WorldCupXISeed.puzzle()
+        let puzzle = practice ? WorldCupXISeed.practicePuzzle() : Self.resolvePuzzle(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle)
         state = WorldCupXIGameState(puzzle: puzzle)
         selectedYear = 2010
         searchQuery = ""
@@ -134,8 +144,8 @@ struct WorldCupXIView: View {
     private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, practice: Bool = false, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: WorldCupXIViewModel(practice: practice, dailyDate: dailyDate))
+    init(dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil, practice: Bool = false, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
+        _viewModel = State(initialValue: WorldCupXIViewModel(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete

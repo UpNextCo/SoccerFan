@@ -8,6 +8,7 @@ import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzz
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
+import { generateWorldCupXiPuzzle } from './worldCupXiGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
@@ -36,6 +37,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'football_bingo', title: 'FOOTBALL BINGO' },
   { modeId: 'football_golf', title: 'FOOTBALL GOLF' },
   { modeId: 'one_more', title: 'ONE MORE' },
+  { modeId: 'world_cup_xi', title: 'WORLD CUP XI' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -169,6 +171,31 @@ async function ensureOneMorePuzzle(date: string): Promise<void> {
   }
 }
 
+/** Generate + store today's World Cup XI if not present. Best-effort. */
+async function ensureWorldCupXiPuzzle(date: string): Promise<void> {
+  const existing = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'world_cup_xi')))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  try {
+    const puzzle = await generateWorldCupXiPuzzle(date);
+    if (!puzzle || puzzle.slots.length < 11) {
+      console.warn(`Skipped world_cup_xi for ${date}: no viable XI`);
+      return;
+    }
+    await db
+      .insert(dailyPuzzles)
+      .values({ date, modeId: 'world_cup_xi', puzzleJson: puzzle, answerPlayerId: null, answerJson: { modeId: 'world_cup_xi', year: puzzle.year } })
+      .onConflictDoNothing();
+    console.log(`Generated world_cup_xi puzzle for ${date} (${puzzle.year})`);
+  } catch (error) {
+    console.warn(`Skipped world_cup_xi for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 /**
  * Drop a stored Blind Rank puzzle if it predates the 10-slot / embedded-stat
  * format so the generator rebuilds it on the next pass. Prevents serving an old
@@ -223,6 +250,9 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   }
   if (!existing.has('one_more')) {
     await ensureOneMorePuzzle(date);
+  }
+  if (!existing.has('world_cup_xi')) {
+    await ensureWorldCupXiPuzzle(date);
   }
 }
 

@@ -1,6 +1,32 @@
 import Foundation
+import CoreGraphics
 
 enum DailyChallengeResolver {
+    /// Map the server World Cup XI puzzle into the game model. Falls back to nil (caller uses the
+    /// local seed) when there's no server puzzle.
+    static func worldCupXIPuzzle(from bundle: DailyBundleDTO?) -> WorldCupXIPuzzle? {
+        guard let dto = bundle?.worldCupXIPuzzle, dto.slots.count == WorldCupXIPuzzle.slotCount else { return nil }
+        return WorldCupXIPuzzle(
+            id: dto.puzzleId,
+            country: dto.country,
+            year: dto.year,
+            formation: dto.formation,
+            manager: dto.manager,
+            captain: dto.captain,
+            hostNation: dto.hostNation,
+            topScorerClue: dto.topScorerClue,
+            slots: dto.slots.map {
+                WorldCupXISlot(
+                    id: $0.id,
+                    label: $0.label,
+                    pitchPoint: CGPoint(x: $0.x, y: $0.y),
+                    expectedName: $0.expectedName,
+                    clues: $0.clues
+                )
+            }
+        )
+    }
+
     static func targetManChallenge(from bundle: DailyBundleDTO?) -> TargetManChallenge {
         guard let bundle, let puzzle = bundle.targetManPuzzle else {
             return TargetManSeed.makeDailyChallenge()
