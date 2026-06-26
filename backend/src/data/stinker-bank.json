@@ -57,10 +57,6 @@
       "name": "Stephen Hunt"
     },
     {
-      "id": "9c7f743c-8f4d-4fd2-9d4a-c6bb74cf5507",
-      "name": "Robert Huth"
-    },
-    {
       "id": "388e71af-0c44-4276-9883-d3ad6fe85bbc",
       "name": "Martin Skrtel"
     },
@@ -95,10 +91,6 @@
     {
       "id": "3b3a9e67-ad90-4f79-b414-541be0f952e0",
       "name": "Emile Heskey"
-    },
-    {
-      "id": "eb5bbc73-bf32-40be-8b0b-8a7d1995e5a3",
-      "name": "James Milner"
     },
     {
       "id": "fe568621-7042-43da-ab9b-c59a54d4005f",
@@ -145,20 +137,12 @@
       "name": "Alan Hutton"
     },
     {
-      "id": "b276ac7c-13ef-49df-b627-10ad5b7601fe",
-      "name": "Idrissa Gueye"
-    },
-    {
       "id": "2b8509e7-a329-4016-bbac-bd9aaa4f2a82",
       "name": "Kenwyne Jones"
     },
     {
       "id": "26913198-873e-4ba7-9d3b-d95c9aaa88c3",
       "name": "David Dunn"
-    },
-    {
-      "id": "9b739b5f-ddf9-4890-b4b0-614e843aa157",
-      "name": "Sébastien Haller"
     },
     {
       "id": "4f8e89ab-22c1-424b-8f40-94f0c7957fd9",
@@ -287,10 +271,6 @@
       "name": "Diego Capel"
     },
     {
-      "id": "ac391fb3-aeb0-4246-9aeb-bada519e2bf9",
-      "name": "Marek Hamsik"
-    },
-    {
       "id": "2494bf6a-4702-4625-84dc-7a7554c2f8a6",
       "name": "Nicklas Bendtner"
     },
@@ -299,16 +279,8 @@
       "name": "Mathieu Valbuena"
     },
     {
-      "id": "c7b81177-2e75-426f-a638-cd21fff1913e",
-      "name": "Luca Toni"
-    },
-    {
       "id": "838b2dbd-a15a-49c8-a4d0-b7759caac82e",
       "name": "Diego Tristán"
-    },
-    {
-      "id": "78b5c977-46b9-4897-823b-5de8d1c350c1",
-      "name": "Juan Cuadrado"
     },
     {
       "id": "fc098e97-1605-419b-a515-67e53688f043",
@@ -317,10 +289,6 @@
     {
       "id": "8eb2902c-c5d7-4ccc-9858-e23b6a3f7f9b",
       "name": "Darko Kovačević"
-    },
-    {
-      "id": "283c46d1-df33-4b0f-8223-b52c1f7e7c5c",
-      "name": "Mikel Arteta"
     },
     {
       "id": "36f927c7-3286-4529-b40e-8b604340908c",
@@ -359,16 +327,8 @@
       "name": "Razvan Rat"
     },
     {
-      "id": "795d1b3d-9127-4890-891e-8fc70d122f78",
-      "name": "Freddie Ljungberg"
-    },
-    {
       "id": "4ecba965-dad6-4f34-aa5f-351f40fc8701",
       "name": "Boudewijn Zenden"
-    },
-    {
-      "id": "f768e958-a851-4a2e-a9ed-1ab8d1590ac9",
-      "name": "Frédéric Kanouté"
     },
     {
       "id": "1ae20d9f-6c87-49e1-afcd-39a45ce38c82",
@@ -445,16 +405,8 @@
       "name": "Hatem Ben Arfa"
     },
     {
-      "id": "8e2fa972-b878-4434-b6e7-7af7ac699232",
-      "name": "Ángel Di María"
-    },
-    {
       "id": "806ab4b7-4968-4d21-b7ba-d56551f44376",
       "name": "Morgan Schneiderlin"
-    },
-    {
-      "id": "c2d43a53-cf57-426c-9119-17af1c192071",
-      "name": "Bastian Schweinsteiger"
     },
     {
       "id": "68a7a1d1-3faf-4650-a1bc-026bc7296937",
@@ -473,10 +425,6 @@
       "name": "Lucas Pérez"
     },
     {
-      "id": "daa2115a-218f-4191-904c-3ca03afb561b",
-      "name": "Mesut Özil"
-    },
-    {
       "id": "9ebd0493-05b2-42cc-ab1e-e7577750f2e7",
       "name": "Alexis Sánchez"
     },
@@ -493,10 +441,6 @@
       "name": "Ousmane Dembélé"
     },
     {
-      "id": "883c1c42-3f46-4b23-a0ee-48442ebd7507",
-      "name": "Antoine Griezmann"
-    },
-    {
       "id": "4f6b96f1-df85-49ae-b82b-3178a4fd6173",
       "name": "Malcom"
     },
@@ -509,10 +453,6 @@
       "name": "Mauro Icardi"
     },
     {
-      "id": "84ff3c4b-2003-4b1b-a47d-2c2fa6fbc29f",
-      "name": "João Cancelo"
-    },
-    {
       "id": "0838acac-d965-4182-a43b-8146b1cfa25d",
       "name": "Loris Karius"
     },
@@ -523,10 +463,6 @@
     {
       "id": "d398fd62-6208-49f8-9eb6-2aff0961d400",
       "name": "Álvaro Morata"
-    },
-    {
-      "id": "a0ad60c2-ae5b-4125-8342-ca00af2ea84b",
-      "name": "Gonzalo Higuaín"
     },
     {
       "id": "311109f7-1f90-4faa-a765-832d9e1cc157",
@@ -551,10 +487,6 @@
     {
       "id": "4aca571e-d300-43ff-84a9-e8e0ea797bcc",
       "name": "Victor Moses"
-    },
-    {
-      "id": "a7cc95b0-f3c2-4281-a0f5-87039b3ac93e",
-      "name": "Gary Cahill"
     },
     {
       "id": "6fc66e2b-b3df-4f26-a49e-748a24763f7d",
@@ -595,10 +527,6 @@
       "name": "David Bentley"
     },
     {
-      "id": "7d1ae76f-0ba5-4b1f-8071-5a89d9360d2e",
-      "name": "Robbie Keane"
-    },
-    {
       "id": "bd30ea0e-92ed-4777-9f76-935aa186540a",
       "name": "Shaun Wright-Phillips"
     },
@@ -609,10 +537,6 @@
     {
       "id": "5239af7b-c2a7-49ce-8aae-1286208de610",
       "name": "Darren Bent"
-    },
-    {
-      "id": "eb5bbc73-bf32-40be-8b0b-8a7d1995e5a3",
-      "name": "James Milner"
     },
     {
       "id": "874e22ea-a7a7-4a90-975a-0a6920a18ec8",
@@ -715,14 +639,6 @@
       "name": "Marlon Harewood"
     },
     {
-      "id": "4a038949-8321-4db4-ad42-522bfff69249",
-      "name": "Jermain Defoe"
-    },
-    {
-      "id": "a2f02477-06f9-4936-874e-18b69bc69ef6",
-      "name": "Darren Fletcher"
-    },
-    {
       "id": "4c9808f6-fa6f-4f07-a9b4-b8f7f7e7ecfa",
       "name": "Emerson Thome"
     },
@@ -797,10 +713,6 @@
       "name": "Celestine Babayaro"
     },
     {
-      "id": "174b9daa-628a-4001-8277-c3d28a4dfe9f",
-      "name": "Nwankwo Kanu"
-    },
-    {
       "id": "15362f31-a323-4fd3-857b-9c9a943b15bb",
       "name": "Benik Afobe"
     },
@@ -849,10 +761,6 @@
       "name": "Darren Bent"
     },
     {
-      "id": "2238a4e9-efc3-4ab1-b720-1de3d31c7086",
-      "name": "Eidur Gudjohnsen"
-    },
-    {
       "id": "7c38612a-87c3-49ae-b07b-c4e1827fc44c",
       "name": "Peter Crouch"
     },
@@ -889,10 +797,6 @@
       "name": "James Beattie"
     },
     {
-      "id": "4a038949-8321-4db4-ad42-522bfff69249",
-      "name": "Jermain Defoe"
-    },
-    {
       "id": "f25e3d5e-7793-475f-8ef1-d9ba16b1ad95",
       "name": "Djibril Cissé"
     },
@@ -903,10 +807,6 @@
     {
       "id": "0ee7eb9a-93d0-4785-b0c8-2436dba91aa9",
       "name": "David Nugent"
-    },
-    {
-      "id": "6eb08628-661e-4925-8725-7c7873a706ca",
-      "name": "Andy Cole"
     },
     {
       "id": "f5c3d223-a9e3-4370-b768-6aac4d72d13e",
@@ -1015,10 +915,6 @@
       "name": "Steve Sidwell"
     },
     {
-      "id": "eb561d33-2bf4-4dfb-b3e3-6cb6410df62b",
-      "name": "Gilberto Silva"
-    },
-    {
       "id": "e6c3d571-a947-4d21-baec-861f0080efff",
       "name": "Michael Brown"
     },
@@ -1099,10 +995,6 @@
       "name": "Lee Bowyer"
     },
     {
-      "id": "9bfa0262-1a1b-4bdb-9695-567a8eb584bb",
-      "name": "Michael Essien"
-    },
-    {
       "id": "45d5cc34-1e31-45f3-a3f4-269d77c821db",
       "name": "Kieran Richardson"
     },
@@ -1113,10 +1005,6 @@
     {
       "id": "3aa54167-f101-4042-b93d-d77502c653fb",
       "name": "Tom Cleverley"
-    },
-    {
-      "id": "37607415-633f-4a88-9c8d-1f70b3e55d8a",
-      "name": "Ji-sung Park"
     },
     {
       "id": "fc5aa86e-f4ea-43fe-b6ac-9cb373afea92",
@@ -1147,20 +1035,12 @@
       "name": "Noel Hunt"
     },
     {
-      "id": "eb5bbc73-bf32-40be-8b0b-8a7d1995e5a3",
-      "name": "James Milner"
-    },
-    {
       "id": "1eb8bbb2-a035-4d1c-b901-abce98d22e19",
       "name": "David Bentley"
     },
     {
       "id": "375f7d83-1d79-43b0-aecd-77bf02548cee",
       "name": "Luke Moore"
-    },
-    {
-      "id": "dc90b23b-2a5f-4139-b985-874ab4299327",
-      "name": "Gary Speed"
     }
   ],
   "premier_league_defenders": [
@@ -1285,14 +1165,6 @@
       "name": "Micah Richards"
     },
     {
-      "id": "70f2003d-07b5-4661-951d-fdf2076825c1",
-      "name": "Joleon Lescott"
-    },
-    {
-      "id": "c2241f30-837e-483b-84c4-57494bdaf4ba",
-      "name": "Glen Johnson"
-    },
-    {
       "id": "06758a7a-a808-490d-b619-015fe960fac0",
       "name": "Ciaran Clark"
     },
@@ -1341,10 +1213,6 @@
       "name": "Neven Subotic"
     },
     {
-      "id": "a2f10692-0269-455a-90fb-add33d159002",
-      "name": "Pablo Zabaleta"
-    },
-    {
       "id": "8f94191e-62b1-4a40-aa36-6f1ca33834f3",
       "name": "Stephen Kelly"
     },
@@ -1385,10 +1253,6 @@
     {
       "id": "951275fb-4863-457d-8d76-a3ee36c83397",
       "name": "Benny Feilhaber"
-    },
-    {
-      "id": "3ba9dc5b-ac61-41ba-9815-eb8d312f1d87",
-      "name": "Robbie Fowler"
     },
     {
       "id": "45ef6982-a9d5-4f45-8a15-ccfd960a62f4",
@@ -1467,10 +1331,6 @@
       "name": "Adam Johnson"
     },
     {
-      "id": "30f2d4fb-25bc-4c33-8f7f-ef2983c94337",
-      "name": "Joe Cole"
-    },
-    {
       "id": "8551f772-04f0-4f19-b4ee-245037206fbf",
       "name": "Carlton Cole"
     },
@@ -1481,10 +1341,6 @@
     {
       "id": "ec1bedde-2353-495e-a678-445c0e32aa82",
       "name": "Mauro Zárate"
-    },
-    {
-      "id": "d62a71ec-859e-436a-b005-4d416319a6f7",
-      "name": "Hernán Crespo"
     },
     {
       "id": "f25e3d5e-7793-475f-8ef1-d9ba16b1ad95",
@@ -1509,10 +1365,6 @@
     {
       "id": "e629f789-1cd6-45ad-b449-97df1701db4e",
       "name": "Florent Malouda"
-    },
-    {
-      "id": "34c8ff87-165f-4598-b209-5727b080ebb6",
-      "name": "Rio Ferdinand"
     },
     {
       "id": "39ecb819-df1c-4110-a531-6e8e94cdb3f6",

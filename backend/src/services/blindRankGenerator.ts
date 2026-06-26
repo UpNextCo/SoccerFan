@@ -73,15 +73,18 @@ interface Theme {
   cats: string[];
 }
 
+// Market value / transfer fee inflate massively by era, so ranking older players by them is
+// meaningless ("Scholes < Gibbs-White"). They're ONLY used on Current Superstars (single era);
+// every historical/mixed-era theme ranks by on-pitch stats, which don't inflate.
 const THEMES: Theme[] = [
-  { id: 'premier_league_legends', title: 'Premier League Legends', structure: sql`a.pl_apps >= 150`, cats: ['peak_market_value', 'biggest_transfer_fee', 'premier_league_goals', 'premier_league_assists', 'premier_league_appearances', 'career_goals'] },
-  { id: 'champions_league_legends', title: 'Champions League Legends', structure: sql`a.cl_apps >= 40`, cats: ['champions_league_goals', 'champions_league_appearances', 'peak_market_value', 'career_goals'] },
-  { id: 'current_superstars', title: 'Current Superstars', structure: sql`a.peak_m >= 40`, cats: ['peak_market_value', 'career_goals', 'career_assists', 'champions_league_goals', 'biggest_transfer_fee'] },
-  { id: 'football_icons', title: 'Football Icons', structure: sql`a.total_apps >= 300 AND a.peak_m >= 25`, cats: ['peak_market_value', 'career_goals', 'career_assists', 'biggest_transfer_fee'] },
-  { id: 'premier_league_strikers', title: 'Premier League Strikers', structure: sql`a.position = 'Attacker' AND a.pl_apps >= 100`, cats: ['premier_league_goals', 'career_goals', 'peak_market_value', 'biggest_transfer_fee'] },
-  { id: 'premier_league_midfielders', title: 'Premier League Midfielders', structure: sql`a.position = 'Midfielder' AND a.pl_apps >= 150`, cats: ['premier_league_assists', 'career_assists', 'premier_league_appearances', 'peak_market_value'] },
-  { id: 'premier_league_defenders', title: 'Premier League Defenders', structure: sql`a.position = 'Defender' AND a.pl_apps >= 150`, cats: ['premier_league_appearances', 'peak_market_value', 'biggest_transfer_fee'] },
-  { id: 'world_cup_heroes', title: 'World Cup Heroes', structure: sql`a.wc = true`, cats: ['career_goals', 'career_assists', 'peak_market_value', 'biggest_transfer_fee'] },
+  { id: 'premier_league_legends', title: 'Premier League Legends', structure: sql`a.pl_apps >= 150`, cats: ['premier_league_goals', 'premier_league_assists', 'premier_league_appearances', 'career_goals'] },
+  { id: 'champions_league_legends', title: 'Champions League Legends', structure: sql`a.cl_apps >= 40`, cats: ['champions_league_goals', 'champions_league_appearances', 'career_goals'] },
+  { id: 'current_superstars', title: 'Current Superstars', structure: sql`a.peak_m >= 40`, cats: ['peak_market_value', 'biggest_transfer_fee', 'career_goals', 'career_assists', 'champions_league_goals'] },
+  { id: 'football_icons', title: 'Football Icons', structure: sql`a.total_apps >= 300 AND a.peak_m >= 25`, cats: ['career_goals', 'career_assists', 'champions_league_appearances'] },
+  { id: 'premier_league_strikers', title: 'Premier League Strikers', structure: sql`a.position = 'Attacker' AND a.pl_apps >= 100`, cats: ['premier_league_goals', 'career_goals', 'champions_league_goals'] },
+  { id: 'premier_league_midfielders', title: 'Premier League Midfielders', structure: sql`a.position = 'Midfielder' AND a.pl_apps >= 150`, cats: ['premier_league_assists', 'career_assists', 'premier_league_appearances'] },
+  { id: 'premier_league_defenders', title: 'Premier League Defenders', structure: sql`a.position = 'Defender' AND a.pl_apps >= 150`, cats: ['premier_league_appearances', 'champions_league_appearances', 'career_goals'] },
+  { id: 'world_cup_heroes', title: 'World Cup Heroes', structure: sql`a.wc = true`, cats: ['career_goals', 'career_assists', 'champions_league_appearances'] },
 ];
 
 // Per-round quality mix as [elite, good, weak] counts (sum 10). Picked by date seed so the
