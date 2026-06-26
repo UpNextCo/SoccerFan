@@ -177,6 +177,18 @@ actor APIClient {
         }
     }
 
+    func targetManValues(categoryId: String, playerIds: [String]) async throws -> [String: Int] {
+        struct Body: Encodable { let categoryId: String; let playerIds: [String] }
+        struct Entry: Decodable { let id: String; let value: Int }
+        struct Resp: Decodable { let values: [Entry] }
+        let resp: Resp = try await request(
+            "players/target-values",
+            method: "POST",
+            body: Body(categoryId: categoryId, playerIds: playerIds)
+        )
+        return Dictionary(resp.values.map { ($0.id, $0.value) }, uniquingKeysWith: { a, _ in a })
+    }
+
     func getPlayerCareerStats(playerId: String, league: TargetManLeague) async throws -> PlayerCareerStatsDTO {
         try await getPlayerCareerStats(playerId: playerId, leagueId: league.apiLeagueId)
     }

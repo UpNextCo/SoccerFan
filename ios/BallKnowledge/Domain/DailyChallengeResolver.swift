@@ -9,18 +9,25 @@ enum DailyChallengeResolver {
     }
 
     static func targetManChallenge(from puzzle: TargetManPuzzleDTO, date: String) -> TargetManChallenge {
-        let category = TargetManStatCategory(rawValue: puzzle.category) ?? .goals
-
-        // Carry the raw league name/id so cups (UCL/Europa) render and fetch the
-        // correct-league stats instead of silently defaulting to the Premier League.
+        // Server now drives the category (Peak Value, CL Goals, Penalties, Trophies, …): the
+        // challenge carries display labels + a categoryId the app values guesses against. Fall
+        // back to the local seed only when there is genuinely no usable server puzzle.
+        guard !puzzle.categoryId.isEmpty, puzzle.target > 0 else {
+            return TargetManSeed.makeDailyChallenge(date: date)
+        }
         return TargetManChallenge(
             id: puzzle.puzzleId,
-            leagueName: puzzle.league,
-            apiLeagueId: puzzle.leagueId,
-            category: category,
+            leagueName: "",
+            apiLeagueId: 0,
+            category: .goals,
             target: puzzle.target,
             isDaily: true,
-            date: date
+            date: date,
+            serverCategoryId: puzzle.categoryId,
+            serverCategoryLabel: puzzle.categoryLabel,
+            serverValueNoun: puzzle.valueNoun,
+            serverOffNoun: puzzle.offNoun,
+            serverUnit: puzzle.unit
         )
     }
 

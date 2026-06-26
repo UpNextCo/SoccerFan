@@ -4,12 +4,31 @@ struct TargetManPuzzleDTO: Codable, Equatable {
     let modeId: String
     let puzzleId: String
     let date: String
-    let league: String
-    let leagueId: Int
-    let category: String
+    let categoryId: String
     let categoryLabel: String
+    let valueNoun: String
+    let offNoun: String
+    let unit: String?
     let target: Int
     let title: String
+
+    enum CodingKeys: String, CodingKey {
+        case modeId, puzzleId, date, categoryId, categoryLabel, valueNoun, offNoun, unit, target, title
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        modeId = try c.decode(String.self, forKey: .modeId)
+        puzzleId = try c.decode(String.self, forKey: .puzzleId)
+        date = try c.decode(String.self, forKey: .date)
+        categoryId = try c.decodeIfPresent(String.self, forKey: .categoryId) ?? ""
+        categoryLabel = try c.decodeIfPresent(String.self, forKey: .categoryLabel) ?? ""
+        valueNoun = try c.decodeIfPresent(String.self, forKey: .valueNoun) ?? "goals"
+        offNoun = try c.decodeIfPresent(String.self, forKey: .offNoun) ?? "\(valueNoun) off"
+        unit = try c.decodeIfPresent(String.self, forKey: .unit)
+        target = try c.decodeIfPresent(Int.self, forKey: .target) ?? 0
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? categoryLabel
+    }
 }
 
 struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {

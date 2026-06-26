@@ -48,10 +48,11 @@ export interface TargetManPuzzlePublic {
   modeId: 'target_man';
   puzzleId: string;
   date: string;
-  league: string;
-  leagueId: number;
-  category: TargetManStatCategory;
+  categoryId: string;
   categoryLabel: string;
+  valueNoun: string;
+  offNoun: string;
+  unit: 'eur_m' | null;
   target: number;
   title: string;
 }
@@ -81,8 +82,7 @@ export interface BlindRankPuzzleAnswer {
 }
 
 export interface TargetManPuzzleAnswer {
-  leagueId: number;
-  category: TargetManStatCategory;
+  categoryId: string;
   target: number;
 }
 

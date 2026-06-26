@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import { requireAuth, sendSuccess } from '../middleware/auth.js';
+import { z } from 'zod';
+import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
 import { searchPlayers, findPlayerForGuess, playerToSnapshot, getPlayerById } from '../services/playerService.js';
+import { playerValuesForCategory } from '../services/targetManCategories.js';
 import { getGameModes } from '../services/dailyService.js';
 import {
   getLatestTransferFeeEurM,
@@ -19,6 +21,25 @@ playersRouter.get('/search', requireAuth, async (req, res) => {
   const currentTop5 = req.query.currentTop5 === '1' || req.query.currentTop5 === 'true';
   const results = await searchPlayers(q, undefined, { currentTop5 });
   sendSuccess(res, results);
+});
+
+// Value a set of players for a Target Man category (scores a guess; works for daily + practice).
+const targetValuesSchema = z.object({
+  categoryId: z.string(),
+  playerIds: z.array(z.string().uuid()).max(10),
+});
+playersRouter.post('/target-values', requireAuth, async (req, res) => {
+  const parsed = targetValuesSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    const values = await playerValuesForCategory(parsed.data.categoryId, parsed.data.playerIds);
+    sendSuccess(res, { values });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to value players', 400);
+  }
 });
 
 playersRouter.get('/:id/stats/career', requireAuth, async (req, res) => {

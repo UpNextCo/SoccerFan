@@ -5,6 +5,19 @@ enum TargetManStats {
         for selections: [TargetManSelection],
         challenge: TargetManChallenge
     ) async throws -> [TargetManSelection] {
+        // Server-driven daily categories are valued in one batch call keyed by categoryId.
+        if let categoryId = challenge.serverCategoryId {
+            let values = try await APIClient.shared.targetManValues(
+                categoryId: categoryId,
+                playerIds: selections.map(\.player.id)
+            )
+            return selections.map { selection in
+                var copy = selection
+                copy.statValue = values[selection.player.id] ?? 0
+                return copy
+            }
+        }
+
         var updated = selections
 
         try await withThrowingTaskGroup(of: (Int, Int).self) { group in

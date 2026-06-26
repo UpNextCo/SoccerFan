@@ -187,7 +187,7 @@ struct TargetManView: View {
                                 selections: viewModel.state.selections,
                                 phase: viewModel.state.phase,
                                 revealedCount: viewModel.state.revealedCount,
-                                category: viewModel.state.challenge.category,
+                                challenge: viewModel.state.challenge,
                                 onRemove: { viewModel.removePlayer(at: $0) }
                             )
                         }
@@ -307,10 +307,12 @@ private struct TargetManChallengeCard: View {
                         .foregroundStyle(BKTheme.textMuted)
                 }
                 Spacer()
-                LeagueBadgeImage(league: challenge.leagueName, size: 22) {
-                    Text(GuessWhoDisplay.leagueAbbrev(challenge.leagueName))
-                        .font(.system(size: 8, weight: .bold, design: .rounded))
-                        .foregroundStyle(BKTheme.textMuted)
+                if !challenge.isServerValued {
+                    LeagueBadgeImage(league: challenge.leagueName, size: 22) {
+                        Text(GuessWhoDisplay.leagueAbbrev(challenge.leagueName))
+                            .font(.system(size: 8, weight: .bold, design: .rounded))
+                            .foregroundStyle(BKTheme.textMuted)
+                    }
                 }
             }
 
@@ -319,7 +321,7 @@ private struct TargetManChallengeCard: View {
                     .font(BKFont.caption(11))
                     .tracking(1)
                     .foregroundStyle(BKTheme.textMuted)
-                Text("\(challenge.target)")
+                Text(challenge.formatValue(challenge.target))
                     .font(BKFont.title(42))
                     .foregroundStyle(BKTheme.accent)
                 Text(challenge.title.uppercased())
@@ -342,7 +344,7 @@ private struct TargetManSlotsView: View {
     let selections: [TargetManSelection]
     let phase: TargetManPhase
     let revealedCount: Int
-    let category: TargetManStatCategory
+    let challenge: TargetManChallenge
     var onRemove: (Int) -> Void
 
     var body: some View {
@@ -363,7 +365,7 @@ private struct TargetManSlotsView: View {
                     TargetManFilledSlotRow(
                         selection: selections[index],
                         index: index + 1,
-                        category: category,
+                        challenge: challenge,
                         isRevealed: phase != .selecting && revealedCount > index,
                         canRemove: phase == .selecting,
                         onRemove: { onRemove(index) }
@@ -405,7 +407,7 @@ private struct TargetManEmptySlotRow: View {
 private struct TargetManFilledSlotRow: View {
     let selection: TargetManSelection
     let index: Int
-    let category: TargetManStatCategory
+    let challenge: TargetManChallenge
     let isRevealed: Bool
     let canRemove: Bool
     var onRemove: () -> Void
@@ -436,7 +438,7 @@ private struct TargetManFilledSlotRow: View {
                     .foregroundStyle(BKTheme.textPrimary)
                     .lineLimit(1)
                 if isRevealed, let stat = selection.statValue {
-                    Text("\(category.label): \(stat)")
+                    Text("\(challenge.displayCategoryLabel): \(challenge.formatValue(stat))")
                         .font(BKFont.caption(10))
                         .foregroundStyle(BKTheme.accent)
                         .transition(.opacity.combined(with: .move(edge: .leading)))
@@ -623,9 +625,9 @@ private struct TargetManResultView: View {
                         VStack(spacing: 10) {
                             if step >= TargetManResultStep.target.rawValue {
                                 resultRevealRow(
-                                    label: "TARGET \(challenge.category.valueNoun.uppercased())",
+                                    label: "TARGET \(challenge.displayValueNoun.uppercased())",
                                     value: formattedStat(challenge.target),
-                                    subtitle: challenge.category.label,
+                                    subtitle: challenge.displayCategoryLabel,
                                     accent: false
                                 )
                                 .transition(resultTransition)
@@ -633,7 +635,7 @@ private struct TargetManResultView: View {
 
                             if step >= TargetManResultStep.guessed.rawValue {
                                 resultRevealRow(
-                                    label: "YOUR \(challenge.category.valueNoun.uppercased())",
+                                    label: "YOUR \(challenge.displayValueNoun.uppercased())",
                                     value: formattedStat(animatedTotal),
                                     subtitle: "Combined from your 5 picks",
                                     accent: true
@@ -690,7 +692,7 @@ private struct TargetManResultView: View {
                                     TargetManResultPlayerRow(
                                         index: index + 1,
                                         selection: selection,
-                                        category: challenge.category,
+                                        challenge: challenge,
                                         appearDelay: Double(index) * 0.08
                                     )
                                 }
@@ -769,7 +771,7 @@ private struct TargetManResultView: View {
             return "You nailed the target exactly"
         }
         let direction = difference > 0 ? "over" : "under"
-        return "\(distance) \(challenge.category.offLabel) · \(direction) target of \(formattedStat(challenge.target))"
+        return "\(distance) \(challenge.displayOffLabel) · \(direction) target of \(formattedStat(challenge.target))"
     }
 
     private var scoreBreakdownHint: String {
@@ -784,10 +786,7 @@ private struct TargetManResultView: View {
     }
 
     private func formattedStat(_ value: Int) -> String {
-        if challenge.category == .minutesPlayed {
-            return value.formatted(.number.grouping(.automatic))
-        }
-        return "\(value)"
+        challenge.formatValue(value)
     }
 
     private func resultRevealRow(
@@ -865,7 +864,7 @@ private struct TargetManResultView: View {
 private struct TargetManResultPlayerRow: View {
     let index: Int
     let selection: TargetManSelection
-    let category: TargetManStatCategory
+    let challenge: TargetManChallenge
     let appearDelay: Double
 
     @State private var appeared = false
@@ -894,10 +893,10 @@ private struct TargetManResultPlayerRow: View {
 
             if let stat = selection.statValue {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("\(stat)")
+                    Text(challenge.formatValue(stat))
                         .font(BKFont.headline(16))
                         .foregroundStyle(BKTheme.accent)
-                    Text(category.label)
+                    Text(challenge.displayCategoryLabel)
                         .font(BKFont.caption(9))
                         .foregroundStyle(BKTheme.textMuted)
                 }

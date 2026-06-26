@@ -6,7 +6,6 @@ import type {
   DailyPuzzlePublic,
   FactPackPlayer,
   GeneratedDailyPuzzle,
-  TargetManStatCategory,
 } from './dailyPuzzleTypes.js';
 
 export const BLIND_RANK_SLOT_COUNT = 10;
@@ -83,34 +82,15 @@ export function validateBlindRankSelection(
   };
 }
 
-export function validateTargetManPuzzle(input: {
-  leagueId: number;
-  category: TargetManStatCategory;
-  target: number;
-}): void {
-  if (input.leagueId <= 0) {
-    throw new PuzzleValidationError('Invalid league id');
+export function validateTargetManPuzzle(input: { categoryId: string; target: number }): void {
+  if (!input.categoryId) {
+    throw new PuzzleValidationError('Missing target category');
   }
   if (input.target <= 0) {
     throw new PuzzleValidationError('Target must be positive');
   }
-
-  // Targets are the COMBINED career total of 5 players, so these are sanity
-  // ceilings for a 5-player sum (not per-player limits).
-  const maxByCategory: Record<TargetManStatCategory, number> = {
-    goals: 1_500,
-    assists: 900,
-    appearances: 3_500,
-    yellowCards: 900,
-    redCards: 200,
-    cleanSheets: 1_200,
-    minutesPlayed: 350_000,
-    saves: 5_000,
-    foulsCommitted: 4_000,
-    tacklesWon: 5_000,
-  };
-
-  if (input.target > maxByCategory[input.category]) {
+  // Combined total of 5 players — generous sanity ceiling across all category types.
+  if (input.target > 1_000_000) {
     throw new PuzzleValidationError('Target exceeds plausible range');
   }
 }
@@ -128,8 +108,7 @@ export async function validateGeneratedPuzzle(puzzle: GeneratedDailyPuzzle): Pro
     }
     case 'target_man': {
       validateTargetManPuzzle({
-        leagueId: publicJson.leagueId,
-        category: publicJson.category,
+        categoryId: publicJson.categoryId,
         target: publicJson.target,
       });
       if (!puzzle.answerJson || puzzle.answerJson.modeId !== 'target_man') {

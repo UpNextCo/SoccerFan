@@ -1,45 +1,13 @@
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { dailyPuzzles, players } from '../db/schema.js';
-import { INGEST_LEAGUES } from '../jobs/ingest-config.js';
-import {
-  buildDailyFactPack,
-  metricForTargetCategory,
-  targetCategoryLabel,
-  topPlayersByLeagueMetric,
-} from './dailyFactPack.js';
-import type {
-  DailyFactPack,
-  GeneratedDailyPuzzle,
-  TargetManStatCategory,
-} from './dailyPuzzleTypes.js';
-import {
-  PuzzleValidationError,
-  validateGeneratedPuzzle,
-  validateTargetManPuzzle,
-} from './puzzleValidator.js';
+import { buildDailyFactPack } from './dailyFactPack.js';
+import type { DailyFactPack, GeneratedDailyPuzzle } from './dailyPuzzleTypes.js';
+import { TARGET_CATEGORIES, topPlayersForCategory } from './targetManCategories.js';
+import { PuzzleValidationError, validateGeneratedPuzzle } from './puzzleValidator.js';
 import { generateBlindRankPuzzle as generateThemedBlindRank } from './blindRankGenerator.js';
 
 const DAILY_MODES = ['guess_who', 'target_man', 'blind_rank'] as const;
-
-/** Competitions for Target Man — big-5 plus continental cups (stats under ids 2/3). */
-const TARGET_MAN_COMPETITIONS: Array<{ id: number; name: string }> = [
-  ...INGEST_LEAGUES.map((l) => ({ id: l.id, name: l.name })),
-  { id: 2, name: 'Champions League' },
-  { id: 3, name: 'Europa League' },
-];
-
-/** Data-backed, scorable categories (clean sheets has no data; red cards too sparse). */
-const TARGET_MAN_CATEGORIES: TargetManStatCategory[] = [
-  'goals',
-  'assists',
-  'appearances',
-  'minutesPlayed',
-  'yellowCards',
-  'tacklesWon',
-  'foulsCommitted',
-  'saves',
-];
 
 function hashString(input: string): number {
   let hash = 0;
@@ -56,11 +24,8 @@ function dayNumber(date: string): number {
   return Number.isFinite(ms) ? Math.floor(ms / 86_400_000) : 0;
 }
 
-function roundTarget(value: number, category: TargetManStatCategory): number {
-  if (category === 'minutesPlayed') {
-    return Math.max(500, Math.round(value / 50) * 50);
-  }
-  return Math.max(5, Math.round(value / 5) * 5);
+function roundTarget(value: number, step: number): number {
+  return Math.max(step, Math.round(value / step) * step);
 }
 
 export async function generateGuessWhoPuzzle(
@@ -141,20 +106,16 @@ export async function generateTargetManPuzzle(
 ): Promise<GeneratedDailyPuzzle> {
   const seed = hashString(`${date}:target_man`);
 
-  // Rotate evenly across every competition×category combo with a coprime stride,
-  // then walk the list so a thin pool falls through instead of failing the mode.
-  const combos: Array<{ comp: { id: number; name: string }; category: TargetManStatCategory }> = [];
-  for (const comp of TARGET_MAN_COMPETITIONS) {
-    for (const category of TARGET_MAN_CATEGORIES) combos.push({ comp, category });
-  }
-  const stride = 13; // coprime with 56 combos
-  const start = ((dayNumber(date) * stride) % combos.length + combos.length) % combos.length;
+  // Rotate across the curated category list with a coprime stride, then walk the list so a
+  // thin pool falls through to the next category instead of failing the whole mode.
+  const cats = TARGET_CATEGORIES;
+  const stride = 7; // coprime with the (19) category count
+  const start = ((dayNumber(date) * stride) % cats.length + cats.length) % cats.length;
 
-  for (let offset = 0; offset < combos.length; offset += 1) {
-    const { comp, category } = combos[(start + offset) % combos.length]!;
-    const metric = metricForTargetCategory(category);
+  for (let offset = 0; offset < cats.length; offset += 1) {
+    const def = cats[(start + offset) % cats.length]!;
 
-    const ranked = await topPlayersByLeagueMetric(comp.id, metric, 1, 25);
+    const ranked = await topPlayersForCategory(def, 25);
     if (ranked.length < 5) continue;
 
     // Pick 5 from the mid-table so the target is challenging, not just the elite.
@@ -165,28 +126,20 @@ export async function generateTargetManPuzzle(
     if (chosen.length < 5) continue;
 
     const combined = chosen.reduce((sum, player) => sum + player.statValue, 0);
-    const target = roundTarget(combined, category);
-
-    // A combo whose combined total exceeds the category ceiling must fall through
-    // to the next combo, not abort the whole mode. Only swallow validation errors;
-    // re-throw anything unexpected.
-    try {
-      validateTargetManPuzzle({ leagueId: comp.id, category, target });
-    } catch (error) {
-      if (error instanceof PuzzleValidationError) continue;
-      throw error;
-    }
+    const target = roundTarget(combined, def.round);
+    if (target <= 0) continue;
 
     const puzzleJson = {
       modeId: 'target_man' as const,
       puzzleId: `${date}-target_man`,
       date,
-      league: comp.name,
-      leagueId: comp.id,
-      category,
-      categoryLabel: targetCategoryLabel(category),
+      categoryId: def.id,
+      categoryLabel: def.label,
+      valueNoun: def.valueNoun,
+      offNoun: def.offNoun,
+      unit: def.unit,
       target,
-      title: `${comp.name} ${targetCategoryLabel(category)}`,
+      title: def.label,
     };
 
     return {
@@ -195,12 +148,12 @@ export async function generateTargetManPuzzle(
       answerPlayerId: null,
       answerJson: {
         modeId: 'target_man',
-        answer: { leagueId: comp.id, category, target },
+        answer: { categoryId: def.id, target },
       },
     };
   }
 
-  throw new PuzzleValidationError('No target man competition produced a viable target');
+  throw new PuzzleValidationError('No target man category produced a viable target');
 }
 
 export async function generateDailyPuzzleForMode(

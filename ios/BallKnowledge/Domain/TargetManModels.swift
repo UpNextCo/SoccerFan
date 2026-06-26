@@ -116,8 +116,29 @@ struct TargetManChallenge: Equatable {
     let isDaily: Bool
     let date: String?
 
-    var title: String {
-        "\(leagueName) \(category.label)"
+    // Server-driven daily category (Peak Value, CL Goals, Penalties, Trophies, …). When present,
+    // valuation and all display labels come from the server instead of the local `category` enum,
+    // which now only backs offline practice. Defaulted so existing call sites are unchanged.
+    var serverCategoryId: String? = nil
+    var serverCategoryLabel: String? = nil
+    var serverValueNoun: String? = nil
+    var serverOffNoun: String? = nil
+    var serverUnit: String? = nil // "eur_m" → format as €Xm
+
+    var isServerValued: Bool { serverCategoryId != nil }
+    var displayTitle: String { serverCategoryLabel ?? "\(leagueName) \(category.label)" }
+    var displayCategoryLabel: String { serverCategoryLabel ?? category.label }
+    var displayValueNoun: String { serverValueNoun ?? category.valueNoun }
+    var displayOffLabel: String { serverOffNoun ?? category.offLabel }
+
+    var title: String { displayTitle }
+
+    func formatValue(_ value: Int) -> String {
+        if serverUnit == "eur_m" { return "€\(value)m" }
+        if serverCategoryId == nil && category == .minutesPlayed {
+            return value.formatted(.number.grouping(.automatic))
+        }
+        return "\(value)"
     }
 }
 
