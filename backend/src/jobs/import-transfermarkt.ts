@@ -127,6 +127,7 @@ interface TmPlayer {
   dob: string | null; // YYYY-MM-DD
   current: number | null;
   peak: number | null;
+  foot: string | null; // 'left' | 'right' | 'both'
   toks: Set<string>;
 }
 
@@ -147,6 +148,7 @@ async function main() {
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS market_value_eur integer`);
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS peak_market_value_eur integer`);
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS record_fee_eur integer`);
+  await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS foot text`);
 
   // --- PEAK + current value per TM player from the FULL valuation history ---
   // players.csv's precomputed columns are frequently blank; the history is far more
@@ -183,6 +185,7 @@ async function main() {
       dob,
       current: latestByTm.get(tmId)?.value ?? toEur(p.market_value_in_eur ?? ''),
       peak: peakByTm.get(tmId) ?? toEur(p.highest_market_value_in_eur ?? ''),
+      foot: ((p.foot ?? '').trim().toLowerCase() || null),
       toks: tokens(name),
     };
     if (dob) (byDob.get(dob) ?? byDob.set(dob, []).get(dob)!).push(entry);
@@ -215,6 +218,7 @@ async function main() {
     mv: number | null;
     pv: number | null;
     rf: number | null;
+    foot: string | null;
     name: string;
     aliases: string;
     searchText: string;
@@ -265,6 +269,7 @@ async function main() {
       mv: tm.current,
       pv: tm.peak,
       rf: recordFee.get(tm.tmId) ?? null,
+      foot: tm.foot,
       name: chosen,
       aliases: JSON.stringify([...aliasSet]),
       searchText: `${p.search_text} ${normalizeSearchText(tm.name)}`.trim(),
@@ -274,17 +279,18 @@ async function main() {
 
   for (const batch of chunk(updates, 300)) {
     const tuples = batch.map(
-      (u) => sql`(${u.id}::uuid, ${u.mv}::int, ${u.pv}::int, ${u.rf}::int, ${u.name}::text, ${u.aliases}::jsonb, ${u.searchText}::text)`
+      (u) => sql`(${u.id}::uuid, ${u.mv}::int, ${u.pv}::int, ${u.rf}::int, ${u.foot}::text, ${u.name}::text, ${u.aliases}::jsonb, ${u.searchText}::text)`
     );
     await db.execute(sql`
       UPDATE players AS p SET
         market_value_eur = v.mv,
         peak_market_value_eur = v.pv,
         record_fee_eur = v.rf,
+        foot = COALESCE(v.ft, p.foot),
         name = v.nm,
         aliases = v.al,
         search_text = v.st
-      FROM (VALUES ${sql.join(tuples, sql`, `)}) AS v(id, mv, pv, rf, nm, al, st)
+      FROM (VALUES ${sql.join(tuples, sql`, `)}) AS v(id, mv, pv, rf, ft, nm, al, st)
       WHERE p.id = v.id
     `);
   }

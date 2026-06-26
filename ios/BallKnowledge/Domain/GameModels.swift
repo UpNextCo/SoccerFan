@@ -160,7 +160,7 @@ enum GuessWhoField: String, CaseIterable {
     case club
     case position
     case age
-    case marketValueTier
+    case foot
 
     var label: String {
         switch self {
@@ -169,7 +169,7 @@ enum GuessWhoField: String, CaseIterable {
         case .club: return "TEAM"
         case .position: return "POS"
         case .age: return "AGE"
-        case .marketValueTier: return "VALUE"
+        case .foot: return "FOOT"
         }
     }
 }

@@ -536,7 +536,14 @@ struct GuessWhoBadgeFace: View {
             return GuessWhoDisplay.clubAbbrev(field.value?.display ?? "?")
         case "position":
             return GuessWhoDisplay.positionAbbrev(field.value?.display ?? "?")
-        case "age", "marketValueTier":
+        case "foot":
+            switch (field.value?.display ?? "").lowercased() {
+            case "left": return "LEFT"
+            case "right": return "RIGHT"
+            case "both": return "BOTH"
+            default: return "?"
+            }
+        case "age":
             return numericDisplay
         default:
             return field.value?.display ?? "?"
@@ -545,7 +552,7 @@ struct GuessWhoBadgeFace: View {
 
     private var numericDisplay: String {
         let value = field.value?.display ?? "?"
-        guard field.field == "age" || field.field == "marketValueTier" else { return value }
+        guard field.field == "age" else { return value }
 
         if let hint = field.hint {
             let arrow = hint == "higher" ? "↑" : "↓"

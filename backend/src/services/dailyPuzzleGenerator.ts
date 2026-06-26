@@ -93,6 +93,7 @@ export async function generateGuessWhoPuzzle(
       LEFT JOIN aw ON aw.player_id = p.id
     WHERE p.external_id IS NOT NULL
       AND p.current_league IN ('Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1')
+      AND p.foot IS NOT NULL
       AND ${PRESTIGE} >= 40
     ORDER BY prestige DESC, r.a DESC, p.id
     LIMIT 500

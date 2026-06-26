@@ -36,11 +36,6 @@ export function compareField(
     if (diff <= 3) return 'partial';
   }
 
-  if (field === 'marketValueTier' && typeof guess === 'number' && typeof answer === 'number') {
-    const diff = Math.abs(guess - answer);
-    if (diff === 1) return 'partial';
-  }
-
   return 'wrong';
 }
 
@@ -60,9 +55,9 @@ export function buildGuessFeedback(
       answer: answerPlayer.shirtNumber,
     },
     {
-      field: 'marketValueTier',
-      guess: guessPlayer.marketValueTier,
-      answer: answerPlayer.marketValueTier,
+      field: 'foot',
+      guess: guessPlayer.foot,
+      answer: answerPlayer.foot,
     },
   ];
 
@@ -71,7 +66,7 @@ export function buildGuessFeedback(
     let hint: 'higher' | 'lower' | undefined;
     if (
       status !== 'correct' &&
-      (field === 'age' || field === 'shirtNumber' || field === 'marketValueTier') &&
+      (field === 'age' || field === 'shirtNumber') &&
       typeof guess === 'number' &&
       typeof answer === 'number'
     ) {
