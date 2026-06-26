@@ -138,6 +138,64 @@ export async function proposeTowerPrompts(
   }
 }
 
+/**
+ * Ask Claude to NOMINATE recognisable "stinker" players for a Blind Rank theme — names a fan
+ * would groan at if they turned up in an otherwise elite list (expensive flops, cult-bad
+ * players, big-hype disappointments). Claude only supplies CULTURAL recall (who's a punchline);
+ * the caller MUST resolve every name against the DB and discard anything unknown — so a
+ * hallucinated or unrecognised name can never reach the game. Returns names, or null on failure.
+ */
+export async function nominateStinkers(
+  themeTitle: string,
+  universeDesc: string,
+  count = 50
+): Promise<string[] | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  const system = [
+    'You curate a daily football game called "Blind Rank". In each round the player ranks a set',
+    'of footballers by a stat. To keep it fun we sprinkle in "stinkers": GENUINELY RECOGNISABLE',
+    'players who fans consider underwhelming — the "oh no, not him" names in an otherwise elite',
+    'list. Your ONLY job is to name such players for a given theme.',
+    '',
+    'What counts as a stinker:',
+    '- Expensive flops / big-money signings who flopped (e.g. a club-record buy who barely played).',
+    '- Cult-bad or meme players fans rib (perennial benchwarmers, panic buys, "how was he at that club?").',
+    '- Hyped prospects who never delivered.',
+    'They MUST be recognisable to an engaged fan — NOT obscure lower-league players. Prefer a mix of',
+    'famous flops and quieter "wait, HIM?" names. Do not include genuinely great players.',
+    '',
+    'Return ONLY JSON: {"players":["Full Name", ...]}. Use the common full name of each player.',
+  ].join('\n');
+
+  const user = [
+    `Theme: ${themeTitle}`,
+    `Players in this theme: ${universeDesc}`,
+    `List ${count} recognisable stinkers who fit this theme. JSON only: {"players":["..."]}.`,
+  ].join('\n');
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const resp = await client.messages.create({
+      model: MODEL,
+      max_tokens: 2000,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const text = resp.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    const parsed = JSON.parse(extractJson(text)) as { players?: string[] };
+    if (!parsed.players?.length) return null;
+    return parsed.players.map((p) => p.trim()).filter(Boolean);
+  } catch (err) {
+    console.warn(`Stinker nomination failed (${err instanceof Error ? err.message : String(err)}).`);
+    return null;
+  }
+}
+
 function extractJson(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced?.[1]) return fenced[1].trim();
