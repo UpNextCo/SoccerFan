@@ -48,6 +48,8 @@ const ALIASES: Record<string, string> = {
   'st etienne': 'Saint-Étienne',
   'saint etienne': 'Saint-Étienne',
   'betis': 'Real Betis',
+  'thonon evian': 'Evian TG',
+  'evian thonon gaillard': 'Evian TG',
   'sporting gijon': 'Sporting Gijón',
   'ath bilbao': 'Athletic Club',
   'athletic club': 'Athletic Club',
