@@ -378,6 +378,38 @@ export const wcSquads = pgTable(
   ]
 );
 
+/**
+ * Match-level World Cup events (goals, own goals, cards, shootout penalties) with the match
+ * date / stage / opponent, derived from StatsBomb open data (2018, 2022) and later Wikipedia
+ * match reports (1994–2014). One row per event. Powers the "witty" per-match clues: who scored
+ * in the semi-final, braces vs a team, hat-tricks, own goals, youngest scorer (date + DOB),
+ * booked-every-game, shootout scorers/saves, and final/match assists.
+ */
+export const wcMatchEvents = pgTable(
+  'wc_match_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    year: integer('year').notNull(),
+    matchId: integer('match_id').notNull(),
+    matchDate: date('match_date'),
+    stage: text('stage').notNull().default(''),
+    team: text('team').notNull(),
+    opponent: text('opponent').notNull().default(''),
+    playerId: uuid('player_id').references(() => players.id, { onDelete: 'set null' }),
+    playerName: text('player_name').notNull(),
+    type: text('type').notNull(), // goal | own_goal | card | shootout_pen | shootout_save
+    minute: integer('minute'),
+    detail: text('detail'), // 'penalty' | 'Yellow Card' | 'Red Card' | 'scored'/'saved'/'missed'
+    assistPlayerId: uuid('assist_player_id').references(() => players.id, { onDelete: 'set null' }),
+    assistPlayerName: text('assist_player_name'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('wc_match_events_player_idx').on(table.playerId),
+    index('wc_match_events_year_type_idx').on(table.year, table.type),
+  ]
+);
+
 export const dailyCompletions = pgTable(
   'daily_completions',
   {
@@ -462,3 +494,4 @@ export type FinalAppearance = typeof finalAppearances.$inferSelect;
 export type PlayerAward = typeof playerAwards.$inferSelect;
 export type PlayerExtraStats = typeof playerExtraStats.$inferSelect;
 export type WcSquad = typeof wcSquads.$inferSelect;
+export type WcMatchEvent = typeof wcMatchEvents.$inferSelect;

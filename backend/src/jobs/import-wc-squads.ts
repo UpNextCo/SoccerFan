@@ -43,7 +43,9 @@ function toInt(s: string | undefined): number | null {
 }
 
 function param(tpl: string, key: string): string | undefined {
-  const m = tpl.match(new RegExp(`\\|\\s*${key}\\s*=\\s*([^|}]+(?:\\[\\[[^\\]]*\\]\\][^|}]*)*)`, 'i'));
+  // Value may contain a full [[Target|Display]] wikilink whose internal pipe must NOT be
+  // treated as the parameter delimiter — so consume whole links atomically.
+  const m = tpl.match(new RegExp(`\\|\\s*${key}\\s*=\\s*((?:\\[\\[[^\\]]*\\]\\]|[^|}])+)`, 'i'));
   return m ? m[1]!.trim() : undefined;
 }
 
