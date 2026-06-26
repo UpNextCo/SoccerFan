@@ -67,8 +67,8 @@ const CATEGORIES: Record<string, Category> = {
 interface Theme {
   id: string;
   title: string;
-  /** Structural universe (NO fame gate) — defines who belongs to the theme. We tier by
-   *  fame WITHIN this universe so each round can mix elite / good / weak players. */
+  /** Structural universe (NO fame gate) — defines who belongs to the theme. We then keep only
+   *  the most PRESTIGIOUS members (see POOL_SIZE) so every name is recognisable. */
   structure: ReturnType<typeof sql>;
   cats: string[];
 }
@@ -80,25 +80,37 @@ const THEMES: Theme[] = [
   { id: 'premier_league_legends', title: 'Premier League Legends', structure: sql`a.pl_apps >= 150`, cats: ['premier_league_goals', 'premier_league_assists', 'premier_league_appearances', 'career_goals'] },
   { id: 'champions_league_legends', title: 'Champions League Legends', structure: sql`a.cl_apps >= 40`, cats: ['champions_league_goals', 'champions_league_appearances', 'career_goals'] },
   { id: 'current_superstars', title: 'Current Superstars', structure: sql`a.peak_m >= 40`, cats: ['peak_market_value', 'biggest_transfer_fee', 'career_goals', 'career_assists', 'champions_league_goals'] },
-  { id: 'football_icons', title: 'Football Icons', structure: sql`a.total_apps >= 300 AND a.peak_m >= 25`, cats: ['career_goals', 'career_assists', 'champions_league_appearances'] },
+  { id: 'football_icons', title: 'Football Icons', structure: sql`a.total_apps >= 300 AND a.peak_m >= 40`, cats: ['career_goals', 'career_assists', 'champions_league_appearances'] },
   { id: 'premier_league_strikers', title: 'Premier League Strikers', structure: sql`a.position = 'Attacker' AND a.pl_apps >= 100`, cats: ['premier_league_goals', 'career_goals', 'champions_league_goals'] },
   { id: 'premier_league_midfielders', title: 'Premier League Midfielders', structure: sql`a.position = 'Midfielder' AND a.pl_apps >= 150`, cats: ['premier_league_assists', 'career_assists', 'premier_league_appearances'] },
   { id: 'premier_league_defenders', title: 'Premier League Defenders', structure: sql`a.position = 'Defender' AND a.pl_apps >= 150`, cats: ['premier_league_appearances', 'champions_league_appearances', 'career_goals'] },
   { id: 'world_cup_heroes', title: 'World Cup Heroes', structure: sql`a.wc = true`, cats: ['career_goals', 'career_assists', 'champions_league_appearances'] },
 ];
 
-// Per-round quality mix as [elite, good, weak] counts (sum 10). Picked by date seed so the
-// blend varies: most rounds carry a weak slot or two, ~30% are all elite/good (no shocker),
-// so leaving the #1 slot open is genuinely suspenseful — sometimes insane, sometimes a dud.
-const MIXES: ReadonlyArray<readonly [number, number, number]> = [
-  [5, 3, 2], [6, 2, 2], [6, 3, 1], [5, 4, 1], [7, 2, 1], [6, 4, 0], [7, 3, 0],
-];
+// How many of the most prestigious theme members we keep as the round's pool. Everyone in here
+// is a recognisable name; we then spread 10 across the category's stat. Bigger pools = more
+// day-to-day variety; small enough that the floor stays genuinely well-known.
+const POOL_SIZE = 80;
+
+// Per round, the chance we deliberately drop in a curated "stinker" (a recognisable flop) —
+// kept variable so it's a surprise, not every round.
+const STINKER_CHANCE = 3; // out of 5
+
+/**
+ * Prestige = how strongly fans ASSOCIATE with a player, which is what makes a "lesser" name
+ * interesting (Klose: low market value, but a World Cup icon) vs forgettable (Zielinski: decent
+ * value, zero honours). Market value alone gets this backwards, so we score by the achievement-
+ * aware tier PLUS major finals and individual awards.
+ */
+const PRESTIGE = sql.raw('(a.mvt * 10 + LEAST(a.finals, 6) * 4 + LEAST(a.awards, 4) * 6)');
 
 const AGG = sql`
   WITH agg AS (
     SELECT p.id, p.name, p.nationality, p.position, p.market_value_tier AS mvt,
       ROUND(COALESCE(p.peak_market_value_eur, 0) / 1000000.0)::int AS peak_m,
       ROUND(COALESCE(p.record_fee_eur, 0) / 1000000.0)::int AS fee_m,
+      COALESCE(fa.finals, 0)::int AS finals,
+      COALESCE(aw.awards, 0)::int AS awards,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39), 0)::int AS pl_goals,
       COALESCE(SUM(s.assists)     FILTER (WHERE s.league_id = 39), 0)::int AS pl_assists,
       COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 39), 0)::int AS pl_apps,
@@ -109,13 +121,16 @@ const AGG = sql`
       COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 1), 0)::int AS intl_caps,
       COALESCE(SUM(s.appearances), 0)::int AS total_apps,
       EXISTS (SELECT 1 FROM final_appearances f WHERE f.player_id = p.id AND f.competition = 'World Cup') AS wc
-    FROM players p LEFT JOIN player_stats s ON s.player_id = p.id
-    GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier, p.peak_market_value_eur, p.record_fee_eur
+    FROM players p
+      LEFT JOIN player_stats s ON s.player_id = p.id
+      LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
+      LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
+    GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier, p.peak_market_value_eur, p.record_fee_eur, fa.finals, aw.awards
   )`;
 
 interface PoolRow { id: string; name: string; nationality: string; position: string; stat: number; }
-/** A universe row also carries fame signals so we can split into elite / good / weak bands. */
-interface UniverseRow extends PoolRow { mvt: number; peak_m: number; }
+/** A universe row also carries the prestige signal used to keep the pool recognisable. */
+interface UniverseRow extends PoolRow { prestige: number; }
 
 function hashString(input: string): number {
   let h = 0;
@@ -183,97 +198,69 @@ function pickSpread(pool: PoolRow[], seed: number): PoolRow[] | null {
   }
 }
 
-/** Spread-sample n rows from a band: distinct stat values, slid by a date-seeded offset. */
-function sampleBand<T extends PoolRow>(rows: T[], n: number, seed: number): T[] {
-  if (n <= 0) return [];
-  const sorted = [...rows].sort((a, b) => b.stat - a.stat);
-  const distinct: T[] = [];
-  const seen = new Set<number>();
-  for (const r of sorted) if (!seen.has(r.stat)) { seen.add(r.stat); distinct.push(r); }
-  if (distinct.length <= n) return distinct;
-
-  const window = Math.min(distinct.length, Math.max(n, Math.floor(distinct.length * SAMPLE_DEPTH)));
-  const maxStart = distinct.length - window;
-  const start = maxStart > 0 ? seed % (maxStart + 1) : 0;
-  const slice = distinct.slice(start, start + window);
-  const step = slice.length / n;
-  const out: T[] = [];
-  let last = -1;
-  for (let i = 0; i < n; i += 1) {
-    const base = Math.floor(i * step);
-    const jitter = Math.floor(seed / (i + 7)) % Math.max(1, Math.floor(step));
-    let idx = Math.min(slice.length - 1, base + jitter);
-    if (idx <= last) idx = last + 1;
-    if (idx >= slice.length) break;
-    out.push(slice[idx]!);
-    last = idx;
-  }
-  return out;
-}
-
-/**
- * Compose 10 from a fame-tiered mix: ~5-6 elite, ~2-3 good, ~1-2 weak (varies by date).
- * Bands are by fame (peak value, then tier) WITHIN the theme universe, so "weak" = the
- * least celebrated players who still belong — the quietly-underwhelming names. Returns
- * null if it can't make a clean 10 (distinct, well-spread values); caller falls back.
- */
-function isCleanTen(rows: UniverseRow[]): boolean {
+function isCleanTen(rows: PoolRow[]): boolean {
   if (rows.length !== BLIND_RANK_SLOT_COUNT) return false;
   const vals = rows.map((c) => c.stat);
   const spread = vals[0]! - vals[vals.length - 1]!;
   return new Set(vals).size === vals.length && spread >= Math.max(8, BLIND_RANK_SLOT_COUNT - 1);
 }
 
-function composeTiered(universe: UniverseRow[], seed: number, shockerIds: Set<string>): UniverseRow[] | null {
-  if (universe.length < BLIND_RANK_SLOT_COUNT) return null;
-  const byFame = [...universe].sort((a, b) => b.peak_m - a.peak_m || b.mvt - a.mvt || b.stat - a.stat);
-  const n = byFame.length;
-  const elite = byFame.slice(0, Math.max(1, Math.floor(n * 0.40)));
-  const good = byFame.slice(Math.floor(n * 0.40), Math.floor(n * 0.75));
-  const weak = byFame.slice(Math.floor(n * 0.75));
-
-  const [ne, ng, nw] = MIXES[seed % MIXES.length]!;
-  let chosen = [
-    ...sampleBand(elite, ne, seed),
-    ...sampleBand(good, ng, seed ^ 0x11),
-    ...sampleBand(weak, nw, seed ^ 0x22),
-  ];
-
-  // Collapse any stat-value collisions across bands, then top up to 10 from the rest.
-  const used = new Set<number>();
-  chosen = chosen.filter((c) => (used.has(c.stat) ? false : (used.add(c.stat), true)));
-  if (chosen.length < BLIND_RANK_SLOT_COUNT) {
-    for (const r of byFame) {
-      if (chosen.length >= BLIND_RANK_SLOT_COUNT) break;
-      if (!used.has(r.stat)) { used.add(r.stat); chosen.push(r); }
-    }
+/**
+ * Lay the 10 out for play so lower-stat names never cluster: interleave a (shuffled) top half
+ * and bottom half by stat, with a date-seeded start. The player therefore never faces a run of
+ * 3-4 less-prominent names back-to-back.
+ */
+function balancedOrder(chosen: PoolRow[], seed: number): PoolRow[] {
+  const sorted = [...chosen].sort((a, b) => b.stat - a.stat);
+  const half = Math.ceil(sorted.length / 2);
+  const top = seededShuffle(sorted.slice(0, half), seed ^ 0x00aa);
+  const bottom = seededShuffle(sorted.slice(half), seed ^ 0x00bb);
+  const topFirst = (seed & 1) === 0;
+  const out: PoolRow[] = [];
+  for (let i = 0; i < half; i += 1) {
+    const a = topFirst ? top[i] : bottom[i];
+    const b = topFirst ? bottom[i] : top[i];
+    if (a) out.push(a);
+    if (b) out.push(b);
   }
-  if (chosen.length < BLIND_RANK_SLOT_COUNT) return null;
-  chosen = chosen.slice(0, BLIND_RANK_SLOT_COUNT).sort((a, b) => b.stat - a.stat);
-  if (!isCleanTen(chosen)) return null;
+  return out;
+}
 
-  // On most weak-bearing rounds, guarantee a RECOGNISABLE shocker (Drinkwater-type) rather
-  // than only the quiet-bad data tier — but not always, so it stays a surprise. Swap in a
-  // vetted shocker for the chosen pick closest in value (keeps the gradient intact).
-  const wantShocker = nw > 0 && ((seed >> 3) % 5) < 3;
-  if (wantShocker && shockerIds.size && !chosen.some((c) => shockerIds.has(c.id))) {
-    const chosenIds = new Set(chosen.map((c) => c.id));
-    const usedVals = new Set(chosen.map((c) => c.stat));
-    const cands = universe.filter((r) => shockerIds.has(r.id) && !chosenIds.has(r.id) && !usedVals.has(r.stat));
-    if (cands.length) {
-      const shocker = cands[seed % cands.length]!;
-      let dropIdx = 0;
-      let best = Infinity;
-      for (let i = 0; i < chosen.length; i += 1) {
-        const d = Math.abs(chosen[i]!.stat - shocker.stat);
-        if (d < best) { best = d; dropIdx = i; }
-      }
-      const trial = chosen.filter((_, i) => i !== dropIdx).concat(shocker).sort((a, b) => b.stat - a.stat);
-      if (isCleanTen(trial)) return trial;
-    }
+/**
+ * Occasionally drop in a curated "stinker" (a recognisable flop, e.g. Drinkwater) — but only
+ * sometimes, so it stays a surprise. The stinker must be a valid member of this theme/category;
+ * it replaces the chosen pick closest in value so the ranking gradient stays clean.
+ */
+async function injectStinker(
+  chosen: PoolRow[], theme: Theme, col: string, seed: number
+): Promise<PoolRow[]> {
+  const bank = STINKER_BANK[theme.id] ?? [];
+  if (!bank.length) return chosen;
+  if (((seed >> 3) % 5) >= STINKER_CHANCE) return chosen;       // not this round
+  if (chosen.some((c) => bank.some((b) => b.id === c.id))) return chosen; // already has one
+
+  const list = sql.join(bank.map((b) => sql`${b.id}::uuid`), sql`, `);
+  const cands = (await db.execute(sql`
+    ${AGG}
+    SELECT a.id, a.name, a.nationality, a.position, a.${sql.raw(col)} AS stat
+    FROM agg a
+    WHERE a.id IN (${list}) AND ${theme.structure} AND a.${sql.raw(col)} >= 1
+  `)) as unknown as PoolRow[];
+
+  const chosenIds = new Set(chosen.map((c) => c.id));
+  const usedVals = new Set(chosen.map((c) => c.stat));
+  const pool = cands.filter((r) => !chosenIds.has(r.id) && !usedVals.has(r.stat));
+  if (!pool.length) return chosen;
+
+  const stinker = pool[seed % pool.length]!;
+  let dropIdx = 0;
+  let best = Infinity;
+  for (let i = 0; i < chosen.length; i += 1) {
+    const d = Math.abs(chosen[i]!.stat - stinker.stat);
+    if (d < best) { best = d; dropIdx = i; }
   }
-
-  return chosen;
+  const trial = chosen.filter((_, i) => i !== dropIdx).concat(stinker).sort((a, b) => b.stat - a.stat);
+  return isCleanTen(trial) ? trial : chosen;
 }
 
 /** Top clubs (by appearances, excluding national teams) for the round's players. */
@@ -308,29 +295,32 @@ export async function generateBlindRankPuzzle(date: string): Promise<GeneratedDa
     const { theme, cat } = pairs[(start + offset) % pairs.length]!;
     const category = CATEGORIES[cat]!;
 
-    // Universe = the theme's structural members that have a real value for this category.
-    // No fame gate: we want elite AND weak players present so we can build a quality mix.
-    const universe = (await db.execute(sql`
+    // Pool = the theme's MOST PRESTIGIOUS members that have a value for this category. Capping
+    // by prestige (not market value) means even the lowest-stat name is one fans associate with
+    // — an "iconic but low here" surprise (Klose), never a forgettable squad player (Zielinski).
+    const pool = (await db.execute(sql`
       ${AGG}
-      SELECT a.id, a.name, a.nationality, a.position, a.mvt, a.peak_m, a.${sql.raw(category.col)} AS stat
+      SELECT a.id, a.name, a.nationality, a.position, ${PRESTIGE} AS prestige, a.${sql.raw(category.col)} AS stat
       FROM agg a
       WHERE ${theme.structure} AND a.${sql.raw(category.col)} >= 1
-      ORDER BY stat DESC
-      LIMIT 400
+      ORDER BY prestige DESC, stat DESC, a.id
+      LIMIT ${POOL_SIZE}
     `)) as unknown as UniverseRow[];
+    if (pool.length < BLIND_RANK_SLOT_COUNT) continue;
 
-    // Tiered mix first; fall back to a plain spread (still recognisable) if it can't form a
-    // clean 10 for this pair, then try the next pair.
-    const shockerIds = new Set((STINKER_BANK[theme.id] ?? []).map((s) => s.id));
-    const chosen = composeTiered(universe, seed, shockerIds) ?? pickSpread(universe, seed);
-    if (!chosen) continue;
+    // Spread 10 across the stat within the recognisable pool, then maybe swap in a curated stinker.
+    const byStat = [...pool].sort((a, b) => b.stat - a.stat);
+    const spread = pickSpread(byStat, seed);
+    if (!spread) continue;
+    const chosen = await injectStinker(spread, theme, category.col, seed);
 
     const clubs = await clubsByPlayer(chosen.map((c) => c.id));
-    const correctRanking = chosen.map((c) => c.id);
+    const ranked = [...chosen].sort((a, b) => b.stat - a.stat);
+    const correctRanking = ranked.map((c) => c.id);
     const statValues: Record<string, number> = {};
     for (const c of chosen) statValues[c.id] = c.stat;
 
-    const presentationOrder = seededShuffle(chosen, seed ^ 0x9e37).map((c) => {
+    const presentationOrder = balancedOrder(chosen, seed ^ 0x9e37).map((c) => {
       const cl = clubs.get(c.id) ?? [];
       return {
         id: c.id,
