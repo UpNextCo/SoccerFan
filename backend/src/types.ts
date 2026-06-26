@@ -52,7 +52,9 @@ export interface BlindRankPuzzlePublic {
   puzzleId: string;
   date: string;
   category: string;
+  themeTitle: string;
   categoryTitle: string;
+  subtitle: string;
   rankHint: string;
   valueNoun: string;
   valuePrefix: string;
@@ -60,6 +62,7 @@ export interface BlindRankPuzzlePublic {
     id: string;
     name: string;
     club: string;
+    clubs: string;
     league: string;
     nationality: string;
     position: string;

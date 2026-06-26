@@ -44,6 +44,7 @@ enum DailyChallengeResolver {
                 id: entry.id,
                 name: entry.name,
                 club: entry.club,
+                clubs: entry.clubs,
                 league: entry.league,
                 nationality: entry.nationality,
                 position: entry.position,
@@ -63,7 +64,9 @@ enum DailyChallengeResolver {
 
         return BlindRankChallenge(
             id: puzzle.puzzleId,
+            themeTitle: puzzle.themeTitle,
             categoryTitle: puzzle.categoryTitle,
+            subtitle: puzzle.subtitle,
             rankHint: puzzle.rankHint,
             valueNoun: puzzle.valueNoun,
             valuePrefix: puzzle.valuePrefix,

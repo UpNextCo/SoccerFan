@@ -16,6 +16,7 @@ struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {
     let id: String
     let name: String
     let club: String
+    let clubs: String
     let league: String
     let nationality: String
     let position: String
@@ -25,6 +26,7 @@ struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {
         id: String,
         name: String,
         club: String,
+        clubs: String = "",
         league: String,
         nationality: String,
         position: String,
@@ -33,6 +35,7 @@ struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {
         self.id = id
         self.name = name
         self.club = club
+        self.clubs = clubs
         self.league = league
         self.nationality = nationality
         self.position = position
@@ -46,6 +49,7 @@ struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {
         id = try c.decode(String.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
         club = try c.decode(String.self, forKey: .club)
+        clubs = try c.decodeIfPresent(String.self, forKey: .clubs) ?? ""
         league = try c.decode(String.self, forKey: .league)
         nationality = try c.decode(String.self, forKey: .nationality)
         position = try c.decode(String.self, forKey: .position)
@@ -58,7 +62,9 @@ struct BlindRankPuzzleDTO: Codable, Equatable {
     let puzzleId: String
     let date: String
     let category: String
+    let themeTitle: String
     let categoryTitle: String
+    let subtitle: String
     let rankHint: String
     let valueNoun: String
     let valuePrefix: String
@@ -69,7 +75,9 @@ struct BlindRankPuzzleDTO: Codable, Equatable {
         puzzleId: String,
         date: String,
         category: String,
+        themeTitle: String = "",
         categoryTitle: String,
+        subtitle: String = "",
         rankHint: String,
         valueNoun: String,
         valuePrefix: String,
@@ -79,7 +87,9 @@ struct BlindRankPuzzleDTO: Codable, Equatable {
         self.puzzleId = puzzleId
         self.date = date
         self.category = category
+        self.themeTitle = themeTitle
         self.categoryTitle = categoryTitle
+        self.subtitle = subtitle
         self.rankHint = rankHint
         self.valueNoun = valueNoun
         self.valuePrefix = valuePrefix
@@ -92,7 +102,9 @@ struct BlindRankPuzzleDTO: Codable, Equatable {
         puzzleId = try c.decode(String.self, forKey: .puzzleId)
         date = try c.decode(String.self, forKey: .date)
         category = try c.decode(String.self, forKey: .category)
+        themeTitle = try c.decodeIfPresent(String.self, forKey: .themeTitle) ?? ""
         categoryTitle = try c.decodeIfPresent(String.self, forKey: .categoryTitle) ?? ""
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
         rankHint = try c.decodeIfPresent(String.self, forKey: .rankHint) ?? "Most → least"
         valueNoun = try c.decodeIfPresent(String.self, forKey: .valueNoun) ?? ""
         valuePrefix = try c.decodeIfPresent(String.self, forKey: .valuePrefix) ?? ""

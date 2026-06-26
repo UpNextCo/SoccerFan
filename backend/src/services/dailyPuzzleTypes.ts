@@ -29,6 +29,7 @@ export interface BlindRankPresentationPlayer {
   id: string;
   name: string;
   club: string;
+  clubs: string; // e.g. "Barcelona · Chelsea" — main clubs for the card
   league: string;
   nationality: string;
   position: string;
@@ -60,7 +61,9 @@ export interface BlindRankPuzzlePublic {
   puzzleId: string;
   date: string;
   category: string;
-  categoryTitle: string;
+  themeTitle: string; // e.g. "Premier League Legends"
+  categoryTitle: string; // e.g. "Peak Market Value"
+  subtitle: string; // e.g. "Rank by Peak Market Value"
   rankHint: string;
   valueNoun: string;
   valuePrefix: string;

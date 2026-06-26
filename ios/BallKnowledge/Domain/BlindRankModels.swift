@@ -4,10 +4,14 @@ struct BlindRankPlayer: Identifiable, Equatable {
     let id: String
     let name: String
     let club: String
+    var clubs: String = ""
     let league: String
     let nationality: String
     let position: String
     let statValue: Int
+
+    /// Prefer the multi-club label ("Barcelona · Chelsea"); fall back to the single club.
+    var displayClubs: String { clubs.isEmpty ? club : clubs }
 
     var searchDTO: PlayerSearchResultDTO {
         PlayerSearchResultDTO(
@@ -73,7 +77,9 @@ enum BlindRankCategory: String, CaseIterable, Codable {
 
 struct BlindRankChallenge: Equatable {
     let id: String
+    let themeTitle: String
     let categoryTitle: String
+    let subtitle: String
     let rankHint: String
     let valueNoun: String
     let valuePrefix: String
@@ -84,7 +90,9 @@ struct BlindRankChallenge: Equatable {
 
     init(
         id: String,
+        themeTitle: String = "",
         categoryTitle: String,
+        subtitle: String = "",
         rankHint: String,
         valueNoun: String,
         valuePrefix: String,
@@ -94,7 +102,9 @@ struct BlindRankChallenge: Equatable {
         date: String?
     ) {
         self.id = id
+        self.themeTitle = themeTitle
         self.categoryTitle = categoryTitle
+        self.subtitle = subtitle.isEmpty ? "Rank by \(categoryTitle.lowercased())" : subtitle
         self.rankHint = rankHint
         self.valueNoun = valueNoun
         self.valuePrefix = valuePrefix
@@ -115,7 +125,9 @@ struct BlindRankChallenge: Equatable {
     ) {
         self.init(
             id: id,
+            themeTitle: "Premier League",
             categoryTitle: category.title,
+            subtitle: "Rank by \(category.title.lowercased())",
             rankHint: category.rankHint,
             valueNoun: category.valueNoun,
             valuePrefix: category.valuePrefix,
@@ -182,42 +194,55 @@ enum BlindRankScoring {
         }
     }
 
-    static func points(forExactMatches matches: Int, slotCount: Int) -> Int {
-        if slotCount == 10 {
-            switch matches {
-            case 10: return 1000
-            case 8...9: return 800
-            case 6...7: return 600
-            case 4...5: return 400
-            case 2...3: return 200
-            default: return 50
-            }
-        }
+    /// Max points for a perfect 10-player round (3 each).
+    static func maxScore(slotCount: Int) -> Int { slotCount * 3 }
 
-        let ratio = Double(matches) / Double(max(slotCount, 1))
-        switch ratio {
-        case 1.0: return 1000
-        case 0.8...: return 800
-        case 0.6...: return 600
-        case 0.4...: return 400
-        case 0.2...: return 200
-        default: return 50
-        }
+    struct Breakdown: Equatable {
+        let exact: Int    // perfect placements (distance 0)
+        let close: Int    // 1–2 places off
+        let disaster: Int // 3+ places off
     }
 
-    static func xp(from score: Int) -> Int {
-        max(10, score / 5)
+    /// Forgiving score: exact = 3, one off = 2, two off = 1, three+ off = 0.
+    static func score(slots: [BlindRankPlayer?], correctRanking: [String]) -> Int {
+        let correctIndex = Dictionary(uniqueKeysWithValues: correctRanking.enumerated().map { ($0.element, $0.offset) })
+        var total = 0
+        for (i, slot) in slots.enumerated() {
+            guard let id = slot?.id, let correct = correctIndex[id] else { continue }
+            let d = abs(i - correct)
+            total += d == 0 ? 3 : d == 1 ? 2 : d == 2 ? 1 : 0
+        }
+        return total
     }
 
-    static func tierLabel(forExactMatches matches: Int, slotCount: Int) -> String {
-        let score = points(forExactMatches: matches, slotCount: slotCount)
+    static func breakdown(slots: [BlindRankPlayer?], correctRanking: [String]) -> Breakdown {
+        let correctIndex = Dictionary(uniqueKeysWithValues: correctRanking.enumerated().map { ($0.element, $0.offset) })
+        var exact = 0, close = 0, disaster = 0
+        for (i, slot) in slots.enumerated() {
+            guard let id = slot?.id, let correct = correctIndex[id] else { continue }
+            let d = abs(i - correct)
+            if d == 0 { exact += 1 } else if d <= 2 { close += 1 } else { disaster += 1 }
+        }
+        return Breakdown(exact: exact, close: close, disaster: disaster)
+    }
+
+    /// XP banded by the 30-point score (small / medium / good / elite).
+    static func xp(fromScore score: Int) -> Int {
         switch score {
-        case 1000: return "Perfect ranking"
-        case 800...: return "Elite knowledge"
-        case 600...: return "Solid effort"
-        case 400...: return "Room to improve"
-        case 200...: return "Tough category"
-        default: return "Better luck next time"
+        case 25...: return 130
+        case 17...: return 90
+        case 9...: return 50
+        default: return 25
+        }
+    }
+
+    static func verdict(forScore score: Int) -> String {
+        switch score {
+        case 28...: return "Ball Knowledge verified."
+        case 23...: return "Serious ball knowledge."
+        case 17...: return "Decent, but the stinkers got you."
+        case 9...: return "You know names, not numbers."
+        default: return "Football Twitter is going to cook you."
         }
     }
 

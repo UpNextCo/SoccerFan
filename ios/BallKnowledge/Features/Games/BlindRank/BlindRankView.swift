@@ -43,7 +43,7 @@ final class BlindRankViewModel {
     }
 
     var xpEarned: Int {
-        BlindRankScoring.xp(from: state.score ?? 0)
+        BlindRankScoring.xp(fromScore: state.score ?? 0)
     }
 
     func assignCurrentPlayer(to slot: Int) {
@@ -110,15 +110,18 @@ final class BlindRankViewModel {
                 }
             }
 
-            let matches = BlindRankScoring.exactMatches(
+            state.exactMatches = BlindRankScoring.exactMatches(
                 slots: state.slots,
                 correctRanking: state.challenge.correctRanking
             )
-            state.exactMatches = matches
-            state.score = BlindRankScoring.points(forExactMatches: matches, slotCount: slotCount)
+            let roundScore = BlindRankScoring.score(
+                slots: state.slots,
+                correctRanking: state.challenge.correctRanking
+            )
+            state.score = roundScore
             state.phase = .complete
 
-            if matches >= max(slotCount - 2, 1) {
+            if roundScore >= 24 {
                 HapticManager.success()
                 confettiBurstToken += 1
             }
@@ -236,7 +239,6 @@ struct BlindRankView: View {
             BlindRankResultView(
                 challenge: viewModel.state.challenge,
                 revealSteps: viewModel.state.revealSteps,
-                exactMatches: viewModel.state.exactMatches ?? 0,
                 score: viewModel.state.score ?? 0,
                 xpEarned: viewModel.xpEarned,
                 showPlayAgain: allowReplay,
@@ -251,7 +253,7 @@ struct BlindRankView: View {
                                 modeId: GameModeID.blindRank.rawValue,
                                 date: dailyDate,
                                 score: viewModel.state.score ?? 0,
-                                won: (viewModel.state.score ?? 0) >= 400,
+                                won: (viewModel.state.score ?? 0) >= 17,
                                 context: modelContext
                             )
                         }
@@ -335,18 +337,20 @@ private struct BlindRankCategoryBanner: View {
             }
 
             VStack(spacing: 6) {
-                Text("RANK BY")
-                    .font(BKFont.caption(11))
-                    .tracking(1)
-                    .foregroundStyle(BKTheme.textMuted)
-                Text(challenge.categoryTitle.uppercased())
-                    .font(BKFont.headline(18))
+                if !challenge.themeTitle.isEmpty {
+                    Text(challenge.themeTitle.uppercased())
+                        .font(BKFont.title(20))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                }
+                Text(challenge.subtitle)
+                    .font(BKFont.headline(15))
                     .foregroundStyle(BKTheme.accent)
                     .multilineTextAlignment(.center)
                 Text(challenge.rankHint.uppercased())
                     .font(BKFont.caption(10))
                     .tracking(0.5)
-                    .foregroundStyle(BKTheme.textSecondary)
+                    .foregroundStyle(BKTheme.textMuted)
             }
         }
         .padding(16)
@@ -575,7 +579,7 @@ private struct BlindRankSlotRow: View {
                         .font(BKFont.headline(14))
                         .foregroundStyle(BKTheme.textPrimary)
                         .lineLimit(1)
-                    Text(player.club)
+                    Text(player.displayClubs)
                         .font(BKFont.caption(10))
                         .foregroundStyle(BKTheme.textSecondary)
                         .lineLimit(1)
@@ -638,7 +642,7 @@ private struct BlindRankCurrentPlayerCard: View {
                         .font(BKFont.headline(17))
                         .foregroundStyle(BKTheme.textPrimary)
                         .lineLimit(2)
-                    Text("\(player.club) · \(player.position)")
+                    Text("\(player.displayClubs) · \(player.position)")
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textSecondary)
                 }
@@ -672,7 +676,7 @@ private struct BlindRankRevealFooter: View {
                 Text("\(exactMatches)/\(slotCount) EXACT")
                     .font(BKFont.headline(16))
                     .foregroundStyle(BKTheme.accent)
-                Text(BlindRankScoring.tierLabel(forExactMatches: exactMatches, slotCount: slotCount))
+                Text("Tallying your score…")
                     .font(BKFont.caption(11))
                     .foregroundStyle(BKTheme.textSecondary)
             } else {
@@ -692,10 +696,31 @@ private struct BlindRankRevealFooter: View {
 
 // MARK: - Result View
 
+private struct BlindRankBreakdownChip: View {
+    let count: Int
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text("\(count)")
+                .font(BKFont.title(22))
+                .foregroundStyle(color)
+            Text(label)
+                .font(BKFont.caption(9))
+                .tracking(0.6)
+                .foregroundStyle(BKTheme.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 private struct BlindRankResultView: View {
     let challenge: BlindRankChallenge
     let revealSteps: [BlindRankRevealStep]
-    let exactMatches: Int
     let score: Int
     let xpEarned: Int
     var showPlayAgain = true
@@ -703,6 +728,18 @@ private struct BlindRankResultView: View {
     var onHome: () -> Void
 
     var slotCount: Int { challenge.presentationOrder.count }
+    var maxScore: Int { BlindRankScoring.maxScore(slotCount: slotCount) }
+
+    /// Distance buckets derived from the reveal steps (every slot is filled at completion).
+    private var breakdown: (exact: Int, close: Int, disaster: Int) {
+        var exact = 0, close = 0, disaster = 0
+        for step in revealSteps {
+            guard let userRank = step.userRank else { continue }
+            let dist = abs(step.rank - userRank)
+            if dist == 0 { exact += 1 } else if dist <= 2 { close += 1 } else { disaster += 1 }
+        }
+        return (exact, close, disaster)
+    }
 
     var body: some View {
         ZStack {
@@ -711,28 +748,36 @@ private struct BlindRankResultView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     VStack(spacing: 8) {
-                        Text("BLIND RANK")
+                        Text(challenge.themeTitle.isEmpty ? "BLIND RANK" : challenge.themeTitle.uppercased())
                             .font(BKFont.caption(11))
                             .tracking(1)
                             .foregroundStyle(BKTheme.accent)
-                        Text(challenge.categoryTitle.uppercased())
+                        Text(challenge.subtitle)
                             .font(BKFont.headline(18))
                             .foregroundStyle(BKTheme.textPrimary)
                             .multilineTextAlignment(.center)
-                        Text("\(exactMatches)/\(slotCount) exact positions")
-                            .font(BKFont.body(14))
-                            .foregroundStyle(BKTheme.textSecondary)
                     }
                     .padding(.top, 24)
 
-                    Text("\(score)")
-                        .font(BKFont.title(48))
-                        .foregroundStyle(BKTheme.accent)
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text("\(score)")
+                            .font(BKFont.title(48))
+                            .foregroundStyle(BKTheme.accent)
+                        Text("/ \(maxScore)")
+                            .font(BKFont.headline(20))
+                            .foregroundStyle(BKTheme.textMuted)
+                    }
 
-                    Text(BlindRankScoring.tierLabel(forExactMatches: exactMatches, slotCount: slotCount).uppercased())
-                        .font(BKFont.caption(11))
-                        .tracking(0.6)
-                        .foregroundStyle(BKTheme.textMuted)
+                    Text(BlindRankScoring.verdict(forScore: score))
+                        .font(BKFont.headline(15))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+
+                    HStack(spacing: 10) {
+                        BlindRankBreakdownChip(count: breakdown.exact, label: "SPOT ON", color: BKTheme.accent)
+                        BlindRankBreakdownChip(count: breakdown.close, label: "CLOSE", color: BKTheme.textSecondary)
+                        BlindRankBreakdownChip(count: breakdown.disaster, label: "WAY OFF", color: BKTheme.wrong)
+                    }
 
                     VStack(spacing: 8) {
                         ForEach(revealSteps) { step in
