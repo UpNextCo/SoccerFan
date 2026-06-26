@@ -94,11 +94,11 @@ async function repointValidIds(dup: string, canon: string): Promise<void> {
   `);
 }
 
-async function applyMerge(dup: Member, canon: Member): Promise<void> {
-  for (const { table, keys } of CHILD) await repoint(table, keys, dup.id, canon.id);
-  await db.execute(sql`UPDATE daily_puzzles SET answer_player_id = ${canon.id} WHERE answer_player_id = ${dup.id}`);
-  await repointValidIds(dup.id, canon.id);
-  await db.execute(sql`DELETE FROM players WHERE id = ${dup.id}`);
+async function applyMerge(dupId: string, canonId: string): Promise<void> {
+  for (const { table, keys } of CHILD) await repoint(table, keys, dupId, canonId);
+  await db.execute(sql`UPDATE daily_puzzles SET answer_player_id = ${canonId} WHERE answer_player_id = ${dupId}`);
+  await repointValidIds(dupId, canonId);
+  await db.execute(sql`DELETE FROM players WHERE id = ${dupId}`);
 }
 
 /** Fold a dup's fields into the canon in-memory so later passes see the enriched record. */
@@ -128,6 +128,102 @@ async function persistCanon(canon: Member): Promise<void> {
       market_value_eur = ${canon.mv}, peak_market_value_eur = ${canon.pv}, record_fee_eur = ${canon.rf}
     WHERE id = ${canon.id}
   `);
+}
+
+/** Fold the non-decomposable special letters norm() leaves behind (ł, ø, ß…) to ASCII,
+ *  so a pure accent/transliteration variant ("łukasz"/"lukasz") compares equal. */
+function asciiFold(s: string): string {
+  const map: Record<string, string> = { 'ł': 'l', 'ø': 'o', 'đ': 'd', 'ı': 'i', 'æ': 'ae', 'œ': 'oe', 'ß': 'ss', 'ð': 'd', 'þ': 'th' };
+  return s.replace(/[łøđıæœßðþ]/g, (c) => map[c] ?? c);
+}
+
+/** Bounded Levenshtein — returns max+1 as soon as the distance provably exceeds `max`. */
+function lev(a: string, b: string, max = 2): number {
+  const m = a.length, n = b.length;
+  if (Math.abs(m - n) > max) return max + 1;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i += 1) {
+    const cur = [i];
+    let best = i;
+    for (let j = 1; j <= n; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const v = Math.min(prev[j]! + 1, cur[j - 1]! + 1, prev[j - 1]! + cost);
+      cur[j] = v;
+      if (v < best) best = v;
+    }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[n]!;
+}
+
+interface Lite3 { id: string; name: string; nkey: string; surname: string; ext: string | null; dob: string | null; apps: number; rows: number; clubs: Set<string>; }
+
+/**
+ * PASS 3 — near-identical spellings (e.g. "Mykhailo" vs "Mykhaylo Mudryk") that the exact-name
+ * passes can't group. Blocks by exact surname, requires full-name edit distance <= 2, and merges
+ * ONLY with safe evidence: same DOB, a shared real club, or a clear empty/national-team-only stub
+ * beside one real record. HARD-BLOCKS any pair whose DOBs both exist and differ (different people).
+ */
+async function pass3(deleted: Set<string>): Promise<{ merged: number; examples: string[] }> {
+  const all = (await db.execute(sql`
+    SELECT p.id, p.name, p.external_id AS ext, p.birth_date::text AS dob,
+           COALESCE(SUM(s.appearances), 0)::int AS apps,
+           COUNT(s.player_id)::int AS rows,
+           COALESCE(array_agg(DISTINCT s.team_name) FILTER (WHERE s.team_name IS NOT NULL AND s.league_id <> 1), ARRAY[]::text[]) AS clubs
+    FROM players p LEFT JOIN player_stats s ON s.player_id = p.id
+    GROUP BY p.id, p.name, p.external_id, p.birth_date
+  `)) as unknown as Array<{ id: string; name: string; ext: string | null; dob: string | null; apps: number; rows: number; clubs: string[] }>;
+
+  const blocks = new Map<string, Lite3[]>();
+  for (const r of all) {
+    if (deleted.has(r.id)) continue;
+    const nkey = norm(r.name);
+    const parts = nkey.split(' ');
+    const surname = parts[parts.length - 1] ?? nkey;
+    if (surname.length < 3) continue;
+    const lite: Lite3 = { id: r.id, name: r.name, nkey, surname, ext: r.ext, dob: r.dob, apps: r.apps, rows: r.rows, clubs: new Set((r.clubs ?? []).map(norm)) };
+    (blocks.get(surname) ?? blocks.set(surname, []).get(surname)!).push(lite);
+  }
+
+  let merged = 0;
+  const examples: string[] = [];
+  for (const [, arr] of blocks) {
+    if (arr.length < 2) continue;
+    for (let i = 0; i < arr.length; i += 1) {
+      for (let j = i + 1; j < arr.length; j += 1) {
+        const a = arr[i]!, b = arr[j]!;
+        if (deleted.has(a.id) || deleted.has(b.id)) continue;
+        if (a.nkey === b.nkey) continue; // exact-name → handled by pass 1/2
+        if (Math.max(a.nkey.length, b.nkey.length) < 6) continue; // too short for a safe edit-distance call
+        const d = lev(a.nkey, b.nkey, 2);
+        if (d < 1 || d > 2) continue;
+
+        // Canon = the more complete record (external id, then apps, then stat rows).
+        const [canon, dup] = [a, b].sort((x, y) =>
+          (Number(Boolean(y.ext)) - Number(Boolean(x.ext))) || (y.apps - x.apps) || (y.rows - x.rows)) as [Lite3, Lite3];
+
+        if (dup.dob && canon.dob && dup.dob !== canon.dob) continue; // different DOB → different people
+        const sameDob = Boolean(dup.dob && canon.dob && dup.dob === canon.dob);
+        const sharedClub = [...dup.clubs].some((c) => canon.clubs.has(c));
+        // Merge ONLY pure accent/transliteration variants (same name, different diacritics —
+        // e.g. "Łukasz"/"Lukasz"), confirmed by a shared club or birthday. Edit-distance alone,
+        // even WITH a matching DOB, is unsafe: twins like Halil/Hamit Altıntop share a surname
+        // and birthday, and "David"/"Dani" Silva are different people 2 edits apart.
+        const accentOnly = asciiFold(canon.nkey) === asciiFold(dup.nkey) && canon.nkey !== dup.nkey;
+        if (!accentOnly || !(sharedClub || sameDob)) continue;
+
+        if (examples.length < 20) examples.push(`${canon.name} ⇐ ${dup.name} [${sameDob ? 'dob' : 'club'}]`);
+        if (APPLY) {
+          await db.execute(sql`UPDATE players c SET external_id = COALESCE(c.external_id, d.external_id), birth_date = COALESCE(c.birth_date, d.birth_date) FROM players d WHERE c.id = ${canon.id} AND d.id = ${dup.id}`);
+          await applyMerge(dup.id, canon.id);
+        }
+        deleted.add(dup.id);
+        merged += 1;
+      }
+    }
+  }
+  return { merged, examples };
 }
 
 function pickCanon(members: Member[]): Member {
@@ -218,7 +314,7 @@ async function main() {
       if (safe.length === 0) continue;
       if (p1ex.length < 12) p1ex.push(`${canon.name} (${canon.nat}) ⇐ ${safe.length}`);
       for (const d of safe) {
-        if (APPLY) await applyMerge(d, canon);
+        if (APPLY) await applyMerge(d.id, canon.id);
         absorbInto(canon, d);
         deleted.add(d.id);
         p1 += 1;
@@ -255,7 +351,7 @@ async function main() {
       }
       if (!canon) continue;
       if (p2ex.length < 12) p2ex.push(`${canon.name} (${canon.nat}) ⇐ Unknown stub [${u.ntNations.size ? [...u.ntNations].join(',') : 'no-club'}]`);
-      if (APPLY) await applyMerge(u, canon);
+      if (APPLY) await applyMerge(u.id, canon.id);
       absorbInto(canon, u);
       deleted.add(u.id);
       changedCanons.add(canon.id);
@@ -270,11 +366,16 @@ async function main() {
     }
   }
 
+  // ---- PASS 3: near-identical spellings (surname-blocked) with safe evidence ----
+  const p3 = await pass3(deleted);
+
   console.log(`Pass 1 (name+nationality): ${APPLY ? 'merged' : 'would merge'} ${p1}`);
   console.log(`Pass 2 (Unknown absorber): ${APPLY ? 'merged' : 'would merge'} ${p2}`);
+  console.log(`Pass 3 (near-spelling):    ${APPLY ? 'merged' : 'would merge'} ${p3.merged}`);
   console.log(`Different-person rows kept apart: ${kept}\n`);
   console.log('Pass 1 samples:'); for (const e of p1ex) console.log(`  ${e}`);
   console.log('Pass 2 samples:'); for (const e of p2ex) console.log(`  ${e}`);
+  console.log('Pass 3 samples:'); for (const e of p3.examples) console.log(`  ${e}`);
   if (!APPLY) console.log('\n(DRY RUN — re-run with "apply" to write.)');
   process.exit(0);
 }

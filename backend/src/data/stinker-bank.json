@@ -179,6 +179,38 @@
     {
       "id": "c92957b7-88c6-46ac-95d0-5ea8b6a4e7ed",
       "name": "Dean Whitehead"
+    },
+    {
+      "id": "8a0bbbcf-71fc-442b-aa17-bcf9910cb227",
+      "name": "Neal Maupay"
+    },
+    {
+      "id": "83edb8c0-6a21-4f06-81cd-aa6f9c33406b",
+      "name": "Eric Dier"
+    },
+    {
+      "id": "51ae7bdf-3a3f-4fbc-bf2b-ce6cfb0fea2c",
+      "name": "Harry Winks"
+    },
+    {
+      "id": "95ff70e7-fd48-45f1-8fac-4b7bace3b510",
+      "name": "Phil Jones"
+    },
+    {
+      "id": "f8449465-6638-412e-8b96-bfbf466761b0",
+      "name": "Scott McTominay"
+    },
+    {
+      "id": "0ebefdd2-9840-49f8-89e2-fd680516d50c",
+      "name": "Jesse Lingard"
+    },
+    {
+      "id": "19785f9a-8027-4232-acb5-840faa718409",
+      "name": "Richarlison"
+    },
+    {
+      "id": "bd02b91e-4041-418a-aa03-79fb97289d37",
+      "name": "Ross Barkley"
     }
   ],
   "champions_league_legends": [
@@ -345,6 +377,14 @@
     {
       "id": "a5056f55-7366-4140-8b78-b0c89fbb83f1",
       "name": "Marc Bartra"
+    },
+    {
+      "id": "83edb8c0-6a21-4f06-81cd-aa6f9c33406b",
+      "name": "Eric Dier"
+    },
+    {
+      "id": "d4161611-df55-43c3-9c3f-4e7ae2b1d658",
+      "name": "Fred"
     }
   ],
   "current_superstars": [
@@ -515,6 +555,46 @@
     {
       "id": "8611bbec-cd4b-4158-aef8-b9c6c394e86c",
       "name": "Wilfried Zaha"
+    },
+    {
+      "id": "eb6eb44a-a30a-4f6a-b146-a429e29c1d94",
+      "name": "Antony"
+    },
+    {
+      "id": "a6bbf646-b8ed-4f83-8637-3b5eefed339b",
+      "name": "Jadon Sancho"
+    },
+    {
+      "id": "16d803b0-d717-4a01-b85b-a27b39db1e1b",
+      "name": "Kalvin Phillips"
+    },
+    {
+      "id": "83edb8c0-6a21-4f06-81cd-aa6f9c33406b",
+      "name": "Eric Dier"
+    },
+    {
+      "id": "51ae7bdf-3a3f-4fbc-bf2b-ce6cfb0fea2c",
+      "name": "Harry Winks"
+    },
+    {
+      "id": "d4161611-df55-43c3-9c3f-4e7ae2b1d658",
+      "name": "Fred"
+    },
+    {
+      "id": "f8449465-6638-412e-8b96-bfbf466761b0",
+      "name": "Scott McTominay"
+    },
+    {
+      "id": "0ebefdd2-9840-49f8-89e2-fd680516d50c",
+      "name": "Jesse Lingard"
+    },
+    {
+      "id": "19785f9a-8027-4232-acb5-840faa718409",
+      "name": "Richarlison"
+    },
+    {
+      "id": "89f7f8c3-b7c5-4562-90f5-1d91af343660",
+      "name": "Mykhailo Mudryk"
     }
   ],
   "football_icons": [
@@ -693,6 +773,26 @@
     {
       "id": "18e936a6-c55d-4843-9235-52132c170cc9",
       "name": "Danny Higginbotham"
+    },
+    {
+      "id": "83edb8c0-6a21-4f06-81cd-aa6f9c33406b",
+      "name": "Eric Dier"
+    },
+    {
+      "id": "d4161611-df55-43c3-9c3f-4e7ae2b1d658",
+      "name": "Fred"
+    },
+    {
+      "id": "f8449465-6638-412e-8b96-bfbf466761b0",
+      "name": "Scott McTominay"
+    },
+    {
+      "id": "19785f9a-8027-4232-acb5-840faa718409",
+      "name": "Richarlison"
+    },
+    {
+      "id": "bd02b91e-4041-418a-aa03-79fb97289d37",
+      "name": "Ross Barkley"
     }
   ],
   "premier_league_strikers": [
@@ -871,6 +971,18 @@
     {
       "id": "39ecb819-df1c-4110-a531-6e8e94cdb3f6",
       "name": "Francis Jeffers"
+    },
+    {
+      "id": "a6bbf646-b8ed-4f83-8637-3b5eefed339b",
+      "name": "Jadon Sancho"
+    },
+    {
+      "id": "8a0bbbcf-71fc-442b-aa17-bcf9910cb227",
+      "name": "Neal Maupay"
+    },
+    {
+      "id": "19785f9a-8027-4232-acb5-840faa718409",
+      "name": "Richarlison"
     }
   ],
   "premier_league_midfielders": [
@@ -1041,6 +1153,22 @@
     {
       "id": "375f7d83-1d79-43b0-aecd-77bf02548cee",
       "name": "Luke Moore"
+    },
+    {
+      "id": "51ae7bdf-3a3f-4fbc-bf2b-ce6cfb0fea2c",
+      "name": "Harry Winks"
+    },
+    {
+      "id": "f8449465-6638-412e-8b96-bfbf466761b0",
+      "name": "Scott McTominay"
+    },
+    {
+      "id": "0ebefdd2-9840-49f8-89e2-fd680516d50c",
+      "name": "Jesse Lingard"
+    },
+    {
+      "id": "bd02b91e-4041-418a-aa03-79fb97289d37",
+      "name": "Ross Barkley"
     }
   ],
   "premier_league_defenders": [
@@ -1227,6 +1355,14 @@
     {
       "id": "1838f5a0-bcb7-4a0a-82b7-baf6ae299432",
       "name": "Christian Dailly"
+    },
+    {
+      "id": "83edb8c0-6a21-4f06-81cd-aa6f9c33406b",
+      "name": "Eric Dier"
+    },
+    {
+      "id": "95ff70e7-fd48-45f1-8fac-4b7bace3b510",
+      "name": "Phil Jones"
     }
   ],
   "world_cup_heroes": [

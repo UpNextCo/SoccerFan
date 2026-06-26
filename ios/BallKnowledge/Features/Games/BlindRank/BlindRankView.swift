@@ -1,5 +1,16 @@
 import SwiftUI
 
+// Match Football Golf's restraint: green (the app accent) is reserved for genuine success
+// signals — correct placements, a strong score, the primary action, +XP. Everything neutral
+// (labels, counters, ranks, stat values) stays white/grey so the screen reads calm, not busy.
+private let blindGreen = BKTheme.accent
+
+/// One motion vocabulary for the whole screen (mirrors Golf) so animation feels deliberate.
+private enum BlindRankMotion {
+    static let layout = Animation.spring(response: 0.34, dampingFraction: 0.82)
+    static let reveal = Animation.spring(response: 0.42, dampingFraction: 0.78)
+}
+
 // MARK: - ViewModel
 
 @MainActor
@@ -191,8 +202,8 @@ struct BlindRankView: View {
                         revealContent(viewModel: viewModel)
                     }
                 }
-                .animation(.spring(response: 0.35, dampingFraction: 0.82), value: viewModel.state.currentPlayerIndex)
-                .animation(.spring(response: 0.42, dampingFraction: 0.78), value: viewModel.state.revealedStepCount)
+                .animation(BlindRankMotion.layout, value: viewModel.state.currentPlayerIndex)
+                .animation(BlindRankMotion.reveal, value: viewModel.state.revealedStepCount)
                 .background(BKTheme.background)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -207,8 +218,8 @@ struct BlindRankView: View {
                         VStack(spacing: 2) {
                             Text("BLIND RANK")
                                 .font(BKFont.caption(13))
-                                .tracking(1)
-                                .foregroundStyle(BKTheme.accent)
+                                .tracking(1.5)
+                                .foregroundStyle(BKTheme.textSecondary)
                             if viewModel.state.phase == .ranking {
                                 Text("PLAYER \(min(viewModel.state.currentPlayerIndex + 1, viewModel.state.slotCount)) OF \(viewModel.state.slotCount)")
                                     .font(BKFont.caption(9))
@@ -317,46 +328,25 @@ private struct BlindRankCategoryBanner: View {
     let challenge: BlindRankChallenge
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack {
-                if challenge.isDaily {
-                    Text("DAILY CHALLENGE")
-                        .font(BKFont.caption(10))
-                        .tracking(0.8)
-                        .foregroundStyle(BKTheme.accent)
-                } else {
-                    Text("PRACTICE")
-                        .font(BKFont.caption(10))
-                        .tracking(0.8)
-                        .foregroundStyle(BKTheme.textMuted)
-                }
-                Spacer()
-                Text("RANK #1 → #\(challenge.presentationOrder.count)")
-                    .font(BKFont.caption(9))
-                    .foregroundStyle(BKTheme.textMuted)
-            }
-
-            VStack(spacing: 6) {
-                if !challenge.themeTitle.isEmpty {
-                    Text(challenge.themeTitle.uppercased())
-                        .font(BKFont.title(20))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                }
-                Text(challenge.subtitle)
-                    .font(BKFont.headline(15))
-                    .foregroundStyle(BKTheme.accent)
-                    .multilineTextAlignment(.center)
-                Text(challenge.rankHint.uppercased())
-                    .font(BKFont.caption(10))
-                    .tracking(0.5)
-                    .foregroundStyle(BKTheme.textMuted)
-            }
+        VStack(spacing: 6) {
+            Text(challenge.isDaily ? "DAILY CHALLENGE" : "PRACTICE")
+                .font(BKFont.caption(10))
+                .tracking(0.8)
+                .foregroundStyle(BKTheme.textMuted)
+            Text(challenge.subtitle)
+                .font(BKFont.headline(18))
+                .foregroundStyle(BKTheme.textPrimary)
+                .multilineTextAlignment(.center)
+            Text(challenge.rankHint.uppercased())
+                .font(BKFont.caption(10))
+                .tracking(0.5)
+                .foregroundStyle(BKTheme.textMuted)
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .background(BKTheme.cardElevated.opacity(0.9))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
     }
 }
 
@@ -380,7 +370,7 @@ private struct BlindRankOrderRevealView: View {
                 Spacer()
                 Text("\(min(revealedCount, slotCount))/\(slotCount)")
                     .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.accent)
+                    .foregroundStyle(BKTheme.textMuted)
             }
 
             ForEach(steps) { step in
@@ -410,7 +400,7 @@ private struct BlindRankRevealStepRow: View {
         HStack(spacing: 10) {
             Text("#\(step.rank)")
                 .font(BKFont.caption(11))
-                .foregroundStyle(step.rank <= 3 ? BKTheme.accent : BKTheme.textMuted)
+                .foregroundStyle(BKTheme.textMuted)
                 .frame(width: 28, alignment: .leading)
 
             if isVisible {
@@ -427,7 +417,7 @@ private struct BlindRankRevealStepRow: View {
                     HStack(spacing: 8) {
                         Text(formattedValue(step.player.statValue))
                             .font(BKFont.caption(11))
-                            .foregroundStyle(BKTheme.accent)
+                            .foregroundStyle(BKTheme.textSecondary)
                         if !step.isCorrect, let userRank = step.userRank {
                             Text("You had #\(userRank)")
                                 .font(BKFont.caption(9))
@@ -531,7 +521,7 @@ private struct BlindRankSlotsBoard: View {
                 Spacer()
                 Text("\(filledCount)/\(viewModel.state.slotCount)")
                     .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.accent)
+                    .foregroundStyle(BKTheme.textMuted)
             }
 
             ForEach(0..<viewModel.state.slotCount, id: \.self) { index in
@@ -570,7 +560,7 @@ private struct BlindRankSlotRow: View {
         HStack(spacing: 10) {
             Text("#\(rank)")
                 .font(BKFont.caption(11))
-                .foregroundStyle(rank <= 3 ? BKTheme.accent : BKTheme.textMuted)
+                .foregroundStyle(BKTheme.textMuted)
                 .frame(width: 28, alignment: .leading)
 
             if let player {
@@ -657,7 +647,7 @@ private struct BlindRankCurrentPlayerCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
             }
             .draggable(player.id)
         }
@@ -675,7 +665,7 @@ private struct BlindRankRevealFooter: View {
             if let exactMatches {
                 Text("\(exactMatches)/\(slotCount) EXACT")
                     .font(BKFont.headline(16))
-                    .foregroundStyle(BKTheme.accent)
+                    .foregroundStyle(BKTheme.textPrimary)
                 Text("Tallying your score…")
                     .font(BKFont.caption(11))
                     .foregroundStyle(BKTheme.textSecondary)
@@ -748,10 +738,10 @@ private struct BlindRankResultView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     VStack(spacing: 8) {
-                        Text(challenge.themeTitle.isEmpty ? "BLIND RANK" : challenge.themeTitle.uppercased())
+                        Text("BLIND RANK")
                             .font(BKFont.caption(11))
                             .tracking(1)
-                            .foregroundStyle(BKTheme.accent)
+                            .foregroundStyle(BKTheme.textMuted)
                         Text(challenge.subtitle)
                             .font(BKFont.headline(18))
                             .foregroundStyle(BKTheme.textPrimary)
@@ -762,7 +752,7 @@ private struct BlindRankResultView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text("\(score)")
                             .font(BKFont.title(48))
-                            .foregroundStyle(BKTheme.accent)
+                            .foregroundStyle(score >= 23 ? blindGreen : BKTheme.textPrimary)
                         Text("/ \(maxScore)")
                             .font(BKFont.headline(20))
                             .foregroundStyle(BKTheme.textMuted)
