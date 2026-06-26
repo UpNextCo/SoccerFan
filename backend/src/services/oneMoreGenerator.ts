@@ -71,11 +71,6 @@ function dayNumber(date: string): number {
   const ms = Date.parse(`${date}T00:00:00Z`);
   return Number.isFinite(ms) ? Math.floor(ms / 86_400_000) : 0;
 }
-function makeRng(seed: number): () => number {
-  let s = (seed ^ 0x9e3779b9) >>> 0;
-  return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 0x100000000; };
-}
-
 /** Legacy per-pick validator (kept for the old /onemore/validate route; play is now client-side). */
 export async function oneMoreStatValue(playerId: string, leagueId: number, category: string): Promise<number> {
   const col = sql.raw(['goals', 'assists', 'appearances'].includes(category) ? category : 'goals');
@@ -213,15 +208,31 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
     (b.q.prestige + b.d.prestige) - (a.q.prestige + a.d.prestige)
     || (b.q.value - b.d.value) - (a.q.value - a.d.value));
 
-  const rng = makeRng(dayNumber(date) + metric.id.length * 31);
   const ids = pairs.flatMap((p) => [p.q.id, p.d.id]);
   const clubs = await clubsByPlayer(ids);
   const toOption = (c: Candidate): OneMoreOption => ({
     id: c.id, name: c.name, clubs: clubs.get(c.id) ?? '', position: c.position, value: c.value,
   });
 
-  const rounds: OneMoreRound[] = pairs.map(({ q, d }) =>
-    ({ options: (rng() < 0.5 ? [toOption(q), toOption(d)] : [toOption(d), toOption(q)]) as [OneMoreOption, OneMoreOption] }));
+  // Which side the qualifier sits on, per round. A well-mixed per-round hash (not an LCG top bit,
+  // which can correlate into long runs), THEN a guard that breaks any run of >3 — so the correct
+  // answer never sits on the same side for long.
+  const seed = dayNumber(date) + metric.id.length * 31;
+  const qualifierFirst = pairs.map((_, i) => {
+    let x = (Math.imul(seed + 1, 0x9e3779b1) + Math.imul(i + 1, 0x85ebca77)) >>> 0;
+    x ^= x >>> 15; x = Math.imul(x, 0x2c1b3c6d) >>> 0; x ^= x >>> 13; x = Math.imul(x, 0x297a2d39) >>> 0; x ^= x >>> 16;
+    return (x & 1) === 0;
+  });
+  let run = 1;
+  for (let i = 1; i < qualifierFirst.length; i += 1) {
+    if (qualifierFirst[i] === qualifierFirst[i - 1]) {
+      run += 1;
+      if (run > 3) { qualifierFirst[i] = !qualifierFirst[i]; run = 1; }
+    } else run = 1;
+  }
+
+  const rounds: OneMoreRound[] = pairs.map(({ q, d }, i) =>
+    ({ options: (qualifierFirst[i] ? [toOption(q), toOption(d)] : [toOption(d), toOption(q)]) as [OneMoreOption, OneMoreOption] }));
 
   return {
     puzzle: { modeId: 'one_more', puzzleId: `${date}-one_more`, date, title: metric.title, valueNoun: metric.noun, minimum, rounds },
