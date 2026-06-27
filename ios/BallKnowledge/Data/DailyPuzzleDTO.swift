@@ -288,14 +288,21 @@ struct WorldCupXIPuzzleDTO: Codable, Equatable {
     let modeId: String
     let puzzleId: String
     let date: String
-    let country: String
-    let year: Int
+    let title: String
     let formation: String
-    let manager: String
-    let captain: String
-    let hostNation: String
-    let topScorerClue: String
     let slots: [WorldCupXISlotDTO]
+
+    enum CodingKeys: String, CodingKey { case modeId, puzzleId, date, title, formation, slots }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        modeId = try c.decode(String.self, forKey: .modeId)
+        puzzleId = try c.decode(String.self, forKey: .puzzleId)
+        date = try c.decode(String.self, forKey: .date)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Name the World Cup XI"
+        formation = try c.decodeIfPresent(String.self, forKey: .formation) ?? "4-3-3"
+        slots = try c.decode([WorldCupXISlotDTO].self, forKey: .slots)
+    }
 }
 
 enum DailyPuzzleDTO: Codable, Equatable {

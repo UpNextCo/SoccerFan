@@ -8,13 +8,8 @@ enum DailyChallengeResolver {
         guard let dto = bundle?.worldCupXIPuzzle, dto.slots.count == WorldCupXIPuzzle.slotCount else { return nil }
         return WorldCupXIPuzzle(
             id: dto.puzzleId,
-            country: dto.country,
-            year: dto.year,
+            title: dto.title,
             formation: dto.formation,
-            manager: dto.manager,
-            captain: dto.captain,
-            hostNation: dto.hostNation,
-            topScorerClue: dto.topScorerClue,
             slots: dto.slots.map {
                 WorldCupXISlot(
                     id: $0.id,

@@ -10,10 +10,8 @@ final class WorldCupXIViewModel {
     var searchResults: [PlayerSearchResultDTO] = []
     var isSearching = false
     var showSlotSheet = false
-    var showYearSheet = false
     var showResult = false
     var confettiBurstToken = 0
-    var selectedYear = 2018
 
     private let practice: Bool
     private let dailyBundle: DailyBundleDTO?
@@ -24,7 +22,6 @@ final class WorldCupXIViewModel {
         self.dailyBundle = dailyBundle
         self.dailyDate = dailyDate
         self.state = WorldCupXIGameState(puzzle: Self.resolvePuzzle(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
-        self.selectedYear = 2010
     }
 
     /// Prefer the server-generated puzzle; fall back to the local seed (practice or offline).
@@ -39,28 +36,16 @@ final class WorldCupXIViewModel {
         return state.puzzle.slots.first { $0.id == id }
     }
 
-    var projectedScore: Int {
-        guard state.phase == .playing else { return state.result?.score ?? 0 }
-        var draft = state
-        draft.guessedYear = state.puzzle.year
-        return WorldCupXIScoring.buildResult(puzzle: state.puzzle, state: draft, guessedYear: state.puzzle.year).score
-    }
+    /// A slot is locked once it's been answered (one attempt per clue).
+    func isLocked(_ slot: WorldCupXISlot) -> Bool { state.fills[slot.id] != nil }
 
     func openSlot(_ slot: WorldCupXISlot) {
+        guard state.phase == .playing, !isLocked(slot) else { return }
         HapticManager.light()
-        if !state.revealedSlotIds.contains(slot.id) {
-            state.revealedSlotIds.insert(slot.id)
-        }
         state.activeSlotId = slot.id
-        searchQuery = state.fills[slot.id]?.player.name ?? ""
+        searchQuery = ""
         searchResults = []
         showSlotSheet = true
-    }
-
-    func revealSpecial(_ reveal: WorldCupXISpecialReveal) {
-        guard state.phase == .playing, !state.revealedSpecials.contains(reveal) else { return }
-        HapticManager.light()
-        state.revealedSpecials.insert(reveal)
     }
 
     func search() async {
@@ -79,55 +64,34 @@ final class WorldCupXIViewModel {
     }
 
     func selectPlayer(_ player: PlayerSearchResultDTO) {
-        guard let slotId = state.activeSlotId else { return }
-        state.fills[slotId] = WorldCupXIFill(player: player)
+        guard let slot = activeSlot else { return }
+        let correct = WorldCupXIMatcher.matches(player, expected: slot.expectedName)
+        state.fills[slot.id] = WorldCupXIFill(player: player, isCorrect: correct)
         searchQuery = ""
         searchResults = []
-        HapticManager.success()
+        if correct { HapticManager.success() } else { HapticManager.light() }
         showSlotSheet = false
         state.activeSlotId = nil
+        if state.allAnswered { finish() }
     }
 
-    func clearActiveSlotSelection() {
-        guard let slotId = state.activeSlotId else { return }
-        state.fills.removeValue(forKey: slotId)
-        searchQuery = ""
-        searchResults = []
-    }
-
-    func presentYearGuess() {
-        HapticManager.light()
-        showYearSheet = true
-    }
-
-    func submitYearGuess() {
+    func finish() {
         guard state.phase == .playing else { return }
-        let result = WorldCupXIScoring.buildResult(
-            puzzle: state.puzzle,
-            state: state,
-            guessedYear: selectedYear
-        )
-        state.guessedYear = selectedYear
+        let result = WorldCupXIScoring.buildResult(puzzle: state.puzzle, state: state)
         state.result = result
         state.phase = .complete
-        showYearSheet = false
-        if result.won {
+        if result.correctCount >= 6 {
             confettiBurstToken += 1
             HapticManager.success()
-        } else {
-            HapticManager.error()
         }
         showResult = true
     }
 
     func restart() {
-        let puzzle = practice ? WorldCupXISeed.practicePuzzle() : Self.resolvePuzzle(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle)
-        state = WorldCupXIGameState(puzzle: puzzle)
-        selectedYear = 2010
+        state = WorldCupXIGameState(puzzle: Self.resolvePuzzle(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
         searchQuery = ""
         searchResults = []
         showSlotSheet = false
-        showYearSheet = false
         showResult = false
         confettiBurstToken = 0
     }
@@ -158,7 +122,6 @@ struct WorldCupXIView: View {
                     VStack(spacing: 16) {
                         headerStrip
                         WorldCupXIPitchView(state: viewModel.state, onTapSlot: viewModel.openSlot)
-                        specialRevealRow
                         answerSection
                     }
                     .padding(.horizontal, 16)
@@ -188,9 +151,6 @@ struct WorldCupXIView: View {
         }
         .sheet(isPresented: $viewModel.showSlotSheet) {
             slotSheet
-        }
-        .sheet(isPresented: $viewModel.showYearSheet) {
-            yearSheet
         }
         .fullScreenCover(isPresented: $viewModel.showResult) {
             if let result = viewModel.state.result {
@@ -235,20 +195,20 @@ struct WorldCupXIView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                Text("REVEALS")
+                Text("NAMED")
                     .font(BKFont.caption(10))
                     .tracking(0.8)
                     .foregroundStyle(BKTheme.textMuted)
-                Text("\(viewModel.state.revealCount)")
+                Text("\(viewModel.state.correctCount)/\(WorldCupXIPuzzle.slotCount)")
                     .font(BKFont.headline(16))
                     .foregroundStyle(BKTheme.accent)
             }
             VStack(alignment: .trailing, spacing: 4) {
-                Text("POTENTIAL")
+                Text("POINTS")
                     .font(BKFont.caption(10))
                     .tracking(0.8)
                     .foregroundStyle(BKTheme.textMuted)
-                Text("\(viewModel.projectedScore)")
+                Text("\(viewModel.state.correctCount * WorldCupXIScoring.perCorrect)")
                     .font(BKFont.headline(16))
                     .foregroundStyle(BKTheme.textPrimary)
             }
@@ -258,75 +218,24 @@ struct WorldCupXIView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private var specialRevealRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("STRATEGIC REVEALS")
-                .font(BKFont.caption(10))
-                .tracking(0.8)
-                .foregroundStyle(BKTheme.textMuted)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(WorldCupXISpecialReveal.allCases) { reveal in
-                        let used = viewModel.state.revealedSpecials.contains(reveal)
-                        Button {
-                            viewModel.revealSpecial(reveal)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(reveal.title.uppercased())
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(used ? BKTheme.textMuted : BKTheme.textPrimary)
-                                Text(used ? "REVEALED" : reveal.costLabel)
-                                    .font(BKFont.caption(9))
-                                    .foregroundStyle(used ? BKTheme.accent : BKTheme.textMuted)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(used ? BKTheme.cardElevated : BKTheme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(used ? BKTheme.accent.opacity(0.4) : Color.clear, lineWidth: 1)
-                            }
-                        }
-                        .disabled(used)
-                    }
-                }
-            }
-
-            if !viewModel.state.revealedSpecials.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(WorldCupXISpecialReveal.allCases.filter { viewModel.state.revealedSpecials.contains($0) }) { reveal in
-                        Text(viewModel.state.puzzle.specialClue(for: reveal))
-                            .font(BKFont.body(13))
-                            .foregroundStyle(BKTheme.textSecondary)
-                    }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(BKTheme.cardElevated.opacity(0.6))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-        }
-    }
-
     private var answerSection: some View {
         VStack(spacing: 10) {
-            Text("Guess the World Cup year whenever you're ready. Fewer reveals = higher score.")
+            Text("Tap a position, read the clue, and name the player. Get as many as you can.")
                 .font(BKFont.caption(11))
                 .foregroundStyle(BKTheme.textMuted)
                 .multilineTextAlignment(.center)
 
-            Button(action: viewModel.presentYearGuess) {
-                Text("ANSWER")
+            Button(action: viewModel.finish) {
+                Text(viewModel.state.allAnswered ? "SEE RESULTS" : "FINISH")
                     .font(BKFont.headline(16))
                     .tracking(1)
                     .foregroundStyle(BKTheme.background)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(BKTheme.accent)
+                    .background(viewModel.state.answeredCount > 0 ? BKTheme.accent : BKTheme.cardElevated)
                     .clipShape(Capsule())
             }
+            .disabled(viewModel.state.answeredCount == 0)
         }
         .padding(.top, 4)
     }
@@ -370,14 +279,6 @@ struct WorldCupXIView: View {
                     }
                 }
 
-                if viewModel.activeSlot != nil, viewModel.state.fills[viewModel.state.activeSlotId ?? ""] != nil {
-                    Button("Clear selection") {
-                        viewModel.clearActiveSlotSelection()
-                    }
-                    .font(BKFont.caption(12))
-                    .foregroundStyle(BKTheme.textMuted)
-                }
-
                 Spacer(minLength: 0)
             }
             .padding(16)
@@ -398,47 +299,6 @@ struct WorldCupXIView: View {
         .presentationDetents([.medium, .large])
     }
 
-    private var yearSheet: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Text("Which World Cup year is this XI from?")
-                    .font(BKFont.body())
-                    .foregroundStyle(BKTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-
-                Picker("Year", selection: $viewModel.selectedYear) {
-                    ForEach(WorldCupXIYearOptions.all, id: \.self) { year in
-                        Text(String(year)).tag(year)
-                    }
-                }
-                .pickerStyle(.wheel)
-                .frame(height: 160)
-
-                Button(action: viewModel.submitYearGuess) {
-                    Text("LOCK IN \(viewModel.selectedYear)")
-                        .font(BKFont.headline(15))
-                        .foregroundStyle(BKTheme.background)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(BKTheme.accent)
-                        .clipShape(Capsule())
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(20)
-            .background(BKTheme.background)
-            .navigationTitle("Guess the year")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Cancel") { viewModel.showYearSheet = false }
-                        .foregroundStyle(BKTheme.textMuted)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
 }
 
 // MARK: - Pitch
@@ -474,7 +334,7 @@ private struct WorldCupXIPitchView: View {
                     WorldCupXIPitchSlot(
                         slot: slot,
                         fill: state.fills[slot.id],
-                        revealed: state.revealedSlotIds.contains(slot.id),
+                        revealAnswer: state.phase == .complete,
                         size: geo.size,
                         onTap: { onTapSlot(slot) }
                     )
@@ -488,43 +348,50 @@ private struct WorldCupXIPitchView: View {
 private struct WorldCupXIPitchSlot: View {
     let slot: WorldCupXISlot
     let fill: WorldCupXIFill?
-    let revealed: Bool
+    let revealAnswer: Bool
     let size: CGSize
     var onTap: () -> Void
+
+    private var chipColor: Color {
+        guard let fill else { return Color.black.opacity(0.35) }
+        return fill.isCorrect ? BKTheme.guessCorrect : BKTheme.guessWrong
+    }
+
+    /// When the game ends, show the right answer under any slot that was missed.
+    private var bottomName: String? {
+        if let fill { return shortName(fill.player.name) }
+        if revealAnswer { return shortName(slot.expectedName) }
+        return nil
+    }
 
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 4) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(fill == nil ? Color.black.opacity(0.35) : BKTheme.accent.opacity(0.92))
+                        .fill(chipColor)
                         .frame(width: fill == nil ? 38 : 44, height: fill == nil ? 44 : 48)
                         .overlay {
                             RoundedRectangle(cornerRadius: 8)
                                 .stroke(Color.white.opacity(0.3), lineWidth: 1)
                         }
 
-                    if fill == nil {
-                        Text("?")
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.white.opacity(0.9))
-                    }
+                    Text(fill == nil ? slot.label : (fill!.isCorrect ? "✓" : "✗"))
+                        .font(.system(size: fill == nil ? 10 : 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(fill == nil ? Color.white.opacity(0.85) : Color.white)
                 }
 
-                if let fill {
-                    Text(shortName(fill.player.name))
+                if let bottomName {
+                    Text(bottomName)
                         .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(fill == nil ? Color.white.opacity(0.6) : Color.white)
                         .lineLimit(1)
                         .frame(maxWidth: 72)
-                } else if revealed {
-                    Text(slot.label)
-                        .font(.system(size: 8, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.white.opacity(0.7))
                 }
             }
         }
         .buttonStyle(.plain)
+        .disabled(fill != nil || revealAnswer)
         .position(
             x: slot.pitchPoint.x * size.width,
             y: slot.pitchPoint.y * size.height
@@ -550,24 +417,19 @@ private struct WorldCupXIResultView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
-                    Text(result.won ? "CORRECT!" : "GAME OVER")
+                    Text(result.won ? "GREAT XI!" : "FULL TIME")
                         .font(BKFont.headline(28))
-                        .foregroundStyle(result.won ? BKTheme.accent : BKTheme.guessWrong)
+                        .foregroundStyle(result.won ? BKTheme.accent : BKTheme.textPrimary)
 
-                    Text(feedbackLine)
+                    Text("You named \(result.correctCount) of \(WorldCupXIPuzzle.slotCount).")
                         .font(BKFont.body(15))
                         .foregroundStyle(BKTheme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 8)
 
-                    if result.won {
-                        Text("SCORE: \(result.score)")
-                            .font(BKFont.headline(22))
-                            .foregroundStyle(BKTheme.textPrimary)
-                        Text("\(result.revealsUsed) reveals used")
-                            .font(BKFont.caption(12))
-                            .foregroundStyle(BKTheme.textMuted)
-                    }
+                    Text("SCORE: \(result.score)")
+                        .font(BKFont.headline(22))
+                        .foregroundStyle(BKTheme.accent)
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("YOUR XI")
@@ -634,15 +496,4 @@ private struct WorldCupXIResultView: View {
             }
         }
     }
-
-    private var feedbackLine: String {
-        if result.won {
-            return "You guessed \(result.guessedYear). Correct answer: \(result.puzzle.country) \(result.puzzle.year)."
-        }
-        return "You guessed \(result.guessedYear). Correct answer: \(result.puzzle.country) \(result.puzzle.year)."
-    }
-}
-
-private enum WorldCupXIYearOptions {
-    static let all: [Int] = Array(stride(from: 2022, through: 1950, by: -4))
 }

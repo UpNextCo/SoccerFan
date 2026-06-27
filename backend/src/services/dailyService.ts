@@ -188,9 +188,9 @@ async function ensureWorldCupXiPuzzle(date: string): Promise<void> {
     }
     await db
       .insert(dailyPuzzles)
-      .values({ date, modeId: 'world_cup_xi', puzzleJson: puzzle, answerPlayerId: null, answerJson: { modeId: 'world_cup_xi', year: puzzle.year } })
+      .values({ date, modeId: 'world_cup_xi', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
       .onConflictDoNothing();
-    console.log(`Generated world_cup_xi puzzle for ${date} (${puzzle.year})`);
+    console.log(`Generated world_cup_xi puzzle for ${date} (${puzzle.slots.length} slots)`);
   } catch (error) {
     console.warn(`Skipped world_cup_xi for ${date}: ${error instanceof Error ? error.message : String(error)}`);
   }

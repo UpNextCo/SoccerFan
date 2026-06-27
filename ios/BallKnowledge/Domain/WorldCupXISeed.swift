@@ -23,7 +23,7 @@ enum WorldCupXISeed {
 
     // MARK: - Argentina 2014 (4-2-3-1)
 
-    private static let argentina2014 = WorldCupXIPuzzle(
+    private static let argentina2014 = make(
         id: "argentina_2014",
         country: "Argentina",
         year: 2014,
@@ -82,7 +82,7 @@ enum WorldCupXISeed {
 
     // MARK: - France 2018 (4-2-3-1)
 
-    private static let france2018 = WorldCupXIPuzzle(
+    private static let france2018 = make(
         id: "france_2018",
         country: "France",
         year: 2018,
@@ -141,7 +141,7 @@ enum WorldCupXISeed {
 
     // MARK: - Spain 2010 (4-3-3)
 
-    private static let spain2010 = WorldCupXIPuzzle(
+    private static let spain2010 = make(
         id: "spain_2010",
         country: "Spain",
         year: 2010,
@@ -200,7 +200,7 @@ enum WorldCupXISeed {
 
     // MARK: - Germany 2014 (4-2-3-1)
 
-    private static let germany2014 = WorldCupXIPuzzle(
+    private static let germany2014 = make(
         id: "germany_2014",
         country: "Germany",
         year: 2014,
@@ -259,7 +259,7 @@ enum WorldCupXISeed {
 
     // MARK: - Italy 2006 (4-4-2 diamond)
 
-    private static let italy2006 = WorldCupXIPuzzle(
+    private static let italy2006 = make(
         id: "italy_2006",
         country: "Italy",
         year: 2006,
@@ -318,7 +318,7 @@ enum WorldCupXISeed {
 
     // MARK: - Brazil 2002 (3-4-1-2)
 
-    private static let brazil2002 = WorldCupXIPuzzle(
+    private static let brazil2002 = make(
         id: "brazil_2002",
         country: "Brazil",
         year: 2002,
@@ -387,6 +387,15 @@ enum WorldCupXISeed {
             hash = ((hash << 5) &+ hash) &+ Int(char)
         }
         return hash
+    }
+
+    /// Adapts the legacy single-tournament seed data onto the current "name the XI" model.
+    /// (Offline/practice fallback only; the live game uses the server-generated cross-tournament XI.)
+    private static func make(
+        id: String, country: String, year: Int, formation: String, manager: String,
+        captain: String, hostNation: String, topScorerClue: String, slots: [WorldCupXISlot]
+    ) -> WorldCupXIPuzzle {
+        WorldCupXIPuzzle(id: id, title: "\(country) \(year)", formation: formation, slots: slots)
     }
 
     private static func slot(

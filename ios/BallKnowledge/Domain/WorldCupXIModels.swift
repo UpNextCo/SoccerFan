@@ -1,26 +1,6 @@
 import Foundation
 import CoreGraphics
 
-enum WorldCupXISpecialReveal: String, CaseIterable, Identifiable {
-    case captain
-    case manager
-    case host
-    case topScorer
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .captain: return "Captain"
-        case .manager: return "Manager"
-        case .host: return "Host nation"
-        case .topScorer: return "Top scorer"
-        }
-    }
-
-    var costLabel: String { "−60 pts" }
-}
-
 struct WorldCupXISlot: Identifiable, Equatable {
     let id: String
     let label: String
@@ -33,25 +13,11 @@ struct WorldCupXISlot: Identifiable, Equatable {
 
 struct WorldCupXIPuzzle: Equatable {
     let id: String
-    let country: String
-    let year: Int
+    let title: String
     let formation: String
-    let manager: String
-    let captain: String
-    let hostNation: String
-    let topScorerClue: String
     let slots: [WorldCupXISlot]
 
     static let slotCount = 11
-
-    func specialClue(for reveal: WorldCupXISpecialReveal) -> String {
-        switch reveal {
-        case .captain: return "Captain: \(captain)"
-        case .manager: return "Manager: \(manager)"
-        case .host: return "Host nation: \(hostNation)"
-        case .topScorer: return topScorerClue
-        }
-    }
 }
 
 enum WorldCupXIPhase: Equatable {
@@ -59,17 +25,10 @@ enum WorldCupXIPhase: Equatable {
     case complete
 }
 
+/// A player named for a slot, with whether it matched the clue's answer.
 struct WorldCupXIFill: Equatable {
     let player: PlayerSearchResultDTO
-}
-
-struct WorldCupXIResultSummary: Equatable {
-    let puzzle: WorldCupXIPuzzle
-    let guessedYear: Int
-    let won: Bool
-    let score: Int
-    let slotResults: [WorldCupXISlotResult]
-    let revealsUsed: Int
+    let isCorrect: Bool
 }
 
 struct WorldCupXISlotResult: Identifiable, Equatable {
@@ -79,30 +38,32 @@ struct WorldCupXISlotResult: Identifiable, Equatable {
     var id: String { slot.id }
 }
 
+struct WorldCupXIResultSummary: Equatable {
+    let puzzle: WorldCupXIPuzzle
+    let correctCount: Int
+    let score: Int
+    let won: Bool
+    let slotResults: [WorldCupXISlotResult]
+}
+
 struct WorldCupXIGameState: Equatable {
     let puzzle: WorldCupXIPuzzle
     var phase: WorldCupXIPhase
     var fills: [String: WorldCupXIFill]
-    var revealedSlotIds: Set<String>
-    var revealedSpecials: Set<WorldCupXISpecialReveal>
     var activeSlotId: String?
-    var guessedYear: Int?
     var result: WorldCupXIResultSummary?
 
     init(puzzle: WorldCupXIPuzzle) {
         self.puzzle = puzzle
         phase = .playing
         fills = [:]
-        revealedSlotIds = []
-        revealedSpecials = []
         activeSlotId = nil
-        guessedYear = nil
         result = nil
     }
 
-    var revealCount: Int {
-        revealedSlotIds.count + revealedSpecials.count
-    }
+    var correctCount: Int { fills.values.filter(\.isCorrect).count }
+    var answeredCount: Int { fills.count }
+    var allAnswered: Bool { fills.count >= puzzle.slots.count }
 }
 
 enum WorldCupXIMatcher {
@@ -147,40 +108,22 @@ enum WorldCupXIMatcher {
 }
 
 enum WorldCupXIScoring {
-    static let baseScore = 1000
-    static let slotRevealCost = 45
-    static let specialRevealCost = 60
-    static let wrongPlayerPenalty = 25
-    static let correctPlayerBonus = 12
+    static let perCorrect = 100
 
-    static func buildResult(puzzle: WorldCupXIPuzzle, state: WorldCupXIGameState, guessedYear: Int) -> WorldCupXIResultSummary {
-        let won = guessedYear == puzzle.year
-        var score = won ? baseScore : 0
-
-        if won {
-            score -= state.revealedSlotIds.count * slotRevealCost
-            score -= state.revealedSpecials.count * specialRevealCost
-        }
-
+    static func buildResult(puzzle: WorldCupXIPuzzle, state: WorldCupXIGameState) -> WorldCupXIResultSummary {
         let slotResults = puzzle.slots.map { slot -> WorldCupXISlotResult in
-            let guess = state.fills[slot.id]?.player.name
-            let isCorrect = guess.map { WorldCupXIMatcher.namesMatch($0, slot.expectedName) } ?? false
-            if won, let guess, !isCorrect {
-                score -= wrongPlayerPenalty
-            }
-            if won, isCorrect {
-                score += correctPlayerBonus
-            }
-            return WorldCupXISlotResult(slot: slot, guessedName: guess, isCorrect: isCorrect)
+            let fill = state.fills[slot.id]
+            return WorldCupXISlotResult(slot: slot, guessedName: fill?.player.name, isCorrect: fill?.isCorrect ?? false)
         }
-
+        let correct = slotResults.filter(\.isCorrect).count
         return WorldCupXIResultSummary(
             puzzle: puzzle,
-            guessedYear: guessedYear,
-            won: won,
-            score: max(0, score),
-            slotResults: slotResults,
-            revealsUsed: state.revealCount
+            correctCount: correct,
+            score: correct * perCorrect,
+            won: correct >= 6,
+            slotResults: slotResults
         )
     }
+
+    static func xp(from score: Int) -> Int { max(10, score / 10) }
 }
