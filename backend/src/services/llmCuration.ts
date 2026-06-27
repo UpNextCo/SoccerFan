@@ -196,6 +196,91 @@ export async function nominateStinkers(
   }
 }
 
+/**
+ * Ask Claude to recall MEMORABLE players from a specific World Cup, each with a cryptic,
+ * story-based clue in the style of a fan quiz ("the masked defender who had a breakout
+ * tournament" → Gvardiol; "the defender who got bitten" → Chiellini). Claude supplies cultural
+ * recall + clue wording ONLY; the caller MUST resolve every name to a player who was actually in
+ * that tournament's squad (DB) and a human validates the bank — so no hallucinated fact ships.
+ * Returns proposals, or null on failure.
+ */
+export interface MemorableProposal { player: string; position: 'GK' | 'DF' | 'MF' | 'FW'; clue: string; }
+
+export async function proposeMemorable(year: number, count = 35): Promise<MemorableProposal[] | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  const classic = year < 2006;
+
+  const system = [
+    'You curate a daily football quiz called "World Cup XI": the player is shown 11 cryptic clues',
+    'and must NAME each footballer. Your job: list the most MEMORABLE players from ONE World Cup,',
+    'each with a single cryptic clue a fan would smile at — favour STORIES and iconic moments over',
+    'dry stats, like these real examples:',
+    '  - "The masked defender who had a breakout tournament" (Gvardiol, 2022)',
+    '  - "The defender who got bitten at this World Cup" (Chiellini, 2014)',
+    '  - "The midfielder whose goal clearly crossed the line but was not given" (Lampard, 2010)',
+    '  - "The midfielder who finished the famous 24-pass team goal" (Cambiasso, 2006)',
+    '  - "The goalkeeper sent off, who has played in the Premier League" (Hennessey, 2022)',
+    '',
+    'RECOGNISABILITY IS THE #1 RULE. Every player must be someone a CASUAL modern football fan',
+    'would actually recognise the name of TODAY. Never include journeymen, role players, or',
+    'one-tournament names that only a hardcore fan of that era would know (no "Earnie Stewart",',
+    '"Oleg Salenko", "Christophe Dugarry" types).',
+    '',
+    ...(classic
+      ? [
+          `This is an OLDER World Cup (${year}). Be STRICT: include ONLY genuinely ICONIC, global`,
+          'household names that today\'s casual fan still instantly knows — World Cup winners,',
+          'Ballon d\'Or-level superstars, and a couple of truly unforgettable moments. If in doubt,',
+          'leave a player OUT. Quality over quantity.',
+        ]
+      : [
+          'This is a recent World Cup, so you can include the full memorable range: superstars PLUS',
+          'recognisable cult/role players and big moments (red cards, own goals, golden boot/glove,',
+          'captains, shock villains, breakout players).',
+        ]),
+    '',
+    'Rules:',
+    '- Every clue must be TRUE and specific to THAT World Cup, and resolve to exactly one player.',
+    '- The clue must NOT contain the player\'s name. Do not state the year (the puzzle adds it).',
+    '- Lead with the player\'s position word where natural ("defender", "midfielder", etc.).',
+    '- Use the common full name. Give a position tag: GK, DF, MF or FW.',
+    '',
+    'Return ONLY JSON: {"players":[{"player":"Full Name","position":"DF","clue":"The ... who ..."}]}',
+  ].join('\n');
+
+  const user = [
+    `World Cup: ${year}.`,
+    `List up to ${count} memorable players from the ${year} World Cup with a cryptic, story-led clue each.`,
+    classic
+      ? 'Only the genuinely iconic — it is fine to return fewer than the maximum.'
+      : 'Spread across positions (a few GK, several DF, several MF, several FW).',
+    'JSON only.',
+  ].join('\n');
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const resp = await client.messages.create({
+      model: MODEL,
+      max_tokens: 4000,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const text = resp.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    const parsed = JSON.parse(extractJson(text)) as { players?: MemorableProposal[] };
+    if (!parsed.players?.length) return null;
+    return parsed.players
+      .filter((p) => p.player && p.clue && ['GK', 'DF', 'MF', 'FW'].includes(p.position))
+      .map((p) => ({ player: p.player.trim(), position: p.position, clue: p.clue.trim() }));
+  } catch (err) {
+    console.warn(`Memorable proposal failed (${err instanceof Error ? err.message : String(err)}).`);
+    return null;
+  }
+}
+
 function extractJson(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced?.[1]) return fenced[1].trim();

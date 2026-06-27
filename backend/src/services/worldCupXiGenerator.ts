@@ -115,6 +115,12 @@ async function gatherCandidates(): Promise<Scored[]> {
   `)) as unknown as Array<{ playerId: string; n: number }>;
   const wcScored = new Map(multiWc.map((m) => [m.playerId, m.n]));
 
+  // Curated, human-QA'd "memorable moments" clues — the premium, story-led source.
+  const memorable = (await db.execute(sql`
+    SELECT player_id AS "playerId", year, clue FROM wc_memorable WHERE status = 'active' AND player_id IS NOT NULL
+  `)) as unknown as Array<{ playerId: string; year: number; clue: string }>;
+  const memBy = new Map(memorable.map((m) => [`${m.playerId}|${m.year}`, m.clue]));
+
   const careerFlavor = (id: string): string => {
     const ls = leagueBy.get(id);
     if (ls?.has(39)) return ' who has played in the Premier League';
@@ -129,6 +135,9 @@ async function gatherCandidates(): Promise<Scored[]> {
     const cf = careerFlavor(c.playerId);
     const facts: Fact[] = [];
     const y = c.year;
+
+    const mem = memBy.get(`${c.playerId}|${y}`);
+    if (mem) facts.push({ sig: 'memorable', score: 200, clue: mem });
 
     const award = awardBy.get(`${c.playerId}|${y}`);
     if (award) facts.push({ sig: `award:${award}`, score: 100, clue: `The ${dem} ${pw} who won the ${AWARD_SHORT[award]} at the ${y} World Cup` });
@@ -167,7 +176,7 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
 
   // One entry per player: keep their best (clue strength + fame + recency). This dedupes a
   // player appearing across multiple tournaments to a single, strongest, recency-biased clue.
-  const value = (x: Scored) => x.facts[0]!.score + x.c.mvt * 14 + (YEAR_WEIGHT[x.c.year] ?? 4);
+  const value = (x: Scored) => x.facts[0]!.score + x.c.mvt * 8 + (YEAR_WEIGHT[x.c.year] ?? 4);
   const bestByPlayer = new Map<string, Scored>();
   for (const x of all) {
     const prev = bestByPlayer.get(x.c.playerId);
@@ -175,10 +184,11 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
   }
   const pool = [...bestByPlayer.values()];
 
-  // Deterministic daily shuffle within position buckets, then take the top by value (so the XI
-  // varies day to day but stays recognisable + recent-biased).
+  // Deterministic daily shuffle within position buckets. A wide jitter (≈ the fame spread) means
+  // the day's XI rotates through the deep curated + structured pool — different almost every day —
+  // while the high base score of memorable/award clues keeps the picks recognisable.
   const seed = hashString(`${date}:wcxi`);
-  const jitter = (x: Scored, i: number) => value(x) + ((hashString(`${seed}:${x.c.playerId}:${i}`) % 100) / 100) * 18;
+  const jitter = (x: Scored, i: number) => value(x) + ((hashString(`${seed}:${x.c.playerId}:${i}`) % 1000) / 1000) * 70;
 
   const used = new Set<string>();
   const usedSig = new Set<string>();

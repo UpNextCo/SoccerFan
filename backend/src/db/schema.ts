@@ -411,6 +411,30 @@ export const wcMatchEvents = pgTable(
   ]
 );
 
+/**
+ * Curated "memorable World Cup moments" clue bank for the World Cup XI game. Claude proposes
+ * story-led clues per tournament (build-wc-memorable), each DB-verified to a player in that
+ * year's squad, then human-QA'd (status active|rejected) via the review CSV. The generator
+ * prefers these over auto-generated structured clues.
+ */
+export const wcMemorable = pgTable(
+  'wc_memorable',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    year: integer('year').notNull(),
+    playerId: uuid('player_id').references(() => players.id, { onDelete: 'cascade' }),
+    playerName: text('player_name').notNull(),
+    position: text('position').notNull().default(''),
+    clue: text('clue').notNull(),
+    status: text('status').notNull().default('active'), // active | rejected
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('wc_memorable_unique').on(table.year, table.playerId),
+    index('wc_memorable_year_status_idx').on(table.year, table.status),
+  ]
+);
+
 export const dailyCompletions = pgTable(
   'daily_completions',
   {
@@ -496,3 +520,4 @@ export type PlayerAward = typeof playerAwards.$inferSelect;
 export type PlayerExtraStats = typeof playerExtraStats.$inferSelect;
 export type WcSquad = typeof wcSquads.$inferSelect;
 export type WcMatchEvent = typeof wcMatchEvents.$inferSelect;
+export type WcMemorable = typeof wcMemorable.$inferSelect;

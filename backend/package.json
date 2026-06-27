@@ -69,6 +69,7 @@
     "job:ingest-wc-events-statsbomb": "tsx src/jobs/ingest-wc-events-statsbomb.ts",
     "job:ingest-wc-events-wikipedia": "tsx src/jobs/ingest-wc-events-wikipedia.ts",
     "job:ingest-sub-positions": "tsx src/jobs/ingest-sub-positions.ts",
+    "job:build-wc-memorable": "tsx src/jobs/build-wc-memorable.ts",
     "job:normalize-nationalities": "tsx src/jobs/normalize-nationalities.ts",
     "job:dedupe-stat-rows": "tsx src/jobs/dedupe-stat-rows.ts",
     "job:refresh-current-club": "tsx src/jobs/refresh-current-club.ts"
