@@ -62,16 +62,23 @@ final class DraftMasterViewModel {
 
         do {
             let results = try await APIClient.shared.searchPlayers(query: query)
-            // Filter on NATIONALITY + an open position only. Whether they actually played the
-            // prompt's league (career, not just current club) is confirmed server-side on select,
-            // so a Brazilian who has since left La Liga still qualifies for "Brazil + La Liga".
-            searchResults = results.filter { player in
-                DraftMasterMatcher.nationalityMatches(player.nationality, prompt.nationality)
-                    && !state.usedPlayerIds.contains(player.id)
-                    && DraftMasterPositionMapper.canFit(player, filled: state.filledPositions)
-            }
-            .prefix(PlayerSearchLimits.maxResults)
-            .map { $0 }
+            // Filter on NATIONALITY only (+ not already used). We deliberately do NOT hide players
+            // whose position bucket is full — DB positions are coarse (GK/DEF/MID/ATT) and that would
+            // make the search silently return nothing once a bucket fills. Instead, surface players
+            // that still fit a natural slot first, but always show the rest so a pick is always
+            // possible. League tenure is confirmed server-side on select.
+            let filled = state.filledPositions
+            searchResults = results
+                .filter { player in
+                    DraftMasterMatcher.nationalityMatches(player.nationality, prompt.nationality)
+                        && !state.usedPlayerIds.contains(player.id)
+                }
+                .sorted { a, b in
+                    DraftMasterPositionMapper.fitsNaturally(a, filled: filled)
+                        && !DraftMasterPositionMapper.fitsNaturally(b, filled: filled)
+                }
+                .prefix(PlayerSearchLimits.maxResults)
+                .map { $0 }
         } catch {
             searchResults = []
         }
@@ -91,8 +98,8 @@ final class DraftMasterViewModel {
             return
         }
         guard let league = DraftMasterMatcher.league(from: prompt),
-              let position = DraftMasterPositionMapper.resolvePosition(for: player, filled: state.filledPositions) else {
-            selectionError = DraftMasterPositionMapper.positionConflictMessage(for: player)
+              let position = DraftMasterPositionMapper.assignSlot(for: player, filled: state.filledPositions) else {
+            selectionError = "Your XI is already full"
             HapticManager.error()
             return
         }
@@ -815,7 +822,7 @@ private struct DraftMasterSearchSection: View {
                                     Text("\(player.nationality) · \(player.league)")
                                         .font(BKFont.caption(11))
                                         .foregroundStyle(BKTheme.textMuted)
-                                    if let slot = DraftMasterPositionMapper.resolvePosition(
+                                    if let slot = DraftMasterPositionMapper.assignSlot(
                                         for: player,
                                         filled: viewModel.state.filledPositions
                                     ) {

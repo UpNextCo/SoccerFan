@@ -38,15 +38,21 @@ function dayNumber(date: string): number {
 export async function generateDraftMasterPuzzle(date: string): Promise<DraftMasterPuzzleJson | null> {
   const category = CATEGORIES[dayNumber(date) % CATEGORIES.length]!;
 
-  // Viable prompts: a nationality × big-5 league with enough FAMOUS real qualifiers that a fan
-  // can name several (guarantees solvability + recognisability).
+  // Viable prompts: a nationality × big-5 league needs ≥6 players who are BOTH famous-ish
+  // (market_value_tier ≥ 3) AND actually had a real tenure in that league (≥40 league apps, not a
+  // late-career cameo). This is what makes a combo genuinely nameable — it excludes e.g.
+  // "Serbia + Ligue 1" where the only "qualifiers" are brief Matić/Kežman spells.
   const rows = (await db.execute(sql`
-    SELECT p.nationality AS nat, s.league_id AS league,
-      COUNT(DISTINCT p.id) FILTER (WHERE p.market_value_tier >= 3) AS famous
-    FROM players p JOIN player_stats s ON s.player_id = p.id
-    WHERE s.league_id IN (39, 140, 135, 78, 61) AND s.appearances > 0 AND p.nationality <> 'Unknown'
-    GROUP BY p.nationality, s.league_id
-    HAVING COUNT(DISTINCT p.id) FILTER (WHERE p.market_value_tier >= 3) >= 5
+    WITH pl AS (
+      SELECT p.id, p.nationality AS nat, s.league_id AS lg, p.market_value_tier AS mvt,
+             SUM(s.appearances)::int AS apps
+      FROM players p JOIN player_stats s ON s.player_id = p.id
+      WHERE s.league_id IN (39, 140, 135, 78, 61) AND p.nationality <> 'Unknown'
+      GROUP BY p.id, p.nationality, s.league_id, p.market_value_tier
+    )
+    SELECT nat, lg AS league, COUNT(*) FILTER (WHERE mvt >= 3 AND apps >= 40) AS famous
+    FROM pl GROUP BY nat, lg
+    HAVING COUNT(*) FILTER (WHERE mvt >= 3 AND apps >= 40) >= 6
   `)) as unknown as Array<{ nat: string; league: number; famous: number }>;
   if (rows.length < 11) return null;
 

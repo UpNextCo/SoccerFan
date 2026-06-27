@@ -292,10 +292,6 @@ enum DraftMasterPositionMapper {
         return [.cm, .st]
     }
 
-    static func canFit(_ player: PlayerSearchResultDTO, filled: Set<DraftMasterPosition>) -> Bool {
-        resolvePosition(for: player, filled: filled) != nil
-    }
-
     static func resolvePosition(
         for player: PlayerSearchResultDTO,
         filled: Set<DraftMasterPosition>
@@ -308,9 +304,19 @@ enum DraftMasterPositionMapper {
         return nil
     }
 
-    static func positionConflictMessage(for player: PlayerSearchResultDTO) -> String {
-        let roles = roles(for: player.position).map(\.label).joined(separator: "/")
-        return "\(roles) slot already filled"
+    /// Whether a player would slot naturally into one of their position's open roles. Used only to
+    /// surface the most sensible picks first in search — it never blocks a pick.
+    static func fitsNaturally(_ player: PlayerSearchResultDTO, filled: Set<DraftMasterPosition>) -> Bool {
+        resolvePosition(for: player, filled: filled) != nil
+    }
+
+    /// Pick a pitch slot for a drafted player. Prefers their natural role; if every slot for that
+    /// role is taken, falls back to ANY open slot. DB positions are only coarse buckets
+    /// (GK/DEF/MID/ATT) and the formation needs a fixed 1/4/3/3, so a strict mapping would let a
+    /// player become un-draftable and dead-end the daily puzzle — this guarantees a pick always lands.
+    static func assignSlot(for player: PlayerSearchResultDTO, filled: Set<DraftMasterPosition>) -> DraftMasterPosition? {
+        if let natural = resolvePosition(for: player, filled: filled) { return natural }
+        return DraftMasterPosition.allCases.first { !filled.contains($0) }
     }
 
     private static func firstAvailableSlot(
