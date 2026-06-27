@@ -160,7 +160,9 @@ export async function searchPlayers(
   const seen = new Set<string>();
 
   for (const player of rows) {
-    const key = normalizeSearchText(player.name);
+    // Dedupe by player IDENTITY, not name — two different people can share a name (e.g. Nico
+    // González of Spain vs Argentina), and a name-key would hide the lower-ranked real player.
+    const key = player.external_id ?? player.id;
     if (seen.has(key)) continue;
     seen.add(key);
 
