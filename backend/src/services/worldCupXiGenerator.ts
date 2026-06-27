@@ -53,12 +53,22 @@ const AWARD_SHORT: Record<string, string> = {
 };
 const POS_WORD: Record<string, string> = { GK: 'goalkeeper', DF: 'defender', MF: 'midfielder', FW: 'forward' };
 
+// Transfermarkt sub_position → the fine pitch slot it can fill in a 4-3-3.
+const SUBPOS_SLOT: Record<string, string> = {
+  Goalkeeper: 'GK',
+  'Right-Back': 'RB', 'Left-Back': 'LB', 'Centre-Back': 'CB',
+  'Defensive Midfield': 'CM', 'Central Midfield': 'CM', 'Attacking Midfield': 'CM',
+  'Right Winger': 'RW', 'Right Midfield': 'RW',
+  'Left Winger': 'LW', 'Left Midfield': 'LW',
+  'Centre-Forward': 'ST', 'Second Striker': 'ST',
+};
+
 function hashString(input: string): number {
   let h = 0;
   for (let i = 0; i < input.length; i += 1) { h = (h << 5) - h + input.charCodeAt(i); h |= 0; }
   return Math.abs(h);
 }
-interface Cand { playerId: string; name: string; country: string; position: string; year: number; mvt: number; isCaptain: boolean; }
+interface Cand { playerId: string; name: string; country: string; position: string; subPosition: string | null; year: number; mvt: number; isCaptain: boolean; }
 interface Ev { type: string; stage: string; opponent: string; detail: string | null; }
 interface Fact { sig: string; score: number; clue: string; }
 interface Scored { c: Cand; facts: Fact[]; }
@@ -78,7 +88,7 @@ export interface WorldCupXiPuzzleJson {
 /** Gather every (player, tournament) candidate across all World Cups with a ranked clue list. */
 async function gatherCandidates(): Promise<Scored[]> {
   const cands = (await db.execute(sql`
-    SELECT s.player_id AS "playerId", p.name, s.country, s.position, s.year, p.market_value_tier AS mvt, s.is_captain AS "isCaptain"
+    SELECT s.player_id AS "playerId", p.name, s.country, s.position, p.sub_position AS "subPosition", s.year, p.market_value_tier AS mvt, s.is_captain AS "isCaptain"
     FROM wc_squads s JOIN players p ON p.id = s.player_id
     WHERE s.position IN ('GK','DF','MF','FW')
   `)) as unknown as Cand[];
@@ -173,27 +183,37 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
   const used = new Set<string>();
   const usedSig = new Set<string>();
   const slots: WorldCupXiSlot[] = [];
-  const bucketPlayers = (bucket: string) =>
-    pool.filter((x) => x.c.position === bucket).map((x, i) => ({ x, j: jitter(x, i) })).sort((a, b) => b.j - a.j);
+  const fineSlot = (x: Scored): string | null => (x.c.subPosition ? SUBPOS_SLOT[x.c.subPosition] ?? null : null);
 
-  const byBucket: Record<string, Array<{ x: Scored; j: number }>> = {
-    GK: bucketPlayers('GK'), DF: bucketPlayers('DF'), MF: bucketPlayers('MF'), FW: bucketPlayers('FW'),
+  // FINE pools (RB only holds right-backs, etc.) used first; COARSE pools (any DF/MF/FW) are the
+  // fallback so a thin tournament never leaves a hole.
+  const sortPool = (filter: (x: Scored) => boolean) =>
+    pool.filter(filter).map((x, i) => ({ x, j: jitter(x, i) })).sort((a, b) => b.j - a.j);
+  const fine: Record<string, Array<{ x: Scored; j: number }>> = {};
+  for (const label of ['GK', 'RB', 'CB', 'LB', 'CM', 'RW', 'LW', 'ST']) fine[label] = sortPool((x) => fineSlot(x) === label);
+  const coarse: Record<string, Array<{ x: Scored; j: number }>> = {
+    GK: sortPool((x) => x.c.position === 'GK'), DF: sortPool((x) => x.c.position === 'DF'),
+    MF: sortPool((x) => x.c.position === 'MF'), FW: sortPool((x) => x.c.position === 'FW'),
   };
-  const cursor: Record<string, number> = { GK: 0, DF: 0, MF: 0, FW: 0 };
+  const cursor: Record<string, number> = {};
+
+  const take = (list: Array<{ x: Scored; j: number }>, key: string): Scored | null => {
+    cursor[key] ??= 0;
+    while (cursor[key]! < list.length) {
+      const { x } = list[cursor[key]!]!;
+      cursor[key] += 1;
+      if (!used.has(x.c.playerId)) return x;
+    }
+    return null;
+  };
 
   for (const pos of LAYOUT) {
-    const list = byBucket[pos.bucket]!;
-    // advance to the next unused player whose top-available clue sig isn't already used
-    while (cursor[pos.bucket]! < list.length) {
-      const { x } = list[cursor[pos.bucket]!]!;
-      cursor[pos.bucket] += 1;
-      if (used.has(x.c.playerId)) continue;
-      const fact = x.facts.find((f) => !usedSig.has(f.sig)) ?? x.facts[0]!;
-      used.add(x.c.playerId);
-      usedSig.add(fact.sig);
-      slots.push({ id: `${pos.label}-${slots.length}`, label: pos.label, x: pos.x, y: pos.y, expectedName: x.c.name, clues: [fact.clue] });
-      break;
-    }
+    const x = take(fine[pos.label] ?? [], `fine:${pos.label}`) ?? take(coarse[pos.bucket]!, `coarse:${pos.bucket}`);
+    if (!x) continue;
+    const fact = x.facts.find((f) => !usedSig.has(f.sig)) ?? x.facts[0]!;
+    used.add(x.c.playerId);
+    usedSig.add(fact.sig);
+    slots.push({ id: `${pos.label}-${slots.length}`, label: pos.label, x: pos.x, y: pos.y, expectedName: x.c.name, clues: [fact.clue] });
   }
   if (slots.length < 11) return null;
 

@@ -47,6 +47,7 @@ export const players = pgTable(
     currentLeague: text('current_league').notNull(),
     shirtNumber: integer('shirt_number'),
     foot: text('foot'), // 'left' | 'right' | 'both' — preferred foot, from Transfermarkt
+    subPosition: text('sub_position'), // fine position from Transfermarkt (Right-Back, Centre-Back, Left Winger…)
     marketValueTier: integer('market_value_tier').notNull().default(3),
     marketValueEur: integer('market_value_eur'),
     peakMarketValueEur: integer('peak_market_value_eur'),

@@ -228,8 +228,29 @@ async function migrateStaleBlindRank(date: string): Promise<void> {
   }
 }
 
+/**
+ * Drop a stored World Cup XI puzzle if it predates the cross-tournament "name the XI" format
+ * (the old single-tournament version had `country`/`year` and no `title`), so it regenerates.
+ */
+async function migrateStaleWorldCupXi(date: string): Promise<void> {
+  const rows = await db
+    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'world_cup_xi')))
+    .limit(1);
+  const puzzle = rows[0]?.puzzleJson as { country?: unknown; title?: unknown } | undefined;
+  if (!puzzle) return;
+  if (puzzle.country !== undefined || typeof puzzle.title !== 'string') {
+    await db
+      .delete(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'world_cup_xi')));
+    console.log(`Removed stale world_cup_xi puzzle for ${date} (will regenerate)`);
+  }
+}
+
 async function ensureDailyPuzzles(date: string): Promise<void> {
   await migrateStaleBlindRank(date);
+  await migrateStaleWorldCupXi(date);
 
   const rows = await db
     .select({ modeId: dailyPuzzles.modeId })
