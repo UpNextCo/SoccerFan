@@ -19,7 +19,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .guessWho: return "GUESS WHO?"
         case .footballGolf: return "FOOTBALL GOLF"
         case .blindRank: return "BLIND RANK"
-        case .draftMaster: return "DRAFT MASTER"
+        case .draftMaster: return "BATTLE MODE"
         case .oneMore: return "ONE MORE"
         case .footballTower: return "FOOTBALL TOWER"
         }

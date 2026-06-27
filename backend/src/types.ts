@@ -188,6 +188,8 @@ export interface PlayerSearchResult {
   league: string;
   nationality: string;
   position: string;
+  /** Transfer-budget price in EUR (peak market value, with a tier-based fallback). */
+  priceEur: number;
   teamId?: number;
   teamLogoUrl?: string;
 }

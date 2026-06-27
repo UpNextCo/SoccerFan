@@ -15,7 +15,22 @@ type SearchRow = {
   position: string;
   current_club: string;
   current_league: string;
+  peak_market_value_eur: number | null;
+  market_value_tier: number | null;
 };
+
+/** Transfer-budget price for Battle Mode: peak market value, or a tier-based estimate when missing. */
+const TIER_PRICE_EUR: Record<number, number> = {
+  5: 120_000_000,
+  4: 55_000_000,
+  3: 22_000_000,
+  2: 8_000_000,
+  1: 2_000_000,
+};
+function playerPriceEur(peak: number | null, tier: number | null): number {
+  if (peak && peak > 0) return peak;
+  return TIER_PRICE_EUR[tier ?? 3] ?? TIER_PRICE_EUR[3]!;
+}
 
 export type FeedbackStatus = 'correct' | 'partial' | 'wrong';
 
@@ -117,6 +132,8 @@ export async function searchPlayers(
       p.position,
       p.current_club,
       p.current_league,
+      p.peak_market_value_eur,
+      p.market_value_tier,
       (
         CASE
           WHEN lower(p.name) = ${normalized} THEN 200
@@ -173,6 +190,7 @@ export async function searchPlayers(
       league: player.current_league,
       nationality: player.nationality,
       position: player.position,
+      priceEur: playerPriceEur(player.peak_market_value_eur, player.market_value_tier),
     });
 
     if (deduped.length >= resultLimit) break;

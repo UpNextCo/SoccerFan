@@ -177,13 +177,6 @@ actor APIClient {
         }
     }
 
-    func draftMasterValue(leagueId: Int, category: String, playerId: String) async throws -> (value: Int, apps: Int) {
-        struct Body: Encodable { let leagueId: Int; let category: String; let playerId: String }
-        struct Resp: Decodable { let value: Int; let apps: Int }
-        let r: Resp = try await request("daily/draftmaster/value", method: "POST", body: Body(leagueId: leagueId, category: category, playerId: playerId))
-        return (r.value, r.apps)
-    }
-
     func targetManValues(categoryId: String, playerIds: [String]) async throws -> [String: Int] {
         struct Body: Encodable { let categoryId: String; let playerIds: [String] }
         struct Entry: Decodable { let id: String; let value: Int }

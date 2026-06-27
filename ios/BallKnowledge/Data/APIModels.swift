@@ -112,6 +112,9 @@ struct PlayerSearchResultDTO: Codable, Identifiable, Equatable {
     let league: String
     let nationality: String
     let position: String
+    /// Transfer-budget price in EUR (peak market value + tier fallback). Optional so locally
+    /// constructed results (seeds) and older payloads still decode.
+    let priceEur: Double?
     let teamId: Int?
     let teamLogoUrl: String?
 
@@ -122,6 +125,7 @@ struct PlayerSearchResultDTO: Codable, Identifiable, Equatable {
         league: String,
         nationality: String,
         position: String,
+        priceEur: Double? = nil,
         teamId: Int? = nil,
         teamLogoUrl: String? = nil
     ) {
@@ -131,6 +135,7 @@ struct PlayerSearchResultDTO: Codable, Identifiable, Equatable {
         self.league = league
         self.nationality = nationality
         self.position = position
+        self.priceEur = priceEur
         self.teamId = teamId
         self.teamLogoUrl = teamLogoUrl
     }

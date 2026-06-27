@@ -98,26 +98,6 @@ dailyRouter.post('/guesswho/hint', requireAuth, async (req, res) => {
   }
 });
 
-// Draft Master: a picked player's league-career stat for the category + apps (eligibility).
-const draftValueSchema = z.object({
-  leagueId: z.number().int(),
-  category: z.enum(['goals', 'assists', 'goalsPlusAssists', 'appearances', 'appearancesMinusYellowCards']),
-  playerId: z.string().uuid(),
-});
-dailyRouter.post('/draftmaster/value', requireAuth, async (req, res) => {
-  const parsed = draftValueSchema.safeParse(req.body);
-  if (!parsed.success) {
-    sendError(res, 'Invalid request body', 400);
-    return;
-  }
-  try {
-    const { draftMasterValue } = await import('../services/draftMasterGenerator.js');
-    sendSuccess(res, await draftMasterValue(parsed.data.leagueId, parsed.data.category, parsed.data.playerId));
-  } catch (err) {
-    sendError(res, err instanceof Error ? err.message : 'Failed to value pick', 400);
-  }
-});
-
 const oneMoreSchema = z.object({
   date: z.string(),
   playerId: z.string().uuid(),

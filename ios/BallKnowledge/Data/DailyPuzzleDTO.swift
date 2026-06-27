@@ -305,19 +305,33 @@ struct WorldCupXIPuzzleDTO: Codable, Equatable {
     }
 }
 
-struct DraftMasterPromptDTO: Codable, Equatable {
+struct DraftMasterOpponentPlayerDTO: Codable, Equatable {
+    let name: String
+    let bucket: String
+    let valueEur: Double
+}
+
+struct DraftMasterOpponentDTO: Codable, Equatable {
+    let name: String
+    let players: [DraftMasterOpponentPlayerDTO]
+}
+
+struct DraftMasterScenarioDTO: Codable, Equatable {
     let id: String
-    let nationality: String
-    let league: String
+    let title: String
+    let subtitle: String
+    let narrative: String
+    let competition: String
+    let budgetEur: Double
+    let opponent: DraftMasterOpponentDTO
 }
 
 struct DraftMasterPuzzleDTO: Codable, Equatable {
     let modeId: String
     let puzzleId: String
     let date: String
-    let category: String
-    let formation: String
-    let prompts: [DraftMasterPromptDTO]
+    let scenario: DraftMasterScenarioDTO
+    let formationId: String
 }
 
 enum DailyPuzzleDTO: Codable, Equatable {

@@ -22,15 +22,26 @@ enum DailyChallengeResolver {
         )
     }
 
-    /// Map the server Draft Master challenge into the game model (nil → caller uses local seed).
-    static func draftMasterChallenge(from bundle: DailyBundleDTO?) -> DraftMasterChallenge? {
-        guard let dto = bundle?.draftMasterPuzzle, dto.prompts.count == DraftMasterChallenge.promptCount else { return nil }
-        return DraftMasterChallenge(
+    /// Map the server Battle Mode challenge into the game model (nil → caller uses local seed).
+    static func battleChallenge(from bundle: DailyBundleDTO?) -> BattleChallenge? {
+        guard let dto = bundle?.draftMasterPuzzle, dto.scenario.opponent.players.count >= 11 else { return nil }
+        let scenario = BattleScenario(
+            id: dto.scenario.id,
+            title: dto.scenario.title,
+            subtitle: dto.scenario.subtitle,
+            narrative: dto.scenario.narrative,
+            competition: dto.scenario.competition,
+            budgetEur: dto.scenario.budgetEur,
+            opponentName: dto.scenario.opponent.name,
+            opponent: dto.scenario.opponent.players.map {
+                BattleOpponentPlayer(name: $0.name, bucket: BattleBucket(rawValue: $0.bucket) ?? .mid, valueEur: $0.valueEur)
+            }
+        )
+        return BattleChallenge(
             id: dto.puzzleId,
             date: dto.date,
-            category: DraftMasterCategory(rawValue: dto.category) ?? .goals,
-            prompts: dto.prompts.map { DraftMasterPrompt(id: $0.id, nationality: $0.nationality, league: $0.league) },
-            formation: .fourThreeThree
+            scenario: scenario,
+            formation: BattleFormations.named(dto.formationId)
         )
     }
 

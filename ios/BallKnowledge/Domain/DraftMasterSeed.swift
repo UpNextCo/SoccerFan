@@ -1,159 +1,132 @@
 import Foundation
 
-enum DraftMasterSeed {
-    static func makeDailyChallenge(date: String? = nil) -> DraftMasterChallenge {
+/// Offline / practice fallback for Battle Mode when no server puzzle is in the bundle. The real
+/// daily catalog lives on the backend (battleScenarios.ts); this is a small mirror so the game is
+/// playable offline and in practice mode.
+enum BattleSeed {
+    static func makeDailyChallenge(date: String? = nil) -> BattleChallenge {
         let dateKey = date ?? todayUTC()
-        let seed = stableHash("draft_master_\(dateKey)")
-        let category = DraftMasterCategory.allCases[seed % DraftMasterCategory.allCases.count]
-        let prompts = dailyPrompts(seed: seed)
-
-        return DraftMasterChallenge(
-            id: "draft_master_\(dateKey)",
-            date: dateKey,
-            category: category,
-            prompts: prompts,
-            formation: .fourThreeThree
-        )
+        let seed = stableHash("battle_\(dateKey)")
+        let scenario = scenarios[seed % scenarios.count]
+        let formationId = BattleFormations.ids[(seed / 7) % BattleFormations.ids.count]
+        return BattleChallenge(id: "battle_\(dateKey)", date: dateKey, scenario: scenario, formation: BattleFormations.named(formationId))
     }
 
-    static func makePracticeChallenge() -> DraftMasterChallenge {
+    static func makePracticeChallenge() -> BattleChallenge {
         let seed = Int.random(in: 0...999_999)
-        return DraftMasterChallenge(
-            id: "draft_master_practice_\(UUID().uuidString.prefix(8))",
+        return BattleChallenge(
+            id: "battle_practice_\(UUID().uuidString.prefix(8))",
             date: todayUTC(),
-            category: DraftMasterCategory.allCases[seed % DraftMasterCategory.allCases.count],
-            prompts: dailyPrompts(seed: seed),
-            formation: .fourThreeThree
+            scenario: scenarios[seed % scenarios.count],
+            formation: BattleFormations.named(BattleFormations.ids[seed % BattleFormations.ids.count])
         )
     }
 
-    static func resultSummary(teamScore: Int, picks: [DraftMasterPick]) -> DraftMasterResultSummary {
-        let dailyBoard = mockDailyLeaderboard(userScore: teamScore)
-        let rank = (dailyBoard.firstIndex { $0.isUser } ?? dailyBoard.count - 1) + 1
-        let percentile = mockPercentile(rank: rank, total: 4_800)
-        let xp = DraftMasterScoring.xp(percentile: percentile)
-
-        return DraftMasterResultSummary(
-            teamScore: teamScore,
-            rank: rank,
-            percentile: percentile,
-            xpEarned: xp,
-            dailyBoard: dailyBoard,
-            weeklyBoard: mockWeeklyLeaderboard(userWeeklyTotal: weeklyTotal(from: teamScore))
-        )
+    /// Mock rank + percentile from a score, for the local leaderboard flavour.
+    static func rankPercentile(score: Int) -> (rank: Int, percentile: Int) {
+        let total = 4_800
+        // Higher score -> better (lower) percentile. ~1000 is a strong day.
+        let frac = max(0.01, min(0.99, 1.0 - Double(score) / 1400.0))
+        let percentile = max(1, min(99, Int((frac * 100).rounded())))
+        let rank = max(1, Int(Double(total) * frac / 100))
+        return (rank, percentile)
     }
 
-    static let spinDecoyNations: [String] = [
-        "England", "France", "Brazil", "Argentina", "Spain", "Portugal",
-        "Germany", "Belgium", "Netherlands", "Italy", "Senegal", "Uruguay",
-        "Croatia", "Poland", "Mexico", "USA", "Japan", "Morocco",
-    ]
+    static func xp(outcome: BattleOutcome, percentile: Int) -> Int {
+        var xp = 100
+        if outcome == .win { xp += 120 } else if outcome == .draw { xp += 50 }
+        if percentile <= 50 { xp += 50 }
+        if percentile <= 25 { xp += 100 }
+        if percentile <= 10 { xp += 200 }
+        return xp
+    }
 
-    static let spinDecoyLeagues: [String] = [
-        "Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1",
-        "Primeira Liga", "Eredivisie", "MLS", "Saudi Pro League",
-    ]
-
-    static func shareText(
-        challenge: DraftMasterChallenge,
-        picks: [DraftMasterPick],
-        summary: DraftMasterResultSummary
-    ) -> String {
+    static func shareText(challenge: BattleChallenge, result: BattleResult) -> String {
         var lines = [
-            "Ball Knowledge — Daily Draft",
-            "Category: \(challenge.category.title)",
-            "Score: \(summary.teamScore.formatted())",
-            DraftMasterScoring.percentileLabel(summary.percentile),
-            "Rank #\(summary.rank)",
-            "",
-            "XI (\(challenge.formation.rawValue)):",
+            "Ball Knowledge — Battle Mode",
+            challenge.scenario.subtitle,
+            "\(result.outcome.verdict) \(result.yourGoals)-\(result.theirGoals)",
+            "Score: \(result.score.formatted())",
+            "Spent \(BattleFormat.money(result.spentEur)) / \(BattleFormat.money(result.budgetEur))",
         ]
-
-        for position in DraftMasterPosition.allCases {
-            if let pick = picks.first(where: { $0.position == position }) {
-                lines.append("\(position.label): \(pick.player.name) (\(pick.contribution))")
-            }
+        let goals = result.events.filter(\.forYou)
+        if !goals.isEmpty {
+            lines.append("")
+            lines.append(goals.map { "\($0.scorer) \($0.minuteLabel)" }.joined(separator: ", "))
         }
-
         lines.append("")
-        lines.append("Can you beat my draft?")
+        lines.append("Can you beat the scenario?")
         return lines.joined(separator: "\n")
     }
 
-    // MARK: - Private
+    // MARK: - Offline scenarios
 
-    private static let basePrompts: [DraftMasterPrompt] = [
-        prompt("p1", "England", "Premier League"),
-        prompt("p2", "France", "Ligue 1"),
-        prompt("p3", "Brazil", "La Liga"),
-        prompt("p4", "Argentina", "Serie A"),
-        prompt("p5", "Spain", "La Liga"),
-        prompt("p6", "Portugal", "Premier League"),
-        prompt("p7", "Germany", "Bundesliga"),
-        prompt("p8", "Belgium", "Bundesliga"),
-        prompt("p9", "Netherlands", "Premier League"),
-        prompt("p10", "Italy", "Serie A"),
-        prompt("p11", "Senegal", "Ligue 1"),
+    private static func opp(_ name: String, _ bucket: BattleBucket, _ valueM: Double) -> BattleOpponentPlayer {
+        BattleOpponentPlayer(name: name, bucket: bucket, valueEur: valueM * 1_000_000)
+    }
+
+    private static let scenarios: [BattleScenario] = [
+        BattleScenario(
+            id: "ucl-barca-2011",
+            title: "Champions League Final",
+            subtitle: "Beat prime Barcelona",
+            narrative: "Wembley, 2011. Guardiola's Barcelona are at their tiki-taka peak. Build an XI and stop them.",
+            competition: "UEFA Champions League",
+            budgetEur: 840_000_000,
+            opponentName: "Barcelona (2011)",
+            opponent: [
+                opp("Víctor Valdés", .gk, 22), opp("Dani Alves", .def, 45), opp("Gerard Piqué", .def, 55),
+                opp("Carles Puyol", .def, 30), opp("Eric Abidal", .def, 25), opp("Sergio Busquets", .mid, 70),
+                opp("Xavi", .mid, 70), opp("Andrés Iniesta", .mid, 90), opp("Pedro", .att, 45),
+                opp("Lionel Messi", .att, 200), opp("David Villa", .att, 50),
+            ]
+        ),
+        BattleScenario(
+            id: "top4-villa",
+            title: "Top-Four Race",
+            subtitle: "Beat Aston Villa to clinch 4th",
+            narrative: "Champions League football is on the line. Out-gun a stubborn, well-drilled Villa.",
+            competition: "Premier League",
+            budgetEur: 680_000_000,
+            opponentName: "Aston Villa",
+            opponent: [
+                opp("Emiliano Martínez", .gk, 35), opp("Matty Cash", .def, 22), opp("Ezri Konsa", .def, 35),
+                opp("Pau Torres", .def, 40), opp("Lucas Digne", .def, 18), opp("Boubacar Kamara", .mid, 45),
+                opp("Douglas Luiz", .mid, 50), opp("John McGinn", .mid, 35), opp("Leon Bailey", .att, 40),
+                opp("Ollie Watkins", .att, 60), opp("Moussa Diaby", .att, 50),
+            ]
+        ),
+        BattleScenario(
+            id: "survive-luton-forest",
+            title: "Relegation Battle",
+            subtitle: "Beat the drop on a shoestring",
+            narrative: "You have the smallest budget in the league. Find value, dig in, and stay up.",
+            competition: "Premier League",
+            budgetEur: 350_000_000,
+            opponentName: "Nottingham Forest",
+            opponent: [
+                opp("Matz Sels", .gk, 8), opp("Neco Williams", .def, 15), opp("Murillo", .def, 30),
+                opp("Nikola Milenković", .def, 18), opp("Ola Aina", .def, 10), opp("Ryan Yates", .mid, 10),
+                opp("Nicolás Domínguez", .mid, 14), opp("Morgan Gibbs-White", .mid, 40), opp("Anthony Elanga", .att, 30),
+                opp("Chris Wood", .att, 10), opp("Callum Hudson-Odoi", .att, 18),
+            ]
+        ),
+        BattleScenario(
+            id: "clasico-real",
+            title: "El Clásico",
+            subtitle: "Win at the Bernabéu",
+            narrative: "The biggest club game on earth. Silence the home crowd and take the spoils.",
+            competition: "La Liga",
+            budgetEur: 1_210_000_000,
+            opponentName: "Real Madrid",
+            opponent: [
+                opp("Thibaut Courtois", .gk, 45), opp("Dani Carvajal", .def, 20), opp("Éder Militão", .def, 55),
+                opp("Antonio Rüdiger", .def, 30), opp("Ferland Mendy", .def, 25), opp("Aurélien Tchouaméni", .mid, 80),
+                opp("Federico Valverde", .mid, 100), opp("Jude Bellingham", .mid, 180), opp("Rodrygo", .att, 100),
+                opp("Vinícius Júnior", .att, 200), opp("Kylian Mbappé", .att, 180),
+            ]
+        ),
     ]
-
-    private static func dailyPrompts(seed: Int) -> [DraftMasterPrompt] {
-        seededShuffle(basePrompts, seed: seed).enumerated().map { index, prompt in
-            DraftMasterPrompt(
-                id: "\(prompt.id)_\(index)",
-                nationality: prompt.nationality,
-                league: prompt.league
-            )
-        }
-    }
-
-    private static func mockDailyLeaderboard(userScore: Int) -> [DraftMasterLeaderboardEntry] {
-        let spread = max(120, userScore / 8)
-        var entries: [DraftMasterLeaderboardEntry] = [
-            .init(id: "1", name: "Sam", score: userScore + spread * 2, isUser: false),
-            .init(id: "2", name: "Jack", score: userScore + spread, isUser: false),
-            .init(id: "3", name: "Liam", score: userScore + spread / 2, isUser: false),
-            .init(id: "4", name: "Noah", score: max(0, userScore - spread / 3), isUser: false),
-            .init(id: "5", name: "Alex", score: max(0, userScore - spread), isUser: false),
-            .init(id: "6", name: "Max", score: max(0, userScore - spread * 2), isUser: false),
-        ]
-        entries.append(.init(id: "user", name: "YOU", score: userScore, isUser: true))
-        return entries.sorted { $0.score > $1.score }
-    }
-
-    private static func mockWeeklyLeaderboard(userWeeklyTotal: Int) -> [DraftMasterLeaderboardEntry] {
-        [
-            .init(id: "w1", name: "Sam", score: userWeeklyTotal + 2_400, isUser: false),
-            .init(id: "w2", name: "Jack", score: userWeeklyTotal + 1_100, isUser: false),
-            .init(id: "w3", name: "Liam", score: userWeeklyTotal + 600, isUser: false),
-            .init(id: "user", name: "YOU", score: userWeeklyTotal, isUser: true),
-            .init(id: "w4", name: "Noah", score: max(0, userWeeklyTotal - 800), isUser: false),
-            .init(id: "w5", name: "Alex", score: max(0, userWeeklyTotal - 1_500), isUser: false),
-        ].sorted { $0.score > $1.score }
-    }
-
-    private static func mockPercentile(rank: Int, total: Int) -> Int {
-        let raw = Double(rank) / Double(total) * 100
-        return max(1, min(99, Int(raw.rounded(.up))))
-    }
-
-    private static func weeklyTotal(from todayScore: Int) -> Int {
-        todayScore + 4_200 + (todayScore % 900)
-    }
-
-    private static func prompt(_ id: String, _ nationality: String, _ league: String) -> DraftMasterPrompt {
-        DraftMasterPrompt(id: id, nationality: nationality, league: league)
-    }
-
-    private static func seededShuffle<T>(_ array: [T], seed: Int) -> [T] {
-        var result = array
-        var state = UInt64(bitPattern: Int64(seed == 0 ? 1 : seed))
-        for index in stride(from: result.count - 1, through: 1, by: -1) {
-            state = state &* 6364136223846793005 &+ 1
-            let swapIndex = Int(state % UInt64(index + 1))
-            result.swapAt(index, swapIndex)
-        }
-        return result
-    }
 
     private static func todayUTC() -> String {
         String(ISO8601DateFormatter().string(from: Date()).prefix(10))
@@ -162,90 +135,4 @@ enum DraftMasterSeed {
     private static func stableHash(_ value: String) -> Int {
         abs(value.utf8.reduce(5381) { ($0 << 5) &+ $0 &+ Int($1) })
     }
-}
-
-enum DraftMasterMatcher {
-    static func matches(_ player: PlayerSearchResultDTO, prompt: DraftMasterPrompt) -> Bool {
-        nationalityMatches(player.nationality, prompt.nationality)
-            && leagueMatches(player.league, prompt.league)
-    }
-
-    static func league(from prompt: DraftMasterPrompt) -> TargetManLeague? {
-        TargetManLeague.allCases.first { leagueMatches(prompt.league, $0.rawValue) }
-    }
-
-    static func validationError(
-        for player: PlayerSearchResultDTO,
-        prompt: DraftMasterPrompt,
-        usedIds: Set<String>
-    ) -> String? {
-        if usedIds.contains(player.id) {
-            return "Player already in your XI"
-        }
-        if !nationalityMatches(player.nationality, prompt.nationality) {
-            return "Wrong nationality for this prompt"
-        }
-        if !leagueMatches(player.league, prompt.league) {
-            return "Wrong league for this prompt"
-        }
-        return nil
-    }
-
-    static func nationalityMatches(_ playerValue: String, _ promptValue: String) -> Bool {
-        normalizedCountry(playerValue) == normalizedCountry(promptValue)
-    }
-
-    private static func leagueMatches(_ playerValue: String, _ promptValue: String) -> Bool {
-        let player = normalized(playerValue)
-        let prompt = normalized(promptValue)
-        if player == prompt { return true }
-        if player.contains(prompt) || prompt.contains(player) { return true }
-
-        switch prompt {
-        case "premierleague", "premier league":
-            return player.contains("premier")
-        case "laliga", "la liga":
-            return player.contains("la liga") || player == "laliga"
-        case "seriea", "serie a":
-            return player.contains("serie")
-        case "bundesliga":
-            return player.contains("bundes")
-        case "ligue1", "ligue 1":
-            return player.contains("ligue")
-        default:
-            return false
-        }
-    }
-
-    private static func normalizedCountry(_ value: String) -> String {
-        let key = normalized(value)
-        return countryAliases[key] ?? key
-    }
-
-    private static func normalized(_ value: String) -> String {
-        value.lowercased()
-            .folding(options: .diacriticInsensitive, locale: .current)
-            .replacingOccurrences(of: "[^a-z0-9 ]", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static let countryAliases: [String: String] = [
-        "england": "england",
-        "france": "france",
-        "brazil": "brazil",
-        "argentina": "argentina",
-        "spain": "spain",
-        "portugal": "portugal",
-        "germany": "germany",
-        "belgium": "belgium",
-        "netherlands": "netherlands",
-        "holland": "netherlands",
-        "italy": "italy",
-        "senegal": "senegal",
-        "usa": "united states",
-        "united states": "united states",
-        "south korea": "south korea",
-        "korea republic": "south korea",
-    ]
 }

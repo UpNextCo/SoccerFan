@@ -1,82 +1,114 @@
 import SwiftUI
+import SwiftData
 
 // MARK: - ViewModel
 
-@MainActor
 @Observable
 final class DraftMasterViewModel {
-    var state: DraftMasterGameState
+    var state: BattleGameState
     var searchQuery = ""
     var searchResults: [PlayerSearchResultDTO] = []
     var isSearching = false
+    var activeSlot: BattleSlot?
+    var selectionError: String?
     var showResult = false
-    var showLeaderboard = false
     var showShare = false
     var confettiBurstToken = 0
-    var resultSummary: DraftMasterResultSummary?
-    var animatedScore = 0
-    var selectionError: String?
 
     private let practice: Bool
-    private let dailyBundle: DailyBundleDTO?
     private let dailyDate: String?
+    private let dailyBundle: DailyBundleDTO?
 
-    init(practice: Bool = false, dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil) {
+    init(practice: Bool, dailyDate: String?, dailyBundle: DailyBundleDTO?) {
         self.practice = practice
-        self.dailyBundle = dailyBundle
         self.dailyDate = dailyDate
-        self.state = DraftMasterGameState(challenge: Self.resolveChallenge(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
+        self.dailyBundle = dailyBundle
+        state = BattleGameState(challenge: Self.resolveChallenge(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
     }
 
-    /// Prefer the server-generated challenge; fall back to the local seed (practice / offline).
-    private static func resolveChallenge(practice: Bool, dailyDate: String?, dailyBundle: DailyBundleDTO?) -> DraftMasterChallenge {
-        if practice { return DraftMasterSeed.makePracticeChallenge() }
-        if let server = DailyChallengeResolver.draftMasterChallenge(from: dailyBundle) { return server }
-        return DraftMasterSeed.makeDailyChallenge(date: dailyDate)
+    private static func resolveChallenge(practice: Bool, dailyDate: String?, dailyBundle: DailyBundleDTO?) -> BattleChallenge {
+        if practice { return BattleSeed.makePracticeChallenge() }
+        if let server = DailyChallengeResolver.battleChallenge(from: dailyBundle) { return server }
+        return BattleSeed.makeDailyChallenge(date: dailyDate)
     }
 
-    func startDraft() {
+    var scenario: BattleScenario { state.challenge.scenario }
+    var formation: BattleFormation { state.challenge.formation }
+
+    func start() {
         HapticManager.light()
-        state.phase = .spinningPrompt(index: 0)
+        state.phase = .building
     }
 
-    func finishSpin(index: Int) {
-        state.currentPromptIndex = index
-        state.phase = .drafting
+    func newPractice() {
+        state = BattleGameState(challenge: BattleSeed.makePracticeChallenge())
+        resetTransient()
+    }
+
+    func restart() {
+        state = BattleGameState(challenge: Self.resolveChallenge(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
+        state.phase = .building
+        resetTransient()
+    }
+
+    private func resetTransient() {
+        searchQuery = ""
+        searchResults = []
+        activeSlot = nil
+        selectionError = nil
+        showResult = false
+        showShare = false
+        confettiBurstToken = 0
+    }
+
+    // MARK: Slot fill
+
+    func openSlot(_ slot: BattleSlot) {
+        activeSlot = slot
+        searchQuery = ""
+        searchResults = []
+        selectionError = nil
+    }
+
+    func closeSlot() {
+        activeSlot = nil
+        searchQuery = ""
+        searchResults = []
+    }
+
+    func removePick(slotId: String) {
+        state.picks.removeAll { $0.slotId == slotId }
+        HapticManager.light()
+    }
+
+    /// Budget available for the active slot (remaining funds + whatever the slot currently holds).
+    private func budgetForActiveSlot() -> Double {
+        guard let slot = activeSlot else { return state.remainingEur }
+        let existing = state.pick(forSlot: slot.id)?.priceEur ?? 0
+        return state.remainingEur + existing
+    }
+
+    func price(for player: PlayerSearchResultDTO) -> Double {
+        player.priceEur ?? 5_000_000
+    }
+
+    func canAfford(_ player: PlayerSearchResultDTO) -> Bool {
+        price(for: player) <= budgetForActiveSlot() + 0.5
     }
 
     func search() async {
-        guard state.phase == .drafting, let prompt = state.currentPrompt else {
-            searchResults = []
-            return
-        }
-
+        guard let slot = activeSlot else { searchResults = []; return }
         let query = searchQuery.trimmingCharacters(in: .whitespaces)
-        guard query.count >= 2 else {
-            searchResults = []
-            return
-        }
+        guard query.count >= 2 else { searchResults = []; return }
 
         isSearching = true
         defer { isSearching = false }
-
         do {
             let results = try await APIClient.shared.searchPlayers(query: query)
-            // Filter on NATIONALITY only (+ not already used). We deliberately do NOT hide players
-            // whose position bucket is full — DB positions are coarse (GK/DEF/MID/ATT) and that would
-            // make the search silently return nothing once a bucket fills. Instead, surface players
-            // that still fit a natural slot first, but always show the rest so a pick is always
-            // possible. League tenure is confirmed server-side on select.
-            let filled = state.filledPositions
+            let used = state.usedPlayerIds
             searchResults = results
-                .filter { player in
-                    DraftMasterMatcher.nationalityMatches(player.nationality, prompt.nationality)
-                        && !state.usedPlayerIds.contains(player.id)
-                }
-                .sorted { a, b in
-                    DraftMasterPositionMapper.fitsNaturally(a, filled: filled)
-                        && !DraftMasterPositionMapper.fitsNaturally(b, filled: filled)
-                }
+                .filter { BattleBucket.from(position: $0.position) == slot.bucket && !used.contains($0.id) }
+                .sorted { canAfford($0) && !canAfford($1) }
                 .prefix(PlayerSearchLimits.maxResults)
                 .map { $0 }
         } catch {
@@ -84,103 +116,36 @@ final class DraftMasterViewModel {
         }
     }
 
-    func selectPlayer(_ player: PlayerSearchResultDTO) async {
-        guard state.phase == .drafting, let prompt = state.currentPrompt else { return }
-
-        if state.usedPlayerIds.contains(player.id) {
-            selectionError = "Player already in your XI"
+    func selectPlayer(_ player: PlayerSearchResultDTO) {
+        guard let slot = activeSlot else { return }
+        if state.usedPlayerIds.contains(player.id), state.pick(forSlot: slot.id)?.player.id != player.id {
+            selectionError = "Already in your XI"
             HapticManager.error()
             return
         }
-        if !DraftMasterMatcher.nationalityMatches(player.nationality, prompt.nationality) {
-            selectionError = "Wrong nationality for this prompt"
+        let cost = price(for: player)
+        if cost > budgetForActiveSlot() + 0.5 {
+            selectionError = "Over budget — free up funds first"
             HapticManager.error()
             return
         }
-        guard let league = DraftMasterMatcher.league(from: prompt),
-              let position = DraftMasterPositionMapper.assignSlot(for: player, filled: state.filledPositions) else {
-            selectionError = "Your XI is already full"
-            HapticManager.error()
-            return
-        }
-
-        // Real contribution + eligibility from the DB (career stats in the prompt's league).
-        isSearching = true
-        defer { isSearching = false }
-        let result: (value: Int, apps: Int)
-        do {
-            result = try await APIClient.shared.draftMasterValue(
-                leagueId: league.apiLeagueId,
-                category: state.challenge.category.rawValue,
-                playerId: player.id
-            )
-        } catch {
-            selectionError = "Couldn't verify that pick — try again"
-            HapticManager.error()
-            return
-        }
-        if result.apps <= 0 {
-            selectionError = "Hasn't played in \(prompt.league)"
-            HapticManager.error()
-            return
-        }
-
+        state.picks.removeAll { $0.slotId == slot.id }
+        state.picks.append(BattlePick(slotId: slot.id, player: player, priceEur: cost, bucket: slot.bucket))
         selectionError = nil
-        state.picks.append(
-            DraftMasterPick(prompt: prompt, player: player, position: position, contribution: result.value)
-        )
-        searchQuery = ""
-        searchResults = []
         HapticManager.success()
-
-        if state.picks.count >= DraftMasterChallenge.promptCount {
-            finishDraft()
-        } else {
-            state.phase = .spinningPrompt(index: state.currentPromptIndex + 1)
-        }
+        closeSlot()
     }
 
-    func restart() {
-        let challenge = Self.resolveChallenge(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle)
-        state = DraftMasterGameState(challenge: challenge)
-        searchQuery = ""
-        searchResults = []
-        showResult = false
-        showLeaderboard = false
-        showShare = false
-        confettiBurstToken = 0
-        resultSummary = nil
-        animatedScore = 0
-        selectionError = nil
-    }
+    // MARK: Kick off
 
-    func newPracticeDraft() {
-        state = DraftMasterGameState(challenge: DraftMasterSeed.makePracticeChallenge())
-        searchQuery = ""
-        searchResults = []
-        showResult = false
-        resultSummary = nil
-        animatedScore = 0
-        selectionError = nil
-    }
-
-    private func finishDraft() {
-        let score = DraftMasterScoring.teamScore(picks: state.picks)
-        let summary = DraftMasterSeed.resultSummary(teamScore: score, picks: state.picks)
-        state.teamScore = score
-        state.rank = summary.rank
-        state.percentile = summary.percentile
-        state.xpEarned = summary.xpEarned
+    func kickOff() {
+        guard state.isComplete else { return }
+        let result = BattleScoring.simulate(picks: state.picks, scenario: scenario, seed: state.challenge.id)
+        state.result = result
         state.phase = .complete
-        resultSummary = summary
-
-        if score >= DraftMasterTiming.confettiThreshold {
-            confettiBurstToken += 1
-        }
-
+        if result.outcome == .win, BattleTiming.confettiOnWin { confettiBurstToken += 1 }
         Task {
-            try? await Task.sleep(for: .seconds(DraftMasterTiming.resultReveal))
-            animatedScore = score
+            try? await Task.sleep(for: .seconds(BattleTiming.resultReveal))
             showResult = true
         }
     }
@@ -192,7 +157,6 @@ struct DraftMasterView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: DraftMasterViewModel
-    @FocusState private var isSearchFocused: Bool
     private let allowReplay: Bool
     private let dailyDate: String?
     var onComplete: () -> Void
@@ -207,15 +171,15 @@ struct DraftMasterView: View {
     var body: some View {
         ZStack {
             NavigationStack {
-                VStack(spacing: 0) {
+                Group {
                     if viewModel.state.phase == .intro {
-                        AnyView(DraftMasterIntroView(
-                            challenge: viewModel.state.challenge,
-                            onStart: viewModel.startDraft,
-                            onNewPractice: allowReplay ? { viewModel.newPracticeDraft() } : nil
-                        ))
+                        BattleIntroView(
+                            scenario: viewModel.scenario,
+                            formation: viewModel.formation,
+                            onStart: viewModel.start
+                        )
                     } else {
-                        AnyView(draftScreen)
+                        buildScreen
                     }
                 }
                 .background(BKTheme.background)
@@ -223,23 +187,19 @@ struct DraftMasterView: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { dismiss() } label: {
-                            Ph.x.bold
-                                .color(BKTheme.textPrimary)
-                                .frame(width: 15, height: 15)
+                            Ph.x.bold.color(BKTheme.textPrimary).frame(width: 15, height: 15)
                         }
                     }
                     ToolbarItem(placement: .principal) {
-                        Text("DRAFT MASTER")
+                        Text("BATTLE MODE")
                             .font(BKFont.caption(13))
                             .tracking(1)
                             .foregroundStyle(BKTheme.accent)
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         if allowReplay, viewModel.state.phase == .intro {
-                            Button { viewModel.newPracticeDraft() } label: {
-                                Text("NEW")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textMuted)
+                            Button { viewModel.newPractice() } label: {
+                                Text("NEW").font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
                             }
                         }
                     }
@@ -250,30 +210,25 @@ struct DraftMasterView: View {
                 .zIndex(999)
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: viewModel.state.phase)
+        .sheet(item: Binding(get: { viewModel.activeSlot }, set: { if $0 == nil { viewModel.closeSlot() } })) { slot in
+            BattleSearchSheet(viewModel: viewModel, slot: slot)
+        }
         .fullScreenCover(isPresented: $viewModel.showResult) {
-            if let summary = viewModel.resultSummary {
-                DraftMasterResultView(
+            if let result = viewModel.state.result {
+                BattleResultView(
                     challenge: viewModel.state.challenge,
-                    picks: viewModel.state.picks,
-                    summary: summary,
-                    onLeaderboard: {
-                        viewModel.showResult = false
-                        viewModel.showLeaderboard = true
-                    },
-                    onShare: { viewModel.showShare = true },
+                    result: result,
                     showPlayAgain: allowReplay,
-                    onPlayAgain: {
-                        viewModel.showResult = false
-                        viewModel.restart()
-                    },
+                    onShare: { viewModel.showShare = true },
+                    onPlayAgain: { viewModel.showResult = false; viewModel.restart() },
                     onHome: {
                         if !allowReplay, let dailyDate {
                             Task {
                                 await DailyCompletionService.recordCompletion(
                                     modeId: GameModeID.draftMaster.rawValue,
                                     date: dailyDate,
-                                    score: summary.teamScore,
-                                    won: summary.teamScore >= 60,
+                                    score: result.score,
+                                    won: result.outcome == .win,
                                     context: modelContext
                                 )
                             }
@@ -285,129 +240,90 @@ struct DraftMasterView: View {
                 )
             }
         }
-        .sheet(isPresented: $viewModel.showLeaderboard) {
-            if let summary = viewModel.resultSummary {
-                DraftMasterLeaderboardSheet(
-                    daily: summary.dailyBoard,
-                    weekly: summary.weeklyBoard
-                )
-            }
-        }
         .sheet(isPresented: $viewModel.showShare) {
-            if let summary = viewModel.resultSummary {
-                DraftMasterShareSheet(
-                    challenge: viewModel.state.challenge,
-                    picks: viewModel.state.picks,
-                    summary: summary
-                )
+            if let result = viewModel.state.result {
+                BattleShareSheet(challenge: viewModel.state.challenge, result: result)
             }
         }
     }
 
-    private var draftScreen: some View {
+    private var buildScreen: some View {
         VStack(spacing: 0) {
+            BattleBudgetHeader(scenario: viewModel.scenario, spent: viewModel.state.spentEur, picks: viewModel.state.picks.count, slots: viewModel.formation.slots.count)
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 14) {
-                    DraftMasterCategoryStrip(challenge: viewModel.state.challenge)
-
-                    if case .spinningPrompt(let index) = viewModel.state.phase,
-                       viewModel.state.challenge.prompts.indices.contains(index) {
-                        DraftMasterPromptSpinner(
-                            target: viewModel.state.challenge.prompts[index],
-                            pickNumber: index + 1,
-                            onComplete: { viewModel.finishSpin(index: index) }
-                        )
-                    } else if let prompt = viewModel.state.currentPrompt,
-                              viewModel.state.phase == .drafting {
-                        DraftMasterPromptCard(
-                            prompt: prompt,
-                            index: viewModel.state.currentPromptIndex + 1,
-                            total: DraftMasterChallenge.promptCount
-                        )
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                    }
-
-                    DraftMasterPitchView(picks: viewModel.state.picks)
-
-                    if !viewModel.state.picks.isEmpty {
-                        DraftMasterPickList(
-                            picks: viewModel.state.picks,
-                            category: viewModel.state.challenge.category
-                        )
-                    }
+                    BattleScenarioBanner(scenario: viewModel.scenario, formation: viewModel.formation)
+                    BattlePitchView(
+                        formation: viewModel.formation,
+                        picks: viewModel.state.picks,
+                        onTapSlot: { viewModel.openSlot($0) }
+                    )
+                    .frame(height: 380)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.top, 10)
                 .padding(.bottom, 16)
             }
 
-            if viewModel.state.phase == .drafting {
-                DraftMasterSearchSection(
-                    viewModel: viewModel,
-                    isSearchFocused: $isSearchFocused
-                )
-            }
+            BattleKickoffBar(
+                ready: viewModel.state.isComplete,
+                filled: viewModel.state.picks.count,
+                total: viewModel.formation.slots.count,
+                onKickOff: viewModel.kickOff
+            )
         }
     }
 }
 
 // MARK: - Intro
 
-private struct DraftMasterIntroView: View {
-    let challenge: DraftMasterChallenge
+private struct BattleIntroView: View {
+    let scenario: BattleScenario
+    let formation: BattleFormation
     var onStart: () -> Void
-    var onNewPractice: (() -> Void)?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
-                VStack(spacing: 10) {
-                    Text("DAILY DRAFT")
-                        .font(BKFont.caption(11))
-                        .tracking(1.2)
-                        .foregroundStyle(BKTheme.accent)
-
-                    Text("Build the highest-scoring XI")
-                        .font(BKFont.headline(18))
-                        .foregroundStyle(BKTheme.textPrimary)
+                VStack(spacing: 8) {
+                    Text(scenario.competition.uppercased())
+                        .font(BKFont.caption(11)).tracking(1.2).foregroundStyle(BKTheme.accent)
+                    Text(scenario.title)
+                        .font(BKFont.title(24)).foregroundStyle(BKTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                    Text(scenario.subtitle.uppercased())
+                        .font(BKFont.headline(15)).foregroundStyle(BKTheme.textSecondary)
                         .multilineTextAlignment(.center)
                 }
-                .padding(.top, 12)
+                .padding(.top, 16)
+
+                Text(scenario.narrative)
+                    .font(BKFont.body(14)).foregroundStyle(BKTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
 
                 VStack(spacing: 12) {
-                    introRow(label: "TODAY'S CATEGORY", value: challenge.category.title.uppercased(), accent: true)
-                    introRow(label: "FORMATION", value: challenge.formation.rawValue, accent: false)
-                    introRow(label: "REWARD", value: "XP + LEADERBOARD RANK", accent: false)
+                    introRow(label: "YOUR BUDGET", value: BattleFormat.money(scenario.budgetEur), accent: true)
+                    introRow(label: "OPPONENT", value: scenario.opponentName.uppercased(), accent: false)
+                    introRow(label: "FORMATION", value: formation.name, accent: false)
                 }
                 .padding(16)
                 .background(BKTheme.cardElevated.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                VStack(spacing: 8) {
-                    Text("11 MYSTERY COMBOS")
-                        .font(BKFont.caption(11))
-                        .tracking(0.8)
-                        .foregroundStyle(BKTheme.textMuted)
-                    Text("Nation + league prompts reveal one at a time after each pick. Players auto-fill their position — once RW is taken, no more wingers there.")
-                        .font(BKFont.body(13))
-                        .foregroundStyle(BKTheme.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.horizontal, 8)
+                Text("Tap each position to sign a player. Stay under budget — sell and re-sign to free funds. When your XI is set, kick off and the match plays out.")
+                    .font(BKFont.body(13)).foregroundStyle(BKTheme.textMuted)
+                    .multilineTextAlignment(.center).padding(.horizontal, 8)
 
                 Button(action: onStart) {
                     HStack(spacing: 8) {
-                        Text("START DRAFT")
-                            .font(BKFont.headline(15))
-                        Ph.arrowRight.bold
-                            .color(BKTheme.background)
-                            .frame(width: 14, height: 14)
+                        Text("ENTER THE MARKET").font(BKFont.headline(15))
+                        Ph.arrowRight.bold.color(BKTheme.background).frame(width: 14, height: 14)
                     }
                     .foregroundStyle(BKTheme.background)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(BKTheme.accent)
-                    .clipShape(Capsule())
+                    .frame(maxWidth: .infinity).padding(.vertical, 16)
+                    .background(BKTheme.accent).clipShape(Capsule())
                 }
                 .padding(.top, 4)
             }
@@ -418,12 +334,9 @@ private struct DraftMasterIntroView: View {
 
     private func introRow(label: String, value: String, accent: Bool) -> some View {
         VStack(spacing: 4) {
-            Text(label)
-                .font(BKFont.caption(10))
-                .tracking(0.6)
-                .foregroundStyle(BKTheme.textMuted)
+            Text(label).font(BKFont.caption(10)).tracking(0.6).foregroundStyle(BKTheme.textMuted)
             Text(value)
-                .font(accent ? BKFont.headline(18) : BKFont.headline(15))
+                .font(accent ? BKFont.headline(20) : BKFont.headline(15))
                 .foregroundStyle(accent ? BKTheme.accent : BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
         }
@@ -431,421 +344,41 @@ private struct DraftMasterIntroView: View {
     }
 }
 
-// MARK: - Category Strip
+// MARK: - Budget header
 
-private struct DraftMasterCategoryStrip: View {
-    let challenge: DraftMasterChallenge
+private struct BattleBudgetHeader: View {
+    let scenario: BattleScenario
+    let spent: Double
+    let picks: Int
+    let slots: Int
 
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("CATEGORY")
-                    .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.textMuted)
-                Text(challenge.category.title.uppercased())
-                    .font(BKFont.headline(14))
-                    .foregroundStyle(BKTheme.accent)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("FORMATION")
-                    .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.textMuted)
-                Text(challenge.formation.rawValue)
-                    .font(BKFont.headline(14))
-                    .foregroundStyle(BKTheme.textPrimary)
-            }
-        }
-        .padding(14)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-}
-
-// MARK: - Prompt Spinner
-
-private struct DraftMasterPromptSpinner: View {
-    let target: DraftMasterPrompt
-    let pickNumber: Int
-    var onComplete: () -> Void
-
-    @State private var displayNation = "???"
-    @State private var displayLeague = "???"
-    @State private var spinPhase: SpinPhase = .country
-    @State private var offset: CGFloat = 0
-
-    private enum SpinPhase {
-        case country, league, locked
-    }
+    private var remaining: Double { scenario.budgetEur - spent }
+    private var fraction: Double { scenario.budgetEur > 0 ? min(1, spent / scenario.budgetEur) : 0 }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Text("NEXT PICK · \(pickNumber)/\(DraftMasterChallenge.promptCount)")
-                .font(BKFont.caption(10))
-                .tracking(0.8)
-                .foregroundStyle(BKTheme.textMuted)
-
-            VStack(spacing: 14) {
-                spinRow(label: "NATION", value: displayNation, active: spinPhase == .country)
-                spinRow(label: "LEAGUE", value: displayLeague, active: spinPhase == .league)
-            }
-            .padding(18)
-            .frame(maxWidth: .infinity)
-            .background(BKTheme.cardElevated.opacity(0.95))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(BKTheme.accent.opacity(spinPhase == .locked ? 0.5 : 0.2), lineWidth: 1.5)
-            }
-            .offset(y: offset)
-        }
-        .task(id: target.id) {
-            await runSpin()
-        }
-    }
-
-    private func spinRow(label: String, value: String, active: Bool) -> some View {
-        VStack(spacing: 6) {
-            Text(label)
-                .font(BKFont.caption(10))
-                .tracking(0.6)
-                .foregroundStyle(BKTheme.textMuted)
-            Text(value.uppercased())
-                .font(BKFont.headline(active ? 22 : 18))
-                .foregroundStyle(active ? BKTheme.accent : BKTheme.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .contentTransition(.numericText())
-                .animation(.easeOut(duration: 0.08), value: value)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    @MainActor
-    private func runSpin() async {
-        spinPhase = .country
-        displayNation = "???"
-        displayLeague = "???"
-
-        let nations = DraftMasterSeed.spinDecoyNations.filter { $0 != target.nationality }.shuffled()
-        let leagues = DraftMasterSeed.spinDecoyLeagues.filter { $0 != target.league }.shuffled()
-
-        for tick in 0..<DraftMasterTiming.spinCountryTicks {
-            let delay = tick < DraftMasterTiming.spinCountryTicks - 3
-                ? DraftMasterTiming.spinTickFast
-                : DraftMasterTiming.spinTickSlow
-            try? await Task.sleep(for: .seconds(delay))
-            displayNation = nations[tick % nations.count]
-            if tick % 2 == 0 { HapticManager.light() }
-        }
-
-        displayNation = target.nationality
-        spinPhase = .league
-        HapticManager.light()
-
-        try? await Task.sleep(for: .seconds(0.12))
-
-        for tick in 0..<DraftMasterTiming.spinLeagueTicks {
-            let delay = tick < DraftMasterTiming.spinLeagueTicks - 2
-                ? DraftMasterTiming.spinTickFast
-                : DraftMasterTiming.spinTickSlow
-            try? await Task.sleep(for: .seconds(delay))
-            displayLeague = leagues[tick % leagues.count]
-            if tick % 2 == 0 { HapticManager.light() }
-        }
-
-        displayLeague = target.league
-        spinPhase = .locked
-        HapticManager.success()
-
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.62)) {
-            offset = -4
-        }
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.72).delay(0.08)) {
-            offset = 0
-        }
-
-        try? await Task.sleep(for: .seconds(0.35))
-        onComplete()
-    }
-}
-
-// MARK: - Prompt Card
-
-private struct DraftMasterPromptCard: View {
-    let prompt: DraftMasterPrompt
-    let index: Int
-    let total: Int
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Text("PICK \(index) OF \(total)")
-                .font(BKFont.caption(10))
-                .tracking(0.8)
-                .foregroundStyle(BKTheme.textMuted)
-
-            HStack(spacing: 12) {
-                Text(GuessWhoDisplay.nationalityFlag(prompt.nationality))
-                    .font(.system(size: 28))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(prompt.nationality.uppercased())
-                        .font(BKFont.headline(16))
-                        .foregroundStyle(BKTheme.textPrimary)
-                    HStack(spacing: 6) {
-                        LeagueBadgeImage(league: prompt.league, size: 16) {
-                            Text(GuessWhoDisplay.leagueAbbrev(prompt.league))
-                                .font(.system(size: 7, weight: .bold))
-                        }
-                        Text(prompt.league.uppercased())
-                            .font(BKFont.caption(10))
-                            .foregroundStyle(BKTheme.textSecondary)
-                    }
-                }
-                Spacer()
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(BKTheme.cardElevated.opacity(0.95))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1)
-        }
-    }
-}
-
-// MARK: - Pitch
-
-private struct DraftMasterPitchView: View {
-    let picks: [DraftMasterPick]
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "0D3B1A"), Color(hex: "145A27"), Color(hex: "0D3B1A")],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 1.5)
-
-                Circle()
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                    .frame(width: geo.size.width * 0.22)
-
-                Rectangle()
-                    .fill(Color.white.opacity(0.12))
-                    .frame(height: 1)
-
-                ForEach(DraftMasterPosition.allCases) { position in
-                    let pick = picks.first { $0.position == position }
-                    DraftMasterPitchSlot(
-                        position: position,
-                        pick: pick,
-                        size: geo.size
-                    )
-                }
-            }
-        }
-        .frame(height: 360)
-    }
-}
-
-private struct DraftMasterPitchSlot: View {
-    let position: DraftMasterPosition
-    let pick: DraftMasterPick?
-    let size: CGSize
-
-    var body: some View {
-        let point = position.pitchPoint
-        VStack(spacing: 3) {
-            ZStack {
-                Circle()
-                    .fill(pick == nil ? Color.black.opacity(0.28) : BKTheme.accent.opacity(0.92))
-                    .frame(width: pick == nil ? 34 : 40, height: pick == nil ? 34 : 40)
-                    .overlay {
-                        Circle()
-                            .stroke(Color.white.opacity(0.25), lineWidth: 1)
-                    }
-
-                if pick == nil {
-                    Text(position.label)
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.white.opacity(0.85))
-                }
-            }
-
-            if let pick {
-                Text(shortName(pick.player.name))
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.white)
-                    .lineLimit(1)
-                    .frame(maxWidth: 64)
-                Text("\(pick.contribution)")
-                    .font(.system(size: 8, weight: .semibold, design: .rounded))
-                    .foregroundStyle(BKTheme.accent)
-            }
-        }
-        .position(
-            x: point.x * size.width,
-            y: point.y * size.height
-        )
-    }
-
-    private func shortName(_ name: String) -> String {
-        name.split(separator: " ").last.map(String.init) ?? name
-    }
-}
-
-// MARK: - Pick List
-
-private struct DraftMasterPickList: View {
-    let picks: [DraftMasterPick]
-    let category: DraftMasterCategory
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(spacing: 8) {
             HStack {
-                Text("YOUR XI")
-                    .font(BKFont.caption(11))
-                    .tracking(0.8)
-                    .foregroundStyle(BKTheme.textMuted)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("REMAINING").font(BKFont.caption(9)).foregroundStyle(BKTheme.textMuted)
+                    Text(BattleFormat.money(max(0, remaining)))
+                        .font(BKFont.headline(20))
+                        .foregroundStyle(remaining < scenario.budgetEur * 0.08 ? Color.orange : BKTheme.accent)
+                        .contentTransition(.numericText())
+                }
                 Spacer()
-                Text("\(picks.count)/\(DraftMasterChallenge.promptCount)")
-                    .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.accent)
-            }
-
-            ForEach(picks) { pick in
-                HStack(spacing: 10) {
-                    Text(pick.position.label)
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.accent)
-                        .frame(width: 28, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(pick.player.name)
-                            .font(BKFont.headline(13))
-                            .foregroundStyle(BKTheme.textPrimary)
-                            .lineLimit(1)
-                        Text(pick.prompt.label)
-                            .font(BKFont.caption(9))
-                            .foregroundStyle(BKTheme.textMuted)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                    Text("+\(pick.contribution)")
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.accent)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(BKTheme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-        }
-    }
-}
-
-// MARK: - Search
-
-private struct DraftMasterSearchSection: View {
-    @Bindable var viewModel: DraftMasterViewModel
-    var isSearchFocused: FocusState<Bool>.Binding
-
-    var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                TextField("", text: $viewModel.searchQuery, prompt:
-                    Text("SEARCH PLAYERS")
-                        .foregroundStyle(BKTheme.textMuted)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                )
-                .textFieldStyle(.plain)
-                .foregroundStyle(BKTheme.background)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .focused(isSearchFocused)
-                .submitLabel(.search)
-                .onChange(of: viewModel.searchQuery) { _, _ in
-                    viewModel.selectionError = nil
-                    Task { await viewModel.search() }
-                }
-
-                if viewModel.isSearching {
-                    ProgressView().tint(BKTheme.accent)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("SQUAD").font(BKFont.caption(9)).foregroundStyle(BKTheme.textMuted)
+                    Text("\(picks)/\(slots)").font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5)
-            )
-
-            if let error = viewModel.selectionError {
-                Text(error.uppercased())
-                    .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.wrong)
-            }
-
-            if !viewModel.searchResults.isEmpty {
-                SearchResultsContainer {
-                    ForEach(viewModel.searchResults) { player in
-                        Button {
-                            isSearchFocused.wrappedValue = false
-                            Task { await viewModel.selectPlayer(player) }
-                        } label: {
-                            HStack(spacing: 12) {
-                                PlayerTeamBadge(player: player, size: 28) {
-                                    Circle()
-                                        .fill(BKTheme.cardElevated)
-                                        .frame(width: 28, height: 28)
-                                        .overlay(
-                                            Text(GuessWhoDisplay.clubAbbrev(player.club))
-                                                .font(.system(size: 8, weight: .bold, design: .rounded))
-                                                .foregroundStyle(BKTheme.textMuted)
-                                        )
-                                }
-
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(player.name.uppercased())
-                                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                                        .foregroundStyle(BKTheme.textPrimary)
-                                    Text("\(player.nationality) · \(player.league)")
-                                        .font(BKFont.caption(11))
-                                        .foregroundStyle(BKTheme.textMuted)
-                                    if let slot = DraftMasterPositionMapper.assignSlot(
-                                        for: player,
-                                        filled: viewModel.state.filledPositions
-                                    ) {
-                                        Text("→ \(slot.label)")
-                                            .font(BKFont.caption(9))
-                                            .foregroundStyle(BKTheme.accent)
-                                    }
-                                }
-                                Spacer(minLength: 0)
-                                Ph.caretRight.bold
-                                    .color(BKTheme.textMuted)
-                                    .frame(width: 12, height: 12)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
-                        }
-
-                        if player.id != viewModel.searchResults.last?.id {
-                            Divider().background(BKTheme.cardElevated)
-                        }
-                    }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(BKTheme.card)
+                    Capsule().fill(BKTheme.accent.opacity(0.85))
+                        .frame(width: geo.size.width * fraction)
                 }
             }
+            .frame(height: 6)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -853,293 +386,499 @@ private struct DraftMasterSearchSection: View {
     }
 }
 
+private struct BattleScenarioBanner: View {
+    let scenario: BattleScenario
+    let formation: BattleFormation
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(scenario.subtitle.uppercased())
+                    .font(BKFont.headline(14)).foregroundStyle(BKTheme.textPrimary).lineLimit(1)
+                Text("\(scenario.competition) · vs \(scenario.opponentName)")
+                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
+            }
+            Spacer()
+            Text(formation.name)
+                .font(BKFont.headline(13)).foregroundStyle(BKTheme.accent)
+        }
+        .padding(14)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+// MARK: - Pitch
+
+private struct BattlePitchView: View {
+    let formation: BattleFormation
+    let picks: [BattlePick]
+    var onTapSlot: (BattleSlot) -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                PitchBackground()
+                ForEach(formation.slots) { slot in
+                    let pick = picks.first { $0.slotId == slot.id }
+                    BattlePitchSlot(slot: slot, pick: pick)
+                        .position(
+                            x: slot.point.x * geo.size.width,
+                            y: slot.point.y * geo.size.height
+                        )
+                        .onTapGesture { onTapSlot(slot) }
+                }
+            }
+        }
+    }
+}
+
+private struct BattlePitchSlot: View {
+    let slot: BattleSlot
+    let pick: BattlePick?
+
+    var body: some View {
+        VStack(spacing: 3) {
+            ZStack {
+                Circle()
+                    .fill(pick == nil ? BKTheme.card : BKTheme.accent.opacity(0.18))
+                    .frame(width: 42, height: 42)
+                    .overlay(
+                        Circle().stroke(pick == nil ? BKTheme.textMuted.opacity(0.4) : BKTheme.accent, lineWidth: 1.5)
+                    )
+                if let pick {
+                    PlayerTeamBadge(player: pick.player, size: 30) { fallbackBadge(pick) }
+                } else {
+                    Text("+")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(BKTheme.textMuted)
+                }
+            }
+            Text(slot.label)
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .foregroundStyle(pick == nil ? BKTheme.textMuted : BKTheme.accent)
+            if let pick {
+                Text(shortName(pick.player.name))
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .lineLimit(1).frame(maxWidth: 64)
+                Text(BattleFormat.money(pick.priceEur))
+                    .font(.system(size: 8, weight: .semibold, design: .rounded))
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+        }
+        .frame(width: 70)
+    }
+
+    private func fallbackBadge(_ pick: BattlePick) -> some View {
+        Circle().fill(BKTheme.cardElevated).frame(width: 30, height: 30)
+            .overlay(
+                Text(GuessWhoDisplay.clubAbbrev(pick.player.club))
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .foregroundStyle(BKTheme.textMuted)
+            )
+    }
+
+    private func shortName(_ name: String) -> String {
+        name.split(separator: " ").last.map(String.init) ?? name
+    }
+}
+
+private struct PitchBackground: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(LinearGradient(colors: [BKTheme.card, BKTheme.cardElevated], startPoint: .top, endPoint: .bottom))
+            GeometryReader { geo in
+                let w = geo.size.width, h = geo.size.height
+                Path { p in
+                    p.move(to: CGPoint(x: 0, y: h * 0.5)); p.addLine(to: CGPoint(x: w, y: h * 0.5))
+                }.stroke(BKTheme.textMuted.opacity(0.18), lineWidth: 1)
+                Circle()
+                    .stroke(BKTheme.textMuted.opacity(0.18), lineWidth: 1)
+                    .frame(width: w * 0.26, height: w * 0.26)
+                    .position(x: w * 0.5, y: h * 0.5)
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(BKTheme.textMuted.opacity(0.12), lineWidth: 1))
+    }
+}
+
+// MARK: - Kick off bar
+
+private struct BattleKickoffBar: View {
+    let ready: Bool
+    let filled: Int
+    let total: Int
+    var onKickOff: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button(action: onKickOff) {
+                HStack(spacing: 8) {
+                    Text(ready ? "KICK OFF" : "FILL YOUR XI (\(filled)/\(total))")
+                        .font(BKFont.headline(15))
+                    if ready { Ph.arrowRight.bold.color(BKTheme.background).frame(width: 14, height: 14) }
+                }
+                .foregroundStyle(ready ? BKTheme.background : BKTheme.textMuted)
+                .frame(maxWidth: .infinity).padding(.vertical, 16)
+                .background(ready ? BKTheme.accent : BKTheme.card)
+                .clipShape(Capsule())
+            }
+            .disabled(!ready)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .background(BKTheme.background)
+    }
+}
+
+// MARK: - Search sheet
+
+private struct BattleSearchSheet: View {
+    @Bindable var viewModel: DraftMasterViewModel
+    let slot: BattleSlot
+    @FocusState private var focused: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("SIGN A \(bucketLabel)")
+                            .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
+                        Text("\(slot.label) · up to \(BattleFormat.money(budgetForSlot))")
+                            .font(BKFont.headline(15)).foregroundStyle(BKTheme.accent)
+                    }
+                    Spacer()
+                    if let pick = viewModel.state.pick(forSlot: slot.id) {
+                        Button {
+                            viewModel.removePick(slotId: slot.id)
+                            dismiss()
+                        } label: {
+                            Text("REMOVE \(pick.player.name.split(separator: " ").last.map(String.init)?.uppercased() ?? "")")
+                                .font(BKFont.caption(10)).foregroundStyle(BKTheme.wrong)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+
+                HStack(spacing: 12) {
+                    TextField("", text: $viewModel.searchQuery, prompt:
+                        Text("SEARCH PLAYERS").foregroundStyle(BKTheme.textMuted)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    )
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(BKTheme.background)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .focused($focused)
+                    .submitLabel(.search)
+                    .onChange(of: viewModel.searchQuery) { _, _ in
+                        viewModel.selectionError = nil
+                        Task { await viewModel.search() }
+                    }
+                    if viewModel.isSearching { ProgressView().tint(BKTheme.accent) }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .background(Color.white).clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5))
+                .padding(.horizontal, 16)
+
+                if let error = viewModel.selectionError {
+                    Text(error.uppercased()).font(BKFont.caption(10)).foregroundStyle(BKTheme.wrong)
+                }
+
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(viewModel.searchResults) { player in
+                            resultRow(player)
+                            if player.id != viewModel.searchResults.last?.id {
+                                Divider().background(BKTheme.cardElevated)
+                            }
+                        }
+                    }
+                    .background(BKTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 16)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 14)
+            .background(BKTheme.background)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }.foregroundStyle(BKTheme.accent)
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .onAppear { focused = true }
+    }
+
+    private var bucketLabel: String {
+        switch slot.bucket {
+        case .gk: return "GOALKEEPER"
+        case .def: return "DEFENDER"
+        case .mid: return "MIDFIELDER"
+        case .att: return "ATTACKER"
+        }
+    }
+
+    private var budgetForSlot: Double {
+        let existing = viewModel.state.pick(forSlot: slot.id)?.priceEur ?? 0
+        return viewModel.state.remainingEur + existing
+    }
+
+    private func resultRow(_ player: PlayerSearchResultDTO) -> some View {
+        let affordable = viewModel.canAfford(player)
+        return Button {
+            focused = false
+            viewModel.selectPlayer(player)
+        } label: {
+            HStack(spacing: 12) {
+                PlayerTeamBadge(player: player, size: 28) {
+                    Circle().fill(BKTheme.cardElevated).frame(width: 28, height: 28)
+                        .overlay(
+                            Text(GuessWhoDisplay.clubAbbrev(player.club))
+                                .font(.system(size: 8, weight: .bold, design: .rounded))
+                                .foregroundStyle(BKTheme.textMuted)
+                        )
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(player.name.uppercased())
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(affordable ? BKTheme.textPrimary : BKTheme.textMuted)
+                    Text("\(player.nationality) · \(player.club)")
+                        .font(BKFont.caption(11)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text(BattleFormat.money(viewModel.price(for: player)))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(affordable ? BKTheme.accent : BKTheme.wrong)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .opacity(affordable ? 1 : 0.6)
+        }
+    }
+}
+
 // MARK: - Result
 
-private struct DraftMasterResultView: View {
-    let challenge: DraftMasterChallenge
-    let picks: [DraftMasterPick]
-    let summary: DraftMasterResultSummary
-    var onLeaderboard: () -> Void
-    var onShare: () -> Void
+private struct BattleResultView: View {
+    let challenge: BattleChallenge
+    let result: BattleResult
     var showPlayAgain = true
+    var onShare: () -> Void
     var onPlayAgain: () -> Void
     var onHome: () -> Void
 
     @State private var revealStep = 0
 
+    private var verdictColor: Color {
+        switch result.outcome {
+        case .win: return BKTheme.accent
+        case .draw: return .orange
+        case .loss: return BKTheme.wrong
+        }
+    }
+
     var body: some View {
         ZStack {
             BKTheme.background.ignoresSafeArea()
-
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
-                    VStack(spacing: 8) {
-                        Text("DAILY DRAFT COMPLETE")
-                            .font(BKFont.caption(11))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.accent)
-                        Text(challenge.category.title.uppercased())
-                            .font(BKFont.headline(16))
-                            .foregroundStyle(BKTheme.textSecondary)
+                    VStack(spacing: 6) {
+                        Text(challenge.scenario.subtitle.uppercased())
+                            .font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                        Text(result.outcome.verdict)
+                            .font(BKFont.title(34)).foregroundStyle(verdictColor)
                     }
                     .padding(.top, 24)
 
                     if revealStep >= 1 {
-                        Text("\(summary.teamScore.formatted())")
-                            .font(BKFont.title(52))
-                            .foregroundStyle(BKTheme.accent)
-                            .contentTransition(.numericText())
-                            .transition(.scale.combined(with: .opacity))
+                        HStack(spacing: 18) {
+                            scoreSide(name: "YOU", goals: result.yourGoals, highlight: result.outcome == .win)
+                            Text("–").font(BKFont.title(30)).foregroundStyle(BKTheme.textMuted)
+                            scoreSide(name: challenge.scenario.opponentName, goals: result.theirGoals, highlight: result.outcome == .loss)
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
 
-                    if revealStep >= 2 {
-                        HStack(spacing: 16) {
-                            statPill("RANK", value: "#\(summary.rank)")
-                            statPill("PERCENTILE", value: DraftMasterScoring.percentileLabel(summary.percentile))
+                    if revealStep >= 2, !result.events.isEmpty {
+                        VStack(spacing: 6) {
+                            ForEach(result.events) { e in
+                                HStack {
+                                    if e.forYou {
+                                        Text("\(e.scorer) \(e.minuteLabel)")
+                                            .font(BKFont.body(12)).foregroundStyle(BKTheme.textPrimary)
+                                        Spacer()
+                                    } else {
+                                        Spacer()
+                                        Text("\(e.minuteLabel) \(e.scorer)")
+                                            .font(BKFont.body(12)).foregroundStyle(BKTheme.textSecondary)
+                                    }
+                                }
+                            }
                         }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.horizontal, 24)
+                        .transition(.opacity)
                     }
 
                     if revealStep >= 3 {
-                        Text("+\(summary.xpEarned) XP")
-                            .font(BKFont.headline(20))
-                            .foregroundStyle(BKTheme.accent)
-                            .transition(.opacity)
+                        powerBars
+                        scoreBreakdown
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-
-                    DraftMasterShareCardView(
-                        challenge: challenge,
-                        picks: picks,
-                        summary: summary
-                    )
-                    .padding(.horizontal, 4)
 
                     VStack(spacing: 10) {
-                        Button(action: onLeaderboard) {
-                            Text("VIEW LEADERBOARD")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.background)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.accent)
-                                .clipShape(Capsule())
-                        }
-
                         Button(action: onShare) {
-                            Text("SHARE TEAM")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.card)
-                                .clipShape(Capsule())
+                            Text("SHARE RESULT").font(BKFont.headline(14))
+                                .foregroundStyle(BKTheme.background)
+                                .frame(maxWidth: .infinity).padding(.vertical, 14)
+                                .background(BKTheme.accent).clipShape(Capsule())
                         }
-
                         if showPlayAgain {
                             Button(action: onPlayAgain) {
-                                Text("PLAY AGAIN")
-                                    .font(BKFont.headline(14))
-                                    .foregroundStyle(BKTheme.textMuted)
-                            }
-                            .padding(.top, 4)
+                                Text("PLAY AGAIN").font(BKFont.headline(14)).foregroundStyle(BKTheme.textMuted)
+                            }.padding(.top, 2)
                         }
-
                         Button(action: onHome) {
                             Text(showPlayAgain ? "BACK TO GAMES" : "DONE")
-                                .font(BKFont.caption(11))
-                                .foregroundStyle(BKTheme.textMuted)
+                                .font(BKFont.caption(11)).foregroundStyle(BKTheme.textMuted)
                         }
                     }
+                    .padding(.top, 8)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 32)
+                .padding(.horizontal, 16).padding(.bottom, 32)
             }
         }
         .task {
             for step in 1...3 {
                 try? await Task.sleep(for: .seconds(0.45))
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
-                    revealStep = step
-                }
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) { revealStep = step }
                 HapticManager.light()
             }
         }
     }
 
-    private func statPill(_ label: String, value: String) -> some View {
+    private func scoreSide(name: String, goals: Int, highlight: Bool) -> some View {
         VStack(spacing: 4) {
-            Text(label)
-                .font(BKFont.caption(9))
-                .foregroundStyle(BKTheme.textMuted)
-            Text(value)
-                .font(BKFont.headline(14))
-                .foregroundStyle(BKTheme.textPrimary)
+            Text("\(goals)")
+                .font(BKFont.title(48))
+                .foregroundStyle(highlight ? BKTheme.accent : BKTheme.textPrimary)
+            Text(name.uppercased())
+                .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
+                .lineLimit(1).frame(maxWidth: 100)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
-}
 
-// MARK: - Share Card
+    private var powerBars: some View {
+        VStack(spacing: 10) {
+            powerBar(label: "YOUR SQUAD", value: result.your.power, max: maxPower, color: BKTheme.accent)
+            powerBar(label: challenge.scenario.opponentName.uppercased(), value: result.opp.power, max: maxPower, color: BKTheme.textSecondary)
+        }
+        .padding(14)
+        .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 14))
+    }
 
-struct DraftMasterShareCardView: View {
-    let challenge: DraftMasterChallenge
-    let picks: [DraftMasterPick]
-    let summary: DraftMasterResultSummary
+    private var maxPower: Double { max(result.your.power, result.opp.power, 1) }
 
-    var body: some View {
-        VStack(spacing: 14) {
+    private func powerBar(label: String, value: Double, max: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("DAILY DRAFT")
-                    .font(BKFont.caption(10))
-                    .tracking(1)
-                    .foregroundStyle(BKTheme.accent)
+                Text(label).font(BKFont.caption(9)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
                 Spacer()
-                Text(challenge.formation.rawValue)
-                    .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.textMuted)
+                Text("\(Int(value.rounded()))").font(BKFont.caption(10)).foregroundStyle(BKTheme.textPrimary)
             }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(BKTheme.cardElevated)
+                    Capsule().fill(color).frame(width: geo.size.width * (value / max))
+                }
+            }
+            .frame(height: 6)
+        }
+    }
 
-            Text(challenge.category.title.uppercased())
-                .font(BKFont.headline(15))
-                .foregroundStyle(BKTheme.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            DraftMasterPitchView(picks: picks)
-                .frame(height: 260)
-
+    private var scoreBreakdown: some View {
+        VStack(spacing: 10) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("SCORE")
-                        .font(BKFont.caption(9))
-                        .foregroundStyle(BKTheme.textMuted)
-                    Text(summary.teamScore.formatted())
-                        .font(BKFont.headline(22))
-                        .foregroundStyle(BKTheme.accent)
-                }
+                Text("SCORE").font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
                 Spacer()
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(DraftMasterScoring.percentileLabel(summary.percentile))
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textPrimary)
-                    Text("Rank #\(summary.rank)")
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textMuted)
-                }
+                Text("\(result.score)").font(BKFont.title(28)).foregroundStyle(BKTheme.accent)
+            }
+            breakdownRow("Squad power", result.powerPoints)
+            breakdownRow(result.outcome.verdict.capitalized, result.outcomePoints)
+            breakdownRow("Value for money", result.efficiencyPoints)
+            Divider().background(BKTheme.cardElevated)
+            HStack {
+                Text("Spent \(BattleFormat.money(result.spentEur)) of \(BattleFormat.money(result.budgetEur))")
+                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
+                Spacer()
+                Text("\(BattleFormat.money(result.budgetLeftEur)) left")
+                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textSecondary)
             }
         }
-        .padding(16)
-        .background(
-            LinearGradient(
-                colors: [BKTheme.cardElevated, BKTheme.card],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(BKTheme.accent.opacity(0.25), lineWidth: 1)
+        .padding(14)
+        .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func breakdownRow(_ label: String, _ value: Int) -> some View {
+        HStack {
+            Text(label).font(BKFont.body(13)).foregroundStyle(BKTheme.textSecondary)
+            Spacer()
+            Text("+\(value)").font(BKFont.headline(13)).foregroundStyle(BKTheme.textPrimary)
         }
     }
 }
 
-private struct DraftMasterShareSheet: View {
-    let challenge: DraftMasterChallenge
-    let picks: [DraftMasterPick]
-    let summary: DraftMasterResultSummary
+// MARK: - Share
+
+private struct BattleShareSheet: View {
+    let challenge: BattleChallenge
+    let result: BattleResult
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
-                DraftMasterShareCardView(
-                    challenge: challenge,
-                    picks: picks,
-                    summary: summary
-                )
+                VStack(spacing: 12) {
+                    Text(challenge.scenario.subtitle.uppercased())
+                        .font(BKFont.headline(15)).foregroundStyle(BKTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                    Text("\(result.outcome.verdict)  \(result.yourGoals)–\(result.theirGoals)")
+                        .font(BKFont.title(28)).foregroundStyle(BKTheme.accent)
+                    Text("Score \(result.score) · Spent \(BattleFormat.money(result.spentEur))")
+                        .font(BKFont.caption(11)).foregroundStyle(BKTheme.textMuted)
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity)
+                .background(LinearGradient(colors: [BKTheme.cardElevated, BKTheme.card], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
                 .padding(.horizontal, 16)
 
-                ShareLink(item: DraftMasterSeed.shareText(
-                    challenge: challenge,
-                    picks: picks,
-                    summary: summary
-                )) {
-                    Text("SHARE")
-                        .font(BKFont.headline(14))
+                ShareLink(item: BattleSeed.shareText(challenge: challenge, result: result)) {
+                    Text("SHARE").font(BKFont.headline(14))
                         .foregroundStyle(BKTheme.background)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(BKTheme.accent)
-                        .clipShape(Capsule())
+                        .frame(maxWidth: .infinity).padding(.vertical, 14)
+                        .background(BKTheme.accent).clipShape(Capsule())
                 }
                 .padding(.horizontal, 16)
-
                 Spacer()
             }
             .padding(.top, 16)
             .background(BKTheme.background)
-            .navigationTitle("Share Team")
+            .navigationTitle("Share Result")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(BKTheme.accent)
+                    Button("Done") { dismiss() }.foregroundStyle(BKTheme.accent)
                 }
             }
         }
-        .presentationDetents([.medium, .large])
-    }
-}
-
-// MARK: - Leaderboard
-
-private struct DraftMasterLeaderboardSheet: View {
-    let daily: [DraftMasterLeaderboardEntry]
-    let weekly: [DraftMasterLeaderboardEntry]
-    @State private var tab = 0
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                Picker("Board", selection: $tab) {
-                    Text("Daily").tag(0)
-                    Text("Weekly").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-
-                List(tab == 0 ? daily : weekly) { entry in
-                    HStack {
-                        Text("#\((tab == 0 ? daily : weekly).firstIndex(of: entry)! + 1)")
-                            .font(BKFont.caption(11))
-                            .foregroundStyle(BKTheme.textMuted)
-                            .frame(width: 28, alignment: .leading)
-                        Text(entry.name)
-                            .font(BKFont.headline(14))
-                            .foregroundStyle(entry.isUser ? BKTheme.accent : BKTheme.textPrimary)
-                        Spacer()
-                        Text(entry.score.formatted())
-                            .font(BKFont.headline(14))
-                            .foregroundStyle(BKTheme.textPrimary)
-                    }
-                    .listRowBackground(entry.isUser ? BKTheme.cardElevated : BKTheme.card)
-                }
-                .scrollContentBackground(.hidden)
-            }
-            .background(BKTheme.background)
-            .navigationTitle("Leaderboards")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(BKTheme.accent)
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium])
     }
 }

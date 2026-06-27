@@ -20,7 +20,7 @@ const GAME_MODES = [
   { id: 'guess_who', title: 'GUESS WHO?', subtitle: 'Wordle-style player guess', playerCount: 22100, isAvailable: true },
   { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9 holes, name the answers', playerCount: 7600, isAvailable: true },
   { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
-  { id: 'draft_master', title: 'DRAFT MASTER', subtitle: 'Build the best XI', playerCount: 11300, isAvailable: true },
+  { id: 'draft_master', title: 'BATTLE MODE', subtitle: 'Beat the scenario on a budget', playerCount: 11300, isAvailable: true },
   { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Guess the World Cup year', playerCount: 8900, isAvailable: true },
 ];
 
@@ -39,7 +39,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'football_golf', title: 'FOOTBALL GOLF' },
   { modeId: 'one_more', title: 'ONE MORE' },
   { modeId: 'world_cup_xi', title: 'WORLD CUP XI' },
-  { modeId: 'draft_master', title: 'DRAFT MASTER' },
+  { modeId: 'draft_master', title: 'BATTLE MODE' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -184,15 +184,15 @@ async function ensureDraftMasterPuzzle(date: string): Promise<void> {
 
   try {
     const puzzle = await generateDraftMasterPuzzle(date);
-    if (!puzzle || puzzle.prompts.length < 11) {
-      console.warn(`Skipped draft_master for ${date}: no viable prompts`);
+    if (!puzzle || puzzle.scenario.opponent.players.length < 11) {
+      console.warn(`Skipped draft_master for ${date}: no viable scenario`);
       return;
     }
     await db
       .insert(dailyPuzzles)
       .values({ date, modeId: 'draft_master', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
       .onConflictDoNothing();
-    console.log(`Generated draft_master puzzle for ${date} (${puzzle.category})`);
+    console.log(`Generated draft_master puzzle for ${date} (${puzzle.scenario.id} / ${puzzle.formationId})`);
   } catch (error) {
     console.warn(`Skipped draft_master for ${date}: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -275,9 +275,30 @@ async function migrateStaleWorldCupXi(date: string): Promise<void> {
   }
 }
 
+/**
+ * Drop a stored Draft Master puzzle if it predates Battle Mode (the old format had `prompts`/
+ * `category`; the new one has `scenario`/`formationId`), so it regenerates.
+ */
+async function migrateStaleDraftMaster(date: string): Promise<void> {
+  const rows = await db
+    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')))
+    .limit(1);
+  const puzzle = rows[0]?.puzzleJson as { scenario?: unknown; prompts?: unknown } | undefined;
+  if (!puzzle) return;
+  if (puzzle.scenario === undefined || puzzle.prompts !== undefined) {
+    await db
+      .delete(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')));
+    console.log(`Removed stale draft_master puzzle for ${date} (will regenerate)`);
+  }
+}
+
 async function ensureDailyPuzzles(date: string): Promise<void> {
   await migrateStaleBlindRank(date);
   await migrateStaleWorldCupXi(date);
+  await migrateStaleDraftMaster(date);
 
   const rows = await db
     .select({ modeId: dailyPuzzles.modeId })
