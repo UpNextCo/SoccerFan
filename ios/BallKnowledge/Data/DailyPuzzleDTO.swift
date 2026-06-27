@@ -305,6 +305,21 @@ struct WorldCupXIPuzzleDTO: Codable, Equatable {
     }
 }
 
+struct DraftMasterPromptDTO: Codable, Equatable {
+    let id: String
+    let nationality: String
+    let league: String
+}
+
+struct DraftMasterPuzzleDTO: Codable, Equatable {
+    let modeId: String
+    let puzzleId: String
+    let date: String
+    let category: String
+    let formation: String
+    let prompts: [DraftMasterPromptDTO]
+}
+
 enum DailyPuzzleDTO: Codable, Equatable {
     case guessWho(GuessWhoPuzzleDTO)
     case targetMan(TargetManPuzzleDTO)
@@ -314,6 +329,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
     case footballGolf(FootballGolfPuzzleDTO)
     case oneMore(OneMorePuzzleDTO)
     case worldCupXI(WorldCupXIPuzzleDTO)
+    case draftMaster(DraftMasterPuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
         case modeId
@@ -340,6 +356,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .oneMore(try OneMorePuzzleDTO(from: decoder))
         case GameModeID.worldCupXI.rawValue:
             self = .worldCupXI(try WorldCupXIPuzzleDTO(from: decoder))
+        case GameModeID.draftMaster.rawValue:
+            self = .draftMaster(try DraftMasterPuzzleDTO(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .modeId,
@@ -367,6 +385,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .worldCupXI(let puzzle):
             try puzzle.encode(to: encoder)
+        case .draftMaster(let puzzle):
+            try puzzle.encode(to: encoder)
         }
     }
 
@@ -380,6 +400,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .footballGolf: return GameModeID.footballGolf.rawValue
         case .oneMore: return GameModeID.oneMore.rawValue
         case .worldCupXI: return GameModeID.worldCupXI.rawValue
+        case .draftMaster: return GameModeID.draftMaster.rawValue
         }
     }
 }
@@ -467,6 +488,11 @@ extension DailyBundleDTO {
 
     var worldCupXIPuzzle: WorldCupXIPuzzleDTO? {
         guard case .worldCupXI(let puzzle) = game(for: .worldCupXI)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var draftMasterPuzzle: DraftMasterPuzzleDTO? {
+        guard case .draftMaster(let puzzle) = game(for: .draftMaster)?.puzzle else { return nil }
         return puzzle
     }
 }

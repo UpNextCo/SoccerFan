@@ -683,7 +683,7 @@ struct DailyGameHost: View {
                     onComplete: onFinished
                 )
             case .draftMaster:
-                DraftMasterView(dailyDate: dailyBundle?.date, allowReplay: allowReplay, onComplete: onFinished)
+                DraftMasterView(dailyDate: dailyBundle?.date, dailyBundle: dailyBundle, allowReplay: allowReplay, onComplete: onFinished)
             case .footballGolf:
                 FootballGolfView(
                     dailyDate: dailyBundle?.date,

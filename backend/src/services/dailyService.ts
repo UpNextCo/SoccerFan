@@ -9,6 +9,7 @@ import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGen
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
 import { generateWorldCupXiPuzzle } from './worldCupXiGenerator.js';
+import { generateDraftMasterPuzzle } from './draftMasterGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
@@ -38,6 +39,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'football_golf', title: 'FOOTBALL GOLF' },
   { modeId: 'one_more', title: 'ONE MORE' },
   { modeId: 'world_cup_xi', title: 'WORLD CUP XI' },
+  { modeId: 'draft_master', title: 'DRAFT MASTER' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -171,6 +173,31 @@ async function ensureOneMorePuzzle(date: string): Promise<void> {
   }
 }
 
+/** Generate + store today's Draft Master challenge if not present. Best-effort. */
+async function ensureDraftMasterPuzzle(date: string): Promise<void> {
+  const existing = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  try {
+    const puzzle = await generateDraftMasterPuzzle(date);
+    if (!puzzle || puzzle.prompts.length < 11) {
+      console.warn(`Skipped draft_master for ${date}: no viable prompts`);
+      return;
+    }
+    await db
+      .insert(dailyPuzzles)
+      .values({ date, modeId: 'draft_master', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
+      .onConflictDoNothing();
+    console.log(`Generated draft_master puzzle for ${date} (${puzzle.category})`);
+  } catch (error) {
+    console.warn(`Skipped draft_master for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 /** Generate + store today's World Cup XI if not present. Best-effort. */
 async function ensureWorldCupXiPuzzle(date: string): Promise<void> {
   const existing = await db
@@ -274,6 +301,9 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   }
   if (!existing.has('world_cup_xi')) {
     await ensureWorldCupXiPuzzle(date);
+  }
+  if (!existing.has('draft_master')) {
+    await ensureDraftMasterPuzzle(date);
   }
 }
 

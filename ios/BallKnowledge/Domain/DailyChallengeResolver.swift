@@ -22,6 +22,18 @@ enum DailyChallengeResolver {
         )
     }
 
+    /// Map the server Draft Master challenge into the game model (nil → caller uses local seed).
+    static func draftMasterChallenge(from bundle: DailyBundleDTO?) -> DraftMasterChallenge? {
+        guard let dto = bundle?.draftMasterPuzzle, dto.prompts.count == DraftMasterChallenge.promptCount else { return nil }
+        return DraftMasterChallenge(
+            id: dto.puzzleId,
+            date: dto.date,
+            category: DraftMasterCategory(rawValue: dto.category) ?? .goals,
+            prompts: dto.prompts.map { DraftMasterPrompt(id: $0.id, nationality: $0.nationality, league: $0.league) },
+            formation: .fourThreeThree
+        )
+    }
+
     static func targetManChallenge(from bundle: DailyBundleDTO?) -> TargetManChallenge {
         guard let bundle, let puzzle = bundle.targetManPuzzle else {
             return TargetManSeed.makeDailyChallenge()

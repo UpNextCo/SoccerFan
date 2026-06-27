@@ -191,7 +191,7 @@ enum DraftMasterMatcher {
         return nil
     }
 
-    private static func nationalityMatches(_ playerValue: String, _ promptValue: String) -> Bool {
+    static func nationalityMatches(_ playerValue: String, _ promptValue: String) -> Bool {
         normalizedCountry(playerValue) == normalizedCountry(promptValue)
     }
 

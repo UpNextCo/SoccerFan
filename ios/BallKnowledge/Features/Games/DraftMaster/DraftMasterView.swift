@@ -18,13 +18,21 @@ final class DraftMasterViewModel {
     var selectionError: String?
 
     private let practice: Bool
+    private let dailyBundle: DailyBundleDTO?
+    private let dailyDate: String?
 
-    init(practice: Bool = false, dailyDate: String? = nil) {
+    init(practice: Bool = false, dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil) {
         self.practice = practice
-        let challenge = practice
-            ? DraftMasterSeed.makePracticeChallenge()
-            : DraftMasterSeed.makeDailyChallenge(date: dailyDate)
-        self.state = DraftMasterGameState(challenge: challenge)
+        self.dailyBundle = dailyBundle
+        self.dailyDate = dailyDate
+        self.state = DraftMasterGameState(challenge: Self.resolveChallenge(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
+    }
+
+    /// Prefer the server-generated challenge; fall back to the local seed (practice / offline).
+    private static func resolveChallenge(practice: Bool, dailyDate: String?, dailyBundle: DailyBundleDTO?) -> DraftMasterChallenge {
+        if practice { return DraftMasterSeed.makePracticeChallenge() }
+        if let server = DailyChallengeResolver.draftMasterChallenge(from: dailyBundle) { return server }
+        return DraftMasterSeed.makeDailyChallenge(date: dailyDate)
     }
 
     func startDraft() {
@@ -54,8 +62,11 @@ final class DraftMasterViewModel {
 
         do {
             let results = try await APIClient.shared.searchPlayers(query: query)
+            // Filter on NATIONALITY + an open position only. Whether they actually played the
+            // prompt's league (career, not just current club) is confirmed server-side on select,
+            // so a Brazilian who has since left La Liga still qualifies for "Brazil + La Liga".
             searchResults = results.filter { player in
-                DraftMasterMatcher.matches(player, prompt: prompt)
+                DraftMasterMatcher.nationalityMatches(player.nationality, prompt.nationality)
                     && !state.usedPlayerIds.contains(player.id)
                     && DraftMasterPositionMapper.canFit(player, filled: state.filledPositions)
             }
@@ -66,43 +77,50 @@ final class DraftMasterViewModel {
         }
     }
 
-    func selectPlayer(_ player: PlayerSearchResultDTO) {
+    func selectPlayer(_ player: PlayerSearchResultDTO) async {
         guard state.phase == .drafting, let prompt = state.currentPrompt else { return }
 
-        if let error = DraftMasterMatcher.validationError(
-            for: player,
-            prompt: prompt,
-            usedIds: state.usedPlayerIds
-        ) {
-            selectionError = error
+        if state.usedPlayerIds.contains(player.id) {
+            selectionError = "Player already in your XI"
             HapticManager.error()
             return
         }
-
+        if !DraftMasterMatcher.nationalityMatches(player.nationality, prompt.nationality) {
+            selectionError = "Wrong nationality for this prompt"
+            HapticManager.error()
+            return
+        }
         guard let league = DraftMasterMatcher.league(from: prompt),
-              let position = DraftMasterPositionMapper.resolvePosition(
-                  for: player,
-                  filled: state.filledPositions
-              ) else {
+              let position = DraftMasterPositionMapper.resolvePosition(for: player, filled: state.filledPositions) else {
             selectionError = DraftMasterPositionMapper.positionConflictMessage(for: player)
             HapticManager.error()
             return
         }
 
-        selectionError = nil
-        let contribution = DraftMasterScoring.contribution(
-            for: player,
-            league: league,
-            category: state.challenge.category
-        )
-
-        state.picks.append(
-            DraftMasterPick(
-                prompt: prompt,
-                player: player,
-                position: position,
-                contribution: contribution
+        // Real contribution + eligibility from the DB (career stats in the prompt's league).
+        isSearching = true
+        defer { isSearching = false }
+        let result: (value: Int, apps: Int)
+        do {
+            result = try await APIClient.shared.draftMasterValue(
+                leagueId: league.apiLeagueId,
+                category: state.challenge.category.rawValue,
+                playerId: player.id
             )
+        } catch {
+            selectionError = "Couldn't verify that pick — try again"
+            HapticManager.error()
+            return
+        }
+        if result.apps <= 0 {
+            selectionError = "Hasn't played in \(prompt.league)"
+            HapticManager.error()
+            return
+        }
+
+        selectionError = nil
+        state.picks.append(
+            DraftMasterPick(prompt: prompt, player: player, position: position, contribution: result.value)
         )
         searchQuery = ""
         searchResults = []
@@ -116,7 +134,7 @@ final class DraftMasterViewModel {
     }
 
     func restart() {
-        let challenge = practice ? DraftMasterSeed.makePracticeChallenge() : DraftMasterSeed.makeDailyChallenge()
+        let challenge = Self.resolveChallenge(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle)
         state = DraftMasterGameState(challenge: challenge)
         searchQuery = ""
         searchResults = []
@@ -172,8 +190,8 @@ struct DraftMasterView: View {
     private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, practice: Bool = false, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: DraftMasterViewModel(practice: practice, dailyDate: dailyDate))
+    init(dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil, practice: Bool = false, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
+        _viewModel = State(initialValue: DraftMasterViewModel(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete
@@ -776,7 +794,7 @@ private struct DraftMasterSearchSection: View {
                     ForEach(viewModel.searchResults) { player in
                         Button {
                             isSearchFocused.wrappedValue = false
-                            viewModel.selectPlayer(player)
+                            Task { await viewModel.selectPlayer(player) }
                         } label: {
                             HStack(spacing: 12) {
                                 PlayerTeamBadge(player: player, size: 28) {
