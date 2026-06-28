@@ -98,8 +98,6 @@ const THEMES: Theme[] = [
   { id: 'current_superstars', title: 'Current Superstars', structure: sql`a.peak_m >= 40`, cats: ['peak_market_value', 'biggest_transfer_fee', 'career_goals', 'career_assists', 'champions_league_goals', 'la_liga_penalties', 'goals_before_21', 'career_hattricks'] },
   { id: 'football_icons', title: 'Football Icons', structure: sql`a.total_apps >= 300 AND a.peak_m >= 40`, cats: ['career_goals', 'career_assists', 'la_liga_penalties', 'serie_a_penalties', 'career_hattricks', 'international_caps', 'weak_foot_goals'] },
   { id: 'premier_league_strikers', title: 'Premier League Strikers', structure: sql`a.position = 'Attacker' AND a.pl_apps >= 100`, cats: ['premier_league_goals', 'career_goals', 'champions_league_goals', 'premier_league_penalties', 'career_hattricks', 'goals_before_21', 'non_big6_pl_goals', 'london_goals'] },
-  { id: 'premier_league_midfielders', title: 'Premier League Midfielders', structure: sql`a.position = 'Midfielder' AND a.pl_apps >= 150`, cats: ['premier_league_assists', 'career_assists', 'premier_league_appearances', 'premier_league_penalties', 'goals_before_21'] },
-  { id: 'premier_league_defenders', title: 'Premier League Defenders', structure: sql`a.position = 'Defender' AND a.pl_apps >= 150`, cats: ['premier_league_appearances', 'career_goals', 'international_caps'] },
   { id: 'world_cup_heroes', title: 'World Cup Heroes', structure: sql`a.wc = true`, cats: ['career_goals', 'career_assists', 'international_caps', 'goals_before_21', 'career_hattricks'] },
 ];
 
@@ -119,6 +117,11 @@ const STINKER_CHANCE = 3; // out of 5
  * aware tier PLUS major finals and individual awards.
  */
 const PRESTIGE = sql.raw('(a.mvt * 10 + LEAST(a.finals, 6) * 4 + LEAST(a.awards, 4) * 6)');
+
+// Hard fame floor: every pool member must be at least mid-tier by value OR have a major final /
+// individual award (catches lower-value icons like Klose). This guarantees no genuinely obscure
+// name can enter a round, on top of the top-PRESTIGE pool cap below.
+const FAME_FLOOR = sql`(a.mvt >= 3 OR a.finals >= 1 OR a.awards >= 1)`;
 
 const BIG6 = ['Manchester United', 'Manchester City', 'Chelsea', 'Arsenal', 'Liverpool', 'Tottenham'];
 const LONDON = ['Arsenal', 'Chelsea', 'Tottenham', 'West Ham', 'Fulham', 'Crystal Palace', 'Brentford', 'Charlton Athletic', 'QPR', 'Wimbledon'];
@@ -282,7 +285,7 @@ async function injectStinker(
     ${AGG}
     SELECT a.id, a.name, a.nationality, a.position, a.${sql.raw(col)} AS stat
     FROM agg a
-    WHERE a.id IN (${list}) AND ${theme.structure} AND a.${sql.raw(col)} >= 1
+    WHERE a.id IN (${list}) AND ${theme.structure} AND a.${sql.raw(col)} >= 1 AND ${FAME_FLOOR}
   `)) as unknown as PoolRow[];
 
   const chosenIds = new Set(chosen.map((c) => c.id));
@@ -341,6 +344,7 @@ export async function generateBlindRankPuzzle(date: string): Promise<GeneratedDa
       SELECT a.id, a.name, a.nationality, a.position, ${PRESTIGE} AS prestige, a.${sql.raw(category.col)} AS stat
       FROM agg a
       WHERE ${theme.structure} AND a.${sql.raw(category.col)} >= 1
+        AND ${FAME_FLOOR}
         AND ${category.eventGated ? sql`a.birth_year >= 1990` : sql`TRUE`}
       ORDER BY prestige DESC, stat DESC, a.id
       LIMIT ${POOL_SIZE}
