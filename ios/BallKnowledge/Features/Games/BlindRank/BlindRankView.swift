@@ -627,6 +627,13 @@ private struct BlindRankCurrentPlayerCard: View {
                 .foregroundStyle(BKTheme.textMuted)
 
             HStack(spacing: 12) {
+                PlayerAvatar(urlString: player.headshotUrl, size: 44) {
+                    Circle()
+                        .fill(BKTheme.card)
+                        .frame(width: 44, height: 44)
+                        .overlay(Text(GuessWhoDisplay.nationalityFlag(player.nationality)).font(.system(size: 24)))
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(player.name)
                         .font(BKFont.headline(17))

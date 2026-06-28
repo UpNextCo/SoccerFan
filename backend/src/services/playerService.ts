@@ -6,6 +6,7 @@ import { normalizeSearchText } from '../utils/playerSearch.js';
 import { resolveSearchLimit } from '../utils/playerSearchRank.js';
 import { lookupTeamLogos } from './teamService.js';
 import { normalizeTeamName } from '../utils/teamName.js';
+import { playerHeadshotUrl } from '../constants/footballMedia.js';
 
 type SearchRow = {
   id: string;
@@ -17,6 +18,7 @@ type SearchRow = {
   current_league: string;
   peak_market_value_eur: number | null;
   market_value_tier: number | null;
+  api_football_id: number | null;
 };
 
 /** Transfer-budget price for Battle Mode: peak market value, or a tier-based estimate when missing. */
@@ -134,6 +136,7 @@ export async function searchPlayers(
       p.current_league,
       p.peak_market_value_eur,
       p.market_value_tier,
+      p.api_football_id,
       (
         CASE
           WHEN lower(p.name) = ${normalized} THEN 200
@@ -191,6 +194,7 @@ export async function searchPlayers(
       nationality: player.nationality,
       position: player.position,
       priceEur: playerPriceEur(player.peak_market_value_eur, player.market_value_tier),
+      headshotUrl: playerHeadshotUrl(player.api_football_id) ?? undefined,
     });
 
     if (deduped.length >= resultLimit) break;

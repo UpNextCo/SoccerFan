@@ -447,7 +447,9 @@ private struct BattlePitchSlot: View {
                         Circle().stroke(pick == nil ? BKTheme.textMuted.opacity(0.4) : BKTheme.accent, lineWidth: 1.5)
                     )
                 if let pick {
-                    PlayerTeamBadge(player: pick.player, size: 30) { fallbackBadge(pick) }
+                    PlayerAvatar(urlString: pick.player.headshotUrl, size: 38) {
+                        PlayerTeamBadge(player: pick.player, size: 30) { fallbackBadge(pick) }
+                    }
                 } else {
                     Text("+")
                         .font(.system(size: 18, weight: .bold, design: .rounded))
@@ -639,13 +641,15 @@ private struct BattleSearchSheet: View {
             viewModel.selectPlayer(player)
         } label: {
             HStack(spacing: 12) {
-                PlayerTeamBadge(player: player, size: 28) {
-                    Circle().fill(BKTheme.cardElevated).frame(width: 28, height: 28)
-                        .overlay(
-                            Text(GuessWhoDisplay.clubAbbrev(player.club))
-                                .font(.system(size: 8, weight: .bold, design: .rounded))
-                                .foregroundStyle(BKTheme.textMuted)
-                        )
+                PlayerAvatar(urlString: player.headshotUrl, size: 32) {
+                    PlayerTeamBadge(player: player, size: 28) {
+                        Circle().fill(BKTheme.cardElevated).frame(width: 28, height: 28)
+                            .overlay(
+                                Text(GuessWhoDisplay.clubAbbrev(player.club))
+                                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                                    .foregroundStyle(BKTheme.textMuted)
+                            )
+                    }
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(player.name.uppercased())

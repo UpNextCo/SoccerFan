@@ -9,6 +9,7 @@ struct BlindRankPlayer: Identifiable, Equatable {
     let nationality: String
     let position: String
     let statValue: Int
+    var headshotUrl: String? = nil
 
     /// Prefer the multi-club label ("Barcelona · Chelsea"); fall back to the single club.
     var displayClubs: String { clubs.isEmpty ? club : clubs }
@@ -20,7 +21,8 @@ struct BlindRankPlayer: Identifiable, Equatable {
             club: club,
             league: league,
             nationality: nationality,
-            position: position
+            position: position,
+            headshotUrl: headshotUrl
         )
     }
 }

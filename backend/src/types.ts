@@ -190,6 +190,8 @@ export interface PlayerSearchResult {
   position: string;
   /** Transfer-budget price in EUR (peak market value, with a tier-based fallback). */
   priceEur: number;
+  /** API-Football headshot URL (quota-free CDN); absent when we have no API-Football id. */
+  headshotUrl?: string;
   teamId?: number;
   teamLogoUrl?: string;
 }

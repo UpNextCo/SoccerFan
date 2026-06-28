@@ -220,3 +220,41 @@ struct PlayerTeamBadge<Fallback: View>: View {
         )
     }
 }
+
+/// A circular player headshot (API-Football quota-free CDN) that falls back to the provided view
+/// (club badge / initials) whenever we have no photo URL or the image fails to load.
+struct PlayerAvatar<Fallback: View>: View {
+    let headshotURL: URL?
+    var size: CGFloat = 32
+    @ViewBuilder var fallback: () -> Fallback
+
+    init(headshotURL: URL?, size: CGFloat = 32, @ViewBuilder fallback: @escaping () -> Fallback) {
+        self.headshotURL = headshotURL
+        self.size = size
+        self.fallback = fallback
+    }
+
+    init(urlString: String?, size: CGFloat = 32, @ViewBuilder fallback: @escaping () -> Fallback) {
+        self.init(headshotURL: urlString.flatMap(URL.init(string:)), size: size, fallback: fallback)
+    }
+
+    var body: some View {
+        if let headshotURL {
+            AsyncImage(url: headshotURL, transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
+                case .empty:
+                    fallback()
+                default:
+                    fallback()
+                }
+            }
+            .frame(width: size, height: size)
+        } else {
+            fallback()
+        }
+    }
+}

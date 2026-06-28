@@ -34,6 +34,7 @@ export interface BlindRankPresentationPlayer {
   nationality: string;
   position: string;
   statValue: number;
+  headshotUrl?: string; // API-Football headshot (quota-free CDN), when available
 }
 
 export interface GuessWhoPuzzlePublic {

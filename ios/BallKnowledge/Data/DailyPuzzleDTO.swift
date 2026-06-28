@@ -40,6 +40,7 @@ struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {
     let nationality: String
     let position: String
     let statValue: Int
+    let headshotUrl: String?
 
     init(
         id: String,
@@ -49,7 +50,8 @@ struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {
         league: String,
         nationality: String,
         position: String,
-        statValue: Int
+        statValue: Int,
+        headshotUrl: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -59,6 +61,7 @@ struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {
         self.nationality = nationality
         self.position = position
         self.statValue = statValue
+        self.headshotUrl = headshotUrl
     }
 
     // Tolerate older puzzles that predate embedded stats so a stale row never
@@ -73,6 +76,7 @@ struct BlindRankPresentationPlayerDTO: Codable, Equatable, Identifiable {
         nationality = try c.decode(String.self, forKey: .nationality)
         position = try c.decode(String.self, forKey: .position)
         statValue = try c.decodeIfPresent(Int.self, forKey: .statValue) ?? 0
+        headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
     }
 }
 

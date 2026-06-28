@@ -99,7 +99,8 @@ enum DailyChallengeResolver {
                 league: entry.league,
                 nationality: entry.nationality,
                 position: entry.position,
-                statValue: entry.statValue
+                statValue: entry.statValue,
+                headshotUrl: entry.headshotUrl
             )
         }
 

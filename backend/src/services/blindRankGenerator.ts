@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import { playerHeadshotUrl } from '../constants/footballMedia.js';
 import {
   BLIND_RANK_SLOT_COUNT,
   PuzzleValidationError,
@@ -130,7 +131,7 @@ const londonSql = sql.join(LONDON.map((t) => sql`${t}`), sql`, `);
 
 const AGG = sql`
   WITH agg AS (
-    SELECT p.id, p.name, p.nationality, p.position, p.market_value_tier AS mvt,
+    SELECT p.id, p.name, p.nationality, p.position, p.market_value_tier AS mvt, p.api_football_id,
       EXTRACT(YEAR FROM p.birth_date)::int AS birth_year,
       ROUND(COALESCE(p.peak_market_value_eur, 0) / 1000000.0)::int AS peak_m,
       ROUND(COALESCE(p.record_fee_eur, 0) / 1000000.0)::int AS fee_m,
@@ -166,10 +167,10 @@ const AGG = sql`
       LEFT JOIN player_extra_stats e ON e.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
-    GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier, p.birth_date, p.peak_market_value_eur, p.record_fee_eur, fa.finals, aw.awards
+    GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier, p.api_football_id, p.birth_date, p.peak_market_value_eur, p.record_fee_eur, fa.finals, aw.awards
   )`;
 
-interface PoolRow { id: string; name: string; nationality: string; position: string; stat: number; }
+interface PoolRow { id: string; name: string; nationality: string; position: string; stat: number; api_football_id?: number | null; }
 /** A universe row also carries the prestige signal used to keep the pool recognisable. */
 interface UniverseRow extends PoolRow { prestige: number; }
 
@@ -283,7 +284,7 @@ async function injectStinker(
   const list = sql.join(bank.map((b) => sql`${b.id}::uuid`), sql`, `);
   const cands = (await db.execute(sql`
     ${AGG}
-    SELECT a.id, a.name, a.nationality, a.position, a.${sql.raw(col)} AS stat
+    SELECT a.id, a.name, a.nationality, a.position, a.api_football_id, a.${sql.raw(col)} AS stat
     FROM agg a
     WHERE a.id IN (${list}) AND ${theme.structure} AND a.${sql.raw(col)} >= 1 AND ${FAME_FLOOR}
   `)) as unknown as PoolRow[];
@@ -341,7 +342,7 @@ export async function generateBlindRankPuzzle(date: string): Promise<GeneratedDa
     // — an "iconic but low here" surprise (Klose), never a forgettable squad player (Zielinski).
     const pool = (await db.execute(sql`
       ${AGG}
-      SELECT a.id, a.name, a.nationality, a.position, ${PRESTIGE} AS prestige, a.${sql.raw(category.col)} AS stat
+      SELECT a.id, a.name, a.nationality, a.position, a.api_football_id, ${PRESTIGE} AS prestige, a.${sql.raw(category.col)} AS stat
       FROM agg a
       WHERE ${theme.structure} AND a.${sql.raw(category.col)} >= 1
         AND ${FAME_FLOOR}
@@ -374,6 +375,7 @@ export async function generateBlindRankPuzzle(date: string): Promise<GeneratedDa
         nationality: c.nationality,
         position: c.position,
         statValue: c.stat,
+        headshotUrl: playerHeadshotUrl(c.api_football_id) ?? undefined,
       };
     });
 

@@ -1,9 +1,15 @@
 /** API-Football public CDN — logo/image requests do not count toward API quota. */
 export const TEAM_LOGO_CDN = 'https://media.api-sports.io/football/teams';
 export const LEAGUE_LOGO_CDN = 'https://media.api-sports.io/football/leagues';
+export const PLAYER_PHOTO_CDN = 'https://media.api-sports.io/football/players';
 
 export function teamLogoUrl(teamId: number): string {
   return `${TEAM_LOGO_CDN}/${teamId}.png`;
+}
+
+/** Player headshot from the public CDN (quota-free). Null when we have no API-Football id. */
+export function playerHeadshotUrl(apiFootballId: number | null | undefined): string | null {
+  return apiFootballId ? `${PLAYER_PHOTO_CDN}/${apiFootballId}.png` : null;
 }
 
 export function leagueLogoUrl(leagueId: number): string {

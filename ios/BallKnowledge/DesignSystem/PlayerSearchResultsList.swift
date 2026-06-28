@@ -23,15 +23,17 @@ struct PlayerSearchResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            PlayerTeamBadge(player: player, size: 28) {
-                Circle()
-                    .fill(BKTheme.cardElevated)
-                    .frame(width: 28, height: 28)
-                    .overlay(
-                        Text(GuessWhoDisplay.clubAbbrev(player.club))
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .foregroundStyle(BKTheme.textMuted)
-                    )
+            PlayerAvatar(urlString: player.headshotUrl, size: 32) {
+                PlayerTeamBadge(player: player, size: 28) {
+                    Circle()
+                        .fill(BKTheme.cardElevated)
+                        .frame(width: 28, height: 28)
+                        .overlay(
+                            Text(GuessWhoDisplay.clubAbbrev(player.club))
+                                .font(.system(size: 8, weight: .bold, design: .rounded))
+                                .foregroundStyle(BKTheme.textMuted)
+                        )
+                }
             }
 
             VStack(alignment: .leading, spacing: 3) {
