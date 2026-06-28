@@ -236,7 +236,7 @@ async function migrateStaleBlindRank(date: string): Promise<void> {
     .limit(1);
 
   const puzzle = rows[0]?.puzzleJson as
-    | { presentationOrder?: Array<{ statValue?: unknown }>; valueNoun?: unknown }
+    | { presentationOrder?: Array<{ statValue?: unknown; headshotUrl?: unknown }>; valueNoun?: unknown }
     | undefined;
   if (!puzzle) return;
 
@@ -245,7 +245,10 @@ async function migrateStaleBlindRank(date: string): Promise<void> {
     !Array.isArray(order) ||
     order.length !== BLIND_RANK_SLOT_COUNT ||
     order.some((player) => typeof player?.statValue !== 'number') ||
-    typeof puzzle.valueNoun !== 'string';
+    typeof puzzle.valueNoun !== 'string' ||
+    // Predates player headshots — no member has one. Fresh puzzles almost always have several
+    // (famous pool ~82% covered), so this regenerates old rounds without churning new ones.
+    order.every((player) => typeof player?.headshotUrl !== 'string');
 
   if (stale) {
     await db
