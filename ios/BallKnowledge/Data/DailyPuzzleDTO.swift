@@ -205,9 +205,11 @@ struct OneMoreOptionDTO: Codable, Equatable {
     let clubs: String
     let position: String
     let value: Int
+    let headshotUrl: String?
 
-    init(id: String, name: String, clubs: String = "", position: String = "", value: Int) {
+    init(id: String, name: String, clubs: String = "", position: String = "", value: Int, headshotUrl: String? = nil) {
         self.id = id; self.name = name; self.clubs = clubs; self.position = position; self.value = value
+        self.headshotUrl = headshotUrl
     }
 
     init(from decoder: Decoder) throws {
@@ -217,6 +219,7 @@ struct OneMoreOptionDTO: Codable, Equatable {
         clubs = try c.decodeIfPresent(String.self, forKey: .clubs) ?? ""
         position = try c.decodeIfPresent(String.self, forKey: .position) ?? ""
         value = try c.decodeIfPresent(Int.self, forKey: .value) ?? 0
+        headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
     }
 }
 

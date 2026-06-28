@@ -11,6 +11,7 @@
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import { playerHeadshotUrl } from '../constants/footballMedia.js';
 
 const ROUND_TARGET = 20;
 const MIN_ROUNDS = 10;
@@ -53,6 +54,7 @@ export interface OneMoreOption {
   clubs: string;
   position: string;
   value: number;
+  headshotUrl?: string;
 }
 export interface OneMoreRound {
   options: [OneMoreOption, OneMoreOption];
@@ -82,7 +84,7 @@ export async function oneMoreStatValue(playerId: string, leagueId: number, categ
 
 const AGG = sql`
   WITH agg AS (
-    SELECT p.id, p.name, p.position,
+    SELECT p.id, p.name, p.position, p.api_football_id,
       EXTRACT(YEAR FROM p.birth_date)::int AS birth_year,
       (p.market_value_tier * 10 + LEAST(COALESCE(fa.finals, 0), 6) * 4 + LEAST(COALESCE(aw.awards, 0), 4) * 6)::int AS prestige,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39), 0)::int AS pl_goals,
@@ -112,10 +114,10 @@ const AGG = sql`
       LEFT JOIN player_extra_stats e ON e.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
-    GROUP BY p.id, p.name, p.position, p.market_value_tier, p.birth_date, fa.finals, aw.awards
+    GROUP BY p.id, p.name, p.position, p.api_football_id, p.market_value_tier, p.birth_date, fa.finals, aw.awards
   )`;
 
-interface Candidate { id: string; name: string; position: string; prestige: number; value: number; birth_year: number | null; }
+interface Candidate { id: string; name: string; position: string; prestige: number; value: number; birth_year: number | null; api_football_id: number | null; }
 
 async function clubsByPlayer(ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
@@ -166,7 +168,7 @@ function nearPools(rows: Candidate[], min: number, above: number, below: number,
 async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: OneMorePuzzle; pool: number } | null> {
   const rows = (await db.execute(sql`
     ${AGG}
-    SELECT id, name, position, birth_year, prestige, ${sql.raw(metric.col)} AS value
+    SELECT id, name, position, birth_year, api_football_id, prestige, ${sql.raw(metric.col)} AS value
     FROM agg WHERE ${sql.raw(metric.part)} > 0
   `)) as unknown as Candidate[];
 
@@ -212,6 +214,7 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
   const clubs = await clubsByPlayer(ids);
   const toOption = (c: Candidate): OneMoreOption => ({
     id: c.id, name: c.name, clubs: clubs.get(c.id) ?? '', position: c.position, value: c.value,
+    headshotUrl: playerHeadshotUrl(c.api_football_id) ?? undefined,
   });
 
   // Which side the qualifier sits on, per round. A well-mixed per-round hash (not an LCG top bit,

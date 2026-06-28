@@ -7,6 +7,7 @@ struct OneMoreOption: Identifiable, Equatable {
     let clubs: String
     let position: String
     let value: Int
+    var headshotUrl: String? = nil
 }
 
 /// A binary round: exactly two options, one of which clears the day's threshold.

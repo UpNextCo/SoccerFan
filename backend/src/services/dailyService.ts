@@ -298,10 +298,34 @@ async function migrateStaleDraftMaster(date: string): Promise<void> {
   }
 }
 
+/**
+ * Drop a stored One More puzzle that predates player headshots (no option has a headshotUrl), so it
+ * regenerates. Fresh puzzles almost always have several, so this won't churn live rounds.
+ */
+async function migrateStaleOneMore(date: string): Promise<void> {
+  const rows = await db
+    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'one_more')))
+    .limit(1);
+  const puzzle = rows[0]?.puzzleJson as
+    | { rounds?: Array<{ options?: Array<{ headshotUrl?: unknown }> }> }
+    | undefined;
+  if (!puzzle || !Array.isArray(puzzle.rounds)) return;
+  const anyHeadshot = puzzle.rounds.some((r) => r.options?.some((o) => typeof o?.headshotUrl === 'string'));
+  if (!anyHeadshot) {
+    await db
+      .delete(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'one_more')));
+    console.log(`Removed stale one_more puzzle for ${date} (will regenerate)`);
+  }
+}
+
 async function ensureDailyPuzzles(date: string): Promise<void> {
   await migrateStaleBlindRank(date);
   await migrateStaleWorldCupXi(date);
   await migrateStaleDraftMaster(date);
+  await migrateStaleOneMore(date);
 
   const rows = await db
     .select({ modeId: dailyPuzzles.modeId })

@@ -336,9 +336,26 @@ private struct OneMoreChoiceCard: View {
         [option.clubs, option.position].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
+    private var initials: String {
+        let parts = option.name.split(separator: " ")
+        let letters = parts.prefix(2).compactMap { $0.first }
+        return String(letters).uppercased()
+    }
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
+                PlayerAvatar(urlString: option.headshotUrl, size: 40) {
+                    Circle()
+                        .fill(BKTheme.cardElevated)
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text(initials)
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(BKTheme.textMuted)
+                        )
+                }
+
                 VStack(alignment: .leading, spacing: 3) {
                     Text(option.name)
                         .font(BKFont.headline(17))
