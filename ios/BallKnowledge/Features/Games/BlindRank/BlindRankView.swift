@@ -231,15 +231,6 @@ struct BlindRankView: View {
                             }
                         }
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        if allowReplay, viewModel.state.phase == .ranking {
-                            Button { viewModel.newPracticeRound() } label: {
-                                Text("NEW")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textMuted)
-                            }
-                        }
-                    }
                 }
             }
 
@@ -329,10 +320,6 @@ private struct BlindRankCategoryBanner: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Text(challenge.isDaily ? "DAILY CHALLENGE" : "PRACTICE")
-                .font(BKFont.caption(10))
-                .tracking(0.8)
-                .foregroundStyle(BKTheme.textMuted)
             Text(challenge.subtitle)
                 .font(BKFont.headline(18))
                 .foregroundStyle(BKTheme.textPrimary)
@@ -564,16 +551,19 @@ private struct BlindRankSlotRow: View {
                 .frame(width: 28, alignment: .leading)
 
             if let player {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(player.name)
-                        .font(BKFont.headline(14))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .lineLimit(1)
-                    Text(player.displayClubs)
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textSecondary)
-                        .lineLimit(1)
+                PlayerAvatar(urlString: player.headshotUrl, size: 30) {
+                    Circle()
+                        .fill(BKTheme.cardElevated)
+                        .frame(width: 30, height: 30)
+                        .overlay(Text(GuessWhoDisplay.nationalityFlag(player.nationality)).font(.system(size: 16)))
                 }
+                Text(player.name)
+                    .font(BKFont.headline(14))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Text(GuessWhoDisplay.nationalityFlag(player.nationality))
+                    .font(.system(size: 20))
             } else {
                 Button(action: onTapEmpty) {
                     HStack {
@@ -620,44 +610,57 @@ private struct BlindRankCurrentPlayerCard: View {
     let player: BlindRankPlayer
 
     var body: some View {
-        VStack(spacing: 10) {
-            Text("DRAG TO RANK")
-                .font(BKFont.caption(10))
-                .tracking(0.8)
-                .foregroundStyle(BKTheme.textMuted)
+        HStack(spacing: 12) {
+            BlindRankDragHandle()
 
-            HStack(spacing: 12) {
-                PlayerAvatar(urlString: player.headshotUrl, size: 44) {
-                    Circle()
-                        .fill(BKTheme.card)
-                        .frame(width: 44, height: 44)
-                        .overlay(Text(GuessWhoDisplay.nationalityFlag(player.nationality)).font(.system(size: 24)))
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(player.name)
-                        .font(BKFont.headline(17))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .lineLimit(2)
-                    Text("\(player.displayClubs) · \(player.position)")
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.textSecondary)
-                }
-
-                Spacer(minLength: 0)
-
-                Text(GuessWhoDisplay.nationalityFlag(player.nationality))
-                    .font(.system(size: 28))
+            PlayerAvatar(urlString: player.headshotUrl, size: 44) {
+                Circle()
+                    .fill(BKTheme.card)
+                    .frame(width: 44, height: 44)
+                    .overlay(Text(GuessWhoDisplay.nationalityFlag(player.nationality)).font(.system(size: 24)))
             }
-            .padding(14)
-            .background(BKTheme.cardElevated)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(player.name)
+                    .font(BKFont.headline(17))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .lineLimit(2)
+                Text("\(player.displayClubs) · \(player.position)")
+                    .font(BKFont.caption(11))
+                    .foregroundStyle(BKTheme.textSecondary)
             }
-            .draggable(player.id)
+
+            Spacer(minLength: 0)
+
+            Text(GuessWhoDisplay.nationalityFlag(player.nationality))
+                .font(.system(size: 28))
         }
+        .padding(14)
+        .background(BKTheme.cardElevated)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+        }
+        .draggable(player.id)
+    }
+}
+
+/// Two columns of three dots — the classic "drag me" grip.
+private struct BlindRankDragHandle: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<2, id: \.self) { _ in
+                VStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Circle()
+                            .fill(BKTheme.textMuted)
+                            .frame(width: 3, height: 3)
+                    }
+                }
+            }
+        }
+        .frame(width: 12)
     }
 }
 
