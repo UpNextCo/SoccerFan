@@ -8,6 +8,16 @@ struct OneMoreOption: Identifiable, Equatable {
     let position: String
     let value: Int
     var headshotUrl: String? = nil
+    var teamId: Int? = nil
+    var teamLogoUrl: String? = nil
+
+    /// The primary club (first of the "Club · Club" list) for the card badge + label.
+    var primaryClub: String { clubs.split(separator: "·").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? clubs }
+
+    /// A search-result shim so the shared team-badge view can render this option's crest.
+    var badgeDTO: PlayerSearchResultDTO {
+        PlayerSearchResultDTO(id: id, name: name, club: primaryClub, league: "", nationality: "", position: position, teamId: teamId, teamLogoUrl: teamLogoUrl)
+    }
 }
 
 /// A binary round: exactly two options, one of which clears the day's threshold.

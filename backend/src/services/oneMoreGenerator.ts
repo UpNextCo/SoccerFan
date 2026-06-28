@@ -12,6 +12,7 @@ import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { playerHeadshotUrl } from '../constants/footballMedia.js';
+import { lookupTeamLogo } from './teamService.js';
 
 const ROUND_TARGET = 20;
 const MIN_ROUNDS = 10;
@@ -55,6 +56,8 @@ export interface OneMoreOption {
   position: string;
   value: number;
   headshotUrl?: string;
+  teamId?: number;
+  teamLogoUrl?: string;
 }
 export interface OneMoreRound {
   options: [OneMoreOption, OneMoreOption];
@@ -212,10 +215,21 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
 
   const ids = pairs.flatMap((p) => [p.q.id, p.d.id]);
   const clubs = await clubsByPlayer(ids);
-  const toOption = (c: Candidate): OneMoreOption => ({
-    id: c.id, name: c.name, clubs: clubs.get(c.id) ?? '', position: c.position, value: c.value,
-    headshotUrl: playerHeadshotUrl(c.api_football_id) ?? undefined,
-  });
+  const primaryClub = (id: string) => (clubs.get(id) ?? '').split(' · ')[0] ?? '';
+  // Resolve the primary club's crest (by name — lookup falls back to top-5 clubs) for the card badge.
+  const logoByClub = new Map<string, { teamId: number; logoUrl: string }>();
+  for (const club of [...new Set(ids.map(primaryClub).filter(Boolean))]) {
+    const logo = await lookupTeamLogo(club, '');
+    if (logo) logoByClub.set(club, logo);
+  }
+  const toOption = (c: Candidate): OneMoreOption => {
+    const logo = logoByClub.get(primaryClub(c.id));
+    return {
+      id: c.id, name: c.name, clubs: clubs.get(c.id) ?? '', position: c.position, value: c.value,
+      headshotUrl: playerHeadshotUrl(c.api_football_id) ?? undefined,
+      teamId: logo?.teamId, teamLogoUrl: logo?.logoUrl,
+    };
+  };
 
   // Which side the qualifier sits on, per round. A well-mixed per-round hash (not an LCG top bit,
   // which can correlate into long runs), THEN a guard that breaks any run of >3 — so the correct

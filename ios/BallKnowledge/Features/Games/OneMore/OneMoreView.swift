@@ -201,15 +201,6 @@ struct OneMoreView: View {
                             .tracking(1.5)
                             .foregroundStyle(BKTheme.textSecondary)
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        if allowReplay, viewModel.state.phase == .playing {
-                            Button { viewModel.newPracticeRound() } label: {
-                                Text("NEW")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textMuted)
-                            }
-                        }
-                    }
                 }
             }
 
@@ -268,10 +259,6 @@ private struct OneMorePromptCard: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Text(prompt.isDaily ? "DAILY CHALLENGE" : "PRACTICE")
-                .font(BKFont.caption(10))
-                .tracking(0.8)
-                .foregroundStyle(BKTheme.textMuted)
             Text(prompt.question)
                 .font(BKFont.headline(18))
                 .foregroundStyle(BKTheme.textPrimary)
@@ -299,28 +286,34 @@ private struct OneMoreChoiceSection: View {
     var onPick: (OneMoreOption) -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            Text(phase == .revealing ? " " : "TAP THE ONE WHO QUALIFIES")
-                .font(BKFont.caption(10))
-                .tracking(0.8)
+        HStack(alignment: .center, spacing: 10) {
+            if let first = round.options.first {
+                card(first)
+            }
+            Text("OR")
+                .font(BKFont.caption(11))
+                .tracking(1.5)
                 .foregroundStyle(BKTheme.textMuted)
-
-            ForEach(round.options) { option in
-                OneMoreChoiceCard(
-                    option: option,
-                    qualifies: prompt.qualifies(option),
-                    statNoun: prompt.statNoun,
-                    revealed: phase == .revealing,
-                    isChosen: chosenId == option.id,
-                    onTap: { onPick(option) }
-                )
+            if round.options.count > 1 {
+                card(round.options[1])
             }
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
-        .padding(.bottom, 14)
+        .padding(.bottom, 16)
         .background(BKTheme.background)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: phase)
+    }
+
+    private func card(_ option: OneMoreOption) -> some View {
+        OneMoreChoiceCard(
+            option: option,
+            qualifies: prompt.qualifies(option),
+            statNoun: prompt.statNoun,
+            revealed: phase == .revealing,
+            isChosen: chosenId == option.id,
+            onTap: { onPick(option) }
+        )
     }
 }
 
@@ -332,10 +325,6 @@ private struct OneMoreChoiceCard: View {
     let isChosen: Bool
     var onTap: () -> Void
 
-    private var subtitle: String {
-        [option.clubs, option.position].filter { !$0.isEmpty }.joined(separator: " · ")
-    }
-
     private var initials: String {
         let parts = option.name.split(separator: " ")
         let letters = parts.prefix(2).compactMap { $0.first }
@@ -344,57 +333,64 @@ private struct OneMoreChoiceCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 12) {
-                PlayerAvatar(urlString: option.headshotUrl, size: 40) {
+            VStack(spacing: 8) {
+                PlayerAvatar(urlString: option.headshotUrl, size: 68) {
                     Circle()
-                        .fill(BKTheme.cardElevated)
-                        .frame(width: 40, height: 40)
+                        .fill(BKTheme.card)
+                        .frame(width: 68, height: 68)
                         .overlay(
                             Text(initials)
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
                                 .foregroundStyle(BKTheme.textMuted)
                         )
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(option.name)
-                        .font(BKFont.headline(17))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .lineLimit(1)
-                    if !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(BKFont.caption(11))
-                            .foregroundStyle(BKTheme.textMuted)
+                Text(option.name)
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(minHeight: 38, alignment: .top)
+
+                if !option.primaryClub.isEmpty {
+                    HStack(spacing: 5) {
+                        PlayerTeamBadge(player: option.badgeDTO, size: 16) {
+                            Circle().fill(BKTheme.card).frame(width: 16, height: 16)
+                        }
+                        Text(option.primaryClub)
+                            .font(BKFont.caption(10))
+                            .foregroundStyle(BKTheme.textSecondary)
                             .lineLimit(1)
                     }
                 }
 
-                Spacer(minLength: 0)
+                if !option.position.isEmpty {
+                    Text(option.position.uppercased())
+                        .font(BKFont.caption(9))
+                        .tracking(0.5)
+                        .foregroundStyle(BKTheme.textMuted)
+                }
 
                 if revealed {
-                    HStack(spacing: 8) {
-                        VStack(alignment: .trailing, spacing: 1) {
-                            Text("\(option.value)")
-                                .font(BKFont.headline(18))
-                                .foregroundStyle(qualifies ? BKTheme.accent : BKTheme.wrong)
-                                .contentTransition(.numericText())
-                            Text(statNoun)
-                                .font(BKFont.caption(9))
-                                .foregroundStyle(BKTheme.textMuted)
-                        }
+                    HStack(spacing: 6) {
+                        Text("\(option.value)")
+                            .font(BKFont.headline(18))
+                            .foregroundStyle(qualifies ? BKTheme.accent : BKTheme.wrong)
+                            .contentTransition(.numericText())
                         (qualifies ? Ph.checkCircle.fill : Ph.xCircle.fill)
                             .color(qualifies ? BKTheme.accent : BKTheme.wrong)
-                            .frame(width: 20, height: 20)
+                            .frame(width: 18, height: 18)
                     }
+                    .padding(.top, 2)
                     .transition(.opacity.combined(with: .scale))
                 }
             }
-            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
             .background(background)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(borderColor, lineWidth: revealed ? 1.5 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(borderColor, lineWidth: revealed ? 1.5 : 1))
         }
         .buttonStyle(.plain)
         .disabled(revealed)
@@ -433,7 +429,7 @@ private struct OneMoreScoreHero: View {
         VStack(spacing: 14) {
             HStack {
                 HStack(spacing: 6) {
-                    Ph.fire.fill
+                    Ph.lightning.fill
                         .color(BKTheme.streak)
                         .frame(width: 16, height: 16)
                     Text("\(streak) STREAK")
@@ -458,12 +454,6 @@ private struct OneMoreScoreHero: View {
                 .scaleEffect(pulseScale)
                 .contentTransition(.numericText())
                 .animation(.spring(response: 0.32, dampingFraction: 0.55), value: currentScore)
-
-            Text(riskLabel.uppercased())
-                .font(BKFont.caption(10))
-                .tracking(0.5)
-                .foregroundStyle(BKTheme.textSecondary)
-                .multilineTextAlignment(.center)
         }
         .padding(18)
         .frame(maxWidth: .infinity)
@@ -498,42 +488,60 @@ private struct OneMorePickHistory: View {
     let picks: [OneMorePick]
     var statLabel: String = "goals"
 
+    /// Latest five picks (oldest→newest), with their original 1-based pick number for scoring.
+    private var recent: [(number: Int, pick: OneMorePick)] {
+        Array(picks.enumerated().suffix(5)).map { (number: $0.offset + 1, pick: $0.element) }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("YOUR RUN")
                 .font(BKFont.caption(11))
                 .tracking(0.8)
                 .foregroundStyle(BKTheme.textMuted)
 
-            ForEach(Array(picks.enumerated().reversed()), id: \.element.id) { index, pick in
-                HStack(spacing: 10) {
-                    Text("#\(index + 1)")
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textMuted)
-                        .frame(width: 24, alignment: .leading)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(pick.name)
-                            .font(BKFont.headline(14))
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(recent, id: \.pick.id) { item in
+                    VStack(spacing: 5) {
+                        ZStack {
+                            Circle().fill(BKTheme.accent).frame(width: 28, height: 28)
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(BKTheme.background)
+                        }
+                        Text(shortName(item.pick.name))
+                            .font(BKFont.caption(10))
                             .foregroundStyle(BKTheme.textPrimary)
                             .lineLimit(1)
-                        Text("\(pick.statValue) \(statLabel)")
+                            .minimumScaleFactor(0.75)
+                        Text("+\(OneMoreScoring.points(forPick: item.number))")
                             .font(BKFont.caption(10))
-                            .foregroundStyle(BKTheme.textMuted)
+                            .foregroundStyle(BKTheme.accent)
                     }
-
-                    Spacer(minLength: 0)
-
-                    Text("+\(OneMoreScoring.points(forPick: index + 1))")
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.accent)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(BKTheme.cardElevated.opacity(0.85))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .background(alignment: .top) {
+                // Connecting timeline line through the tick centres.
+                GeometryReader { geo in
+                    let n = max(recent.count, 1)
+                    let colW = geo.size.width / CGFloat(n)
+                    if recent.count > 1 {
+                        Path { p in
+                            p.move(to: CGPoint(x: colW / 2, y: 14))
+                            p.addLine(to: CGPoint(x: geo.size.width - colW / 2, y: 14))
+                        }
+                        .stroke(BKTheme.accent.opacity(0.3), lineWidth: 2)
+                    }
+                }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: picks.count)
+    }
+
+    private func shortName(_ name: String) -> String {
+        name.split(separator: " ").last.map(String.init) ?? name
     }
 }
 
@@ -543,14 +551,14 @@ private struct OneMoreCashOutButton: View {
     let score: Int
     var action: () -> Void
 
-    @State private var glow = false
-
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Ph.lightning.fill
-                    .color(BKTheme.background)
-                    .frame(width: 16, height: 16)
+                Image(systemName: "banknote.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(BKTheme.background)
+                    .frame(width: 20, height: 16)
                 Text("CASH OUT · \(score) PTS")
                     .font(BKFont.headline(15))
                     .foregroundStyle(BKTheme.background)
@@ -565,14 +573,8 @@ private struct OneMoreCashOutButton: View {
                 )
             )
             .clipShape(Capsule())
-            .shadow(color: BKTheme.accent.opacity(glow ? 0.45 : 0.2), radius: glow ? 14 : 6, y: 2)
         }
         .buttonStyle(.plain)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                glow = true
-            }
-        }
     }
 }
 
