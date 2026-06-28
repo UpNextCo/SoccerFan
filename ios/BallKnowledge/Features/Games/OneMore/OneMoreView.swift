@@ -388,24 +388,44 @@ private struct OneMoreChoiceCard: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .padding(.horizontal, 10)
-            .background(background)
+            .background(cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(borderColor, lineWidth: revealed ? 1.5 : 1))
         }
         .buttonStyle(.plain)
         .disabled(revealed)
     }
 
-    private var background: Color {
-        guard revealed else { return BKTheme.cardElevated }
-        if qualifies { return BKTheme.accent.opacity(0.12) }
-        return isChosen ? BKTheme.wrong.opacity(0.12) : BKTheme.cardElevated
-    }
-
-    private var borderColor: Color {
-        guard revealed else { return Color.white.opacity(0.06) }
-        if qualifies { return BKTheme.accent.opacity(0.55) }
-        return isChosen ? BKTheme.wrong.opacity(0.5) : Color.white.opacity(0.06)
+    /// FIFA/EA-style panel: dark fill that fades into the page, a faint accent slash, and a subtle
+    /// diagonal line texture — no borders.
+    @ViewBuilder private var cardBackground: some View {
+        ZStack {
+            // Base darkens toward the bottom of the card.
+            LinearGradient(
+                colors: [BKTheme.card, BKTheme.background],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            // Lightness radiating around the player image up top, fading out.
+            RadialGradient(
+                colors: [Color.white.opacity(0.08), .clear],
+                center: UnitPoint(x: 0.5, y: 0.16),
+                startRadius: 4,
+                endRadius: 150
+            )
+            // Faint accent slash.
+            LinearGradient(
+                colors: [BKTheme.accent.opacity(0.10), .clear],
+                startPoint: .bottomLeading,
+                endPoint: .topTrailing
+            )
+            // Subtle diagonal texture (toned down).
+            DiagonalLineTexture(color: .white.opacity(0.03), spacing: 9)
+            if revealed, qualifies {
+                BKTheme.accent.opacity(0.16)
+            } else if revealed, isChosen {
+                BKTheme.wrong.opacity(0.16)
+            }
+        }
     }
 }
 
@@ -749,5 +769,29 @@ private struct OneMoreResultView: View {
                 .padding(.bottom, 32)
             }
         }
+    }
+}
+
+// MARK: - FIFA-style panel texture
+
+/// Subtle "/" diagonal line texture, the FIFA/EA menu-panel finish.
+private struct DiagonalLineTexture: View {
+    var color: Color = .white.opacity(0.05)
+    var spacing: CGFloat = 9
+    var lineWidth: CGFloat = 1
+
+    var body: some View {
+        Canvas { ctx, size in
+            guard size.width > 1, size.height > 1 else { return }
+            var x = -size.height
+            while x < size.width {
+                var path = Path()
+                path.move(to: CGPoint(x: x, y: size.height))
+                path.addLine(to: CGPoint(x: x + size.height, y: 0))
+                ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
+                x += spacing
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
