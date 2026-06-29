@@ -254,7 +254,6 @@ export async function battlePlayers(
       )
       ${nameFilter}
     GROUP BY p.id, p.name, p.api_football_id
-    HAVING COALESCE(SUM(s.${metric}) FILTER (WHERE ${leagueScope(cat)}), 0) > 0
     ORDER BY stat DESC
     LIMIT 20
   `)) as unknown as Array<{ id: string; name: string; api_football_id: number | null; stat: number }>;
