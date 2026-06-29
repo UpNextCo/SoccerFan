@@ -90,11 +90,9 @@ struct BattleGameState: Equatable {
     var usedPlayerIds: Set<String> { Set(picks.values.map(\.player.id)) }
     func club(forSlot slotId: String) -> BattleClub? { assignments[slotId] }
     func pick(forSlot slotId: String) -> BattlePick? { picks[slotId] }
-    /// A wrong pick is final: the slot is locked at 0 and its club can't be reused.
-    func isLocked(_ slotId: String) -> Bool {
-        guard let p = picks[slotId] else { return false }
-        return !p.correct
-    }
+    /// Once a player is selected (right or wrong) the slot is final and its club is burned. Merely
+    /// assigning a club (then backing out without picking) does NOT lock it.
+    func isLocked(_ slotId: String) -> Bool { picks[slotId] != nil }
     var yourTotal: Int { picks.values.reduce(0) { $0 + $1.score } }
     var filledCount: Int { picks.count }
     var isComplete: Bool { picks.count >= challenge.slots.count }
