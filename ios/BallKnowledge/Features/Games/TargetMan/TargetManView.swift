@@ -294,20 +294,9 @@ private struct TargetManChallengeCard: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            HStack {
-                if challenge.isDaily {
-                    Text("DAILY CHALLENGE")
-                        .font(BKFont.caption(10))
-                        .tracking(0.8)
-                        .foregroundStyle(BKTheme.accent)
-                } else {
-                    Text("PRACTICE")
-                        .font(BKFont.caption(10))
-                        .tracking(0.8)
-                        .foregroundStyle(BKTheme.textMuted)
-                }
-                Spacer()
-                if !challenge.isServerValued {
+            if !challenge.isServerValued {
+                HStack {
+                    Spacer()
                     LeagueBadgeImage(league: challenge.leagueName, size: 22) {
                         Text(GuessWhoDisplay.leagueAbbrev(challenge.leagueName))
                             .font(.system(size: 8, weight: .bold, design: .rounded))
@@ -421,15 +410,17 @@ private struct TargetManFilledSlotRow: View {
                 .background(BKTheme.accent)
                 .clipShape(Circle())
 
-            PlayerTeamBadge(player: selection.player, size: 28) {
-                Circle()
-                    .fill(BKTheme.cardElevated)
-                    .frame(width: 28, height: 28)
-                    .overlay(
-                        Text(GuessWhoDisplay.clubAbbrev(selection.player.club))
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .foregroundStyle(BKTheme.textMuted)
-                    )
+            PlayerAvatar(urlString: selection.player.headshotUrl, size: 34) {
+                PlayerTeamBadge(player: selection.player, size: 28) {
+                    Circle()
+                        .fill(BKTheme.cardElevated)
+                        .frame(width: 28, height: 28)
+                        .overlay(
+                            Text(GuessWhoDisplay.clubAbbrev(selection.player.club))
+                                .font(.system(size: 8, weight: .bold, design: .rounded))
+                                .foregroundStyle(BKTheme.textMuted)
+                        )
+                }
             }
 
             VStack(alignment: .leading, spacing: 3) {
