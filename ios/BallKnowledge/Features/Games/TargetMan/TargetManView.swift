@@ -220,7 +220,7 @@ struct TargetManView: View {
                         }
                     }
                 }
-                .background(BKTheme.background)
+                .background(StadiumBackground())
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {

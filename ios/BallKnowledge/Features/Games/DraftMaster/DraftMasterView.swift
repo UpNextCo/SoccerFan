@@ -174,7 +174,7 @@ struct DraftMasterView: View {
                         buildScreen
                     }
                 }
-                .background(BKTheme.background)
+                .background(StadiumBackground())
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -240,19 +240,17 @@ struct DraftMasterView: View {
                 usedNames: viewModel.state.usedClubNames
             )
 
-            ScrollView(showsIndicators: false) {
-                BattlePitchView(
-                    slots: viewModel.challenge.slots,
-                    state: viewModel.state,
-                    league: viewModel.category.title,
-                    onTapSlot: { viewModel.openSlot($0) },
-                    onDropClub: { name, slot in viewModel.assignClub(named: name, toSlot: slot.id); viewModel.openSlot(slot) }
-                )
-                .frame(height: 400)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 16)
-            }
+            BattlePitchView(
+                slots: viewModel.challenge.slots,
+                state: viewModel.state,
+                league: viewModel.category.title,
+                onTapSlot: { viewModel.openSlot($0) },
+                onDropClub: { name, slot in viewModel.assignClub(named: name, toSlot: slot.id); viewModel.openSlot(slot) }
+            )
+            .frame(maxHeight: .infinity)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
 
             BattleSubmitBar(
                 ready: viewModel.state.isComplete,
@@ -343,7 +341,6 @@ private struct BattleBuildHeader: View {
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
-        .background(BKTheme.background)
     }
 }
 
@@ -374,7 +371,6 @@ private struct BattleClubsStrip: View {
             }
         }
         .padding(.vertical, 8)
-        .background(BKTheme.background)
     }
 }
 

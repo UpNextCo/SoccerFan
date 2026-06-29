@@ -325,7 +325,7 @@ struct FootballGolfView: View {
 
                 if vm.phase == .playing { inputBar(vm) }
             }
-            .background(BKTheme.background)
+            .background(StadiumBackground())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

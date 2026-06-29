@@ -40,7 +40,7 @@ enum BattleSeed {
     private static func challenge(id: String, date: String) -> BattleChallenge {
         // Goals category -> all-outfield XI (no GK), mirroring the backend.
         let slots = standardSlots.enumerated().map { index, s in
-            BattleFormations.slot(id: s.id, position: s.position, index: index)
+            BattleFormations.slot(id: s.id, position: s.position, index: index, formationId: "4-3-3-of")
         }
         return BattleChallenge(
             id: id,

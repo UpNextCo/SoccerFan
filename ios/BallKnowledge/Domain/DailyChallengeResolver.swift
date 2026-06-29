@@ -31,7 +31,7 @@ enum DailyChallengeResolver {
             category: BattleCategory(id: dto.category.id, title: dto.category.title, noun: dto.category.noun),
             formationId: dto.formationId,
             slots: dto.slots.enumerated().map { index, s in
-                BattleFormations.slot(id: s.id, position: s.position, index: index)
+                BattleFormations.slot(id: s.id, position: s.position, index: index, formationId: dto.formationId)
             },
             clubs: dto.clubs.map { BattleClub(name: $0.name, teamId: $0.teamId, logoUrl: $0.logoUrl) },
             optimalScore: dto.optimalScore,

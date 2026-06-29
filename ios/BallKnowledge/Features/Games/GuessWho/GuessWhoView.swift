@@ -239,7 +239,7 @@ struct GuessWhoView: View {
                         )
                     }
                 }
-                .background(BKTheme.background)
+                .background(StadiumBackground())
                 .onAppear {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         isSearchFocused = true

@@ -204,7 +204,7 @@ struct BlindRankView: View {
                 }
                 .animation(BlindRankMotion.layout, value: viewModel.state.currentPlayerIndex)
                 .animation(BlindRankMotion.reveal, value: viewModel.state.revealedStepCount)
-                .background(BKTheme.background)
+                .background(StadiumBackground())
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {

@@ -160,7 +160,7 @@ struct FootballBingoView: View {
                         .padding(.bottom, 24)
                     }
                 }
-                .background(BKTheme.background)
+                .background(StadiumBackground())
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
