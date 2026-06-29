@@ -259,6 +259,7 @@ export interface BattlePlayerResult {
   id: string;
   name: string;
   statValue: number;
+  nationality: string | null;
   headshotUrl?: string;
 }
 
@@ -281,7 +282,7 @@ export async function battlePlayers(
     ? sql`AND (lower(p.name) LIKE ${like} OR lower(p.search_text) LIKE ${like})`
     : sql``;
   const rows = (await db.execute(sql`
-    SELECT p.id, p.name, p.api_football_id,
+    SELECT p.id, p.name, p.api_football_id, p.nationality,
       COALESCE(SUM(s.${metric}) FILTER (WHERE ${leagueScope(cat)}), 0)::int AS stat
     FROM players p JOIN player_stats s ON s.player_id = p.id
     WHERE p.sub_position = ${position}
@@ -290,14 +291,15 @@ export async function battlePlayers(
         WHERE m.player_id = p.id AND m.team_name = ${club} AND m.appearances > 0 AND ${membershipScope(cat)}
       )
       ${nameFilter}
-    GROUP BY p.id, p.name, p.api_football_id
+    GROUP BY p.id, p.name, p.api_football_id, p.nationality
     ORDER BY stat DESC
     LIMIT 20
-  `)) as unknown as Array<{ id: string; name: string; api_football_id: number | null; stat: number }>;
+  `)) as unknown as Array<{ id: string; name: string; api_football_id: number | null; nationality: string | null; stat: number }>;
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     statValue: r.stat,
+    nationality: r.nationality,
     headshotUrl: playerHeadshotUrl(r.api_football_id) ?? undefined,
   }));
 }

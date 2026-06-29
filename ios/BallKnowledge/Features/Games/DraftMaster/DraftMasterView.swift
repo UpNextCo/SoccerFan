@@ -232,7 +232,7 @@ struct DraftMasterView: View {
 
     private var buildScreen: some View {
         VStack(spacing: 0) {
-            BattleBuildHeader(category: viewModel.category, total: viewModel.state.yourTotal, filled: viewModel.state.filledCount, slots: viewModel.challenge.slots.count)
+            BattleBuildHeader(category: viewModel.category, total: viewModel.state.yourTotal)
 
             BattleClubsStrip(
                 clubs: viewModel.challenge.clubs,
@@ -319,28 +319,39 @@ private struct BattleIntroView: View {
 
 // MARK: - Build header
 
+/// Animates an integer rolling up/down when the value changes inside an animation transaction.
+private struct CountingNumber: AnimatableModifier {
+    var value: Double
+    var animatableData: Double {
+        get { value }
+        set { value = newValue }
+    }
+    func body(content: Content) -> some View {
+        Text("\(Int(value.rounded()))")
+    }
+}
+
 private struct BattleBuildHeader: View {
     let category: BattleCategory
     let total: Int
-    let filled: Int
-    let slots: Int
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(category.title.uppercased())
-                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
-                Text("\(total) \(category.noun)")
-                    .font(BKFont.headline(20)).foregroundStyle(BKTheme.accent)
-                    .contentTransition(.numericText())
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("XI").font(BKFont.caption(9)).foregroundStyle(BKTheme.textMuted)
-                Text("\(filled)/\(slots)").font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
-            }
+        VStack(spacing: 2) {
+            Text(category.title.uppercased())
+                .font(BKFont.headline(14)).tracking(1)
+                .foregroundStyle(BKTheme.textSecondary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text("")
+                .modifier(CountingNumber(value: Double(total)))
+                .font(BKFont.title(44)).foregroundStyle(BKTheme.accent)
+                .animation(.easeOut(duration: 0.5), value: total)
+            Text("TOTAL \(category.noun.uppercased())")
+                .font(BKFont.caption(11)).tracking(1.5)
+                .foregroundStyle(BKTheme.accent)
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 4)
     }
 }
 
@@ -462,16 +473,20 @@ private struct BattlePitchSlot: View {
 
     @State private var targeted = false
 
+    /// Soft whitish-green for empty slot rings + the plus.
+    private static let ringColor = Color(red: 0.80, green: 0.93, blue: 0.84).opacity(0.85)
+
     var body: some View {
         VStack(spacing: 3) {
             ZStack {
                 Circle()
-                    .fill(pick != nil ? BKTheme.accent.opacity(0.18) : (club != nil ? BKTheme.cardElevated : BKTheme.card))
+                    // Darker-grey fill so slots sit clearly on the grass; thin whitish-green ring.
+                    .fill(pick != nil ? Color.black.opacity(0.30) : Color(white: 0.14).opacity(0.72))
                     .frame(width: 46, height: 46)
                     .overlay(
                         Circle().stroke(
-                            targeted ? BKTheme.accent : (pick != nil ? BKTheme.accent : BKTheme.textMuted.opacity(0.4)),
-                            lineWidth: targeted ? 2.5 : 1.5
+                            targeted ? BKTheme.accent : (pick != nil ? BKTheme.accent : Self.ringColor),
+                            lineWidth: targeted ? 2.5 : 1.1
                         )
                     )
                 if let pick {
@@ -481,26 +496,27 @@ private struct BattlePitchSlot: View {
                 } else if let club {
                     ClubCrest(club: club, league: league, size: 34)
                 } else {
-                    Text("+").font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(BKTheme.textMuted)
+                    Text("+").font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(Self.ringColor)
                 }
             }
             Text(slot.label)
-                .font(.system(size: 8, weight: .bold, design: .rounded))
-                .foregroundStyle(pick != nil ? BKTheme.accent : BKTheme.textMuted)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.white.opacity(0.95))
             if let pick {
                 Text(shortName(pick.player.name))
                     .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(BKTheme.textPrimary)
+                    .foregroundStyle(.white)
                     .lineLimit(1).frame(maxWidth: 70)
                 Text("\(pick.player.statValue)")
                     .font(.system(size: 9, weight: .heavy, design: .rounded))
-                    .foregroundStyle(BKTheme.accent)
+                    .foregroundStyle(.white)
             } else if club != nil {
                 Text("TAP TO PICK")
                     .font(.system(size: 7, weight: .bold, design: .rounded))
-                    .foregroundStyle(BKTheme.textMuted)
+                    .foregroundStyle(Color.white.opacity(0.7))
             }
         }
+        .shadow(color: .black.opacity(0.55), radius: 2, x: 0, y: 1)
         .frame(width: 76)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
@@ -516,23 +532,90 @@ private struct BattlePitchSlot: View {
     }
 }
 
+/// A drawn top-down pitch: deep, slightly desaturated mown stripes + full markings, so it reads as
+/// real turf while staying dark enough for headshots/badges to pop. Resolution-independent (scales
+/// with the flexible pitch frame), so the markings always line up with the fraction-positioned slots.
 private struct PitchBackground: View {
+    private let grassA = Color(red: 0.11, green: 0.26, blue: 0.16)
+    private let grassB = Color(red: 0.14, green: 0.31, blue: 0.19)
+    private let line = Color.white.opacity(0.32)
+
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 18)
-                .fill(LinearGradient(colors: [BKTheme.card, BKTheme.cardElevated], startPoint: .top, endPoint: .bottom))
-            GeometryReader { geo in
-                let w = geo.size.width, h = geo.size.height
-                Path { p in
-                    p.move(to: CGPoint(x: 0, y: h * 0.5)); p.addLine(to: CGPoint(x: w, y: h * 0.5))
-                }.stroke(BKTheme.textMuted.opacity(0.18), lineWidth: 1)
-                Circle()
-                    .stroke(BKTheme.textMuted.opacity(0.18), lineWidth: 1)
-                    .frame(width: w * 0.26, height: w * 0.26)
-                    .position(x: w * 0.5, y: h * 0.5)
+        Canvas { ctx, size in
+            let w = size.width, h = size.height
+            let lw: CGFloat = 1.4
+
+            // Mown stripes (parallel to the goal lines).
+            let stripes = 7
+            let band = h / CGFloat(stripes)
+            for i in 0..<stripes {
+                var p = Path(); p.addRect(CGRect(x: 0, y: band * CGFloat(i), width: w, height: band + 1))
+                ctx.fill(p, with: .color(i.isMultiple(of: 2) ? grassA : grassB))
+            }
+
+            func stroke(_ p: Path) { ctx.stroke(p, with: .color(line), lineWidth: lw) }
+            func rect(_ r: CGRect) -> Path { var p = Path(); p.addRect(r); return p }
+            func dot(_ c: CGPoint, _ r: CGFloat = 2) {
+                ctx.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(line))
+            }
+
+            let inset: CGFloat = 9
+            let field = CGRect(x: inset, y: inset, width: w - inset * 2, height: h - inset * 2)
+            stroke(rect(field))
+
+            // Halfway line + centre circle + spot.
+            var mid = Path(); mid.move(to: CGPoint(x: field.minX, y: field.midY)); mid.addLine(to: CGPoint(x: field.maxX, y: field.midY)); stroke(mid)
+            let cr = w * 0.13
+            stroke(Path(ellipseIn: CGRect(x: field.midX - cr, y: field.midY - cr, width: cr * 2, height: cr * 2)))
+            dot(CGPoint(x: field.midX, y: field.midY))
+
+            // Penalty + six-yard boxes, spots and arcs, top and bottom.
+            let pbW = field.width * 0.58, pbH = field.height * 0.15
+            let gbW = field.width * 0.30, gbH = field.height * 0.065
+            let arc = w * 0.11
+            // 3-sided box (open along the goal line, so we don't redraw the boundary there).
+            func openBox(width bw: CGFloat, depth: CGFloat, top: Bool) {
+                let edge = top ? field.minY : field.maxY
+                let inner = top ? edge + depth : edge - depth
+                let x0 = field.midX - bw / 2, x1 = field.midX + bw / 2
+                var p = Path()
+                p.move(to: CGPoint(x: x0, y: edge))
+                p.addLine(to: CGPoint(x: x0, y: inner))
+                p.addLine(to: CGPoint(x: x1, y: inner))
+                p.addLine(to: CGPoint(x: x1, y: edge))
+                stroke(p)
+            }
+            for top in [true, false] {
+                let edge = top ? field.minY : field.maxY
+                let dir: CGFloat = top ? 1 : -1
+                openBox(width: pbW, depth: pbH, top: top)
+                openBox(width: gbW, depth: gbH, top: top)
+                let spotY = edge + dir * pbH * 0.72
+                dot(CGPoint(x: field.midX, y: spotY))
+                var a = Path()
+                a.addArc(center: CGPoint(x: field.midX, y: spotY), radius: arc,
+                         startAngle: .degrees(top ? 20 : 200), endAngle: .degrees(top ? 160 : 340), clockwise: false)
+                stroke(a)
+            }
+
+            // Corner arcs.
+            let ca = w * 0.035
+            let corners: [(CGPoint, Double, Double)] = [
+                (CGPoint(x: field.minX, y: field.minY), 0, 90),
+                (CGPoint(x: field.maxX, y: field.minY), 90, 180),
+                (CGPoint(x: field.maxX, y: field.maxY), 180, 270),
+                (CGPoint(x: field.minX, y: field.maxY), 270, 360),
+            ]
+            for (c, s, e) in corners {
+                var p = Path(); p.addArc(center: c, radius: ca, startAngle: .degrees(s), endAngle: .degrees(e), clockwise: false); stroke(p)
             }
         }
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(BKTheme.textMuted.opacity(0.12), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(RadialGradient(colors: [.clear, .black.opacity(0.28)], center: .center, startRadius: 10, endRadius: 320))
+        )
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.08), lineWidth: 1))
     }
 }
 
@@ -700,9 +783,9 @@ private struct BattleSearchSheet: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(BKTheme.textPrimary)
                 Spacer(minLength: 0)
-                Text("\(player.statValue)")
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
-                    .foregroundStyle(BKTheme.accent)
+                // Show the flag, not the stat — players shouldn't see the value before they pick.
+                Text(GuessWhoDisplay.nationalityFlag(player.nationality ?? ""))
+                    .font(.system(size: 20))
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
         }
