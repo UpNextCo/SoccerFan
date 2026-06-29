@@ -309,11 +309,14 @@ async function migrateStaleOneMore(date: string): Promise<void> {
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'one_more')))
     .limit(1);
   const puzzle = rows[0]?.puzzleJson as
-    | { rounds?: Array<{ options?: Array<{ headshotUrl?: unknown }> }> }
+    | { rounds?: Array<{ options?: Array<{ headshotUrl?: unknown; nationality?: unknown }> }> }
     | undefined;
   if (!puzzle || !Array.isArray(puzzle.rounds)) return;
-  const anyHeadshot = puzzle.rounds.some((r) => r.options?.some((o) => typeof o?.headshotUrl === 'string'));
-  if (!anyHeadshot) {
+  const opts = puzzle.rounds.flatMap((r) => r.options ?? []);
+  // Stale if it predates headshots OR nationality (the option card needs both).
+  const anyHeadshot = opts.some((o) => typeof o?.headshotUrl === 'string');
+  const anyNationality = opts.some((o) => typeof o?.nationality === 'string' && o.nationality !== '');
+  if (!anyHeadshot || !anyNationality) {
     await db
       .delete(dailyPuzzles)
       .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'one_more')));
