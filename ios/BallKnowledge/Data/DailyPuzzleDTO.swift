@@ -318,33 +318,40 @@ struct WorldCupXIPuzzleDTO: Codable, Equatable {
     }
 }
 
-struct DraftMasterOpponentPlayerDTO: Codable, Equatable {
-    let name: String
-    let bucket: String
-    let valueEur: Double
-}
-
-struct DraftMasterOpponentDTO: Codable, Equatable {
-    let name: String
-    let players: [DraftMasterOpponentPlayerDTO]
-}
-
-struct DraftMasterScenarioDTO: Codable, Equatable {
+struct BattleCategoryDTO: Codable, Equatable {
     let id: String
     let title: String
-    let subtitle: String
-    let narrative: String
-    let competition: String
-    let budgetEur: Double
-    let opponent: DraftMasterOpponentDTO
+    let noun: String
+}
+
+struct BattleSlotDTO: Codable, Equatable {
+    let id: String
+    let position: String
+}
+
+struct BattleClubDTO: Codable, Equatable {
+    let name: String
+    let teamId: Int?
+    let logoUrl: String?
 }
 
 struct DraftMasterPuzzleDTO: Codable, Equatable {
     let modeId: String
     let puzzleId: String
     let date: String
-    let scenario: DraftMasterScenarioDTO
+    let category: BattleCategoryDTO
     let formationId: String
+    let slots: [BattleSlotDTO]
+    let clubs: [BattleClubDTO]
+    let optimalScore: Int
+}
+
+/// One result from the Battle player search (`POST /daily/battle/players`).
+struct BattlePlayerDTO: Codable, Equatable, Identifiable {
+    let id: String
+    let name: String
+    let statValue: Int
+    let headshotUrl: String?
 }
 
 enum DailyPuzzleDTO: Codable, Equatable {

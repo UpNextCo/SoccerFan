@@ -152,6 +152,20 @@ actor APIClient {
         return (resp.valid, resp.statValue)
     }
 
+    func battlePlayers(categoryId: String, club: String, position: String, query: String) async throws -> [BattlePlayerDTO] {
+        struct Body: Encodable {
+            let categoryId: String
+            let club: String
+            let position: String
+            let q: String
+        }
+        return try await request(
+            "daily/battle/players",
+            method: "POST",
+            body: Body(categoryId: categoryId, club: club, position: position, q: query)
+        )
+    }
+
     func searchPlayers(query: String, currentTop5: Bool = false) async throws -> [PlayerSearchResultDTO] {
         var items = [URLQueryItem(name: "q", value: query)]
         if currentTop5 {

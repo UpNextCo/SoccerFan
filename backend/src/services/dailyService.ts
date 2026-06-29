@@ -9,7 +9,7 @@ import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGen
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
 import { generateWorldCupXiPuzzle } from './worldCupXiGenerator.js';
-import { generateDraftMasterPuzzle } from './draftMasterGenerator.js';
+import { generateBattlePuzzle } from './battleGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
@@ -183,16 +183,16 @@ async function ensureDraftMasterPuzzle(date: string): Promise<void> {
   if (existing.length > 0) return;
 
   try {
-    const puzzle = await generateDraftMasterPuzzle(date);
-    if (!puzzle || puzzle.scenario.opponent.players.length < 11) {
-      console.warn(`Skipped draft_master for ${date}: no viable scenario`);
+    const puzzle = await generateBattlePuzzle(date);
+    if (!puzzle || puzzle.clubs.length < 11) {
+      console.warn(`Skipped draft_master for ${date}: no viable battle puzzle`);
       return;
     }
     await db
       .insert(dailyPuzzles)
       .values({ date, modeId: 'draft_master', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
       .onConflictDoNothing();
-    console.log(`Generated draft_master puzzle for ${date} (${puzzle.scenario.id} / ${puzzle.formationId})`);
+    console.log(`Generated draft_master puzzle for ${date} (${puzzle.category.id}, optimal ${puzzle.optimalScore})`);
   } catch (error) {
     console.warn(`Skipped draft_master for ${date}: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -288,9 +288,10 @@ async function migrateStaleDraftMaster(date: string): Promise<void> {
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')))
     .limit(1);
-  const puzzle = rows[0]?.puzzleJson as { scenario?: unknown; prompts?: unknown } | undefined;
+  const puzzle = rows[0]?.puzzleJson as { clubs?: unknown; optimalScore?: unknown } | undefined;
   if (!puzzle) return;
-  if (puzzle.scenario === undefined || puzzle.prompts !== undefined) {
+  // New Battle format has `clubs` + `optimalScore`; drop anything older (scenario/budget or prompts).
+  if (!Array.isArray(puzzle.clubs) || typeof puzzle.optimalScore !== 'number') {
     await db
       .delete(dailyPuzzles)
       .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')));

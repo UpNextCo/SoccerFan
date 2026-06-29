@@ -24,24 +24,17 @@ enum DailyChallengeResolver {
 
     /// Map the server Battle Mode challenge into the game model (nil → caller uses local seed).
     static func battleChallenge(from bundle: DailyBundleDTO?) -> BattleChallenge? {
-        guard let dto = bundle?.draftMasterPuzzle, dto.scenario.opponent.players.count >= 11 else { return nil }
-        let scenario = BattleScenario(
-            id: dto.scenario.id,
-            title: dto.scenario.title,
-            subtitle: dto.scenario.subtitle,
-            narrative: dto.scenario.narrative,
-            competition: dto.scenario.competition,
-            budgetEur: dto.scenario.budgetEur,
-            opponentName: dto.scenario.opponent.name,
-            opponent: dto.scenario.opponent.players.map {
-                BattleOpponentPlayer(name: $0.name, bucket: BattleBucket(rawValue: $0.bucket) ?? .mid, valueEur: $0.valueEur)
-            }
-        )
+        guard let dto = bundle?.draftMasterPuzzle, dto.clubs.count >= 11, dto.slots.count >= 11 else { return nil }
         return BattleChallenge(
             id: dto.puzzleId,
             date: dto.date,
-            scenario: scenario,
-            formation: BattleFormations.named(dto.formationId)
+            category: BattleCategory(id: dto.category.id, title: dto.category.title, noun: dto.category.noun),
+            formationId: dto.formationId,
+            slots: dto.slots.enumerated().map { index, s in
+                BattleFormations.slot(id: s.id, position: s.position, index: index)
+            },
+            clubs: dto.clubs.map { BattleClub(name: $0.name, teamId: $0.teamId, logoUrl: $0.logoUrl) },
+            optimalScore: dto.optimalScore
         )
     }
 

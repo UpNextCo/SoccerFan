@@ -6,10 +6,10 @@ import SwiftData
 @Observable
 final class DraftMasterViewModel {
     var state: BattleGameState
-    var searchQuery = ""
-    var searchResults: [PlayerSearchResultDTO] = []
-    var isSearching = false
     var activeSlot: BattleSlot?
+    var searchQuery = ""
+    var results: [BattlePlayerDTO] = []
+    var isSearching = false
     var selectionError: String?
     var showResult = false
     var showShare = false
@@ -32,18 +32,10 @@ final class DraftMasterViewModel {
         return BattleSeed.makeDailyChallenge(date: dailyDate)
     }
 
-    var scenario: BattleScenario { state.challenge.scenario }
-    var formation: BattleFormation { state.challenge.formation }
+    var challenge: BattleChallenge { state.challenge }
+    var category: BattleCategory { state.challenge.category }
 
-    func start() {
-        HapticManager.light()
-        state.phase = .building
-    }
-
-    func newPractice() {
-        state = BattleGameState(challenge: BattleSeed.makePracticeChallenge())
-        resetTransient()
-    }
+    func start() { HapticManager.light(); state.phase = .building }
 
     func restart() {
         state = BattleGameState(challenge: Self.resolveChallenge(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
@@ -51,99 +43,103 @@ final class DraftMasterViewModel {
         resetTransient()
     }
 
-    private func resetTransient() {
-        searchQuery = ""
-        searchResults = []
-        activeSlot = nil
-        selectionError = nil
-        showResult = false
-        showShare = false
-        confettiBurstToken = 0
+    func newPractice() {
+        state = BattleGameState(challenge: BattleSeed.makePracticeChallenge())
+        resetTransient()
     }
 
-    // MARK: Slot fill
+    private func resetTransient() {
+        searchQuery = ""; results = []; activeSlot = nil; selectionError = nil
+        showResult = false; showShare = false; confettiBurstToken = 0
+    }
+
+    // MARK: Club assignment (one club per slot)
+
+    var unusedClubs: [BattleClub] { challenge.clubs.filter { !state.usedClubNames.contains($0.name) } }
+
+    func assignClub(named name: String, toSlot slotId: String) {
+        guard let club = challenge.clubs.first(where: { $0.name == name }) else { return }
+        assignClub(club, toSlot: slotId)
+    }
+
+    func assignClub(_ club: BattleClub, toSlot slotId: String) {
+        // A club can only sit on one slot: pull it off any other slot first.
+        for (sid, c) in state.assignments where c.name == club.name && sid != slotId {
+            state.assignments[sid] = nil
+            state.picks[sid] = nil
+        }
+        if state.assignments[slotId]?.name != club.name { state.picks[slotId] = nil }
+        state.assignments[slotId] = club
+        HapticManager.light()
+    }
+
+    // MARK: Slot / search
 
     func openSlot(_ slot: BattleSlot) {
         activeSlot = slot
         searchQuery = ""
-        searchResults = []
+        results = []
         selectionError = nil
     }
 
-    func closeSlot() {
-        activeSlot = nil
+    func closeSlot() { activeSlot = nil; searchQuery = ""; results = [] }
+
+    func setActiveSlotClub(_ club: BattleClub) {
+        guard let slot = activeSlot else { return }
+        assignClub(club, toSlot: slot.id)
         searchQuery = ""
-        searchResults = []
+        results = []
+        selectionError = nil
     }
 
-    func removePick(slotId: String) {
-        state.picks.removeAll { $0.slotId == slotId }
+    func removePick(_ slotId: String) { state.picks[slotId] = nil; HapticManager.light() }
+
+    func clearSlot(_ slotId: String) {
+        state.picks[slotId] = nil
+        state.assignments[slotId] = nil
         HapticManager.light()
     }
 
-    /// Budget available for the active slot (remaining funds + whatever the slot currently holds).
-    private func budgetForActiveSlot() -> Double {
-        guard let slot = activeSlot else { return state.remainingEur }
-        let existing = state.pick(forSlot: slot.id)?.priceEur ?? 0
-        return state.remainingEur + existing
-    }
-
-    func price(for player: PlayerSearchResultDTO) -> Double {
-        player.priceEur ?? 5_000_000
-    }
-
-    func canAfford(_ player: PlayerSearchResultDTO) -> Bool {
-        price(for: player) <= budgetForActiveSlot() + 0.5
-    }
-
     func search() async {
-        guard let slot = activeSlot else { searchResults = []; return }
-        let query = searchQuery.trimmingCharacters(in: .whitespaces)
-        guard query.count >= 2 else { searchResults = []; return }
-
+        guard let slot = activeSlot, let club = state.club(forSlot: slot.id) else { results = []; return }
+        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else { results = []; return }
         isSearching = true
         defer { isSearching = false }
         do {
-            let results = try await APIClient.shared.searchPlayers(query: query)
+            let res = try await APIClient.shared.battlePlayers(
+                categoryId: category.id, club: club.name, position: slot.position, query: q
+            )
             let used = state.usedPlayerIds
-            searchResults = results
-                .filter { BattleBucket.from(position: $0.position) == slot.bucket && !used.contains($0.id) }
-                .sorted { canAfford($0) && !canAfford($1) }
-                .prefix(PlayerSearchLimits.maxResults)
-                .map { $0 }
+            let currentId = state.pick(forSlot: slot.id)?.player.id
+            results = res.filter { !used.contains($0.id) || $0.id == currentId }
         } catch {
-            searchResults = []
+            results = []
         }
     }
 
-    func selectPlayer(_ player: PlayerSearchResultDTO) {
-        guard let slot = activeSlot else { return }
-        if state.usedPlayerIds.contains(player.id), state.pick(forSlot: slot.id)?.player.id != player.id {
+    func selectPlayer(_ dto: BattlePlayerDTO) {
+        guard let slot = activeSlot, let club = state.club(forSlot: slot.id) else { return }
+        if state.usedPlayerIds.contains(dto.id), state.pick(forSlot: slot.id)?.player.id != dto.id {
             selectionError = "Already in your XI"
             HapticManager.error()
             return
         }
-        let cost = price(for: player)
-        if cost > budgetForActiveSlot() + 0.5 {
-            selectionError = "Over budget — free up funds first"
-            HapticManager.error()
-            return
-        }
-        state.picks.removeAll { $0.slotId == slot.id }
-        state.picks.append(BattlePick(slotId: slot.id, player: player, priceEur: cost, bucket: slot.bucket))
+        let player = BattlePlayer(id: dto.id, name: dto.name, statValue: dto.statValue, headshotUrl: dto.headshotUrl)
+        state.picks[slot.id] = BattlePick(club: club, player: player)
         selectionError = nil
         HapticManager.success()
         closeSlot()
     }
 
-    // MARK: Kick off
+    // MARK: Submit
 
-    func kickOff() {
+    func submit() {
         guard state.isComplete else { return }
-        let result = BattleScoring.simulate(picks: state.picks, scenario: scenario, seed: state.challenge.id)
+        let result = BattleResult(yourTotal: state.yourTotal, optimalScore: challenge.optimalScore)
         state.result = result
         state.phase = .complete
-        if result.outcome == .win, BattleTiming.confettiOnWin { confettiBurstToken += 1 }
+        if result.percentage >= BattleTiming.confettiThreshold { confettiBurstToken += 1 }
         Task {
             try? await Task.sleep(for: .seconds(BattleTiming.resultReveal))
             showResult = true
@@ -173,11 +169,7 @@ struct DraftMasterView: View {
             NavigationStack {
                 Group {
                     if viewModel.state.phase == .intro {
-                        BattleIntroView(
-                            scenario: viewModel.scenario,
-                            formation: viewModel.formation,
-                            onStart: viewModel.start
-                        )
+                        BattleIntroView(challenge: viewModel.challenge, onStart: viewModel.start)
                     } else {
                         buildScreen
                     }
@@ -192,16 +184,7 @@ struct DraftMasterView: View {
                     }
                     ToolbarItem(placement: .principal) {
                         Text("BATTLE MODE")
-                            .font(BKFont.caption(13))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.accent)
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        if allowReplay, viewModel.state.phase == .intro {
-                            Button { viewModel.newPractice() } label: {
-                                Text("NEW").font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
-                            }
-                        }
+                            .font(BKFont.caption(13)).tracking(1).foregroundStyle(BKTheme.accent)
                     }
                 }
             }
@@ -216,7 +199,7 @@ struct DraftMasterView: View {
         .fullScreenCover(isPresented: $viewModel.showResult) {
             if let result = viewModel.state.result {
                 BattleResultView(
-                    challenge: viewModel.state.challenge,
+                    state: viewModel.state,
                     result: result,
                     showPlayAgain: allowReplay,
                     onShare: { viewModel.showShare = true },
@@ -227,8 +210,8 @@ struct DraftMasterView: View {
                                 await DailyCompletionService.recordCompletion(
                                     modeId: GameModeID.draftMaster.rawValue,
                                     date: dailyDate,
-                                    score: result.score,
-                                    won: result.outcome == .win,
+                                    score: result.percentage,
+                                    won: result.percentage >= 70,
                                     context: modelContext
                                 )
                             }
@@ -242,35 +225,40 @@ struct DraftMasterView: View {
         }
         .sheet(isPresented: $viewModel.showShare) {
             if let result = viewModel.state.result {
-                BattleShareSheet(challenge: viewModel.state.challenge, result: result)
+                BattleShareSheet(challenge: viewModel.challenge, result: result)
             }
         }
     }
 
     private var buildScreen: some View {
         VStack(spacing: 0) {
-            BattleBudgetHeader(scenario: viewModel.scenario, spent: viewModel.state.spentEur, picks: viewModel.state.picks.count, slots: viewModel.formation.slots.count)
+            BattleBuildHeader(category: viewModel.category, total: viewModel.state.yourTotal, filled: viewModel.state.filledCount, slots: viewModel.challenge.slots.count)
+
+            BattleClubsStrip(
+                clubs: viewModel.challenge.clubs,
+                league: viewModel.category.title,
+                usedNames: viewModel.state.usedClubNames
+            )
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
-                    BattleScenarioBanner(scenario: viewModel.scenario, formation: viewModel.formation)
-                    BattlePitchView(
-                        formation: viewModel.formation,
-                        picks: viewModel.state.picks,
-                        onTapSlot: { viewModel.openSlot($0) }
-                    )
-                    .frame(height: 380)
-                }
+                BattlePitchView(
+                    slots: viewModel.challenge.slots,
+                    state: viewModel.state,
+                    league: viewModel.category.title,
+                    onTapSlot: { viewModel.openSlot($0) },
+                    onDropClub: { name, slot in viewModel.assignClub(named: name, toSlot: slot.id); viewModel.openSlot(slot) }
+                )
+                .frame(height: 400)
                 .padding(.horizontal, 16)
-                .padding(.top, 10)
+                .padding(.top, 8)
                 .padding(.bottom, 16)
             }
 
-            BattleKickoffBar(
+            BattleSubmitBar(
                 ready: viewModel.state.isComplete,
-                filled: viewModel.state.picks.count,
-                total: viewModel.formation.slots.count,
-                onKickOff: viewModel.kickOff
+                filled: viewModel.state.filledCount,
+                total: viewModel.challenge.slots.count,
+                onSubmit: viewModel.submit
             )
         }
     }
@@ -279,46 +267,44 @@ struct DraftMasterView: View {
 // MARK: - Intro
 
 private struct BattleIntroView: View {
-    let scenario: BattleScenario
-    let formation: BattleFormation
+    let challenge: BattleChallenge
     var onStart: () -> Void
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 VStack(spacing: 8) {
-                    Text(scenario.competition.uppercased())
+                    Text("TODAY'S CATEGORY")
                         .font(BKFont.caption(11)).tracking(1.2).foregroundStyle(BKTheme.accent)
-                    Text(scenario.title)
-                        .font(BKFont.title(24)).foregroundStyle(BKTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                    Text(scenario.subtitle.uppercased())
-                        .font(BKFont.headline(15)).foregroundStyle(BKTheme.textSecondary)
+                    Text(challenge.category.title)
+                        .font(BKFont.title(26)).foregroundStyle(BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.top, 16)
 
-                Text(scenario.narrative)
+                Text("Drag each club onto a position, then name a player from that club who plays there. Every pick scores their total \(challenge.category.title.lowercased()). Beat the perfect XI.")
                     .font(BKFont.body(14)).foregroundStyle(BKTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 8)
+                    .multilineTextAlignment(.center).padding(.horizontal, 8)
 
-                VStack(spacing: 12) {
-                    introRow(label: "YOUR BUDGET", value: BattleFormat.money(scenario.budgetEur), accent: true)
-                    introRow(label: "OPPONENT", value: scenario.opponentName.uppercased(), accent: false)
-                    introRow(label: "FORMATION", value: formation.name, accent: false)
+                // Club crests preview
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 14) {
+                    ForEach(challenge.clubs) { club in
+                        VStack(spacing: 5) {
+                            ClubCrest(club: club, league: challenge.category.title, size: 38)
+                            Text(club.name.uppercased())
+                                .font(.system(size: 8, weight: .bold, design: .rounded))
+                                .foregroundStyle(BKTheme.textMuted)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                    }
                 }
                 .padding(16)
                 .background(BKTheme.cardElevated.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                Text("Tap each position to sign a player. Stay under budget — sell and re-sign to free funds. When your XI is set, kick off and the match plays out.")
-                    .font(BKFont.body(13)).foregroundStyle(BKTheme.textMuted)
-                    .multilineTextAlignment(.center).padding(.horizontal, 8)
-
                 Button(action: onStart) {
                     HStack(spacing: 8) {
-                        Text("ENTER THE MARKET").font(BKFont.headline(15))
+                        Text("BUILD YOUR XI").font(BKFont.headline(15))
                         Ph.arrowRight.bold.color(BKTheme.background).frame(width: 14, height: 14)
                     }
                     .foregroundStyle(BKTheme.background)
@@ -331,102 +317,139 @@ private struct BattleIntroView: View {
             .padding(.bottom, 32)
         }
     }
-
-    private func introRow(label: String, value: String, accent: Bool) -> some View {
-        VStack(spacing: 4) {
-            Text(label).font(BKFont.caption(10)).tracking(0.6).foregroundStyle(BKTheme.textMuted)
-            Text(value)
-                .font(accent ? BKFont.headline(20) : BKFont.headline(15))
-                .foregroundStyle(accent ? BKTheme.accent : BKTheme.textPrimary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-    }
 }
 
-// MARK: - Budget header
+// MARK: - Build header
 
-private struct BattleBudgetHeader: View {
-    let scenario: BattleScenario
-    let spent: Double
-    let picks: Int
+private struct BattleBuildHeader: View {
+    let category: BattleCategory
+    let total: Int
+    let filled: Int
     let slots: Int
 
-    private var remaining: Double { scenario.budgetEur - spent }
-    private var fraction: Double { scenario.budgetEur > 0 ? min(1, spent / scenario.budgetEur) : 0 }
-
     var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("REMAINING").font(BKFont.caption(9)).foregroundStyle(BKTheme.textMuted)
-                    Text(BattleFormat.money(max(0, remaining)))
-                        .font(BKFont.headline(20))
-                        .foregroundStyle(remaining < scenario.budgetEur * 0.08 ? Color.orange : BKTheme.accent)
-                        .contentTransition(.numericText())
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("SQUAD").font(BKFont.caption(9)).foregroundStyle(BKTheme.textMuted)
-                    Text("\(picks)/\(slots)").font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
-                }
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(category.title.uppercased())
+                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
+                Text("\(total) \(category.noun)")
+                    .font(BKFont.headline(20)).foregroundStyle(BKTheme.accent)
+                    .contentTransition(.numericText())
             }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(BKTheme.card)
-                    Capsule().fill(BKTheme.accent.opacity(0.85))
-                        .frame(width: geo.size.width * fraction)
-                }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("XI").font(BKFont.caption(9)).foregroundStyle(BKTheme.textMuted)
+                Text("\(filled)/\(slots)").font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
             }
-            .frame(height: 6)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16).padding(.vertical, 12)
         .background(BKTheme.background)
     }
 }
 
-private struct BattleScenarioBanner: View {
-    let scenario: BattleScenario
-    let formation: BattleFormation
+// MARK: - Clubs strip
+
+private struct BattleClubsStrip: View {
+    let clubs: [BattleClub]
+    let league: String
+    let usedNames: Set<String>
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(scenario.subtitle.uppercased())
-                    .font(BKFont.headline(14)).foregroundStyle(BKTheme.textPrimary).lineLimit(1)
-                Text("\(scenario.competition) · vs \(scenario.opponentName)")
-                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("DRAG A CLUB ONTO A POSITION")
+                .font(BKFont.caption(9)).tracking(0.8).foregroundStyle(BKTheme.textMuted)
+                .padding(.horizontal, 16)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(clubs) { club in
+                        let used = usedNames.contains(club.name)
+                        ClubChip(club: club, league: league, used: used)
+                            .draggable(club.name) {
+                                ClubCrest(club: club, league: league, size: 44)
+                            }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
             }
-            Spacer()
-            Text(formation.name)
-                .font(BKFont.headline(13)).foregroundStyle(BKTheme.accent)
         }
-        .padding(14)
+        .padding(.vertical, 8)
+        .background(BKTheme.background)
+    }
+}
+
+private struct ClubChip: View {
+    let club: BattleClub
+    let league: String
+    let used: Bool
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ClubCrest(club: club, league: league, size: 40)
+            Text(club.name.uppercased())
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .foregroundStyle(BKTheme.textMuted)
+                .lineLimit(1).frame(width: 56).minimumScaleFactor(0.7)
+        }
+        .padding(.vertical, 8).padding(.horizontal, 4)
+        .frame(width: 64)
         .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(alignment: .topTrailing) {
+            if used {
+                Ph.checkCircle.fill.color(BKTheme.accent).frame(width: 12, height: 12).padding(3)
+            }
+        }
+        .opacity(used ? 0.45 : 1)
+    }
+}
+
+private struct ClubCrest: View {
+    let club: BattleClub
+    let league: String
+    var size: CGFloat = 40
+
+    var body: some View {
+        TeamBadgeImage(
+            club: club.name,
+            league: league,
+            teamId: club.teamId,
+            logoURL: club.logoUrl.flatMap(URL.init(string:)),
+            size: size
+        ) {
+            Circle().fill(BKTheme.cardElevated).frame(width: size, height: size)
+                .overlay(
+                    Text(GuessWhoDisplay.clubAbbrev(club.name))
+                        .font(.system(size: size * 0.3, weight: .bold, design: .rounded))
+                        .foregroundStyle(BKTheme.textMuted)
+                )
+        }
     }
 }
 
 // MARK: - Pitch
 
 private struct BattlePitchView: View {
-    let formation: BattleFormation
-    let picks: [BattlePick]
+    let slots: [BattleSlot]
+    let state: BattleGameState
+    let league: String
     var onTapSlot: (BattleSlot) -> Void
+    var onDropClub: (String, BattleSlot) -> Void
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 PitchBackground()
-                ForEach(formation.slots) { slot in
-                    let pick = picks.first { $0.slotId == slot.id }
-                    BattlePitchSlot(slot: slot, pick: pick)
-                        .position(
-                            x: slot.point.x * geo.size.width,
-                            y: slot.point.y * geo.size.height
-                        )
-                        .onTapGesture { onTapSlot(slot) }
+                ForEach(slots) { slot in
+                    BattlePitchSlot(
+                        slot: slot,
+                        club: state.club(forSlot: slot.id),
+                        pick: state.pick(forSlot: slot.id),
+                        league: league,
+                        onTap: { onTapSlot(slot) },
+                        onDrop: { name in onDropClub(name, slot) }
+                    )
+                    .position(x: slot.point.x * geo.size.width, y: slot.point.y * geo.size.height)
                 }
             }
         }
@@ -435,50 +458,61 @@ private struct BattlePitchView: View {
 
 private struct BattlePitchSlot: View {
     let slot: BattleSlot
+    let club: BattleClub?
     let pick: BattlePick?
+    let league: String
+    var onTap: () -> Void
+    var onDrop: (String) -> Void
+
+    @State private var targeted = false
 
     var body: some View {
         VStack(spacing: 3) {
             ZStack {
                 Circle()
-                    .fill(pick == nil ? BKTheme.card : BKTheme.accent.opacity(0.18))
-                    .frame(width: 42, height: 42)
+                    .fill(pick != nil ? BKTheme.accent.opacity(0.18) : (club != nil ? BKTheme.cardElevated : BKTheme.card))
+                    .frame(width: 46, height: 46)
                     .overlay(
-                        Circle().stroke(pick == nil ? BKTheme.textMuted.opacity(0.4) : BKTheme.accent, lineWidth: 1.5)
+                        Circle().stroke(
+                            targeted ? BKTheme.accent : (pick != nil ? BKTheme.accent : BKTheme.textMuted.opacity(0.4)),
+                            lineWidth: targeted ? 2.5 : 1.5
+                        )
                     )
                 if let pick {
-                    PlayerAvatar(urlString: pick.player.headshotUrl, size: 38) {
-                        PlayerTeamBadge(player: pick.player, size: 30) { fallbackBadge(pick) }
+                    PlayerAvatar(urlString: pick.player.headshotUrl, size: 42) {
+                        ClubCrest(club: pick.club, league: league, size: 32)
                     }
+                } else if let club {
+                    ClubCrest(club: club, league: league, size: 34)
                 } else {
-                    Text("+")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(BKTheme.textMuted)
+                    Text("+").font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(BKTheme.textMuted)
                 }
             }
             Text(slot.label)
                 .font(.system(size: 8, weight: .bold, design: .rounded))
-                .foregroundStyle(pick == nil ? BKTheme.textMuted : BKTheme.accent)
+                .foregroundStyle(pick != nil ? BKTheme.accent : BKTheme.textMuted)
             if let pick {
                 Text(shortName(pick.player.name))
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .foregroundStyle(BKTheme.textPrimary)
-                    .lineLimit(1).frame(maxWidth: 64)
-                Text(BattleFormat.money(pick.priceEur))
-                    .font(.system(size: 8, weight: .semibold, design: .rounded))
+                    .lineLimit(1).frame(maxWidth: 70)
+                Text("\(pick.player.statValue)")
+                    .font(.system(size: 9, weight: .heavy, design: .rounded))
+                    .foregroundStyle(BKTheme.accent)
+            } else if club != nil {
+                Text("TAP TO PICK")
+                    .font(.system(size: 7, weight: .bold, design: .rounded))
                     .foregroundStyle(BKTheme.textMuted)
             }
         }
-        .frame(width: 70)
-    }
-
-    private func fallbackBadge(_ pick: BattlePick) -> some View {
-        Circle().fill(BKTheme.cardElevated).frame(width: 30, height: 30)
-            .overlay(
-                Text(GuessWhoDisplay.clubAbbrev(pick.player.club))
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(BKTheme.textMuted)
-            )
+        .frame(width: 76)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+        .dropDestination(for: String.self) { items, _ in
+            guard let name = items.first else { return false }
+            onDrop(name)
+            return true
+        } isTargeted: { targeted = $0 }
     }
 
     private func shortName(_ name: String) -> String {
@@ -506,31 +540,28 @@ private struct PitchBackground: View {
     }
 }
 
-// MARK: - Kick off bar
+// MARK: - Submit bar
 
-private struct BattleKickoffBar: View {
+private struct BattleSubmitBar: View {
     let ready: Bool
     let filled: Int
     let total: Int
-    var onKickOff: () -> Void
+    var onSubmit: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Button(action: onKickOff) {
-                HStack(spacing: 8) {
-                    Text(ready ? "KICK OFF" : "FILL YOUR XI (\(filled)/\(total))")
-                        .font(BKFont.headline(15))
-                    if ready { Ph.arrowRight.bold.color(BKTheme.background).frame(width: 14, height: 14) }
-                }
-                .foregroundStyle(ready ? BKTheme.background : BKTheme.textMuted)
-                .frame(maxWidth: .infinity).padding(.vertical, 16)
-                .background(ready ? BKTheme.accent : BKTheme.card)
-                .clipShape(Capsule())
+        Button(action: onSubmit) {
+            HStack(spacing: 8) {
+                Text(ready ? "SUBMIT XI" : "FILL YOUR XI (\(filled)/\(total))")
+                    .font(BKFont.headline(15))
+                if ready { Ph.arrowRight.bold.color(BKTheme.background).frame(width: 14, height: 14) }
             }
-            .disabled(!ready)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .foregroundStyle(ready ? BKTheme.background : BKTheme.textMuted)
+            .frame(maxWidth: .infinity).padding(.vertical, 16)
+            .background(ready ? BKTheme.accent : BKTheme.card)
+            .clipShape(Capsule())
         }
+        .disabled(!ready)
+        .padding(.horizontal, 16).padding(.vertical, 12)
         .background(BKTheme.background)
     }
 }
@@ -543,50 +574,77 @@ private struct BattleSearchSheet: View {
     @FocusState private var focused: Bool
     @Environment(\.dismiss) private var dismiss
 
+    private var assignedClub: BattleClub? { viewModel.state.club(forSlot: slot.id) }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("SIGN A \(bucketLabel)")
+                        Text("\(slot.position.uppercased())")
                             .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
-                        Text("\(slot.label) · up to \(BattleFormat.money(budgetForSlot))")
-                            .font(BKFont.headline(15)).foregroundStyle(BKTheme.accent)
+                        Text(assignedClub?.name.uppercased() ?? "CHOOSE A CLUB")
+                            .font(BKFont.headline(16)).foregroundStyle(BKTheme.accent)
                     }
                     Spacer()
-                    if let pick = viewModel.state.pick(forSlot: slot.id) {
+                    if viewModel.state.pick(forSlot: slot.id) != nil {
                         Button {
-                            viewModel.removePick(slotId: slot.id)
+                            viewModel.removePick(slot.id)
                             dismiss()
                         } label: {
-                            Text("REMOVE \(pick.player.name.split(separator: " ").last.map(String.init)?.uppercased() ?? "")")
-                                .font(BKFont.caption(10)).foregroundStyle(BKTheme.wrong)
+                            Text("REMOVE").font(BKFont.caption(10)).foregroundStyle(BKTheme.wrong)
                         }
                     }
                 }
                 .padding(.horizontal, 16)
 
-                HStack(spacing: 12) {
-                    TextField("", text: $viewModel.searchQuery, prompt:
-                        Text("SEARCH PLAYERS").foregroundStyle(BKTheme.textMuted)
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    )
-                    .textFieldStyle(.plain)
-                    .foregroundStyle(BKTheme.background)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .focused($focused)
-                    .submitLabel(.search)
-                    .onChange(of: viewModel.searchQuery) { _, _ in
-                        viewModel.selectionError = nil
-                        Task { await viewModel.search() }
+                // Club chooser (unused clubs + the one already on this slot)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(clubChoices) { club in
+                            let selected = assignedClub?.name == club.name
+                            Button {
+                                viewModel.setActiveSlotClub(club)
+                                focused = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    ClubCrest(club: club, league: viewModel.category.title, size: 22)
+                                    Text(club.name.uppercased())
+                                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                                        .foregroundStyle(selected ? BKTheme.background : BKTheme.textSecondary)
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 8)
+                                .background(selected ? BKTheme.accent : BKTheme.card)
+                                .clipShape(Capsule())
+                            }
+                        }
                     }
-                    if viewModel.isSearching { ProgressView().tint(BKTheme.accent) }
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16).padding(.vertical, 14)
-                .background(Color.white).clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5))
-                .padding(.horizontal, 16)
+
+                if assignedClub != nil {
+                    HStack(spacing: 12) {
+                        TextField("", text: $viewModel.searchQuery, prompt:
+                            Text("SEARCH \(slot.position.uppercased())S").foregroundStyle(BKTheme.textMuted)
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        )
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(BKTheme.background)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .focused($focused)
+                        .submitLabel(.search)
+                        .onChange(of: viewModel.searchQuery) { _, _ in
+                            viewModel.selectionError = nil
+                            Task { await viewModel.search() }
+                        }
+                        if viewModel.isSearching { ProgressView().tint(BKTheme.textMuted) }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 14)
+                    .background(Color.white).clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5))
+                    .padding(.horizontal, 16)
+                }
 
                 if let error = viewModel.selectionError {
                     Text(error.uppercased()).font(BKFont.caption(10)).foregroundStyle(BKTheme.wrong)
@@ -594,9 +652,9 @@ private struct BattleSearchSheet: View {
 
                 ScrollView {
                     VStack(spacing: 0) {
-                        ForEach(viewModel.searchResults) { player in
+                        ForEach(viewModel.results) { player in
                             resultRow(player)
-                            if player.id != viewModel.searchResults.last?.id {
+                            if player.id != viewModel.results.last?.id {
                                 Divider().background(BKTheme.cardElevated)
                             }
                         }
@@ -617,62 +675,55 @@ private struct BattleSearchSheet: View {
             }
         }
         .presentationDetents([.large])
-        .onAppear { focused = true }
+        .onAppear { if assignedClub != nil { focused = true } }
     }
 
-    private var bucketLabel: String {
-        switch slot.bucket {
-        case .gk: return "GOALKEEPER"
-        case .def: return "DEFENDER"
-        case .mid: return "MIDFIELDER"
-        case .att: return "ATTACKER"
+    private var clubChoices: [BattleClub] {
+        var list = viewModel.unusedClubs
+        if let assignedClub, !list.contains(where: { $0.name == assignedClub.name }) {
+            list.insert(assignedClub, at: 0)
         }
+        return list
     }
 
-    private var budgetForSlot: Double {
-        let existing = viewModel.state.pick(forSlot: slot.id)?.priceEur ?? 0
-        return viewModel.state.remainingEur + existing
-    }
-
-    private func resultRow(_ player: PlayerSearchResultDTO) -> some View {
-        let affordable = viewModel.canAfford(player)
-        return Button {
+    private func resultRow(_ player: BattlePlayerDTO) -> some View {
+        Button {
             focused = false
             viewModel.selectPlayer(player)
         } label: {
             HStack(spacing: 12) {
                 PlayerAvatar(urlString: player.headshotUrl, size: 32) {
-                    PlayerTeamBadge(player: player, size: 28) {
-                        Circle().fill(BKTheme.cardElevated).frame(width: 28, height: 28)
-                            .overlay(
-                                Text(GuessWhoDisplay.clubAbbrev(player.club))
-                                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                                    .foregroundStyle(BKTheme.textMuted)
-                            )
-                    }
+                    Circle().fill(BKTheme.cardElevated).frame(width: 32, height: 32)
+                        .overlay(
+                            Text(initials(player.name))
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(BKTheme.textMuted)
+                        )
                 }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(player.name.uppercased())
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(affordable ? BKTheme.textPrimary : BKTheme.textMuted)
-                    Text("\(player.nationality) · \(player.club)")
-                        .font(BKFont.caption(11)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                Text(BattleFormat.money(viewModel.price(for: player)))
+                Text(player.name.uppercased())
                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(affordable ? BKTheme.accent : BKTheme.wrong)
+                    .foregroundStyle(BKTheme.textPrimary)
+                Spacer(minLength: 0)
+                Text("\(player.statValue)")
+                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    .foregroundStyle(BKTheme.accent)
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
-            .opacity(affordable ? 1 : 0.6)
         }
+    }
+
+    private func initials(_ name: String) -> String {
+        let parts = name.split(separator: " ")
+        let first = parts.first?.first.map(String.init) ?? ""
+        let last = parts.count > 1 ? (parts.last?.first.map(String.init) ?? "") : ""
+        return (first + last).uppercased()
     }
 }
 
 // MARK: - Result
 
 private struct BattleResultView: View {
-    let challenge: BattleChallenge
+    let state: BattleGameState
     let result: BattleResult
     var showPlayAgain = true
     var onShare: () -> Void
@@ -681,13 +732,7 @@ private struct BattleResultView: View {
 
     @State private var revealStep = 0
 
-    private var verdictColor: Color {
-        switch result.outcome {
-        case .win: return BKTheme.accent
-        case .draw: return .orange
-        case .loss: return BKTheme.wrong
-        }
-    }
+    private var challenge: BattleChallenge { state.challenge }
 
     var body: some View {
         ZStack {
@@ -695,45 +740,35 @@ private struct BattleResultView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     VStack(spacing: 6) {
-                        Text(challenge.scenario.subtitle.uppercased())
+                        Text(challenge.category.title.uppercased())
                             .font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
-                        Text(result.outcome.verdict)
-                            .font(BKFont.title(34)).foregroundStyle(verdictColor)
+                        Text(result.verdict)
+                            .font(BKFont.title(32)).foregroundStyle(BKTheme.accent)
                     }
                     .padding(.top, 24)
 
                     if revealStep >= 1 {
-                        HStack(spacing: 18) {
-                            scoreSide(name: "YOU", goals: result.yourGoals, highlight: result.outcome == .win)
-                            Text("–").font(BKFont.title(30)).foregroundStyle(BKTheme.textMuted)
-                            scoreSide(name: challenge.scenario.opponentName, goals: result.theirGoals, highlight: result.outcome == .loss)
+                        VStack(spacing: 4) {
+                            Text("\(result.percentage)%")
+                                .font(BKFont.title(56)).foregroundStyle(BKTheme.accent)
+                                .contentTransition(.numericText())
+                            Text("OF THE PERFECT XI")
+                                .font(BKFont.caption(10)).tracking(1).foregroundStyle(BKTheme.textMuted)
                         }
                         .transition(.scale.combined(with: .opacity))
                     }
 
-                    if revealStep >= 2, !result.events.isEmpty {
-                        VStack(spacing: 6) {
-                            ForEach(result.events) { e in
-                                HStack {
-                                    if e.forYou {
-                                        Text("\(e.scorer) \(e.minuteLabel)")
-                                            .font(BKFont.body(12)).foregroundStyle(BKTheme.textPrimary)
-                                        Spacer()
-                                    } else {
-                                        Spacer()
-                                        Text("\(e.minuteLabel) \(e.scorer)")
-                                            .font(BKFont.body(12)).foregroundStyle(BKTheme.textSecondary)
-                                    }
-                                }
-                            }
+                    if revealStep >= 2 {
+                        HStack(spacing: 18) {
+                            totalSide(label: "YOUR XI", value: result.yourTotal, accent: true)
+                            Text("/").font(BKFont.title(28)).foregroundStyle(BKTheme.textMuted)
+                            totalSide(label: "OPTIMAL", value: result.optimalScore, accent: false)
                         }
-                        .padding(.horizontal, 24)
                         .transition(.opacity)
                     }
 
                     if revealStep >= 3 {
-                        powerBars
-                        scoreBreakdown
+                        xiBreakdown
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
@@ -761,81 +796,45 @@ private struct BattleResultView: View {
         }
         .task {
             for step in 1...3 {
-                try? await Task.sleep(for: .seconds(0.45))
+                try? await Task.sleep(for: .seconds(0.42))
                 withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) { revealStep = step }
                 HapticManager.light()
             }
         }
     }
 
-    private func scoreSide(name: String, goals: Int, highlight: Bool) -> some View {
+    private func totalSide(label: String, value: Int, accent: Bool) -> some View {
         VStack(spacing: 4) {
-            Text("\(goals)")
-                .font(BKFont.title(48))
-                .foregroundStyle(highlight ? BKTheme.accent : BKTheme.textPrimary)
-            Text(name.uppercased())
-                .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
-                .lineLimit(1).frame(maxWidth: 100)
+            Text("\(value)")
+                .font(BKFont.title(40))
+                .foregroundStyle(accent ? BKTheme.accent : BKTheme.textPrimary)
+            Text(label).font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
         }
     }
 
-    private var powerBars: some View {
-        VStack(spacing: 10) {
-            powerBar(label: "YOUR SQUAD", value: result.your.power, max: maxPower, color: BKTheme.accent)
-            powerBar(label: challenge.scenario.opponentName.uppercased(), value: result.opp.power, max: maxPower, color: BKTheme.textSecondary)
-        }
-        .padding(14)
-        .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 14))
-    }
+    private var orderedSlots: [BattleSlot] { challenge.slots }
 
-    private var maxPower: Double { max(result.your.power, result.opp.power, 1) }
-
-    private func powerBar(label: String, value: Double, max: Double, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(label).font(BKFont.caption(9)).foregroundStyle(BKTheme.textMuted).lineLimit(1)
-                Spacer()
-                Text("\(Int(value.rounded()))").font(BKFont.caption(10)).foregroundStyle(BKTheme.textPrimary)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(BKTheme.cardElevated)
-                    Capsule().fill(color).frame(width: geo.size.width * (value / max))
+    private var xiBreakdown: some View {
+        VStack(spacing: 8) {
+            ForEach(orderedSlots) { slot in
+                if let pick = state.pick(forSlot: slot.id) {
+                    HStack(spacing: 10) {
+                        Text(slot.label)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(BKTheme.textMuted).frame(width: 30, alignment: .leading)
+                        ClubCrest(club: pick.club, league: challenge.category.title, size: 20)
+                        Text(pick.player.name)
+                            .font(BKFont.body(13)).foregroundStyle(BKTheme.textPrimary).lineLimit(1)
+                        Spacer(minLength: 0)
+                        Text("\(pick.player.statValue)")
+                            .font(.system(size: 13, weight: .heavy, design: .rounded))
+                            .foregroundStyle(BKTheme.accent)
+                    }
                 }
             }
-            .frame(height: 6)
-        }
-    }
-
-    private var scoreBreakdown: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Text("SCORE").font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
-                Spacer()
-                Text("\(result.score)").font(BKFont.title(28)).foregroundStyle(BKTheme.accent)
-            }
-            breakdownRow("Squad power", result.powerPoints)
-            breakdownRow(result.outcome.verdict.capitalized, result.outcomePoints)
-            breakdownRow("Value for money", result.efficiencyPoints)
-            Divider().background(BKTheme.cardElevated)
-            HStack {
-                Text("Spent \(BattleFormat.money(result.spentEur)) of \(BattleFormat.money(result.budgetEur))")
-                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
-                Spacer()
-                Text("\(BattleFormat.money(result.budgetLeftEur)) left")
-                    .font(BKFont.caption(10)).foregroundStyle(BKTheme.textSecondary)
-            }
         }
         .padding(14)
         .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-
-    private func breakdownRow(_ label: String, _ value: Int) -> some View {
-        HStack {
-            Text(label).font(BKFont.body(13)).foregroundStyle(BKTheme.textSecondary)
-            Spacer()
-            Text("+\(value)").font(BKFont.headline(13)).foregroundStyle(BKTheme.textPrimary)
-        }
     }
 }
 
@@ -850,12 +849,12 @@ private struct BattleShareSheet: View {
         NavigationStack {
             VStack(spacing: 20) {
                 VStack(spacing: 12) {
-                    Text(challenge.scenario.subtitle.uppercased())
+                    Text(challenge.category.title.uppercased())
                         .font(BKFont.headline(15)).foregroundStyle(BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
-                    Text("\(result.outcome.verdict)  \(result.yourGoals)–\(result.theirGoals)")
-                        .font(BKFont.title(28)).foregroundStyle(BKTheme.accent)
-                    Text("Score \(result.score) · Spent \(BattleFormat.money(result.spentEur))")
+                    Text("\(result.percentage)%")
+                        .font(BKFont.title(34)).foregroundStyle(BKTheme.accent)
+                    Text("\(result.yourTotal) / \(result.optimalScore) \(challenge.category.noun)")
                         .font(BKFont.caption(11)).foregroundStyle(BKTheme.textMuted)
                 }
                 .padding(20)
