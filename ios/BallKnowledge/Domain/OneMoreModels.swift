@@ -6,6 +6,7 @@ struct OneMoreOption: Identifiable, Equatable {
     let name: String
     let clubs: String
     let position: String
+    var nationality: String = ""
     let value: Int
     var headshotUrl: String? = nil
     var teamId: Int? = nil

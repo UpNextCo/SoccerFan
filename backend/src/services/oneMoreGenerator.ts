@@ -54,6 +54,7 @@ export interface OneMoreOption {
   name: string;
   clubs: string;
   position: string;
+  nationality: string;
   value: number;
   headshotUrl?: string;
   teamId?: number;
@@ -87,7 +88,7 @@ export async function oneMoreStatValue(playerId: string, leagueId: number, categ
 
 const AGG = sql`
   WITH agg AS (
-    SELECT p.id, p.name, p.position, p.api_football_id,
+    SELECT p.id, p.name, p.position, p.api_football_id, p.nationality,
       EXTRACT(YEAR FROM p.birth_date)::int AS birth_year,
       (p.market_value_tier * 10 + LEAST(COALESCE(fa.finals, 0), 6) * 4 + LEAST(COALESCE(aw.awards, 0), 4) * 6)::int AS prestige,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39), 0)::int AS pl_goals,
@@ -117,10 +118,10 @@ const AGG = sql`
       LEFT JOIN player_extra_stats e ON e.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
-    GROUP BY p.id, p.name, p.position, p.api_football_id, p.market_value_tier, p.birth_date, fa.finals, aw.awards
+    GROUP BY p.id, p.name, p.position, p.api_football_id, p.nationality, p.market_value_tier, p.birth_date, fa.finals, aw.awards
   )`;
 
-interface Candidate { id: string; name: string; position: string; prestige: number; value: number; birth_year: number | null; api_football_id: number | null; }
+interface Candidate { id: string; name: string; position: string; nationality: string; prestige: number; value: number; birth_year: number | null; api_football_id: number | null; }
 
 async function clubsByPlayer(ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
@@ -171,7 +172,7 @@ function nearPools(rows: Candidate[], min: number, above: number, below: number,
 async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: OneMorePuzzle; pool: number } | null> {
   const rows = (await db.execute(sql`
     ${AGG}
-    SELECT id, name, position, birth_year, api_football_id, prestige, ${sql.raw(metric.col)} AS value
+    SELECT id, name, position, nationality, birth_year, api_football_id, prestige, ${sql.raw(metric.col)} AS value
     FROM agg WHERE ${sql.raw(metric.part)} > 0
   `)) as unknown as Candidate[];
 
@@ -225,7 +226,7 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
   const toOption = (c: Candidate): OneMoreOption => {
     const logo = logoByClub.get(primaryClub(c.id));
     return {
-      id: c.id, name: c.name, clubs: clubs.get(c.id) ?? '', position: c.position, value: c.value,
+      id: c.id, name: c.name, clubs: clubs.get(c.id) ?? '', position: c.position, nationality: c.nationality, value: c.value,
       headshotUrl: playerHeadshotUrl(c.api_football_id) ?? undefined,
       teamId: logo?.teamId, teamLogoUrl: logo?.logoUrl,
     };

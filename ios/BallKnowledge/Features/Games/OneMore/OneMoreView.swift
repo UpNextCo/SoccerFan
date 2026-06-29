@@ -156,10 +156,12 @@ struct OneMoreView: View {
                                 VStack(spacing: 34) {
                                     OneMorePickHistory(
                                         picks: viewModel.state.picks,
-                                        statLabel: viewModel.state.prompt.statNoun
+                                        statLabel: viewModel.state.prompt.statNoun,
+                                        nextPoints: viewModel.state.nextPickPoints,
+                                        showNext: viewModel.state.isActive
                                     )
                                     if viewModel.canCashOut {
-                                        OneMoreCashOutButton { viewModel.cashOut() }
+                                        OneMoreCashOutButton(score: viewModel.state.currentScore) { viewModel.cashOut() }
                                             .transition(.opacity)
                                     }
                                 }
@@ -333,17 +335,18 @@ private struct OneMoreChoiceCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 8) {
-                PlayerAvatar(urlString: option.headshotUrl, size: 68) {
+            VStack(spacing: 10) {
+                PlayerAvatar(urlString: option.headshotUrl, size: 80) {
                     Circle()
                         .fill(BKTheme.card)
-                        .frame(width: 68, height: 68)
+                        .frame(width: 80, height: 80)
                         .overlay(
                             Text(initials)
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .font(.system(size: 26, weight: .bold, design: .rounded))
                                 .foregroundStyle(BKTheme.textMuted)
                         )
                 }
+                .shadow(color: BKTheme.accent.opacity(0.55), radius: 9, y: 6) // green glow under the circle
 
                 Text(option.name)
                     .font(BKFont.headline(15))
@@ -352,23 +355,28 @@ private struct OneMoreChoiceCard: View {
                     .lineLimit(2)
                     .frame(minHeight: 38, alignment: .top)
 
+                HStack(spacing: 6) {
+                    Text(GuessWhoDisplay.nationalityFlag(option.nationality))
+                        .font(.system(size: 14))
+                    if !option.position.isEmpty {
+                        Text(option.position.uppercased())
+                            .font(BKFont.caption(10))
+                            .tracking(0.5)
+                            .foregroundStyle(BKTheme.textMuted)
+                    }
+                }
+
                 if !option.primaryClub.isEmpty {
-                    HStack(spacing: 5) {
-                        PlayerTeamBadge(player: option.badgeDTO, size: 16) {
-                            Circle().fill(BKTheme.card).frame(width: 16, height: 16)
+                    VStack(spacing: 4) {
+                        PlayerTeamBadge(player: option.badgeDTO, size: 36) {
+                            Circle().fill(BKTheme.card).frame(width: 36, height: 36)
                         }
                         Text(option.primaryClub)
                             .font(BKFont.caption(10))
                             .foregroundStyle(BKTheme.textSecondary)
                             .lineLimit(1)
                     }
-                }
-
-                if !option.position.isEmpty {
-                    Text(option.position.uppercased())
-                        .font(BKFont.caption(9))
-                        .tracking(0.5)
-                        .foregroundStyle(BKTheme.textMuted)
+                    .padding(.top, 2)
                 }
 
                 if revealed {
@@ -443,30 +451,16 @@ private struct OneMoreScoreHero: View {
 
     var body: some View {
         VStack(spacing: 34) {
-            HStack {
-                Text("YOUR RUN")
-                    .font(BKFont.caption(11))
-                    .tracking(0.8)
-                    .foregroundStyle(BKTheme.textMuted)
-                Spacer()
-                HStack(spacing: 6) {
-                    Ph.lightning.fill
-                        .color(BKTheme.streak)
-                        .frame(width: 14, height: 14)
-                    Text("\(streak) STREAK")
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.textPrimary)
-                }
-                if isActive, streak > 0 {
-                    Text("+\(nextPoints) NEXT")
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.accent)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(BKTheme.accent.opacity(0.12))
-                        .clipShape(Capsule())
-                }
+            HStack(spacing: 8) {
+                Ph.lightning.fill
+                    .color(BKTheme.streak)
+                    .frame(width: 18, height: 18)
+                Text("\(streak) STREAK")
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 18)
 
             Text("\(currentScore)")
                 .font(BKFont.title(52))
@@ -491,41 +485,41 @@ private struct OneMoreScoreHero: View {
 private struct OneMorePickHistory: View {
     let picks: [OneMorePick]
     var statLabel: String = "goals"
+    var nextPoints: Int = 0
+    var showNext: Bool = false
 
-    /// Latest five picks (oldest→newest), with their original 1-based pick number for scoring.
-    private var recent: [(number: Int, pick: OneMorePick)] {
-        Array(picks.enumerated().suffix(5)).map { (number: $0.offset + 1, pick: $0.element) }
+    private enum Item: Identifiable {
+        case pick(number: Int, pick: OneMorePick)
+        case next(points: Int)
+        var id: String {
+            switch self {
+            case .pick(_, let p): return "p-\(p.id)"
+            case .next: return "next"
+            }
+        }
+    }
+
+    /// Latest five entries (picks oldest→newest, plus the upcoming "next" empty slot), so the row
+    /// slides as the run grows.
+    private var items: [Item] {
+        var arr: [Item] = picks.enumerated().map { .pick(number: $0.offset + 1, pick: $0.element) }
+        if showNext { arr.append(.next(points: nextPoints)) }
+        return Array(arr.suffix(5))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 0) {
-                ForEach(recent, id: \.pick.id) { item in
-                    VStack(spacing: 5) {
-                        ZStack {
-                            Circle().fill(BKTheme.accent).frame(width: 28, height: 28)
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(BKTheme.background)
-                        }
-                        Text(shortName(item.pick.name))
-                            .font(BKFont.caption(10))
-                            .foregroundStyle(BKTheme.textPrimary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                        Text("+\(OneMoreScoring.points(forPick: item.number))")
-                            .font(BKFont.caption(10))
-                            .foregroundStyle(BKTheme.accent)
-                    }
-                    .frame(maxWidth: .infinity)
+                ForEach(items) { item in
+                    column(item).frame(maxWidth: .infinity)
                 }
             }
             .background(alignment: .top) {
-                // Connecting timeline line through the tick centres.
+                // Connecting timeline line through the circle centres.
                 GeometryReader { geo in
-                    let n = max(recent.count, 1)
+                    let n = max(items.count, 1)
                     let colW = geo.size.width / CGFloat(n)
-                    if recent.count > 1 {
+                    if items.count > 1 {
                         Path { p in
                             p.move(to: CGPoint(x: colW / 2, y: 14))
                             p.addLine(to: CGPoint(x: geo.size.width - colW / 2, y: 14))
@@ -536,7 +530,44 @@ private struct OneMorePickHistory: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: picks.count)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: items.count)
+    }
+
+    @ViewBuilder private func column(_ item: Item) -> some View {
+        switch item {
+        case let .pick(number, pick):
+            VStack(spacing: 5) {
+                ZStack {
+                    Circle().fill(BKTheme.accent).frame(width: 28, height: 28)
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(BKTheme.background)
+                }
+                Text(shortName(pick.name))
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Text("+\(OneMoreScoring.points(forPick: number))")
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(BKTheme.accent)
+            }
+        case let .next(points):
+            VStack(spacing: 5) {
+                ZStack {
+                    Circle().fill(BKTheme.cardElevated) // hides the timeline line behind the empty slot
+                    Circle().strokeBorder(BKTheme.textMuted.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                }
+                .frame(width: 28, height: 28)
+                Text("NEXT")
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(BKTheme.textMuted)
+                    .lineLimit(1)
+                Text("+\(points)")
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+        }
     }
 
     private func shortName(_ name: String) -> String {
@@ -547,22 +578,33 @@ private struct OneMorePickHistory: View {
 // MARK: - Cash Out
 
 private struct OneMoreCashOutButton: View {
+    let score: Int
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
-                Ph.coins.regular
-                    .color(BKTheme.textPrimary)
-                    .frame(width: 18, height: 18)
-                Text("CASH OUT")
-                    .font(BKFont.headline(15))
-                    .foregroundStyle(BKTheme.textPrimary)
+            HStack(spacing: 14) {
+                Text("💰")
+                    .font(.system(size: 30))
+                VStack(spacing: 1) {
+                    Text("CASH OUT")
+                        .font(BKFont.headline(15))
+                        .foregroundStyle(BKTheme.textPrimary)
+                    Text("\(score)")
+                        .font(BKFont.headline(20))
+                        .foregroundStyle(BKTheme.accent)
+                        .contentTransition(.numericText())
+                }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 15)
-            .background(BKTheme.cardElevated)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.vertical, 14)
+            .background(BKTheme.background)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(BKTheme.accent, lineWidth: 1.5)
+            )
+            .shadow(color: BKTheme.accent.opacity(0.3), radius: 8)
         }
         .buttonStyle(.plain)
     }

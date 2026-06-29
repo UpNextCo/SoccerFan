@@ -204,13 +204,14 @@ struct OneMoreOptionDTO: Codable, Equatable {
     let name: String
     let clubs: String
     let position: String
+    let nationality: String
     let value: Int
     let headshotUrl: String?
     let teamId: Int?
     let teamLogoUrl: String?
 
-    init(id: String, name: String, clubs: String = "", position: String = "", value: Int, headshotUrl: String? = nil, teamId: Int? = nil, teamLogoUrl: String? = nil) {
-        self.id = id; self.name = name; self.clubs = clubs; self.position = position; self.value = value
+    init(id: String, name: String, clubs: String = "", position: String = "", nationality: String = "", value: Int, headshotUrl: String? = nil, teamId: Int? = nil, teamLogoUrl: String? = nil) {
+        self.id = id; self.name = name; self.clubs = clubs; self.position = position; self.nationality = nationality; self.value = value
         self.headshotUrl = headshotUrl; self.teamId = teamId; self.teamLogoUrl = teamLogoUrl
     }
 
@@ -220,6 +221,7 @@ struct OneMoreOptionDTO: Codable, Equatable {
         name = try c.decode(String.self, forKey: .name)
         clubs = try c.decodeIfPresent(String.self, forKey: .clubs) ?? ""
         position = try c.decodeIfPresent(String.self, forKey: .position) ?? ""
+        nationality = try c.decodeIfPresent(String.self, forKey: .nationality) ?? ""
         value = try c.decodeIfPresent(Int.self, forKey: .value) ?? 0
         headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
         teamId = try c.decodeIfPresent(Int.self, forKey: .teamId)
