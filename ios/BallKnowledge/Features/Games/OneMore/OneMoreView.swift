@@ -153,7 +153,7 @@ struct OneMoreView: View {
                             )
 
                             if !viewModel.state.picks.isEmpty {
-                                VStack(spacing: 34) {
+                                VStack(spacing: 20) {
                                     OneMorePickHistory(
                                         picks: viewModel.state.picks,
                                         statLabel: viewModel.state.prompt.statNoun,
@@ -165,7 +165,7 @@ struct OneMoreView: View {
                                             .transition(.opacity)
                                     }
                                 }
-                                .padding(.top, 14)
+                                .padding(.top, 0)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -335,7 +335,7 @@ private struct OneMoreChoiceCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 PlayerAvatar(urlString: option.headshotUrl, size: 80) {
                     Circle()
                         .fill(BKTheme.card)
@@ -346,14 +346,14 @@ private struct OneMoreChoiceCard: View {
                                 .foregroundStyle(BKTheme.textMuted)
                         )
                 }
-                .shadow(color: BKTheme.accent.opacity(0.55), radius: 9, y: 6) // green glow under the circle
+                .shadow(color: BKTheme.accent.opacity(0.5), radius: 5, y: 3) // tight green glow under the circle
 
                 Text(option.name)
                     .font(BKFont.headline(15))
                     .foregroundStyle(BKTheme.textPrimary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-                    .frame(minHeight: 38, alignment: .top)
+                    .frame(minHeight: 26, alignment: .top)
 
                 HStack(spacing: 6) {
                     Text(GuessWhoDisplay.nationalityFlag(option.nationality))
@@ -418,16 +418,8 @@ private struct OneMoreChoiceCard: View {
     /// diagonal line texture — no borders.
     @ViewBuilder private var cardBackground: some View {
         ZStack {
-            // The card's own colour radiates around the player image and fades to the page colour
-            // toward the edges and bottom.
-            RadialGradient(
-                colors: [BKTheme.card, BKTheme.background],
-                center: UnitPoint(x: 0.5, y: 0.18),
-                startRadius: 6,
-                endRadius: 175
-            )
-            // Subtle diagonal texture (toned down).
-            DiagonalLineTexture(color: .white.opacity(0.03), spacing: 9)
+            // Flat fill matching the question rectangle at the top.
+            BKTheme.card
             if revealed, qualifies {
                 BKTheme.accent.opacity(0.16)
             } else if revealed, isChosen {
@@ -450,7 +442,7 @@ private struct OneMoreScoreHero: View {
     @State private var pulseScale: CGFloat = 1
 
     var body: some View {
-        VStack(spacing: 34) {
+        VStack(spacing: 22) {
             HStack(spacing: 8) {
                 Ph.lightning.fill
                     .color(BKTheme.streak)
@@ -460,7 +452,7 @@ private struct OneMoreScoreHero: View {
                     .foregroundStyle(BKTheme.textPrimary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, 18)
+            .padding(.top, 8)
 
             Text("\(currentScore)")
                 .font(BKFont.title(52))
@@ -581,19 +573,26 @@ private struct OneMoreCashOutButton: View {
     let score: Int
     var action: () -> Void
 
+    @State private var borderPhase: Double = 0
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
                 Text("💰")
                     .font(.system(size: 30))
-                VStack(spacing: 1) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text("CASH OUT")
                         .font(BKFont.headline(15))
                         .foregroundStyle(BKTheme.textPrimary)
-                    Text("\(score)")
-                        .font(BKFont.headline(20))
-                        .foregroundStyle(BKTheme.accent)
-                        .contentTransition(.numericText())
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text("\(score)")
+                            .font(BKFont.headline(20))
+                            .foregroundStyle(BKTheme.accent)
+                            .contentTransition(.numericText())
+                        Text("PTS")
+                            .font(BKFont.caption(10))
+                            .foregroundStyle(BKTheme.accent)
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
@@ -601,12 +600,29 @@ private struct OneMoreCashOutButton: View {
             .background(BKTheme.background)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
+                // Subtle border with a soft highlight that travels around the rectangle.
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(BKTheme.accent, lineWidth: 1.5)
+                    .strokeBorder(
+                        AngularGradient(
+                            gradient: Gradient(colors: [
+                                BKTheme.accent.opacity(0.10),
+                                BKTheme.accent.opacity(0.45),
+                                BKTheme.accent.opacity(0.10),
+                                BKTheme.accent.opacity(0.10),
+                            ]),
+                            center: .center,
+                            angle: .degrees(borderPhase)
+                        ),
+                        lineWidth: 1
+                    )
             )
-            .shadow(color: BKTheme.accent.opacity(0.3), radius: 8)
         }
         .buttonStyle(.plain)
+        .onAppear {
+            withAnimation(.linear(duration: 5).repeatForever(autoreverses: false)) {
+                borderPhase = 360
+            }
+        }
     }
 }
 
@@ -784,26 +800,3 @@ private struct OneMoreResultView: View {
     }
 }
 
-// MARK: - FIFA-style panel texture
-
-/// Subtle "/" diagonal line texture, the FIFA/EA menu-panel finish.
-private struct DiagonalLineTexture: View {
-    var color: Color = .white.opacity(0.05)
-    var spacing: CGFloat = 9
-    var lineWidth: CGFloat = 1
-
-    var body: some View {
-        Canvas { ctx, size in
-            guard size.width > 1, size.height > 1 else { return }
-            var x = -size.height
-            while x < size.width {
-                var path = Path()
-                path.move(to: CGPoint(x: x, y: size.height))
-                path.addLine(to: CGPoint(x: x + size.height, y: 0))
-                ctx.stroke(path, with: .color(color), lineWidth: lineWidth)
-                x += spacing
-            }
-        }
-        .allowsHitTesting(false)
-    }
-}
