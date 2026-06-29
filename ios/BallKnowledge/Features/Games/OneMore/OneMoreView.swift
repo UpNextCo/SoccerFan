@@ -185,7 +185,7 @@ struct OneMoreView: View {
                 }
                 .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.state.streak)
                 .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.canCashOut)
-                .background(BKTheme.background)
+                .background(StadiumBackground())
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -573,8 +573,6 @@ private struct OneMoreCashOutButton: View {
     let score: Int
     var action: () -> Void
 
-    @State private var borderPhase: Double = 0
-
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
@@ -600,29 +598,11 @@ private struct OneMoreCashOutButton: View {
             .background(BKTheme.background)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(
-                // Subtle border with a soft highlight that travels around the rectangle.
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(
-                        AngularGradient(
-                            gradient: Gradient(colors: [
-                                BKTheme.accent.opacity(0.10),
-                                BKTheme.accent.opacity(0.45),
-                                BKTheme.accent.opacity(0.10),
-                                BKTheme.accent.opacity(0.10),
-                            ]),
-                            center: .center,
-                            angle: .degrees(borderPhase)
-                        ),
-                        lineWidth: 1
-                    )
+                    .strokeBorder(BKTheme.accent.opacity(0.45), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
-        .onAppear {
-            withAnimation(.linear(duration: 5).repeatForever(autoreverses: false)) {
-                borderPhase = 360
-            }
-        }
     }
 }
 
@@ -797,6 +777,42 @@ private struct OneMoreResultView: View {
                 .padding(.bottom, 32)
             }
         }
+    }
+}
+
+// MARK: - Stadium Background
+
+/// Subtle night-stadium atmosphere: the moody floodlit top sits faintly behind the content and
+/// fades to solid page-black before the bright pitch shows, so text/cards stay readable.
+struct StadiumBackground: View {
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                BKTheme.background
+                // Confine the photo to the upper ~66% so you still glimpse the pitch, then fade it
+                // fully into the page colour — leaving the cards section on clean black.
+                GameModeBundleImage(name: "stadium")
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height * 0.88, alignment: .top)
+                    .clipped()
+                    .grayscale(0.7)
+                    .blur(radius: 3)
+                    .opacity(0.15)
+                    .overlay(
+                        LinearGradient(
+                            stops: [
+                                .init(color: BKTheme.background.opacity(0.0), location: 0.0),
+                                .init(color: BKTheme.background.opacity(0.0), location: 0.30),
+                                .init(color: BKTheme.background.opacity(0.75), location: 0.60),
+                                .init(color: BKTheme.background, location: 0.78),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+        }
+        .ignoresSafeArea()
     }
 }
 
