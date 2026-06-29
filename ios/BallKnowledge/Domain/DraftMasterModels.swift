@@ -39,6 +39,10 @@ struct BattlePlayer: Identifiable, Equatable {
 struct BattlePick: Equatable {
     let club: BattleClub
     let player: BattlePlayer
+    /// False when the chosen player never actually played for `club` — scores 0 and shows red.
+    let correct: Bool
+    /// What this pick contributes to the total (0 for a wrong pick).
+    var score: Int { correct ? player.statValue : 0 }
 }
 
 /// The mathematically optimal pick for a slot (best club→slot assignment + best player), revealed
@@ -86,7 +90,12 @@ struct BattleGameState: Equatable {
     var usedPlayerIds: Set<String> { Set(picks.values.map(\.player.id)) }
     func club(forSlot slotId: String) -> BattleClub? { assignments[slotId] }
     func pick(forSlot slotId: String) -> BattlePick? { picks[slotId] }
-    var yourTotal: Int { picks.values.reduce(0) { $0 + $1.player.statValue } }
+    /// A wrong pick is final: the slot is locked at 0 and its club can't be reused.
+    func isLocked(_ slotId: String) -> Bool {
+        guard let p = picks[slotId] else { return false }
+        return !p.correct
+    }
+    var yourTotal: Int { picks.values.reduce(0) { $0 + $1.score } }
     var filledCount: Int { picks.count }
     var isComplete: Bool { picks.count >= challenge.slots.count }
 }

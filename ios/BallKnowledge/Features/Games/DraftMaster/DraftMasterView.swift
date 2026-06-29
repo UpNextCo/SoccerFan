@@ -14,6 +14,8 @@ final class DraftMasterViewModel {
     var showResult = false
     var showShare = false
     var confettiBurstToken = 0
+    var shakeToken = 0
+    var wrongMessage: String?
 
     private let practice: Bool
     private let dailyDate: String?
@@ -63,7 +65,11 @@ final class DraftMasterViewModel {
     }
 
     func assignClub(_ club: BattleClub, toSlot slotId: String) {
-        // A club can only sit on one slot: pull it off any other slot first.
+        // Locked slots are final — can't drop onto them, and a club burned on a locked slot
+        // can't be moved/reused elsewhere.
+        if state.isLocked(slotId) { return }
+        if state.assignments.contains(where: { $0.value.name == club.name && state.isLocked($0.key) }) { return }
+        // A club can only sit on one slot: pull it off any other (unlocked) slot first.
         for (sid, c) in state.assignments where c.name == club.name && sid != slotId {
             state.assignments[sid] = nil
             state.picks[sid] = nil
@@ -76,6 +82,7 @@ final class DraftMasterViewModel {
     // MARK: Slot / search
 
     func openSlot(_ slot: BattleSlot) {
+        if state.isLocked(slot.id) { return } // wrong pick is final
         activeSlot = slot
         searchQuery = ""
         results = []
@@ -126,10 +133,23 @@ final class DraftMasterViewModel {
             return
         }
         let player = BattlePlayer(id: dto.id, name: dto.name, statValue: dto.statValue, headshotUrl: dto.headshotUrl)
-        state.picks[slot.id] = BattlePick(club: club, player: player)
+        let correct = dto.playedForClub ?? true
+        state.picks[slot.id] = BattlePick(club: club, player: player, correct: correct)
         selectionError = nil
-        HapticManager.success()
         closeSlot()
+        if correct {
+            HapticManager.success()
+        } else {
+            // Wrong club: place it red/0, shake the pitch, and surface the reason.
+            HapticManager.error()
+            shakeToken += 1
+            let msg = "\(dto.name) never played for \(club.name)"
+            wrongMessage = msg
+            Task {
+                try? await Task.sleep(for: .seconds(2.6))
+                if wrongMessage == msg { wrongMessage = nil }
+            }
+        }
     }
 
     // MARK: Submit
@@ -251,6 +271,17 @@ struct DraftMasterView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 8)
+            .modifier(ShakeEffect(animatableData: CGFloat(viewModel.shakeToken)))
+            .animation(.linear(duration: 0.4), value: viewModel.shakeToken)
+
+            if let msg = viewModel.wrongMessage {
+                Text(msg.uppercased())
+                    .font(BKFont.caption(11)).tracking(0.5)
+                    .foregroundStyle(BKTheme.wrong)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16).padding(.bottom, 4)
+                    .transition(.opacity)
+            }
 
             BattleSubmitBar(
                 ready: viewModel.state.isComplete,
@@ -259,6 +290,15 @@ struct DraftMasterView: View {
                 onSubmit: viewModel.submit
             )
         }
+        .animation(.easeInOut(duration: 0.2), value: viewModel.wrongMessage)
+    }
+}
+
+/// Horizontal shake for a wrong pick (matches the other games' wrong-answer feel).
+private struct ShakeEffect: GeometryEffect {
+    var animatableData: CGFloat
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        ProjectionTransform(CGAffineTransform(translationX: 7 * sin(animatableData * .pi * 4), y: 0))
     }
 }
 
@@ -476,6 +516,12 @@ private struct BattlePitchSlot: View {
     /// Soft whitish-green for empty slot rings + the plus.
     private static let ringColor = Color(red: 0.80, green: 0.93, blue: 0.84).opacity(0.85)
 
+    private var strokeColor: Color {
+        if targeted { return BKTheme.accent }
+        if let pick { return pick.correct ? BKTheme.accent : BKTheme.wrong }
+        return Self.ringColor
+    }
+
     var body: some View {
         VStack(spacing: 3) {
             ZStack {
@@ -484,15 +530,14 @@ private struct BattlePitchSlot: View {
                     .fill(pick != nil ? Color.black.opacity(0.30) : Color(white: 0.14).opacity(0.72))
                     .frame(width: 46, height: 46)
                     .overlay(
-                        Circle().stroke(
-                            targeted ? BKTheme.accent : (pick != nil ? BKTheme.accent : Self.ringColor),
-                            lineWidth: targeted ? 2.5 : 1.1
-                        )
+                        Circle().stroke(strokeColor, lineWidth: targeted ? 2.5 : 1.1)
                     )
                 if let pick {
                     PlayerAvatar(urlString: pick.player.headshotUrl, size: 42) {
                         ClubCrest(club: pick.club, league: league, size: 32)
                     }
+                    .grayscale(pick.correct ? 0 : 0.85)
+                    .opacity(pick.correct ? 1 : 0.55)
                 } else if let club {
                     ClubCrest(club: club, league: league, size: 34)
                 } else {
@@ -505,11 +550,11 @@ private struct BattlePitchSlot: View {
             if let pick {
                 Text(shortName(pick.player.name))
                     .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(pick.correct ? .white : BKTheme.wrong)
                     .lineLimit(1).frame(maxWidth: 70)
-                Text("\(pick.player.statValue)")
+                Text(pick.correct ? "\(pick.player.statValue)" : "0")
                     .font(.system(size: 9, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(pick.correct ? .white : BKTheme.wrong)
             } else if club != nil {
                 Text("TAP TO PICK")
                     .font(.system(size: 7, weight: .bold, design: .rounded))
@@ -908,7 +953,7 @@ private struct BattleResultView: View {
     private var yourRows: [XIRow] {
         challenge.slots.compactMap { slot in
             guard let pick = state.pick(forSlot: slot.id) else { return nil }
-            return XIRow(id: slot.id, label: slot.label, club: pick.club, name: pick.player.name, stat: pick.player.statValue)
+            return XIRow(id: slot.id, label: slot.label, club: pick.club, name: pick.player.name, stat: pick.score)
         }
     }
 

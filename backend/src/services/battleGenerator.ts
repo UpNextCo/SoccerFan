@@ -260,12 +260,15 @@ export interface BattlePlayerResult {
   name: string;
   statValue: number;
   nationality: string | null;
+  /** Did this player actually play for the slot's club (in the category's league)? */
+  playedForClub: boolean;
   headshotUrl?: string;
 }
 
 /**
- * Players who played for `club` at the given fine `position`, name-matched, with their category
- * total. Powers the in-slot search; the top result is what the optimal lineup uses for that cell.
+ * Players at the given fine `position` who played in the category's league (NOT just the slot's
+ * club) — so the player has to actually know who turned out for that club. `playedForClub` lets the
+ * client mark a wrong pick (didn't play for `club`) as a red, 0-scoring choice.
  */
 export async function battlePlayers(
   categoryId: string,
@@ -283,23 +286,28 @@ export async function battlePlayers(
     : sql``;
   const rows = (await db.execute(sql`
     SELECT p.id, p.name, p.api_football_id, p.nationality,
-      COALESCE(SUM(s.${metric}) FILTER (WHERE ${leagueScope(cat)}), 0)::int AS stat
+      COALESCE(SUM(s.${metric}) FILTER (WHERE ${leagueScope(cat)}), 0)::int AS stat,
+      EXISTS (
+        SELECT 1 FROM player_stats m
+        WHERE m.player_id = p.id AND m.team_name = ${club} AND m.appearances > 0 AND ${membershipScope(cat)}
+      ) AS played_for_club
     FROM players p JOIN player_stats s ON s.player_id = p.id
     WHERE p.sub_position = ${position}
       AND EXISTS (
-        SELECT 1 FROM player_stats m
-        WHERE m.player_id = p.id AND m.team_name = ${club} AND m.appearances > 0 AND ${membershipScope(cat)}
+        SELECT 1 FROM player_stats l
+        WHERE l.player_id = p.id AND l.appearances > 0 AND ${cat.leagueId != null ? sql`l.league_id = ${cat.leagueId}` : sql`l.league_id <> 1`}
       )
       ${nameFilter}
     GROUP BY p.id, p.name, p.api_football_id, p.nationality
     ORDER BY stat DESC
-    LIMIT 20
-  `)) as unknown as Array<{ id: string; name: string; api_football_id: number | null; nationality: string | null; stat: number }>;
+    LIMIT 25
+  `)) as unknown as Array<{ id: string; name: string; api_football_id: number | null; nationality: string | null; stat: number; played_for_club: boolean }>;
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     statValue: r.stat,
     nationality: r.nationality,
+    playedForClub: r.played_for_club,
     headshotUrl: playerHeadshotUrl(r.api_football_id) ?? undefined,
   }));
 }

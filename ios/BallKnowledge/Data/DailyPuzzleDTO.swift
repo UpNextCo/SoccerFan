@@ -361,6 +361,7 @@ struct BattlePlayerDTO: Codable, Equatable, Identifiable {
     let name: String
     let statValue: Int
     let nationality: String?
+    let playedForClub: Bool?
     let headshotUrl: String?
 }
 
