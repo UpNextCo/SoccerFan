@@ -25,8 +25,8 @@ enum BattleSeed {
         ].joined(separator: "\n")
     }
 
+    // Goals category -> all-outfield XI (10 slots, no GK).
     private static let standardSlots: [(id: String, position: String)] = [
-        ("gk", "Goalkeeper"),
         ("lb", "Left-Back"), ("cb1", "Centre-Back"), ("cb2", "Centre-Back"), ("rb", "Right-Back"),
         ("dm", "Defensive Midfield"), ("cm", "Central Midfield"), ("am", "Attacking Midfield"),
         ("lw", "Left Winger"), ("cf", "Centre-Forward"), ("rw", "Right Winger"),
@@ -34,20 +34,23 @@ enum BattleSeed {
 
     private static let offlineClubs = [
         "Arsenal", "Chelsea", "Liverpool", "Manchester United", "Manchester City", "Tottenham",
-        "Everton", "Aston Villa", "Newcastle", "West Ham", "Leicester",
+        "Everton", "Aston Villa", "Newcastle", "West Ham",
     ]
 
     private static func challenge(id: String, date: String) -> BattleChallenge {
-        BattleChallenge(
+        // Goals category -> all-outfield XI (no GK), mirroring the backend.
+        let slots = standardSlots.enumerated().map { index, s in
+            BattleFormations.slot(id: s.id, position: s.position, index: index)
+        }
+        return BattleChallenge(
             id: id,
             date: date,
             category: BattleCategory(id: "pl_goals", title: "Premier League Goals", noun: "goals"),
-            formationId: "4-3-3",
-            slots: standardSlots.enumerated().map { index, s in
-                BattleFormations.slot(id: s.id, position: s.position, index: index)
-            },
+            formationId: "4-3-3-of",
+            slots: slots,
             clubs: offlineClubs.map { BattleClub(name: $0, teamId: nil, logoUrl: nil) },
-            optimalScore: 700
+            optimalScore: 700,
+            optimalLineup: []
         )
     }
 

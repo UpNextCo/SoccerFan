@@ -768,8 +768,13 @@ private struct BattleResultView: View {
                     }
 
                     if revealStep >= 3 {
-                        xiBreakdown
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        VStack(spacing: 14) {
+                            xiCard(title: "YOUR XI", total: result.yourTotal, rows: yourRows)
+                            if !optimalRows.isEmpty {
+                                xiCard(title: "PERFECT XI", total: result.optimalScore, rows: optimalRows)
+                            }
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
                     VStack(spacing: 10) {
@@ -812,24 +817,50 @@ private struct BattleResultView: View {
         }
     }
 
-    private var orderedSlots: [BattleSlot] { challenge.slots }
+    // A row to render: position label, club crest, player name, stat.
+    private struct XIRow: Identifiable {
+        let id: String
+        let label: String
+        let club: BattleClub
+        let name: String
+        let stat: Int
+    }
 
-    private var xiBreakdown: some View {
+    private var yourRows: [XIRow] {
+        challenge.slots.compactMap { slot in
+            guard let pick = state.pick(forSlot: slot.id) else { return nil }
+            return XIRow(id: slot.id, label: slot.label, club: pick.club, name: pick.player.name, stat: pick.player.statValue)
+        }
+    }
+
+    private var optimalRows: [XIRow] {
+        challenge.optimalLineup.map { o in
+            let label = challenge.slots.first { $0.id == o.slotId }?.label ?? BattleFormations.shortLabel(o.position)
+            let club = challenge.clubs.first { $0.name == o.club } ?? BattleClub(name: o.club, teamId: nil, logoUrl: nil)
+            return XIRow(id: o.slotId, label: label, club: club, name: o.playerName, stat: o.statValue)
+        }
+    }
+
+    private func xiCard(title: String, total: Int, rows: [XIRow]) -> some View {
         VStack(spacing: 8) {
-            ForEach(orderedSlots) { slot in
-                if let pick = state.pick(forSlot: slot.id) {
-                    HStack(spacing: 10) {
-                        Text(slot.label)
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundStyle(BKTheme.textMuted).frame(width: 30, alignment: .leading)
-                        ClubCrest(club: pick.club, league: challenge.category.title, size: 20)
-                        Text(pick.player.name)
-                            .font(BKFont.body(13)).foregroundStyle(BKTheme.textPrimary).lineLimit(1)
-                        Spacer(minLength: 0)
-                        Text("\(pick.player.statValue)")
-                            .font(.system(size: 13, weight: .heavy, design: .rounded))
-                            .foregroundStyle(BKTheme.accent)
-                    }
+            HStack {
+                Text(title).font(BKFont.caption(10)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                Spacer()
+                Text("\(total) \(challenge.category.noun)")
+                    .font(.system(size: 13, weight: .heavy, design: .rounded)).foregroundStyle(BKTheme.accent)
+            }
+            ForEach(rows) { row in
+                HStack(spacing: 10) {
+                    Text(row.label)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(BKTheme.textMuted).frame(width: 30, alignment: .leading)
+                    ClubCrest(club: row.club, league: challenge.category.title, size: 20)
+                    Text(row.name)
+                        .font(BKFont.body(13)).foregroundStyle(BKTheme.textPrimary).lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text("\(row.stat)")
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .foregroundStyle(BKTheme.accent)
                 }
             }
         }

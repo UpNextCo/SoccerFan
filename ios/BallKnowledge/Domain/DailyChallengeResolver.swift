@@ -34,7 +34,10 @@ enum DailyChallengeResolver {
                 BattleFormations.slot(id: s.id, position: s.position, index: index)
             },
             clubs: dto.clubs.map { BattleClub(name: $0.name, teamId: $0.teamId, logoUrl: $0.logoUrl) },
-            optimalScore: dto.optimalScore
+            optimalScore: dto.optimalScore,
+            optimalLineup: (dto.optimalLineup ?? []).map {
+                BattleOptimalPick(slotId: $0.slotId, position: $0.position, club: $0.club, playerName: $0.playerName, statValue: $0.statValue)
+            }
         )
     }
 

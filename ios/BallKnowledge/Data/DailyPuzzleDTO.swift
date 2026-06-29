@@ -335,6 +335,14 @@ struct BattleClubDTO: Codable, Equatable {
     let logoUrl: String?
 }
 
+struct BattleOptimalSlotDTO: Codable, Equatable {
+    let slotId: String
+    let position: String
+    let club: String
+    let playerName: String
+    let statValue: Int
+}
+
 struct DraftMasterPuzzleDTO: Codable, Equatable {
     let modeId: String
     let puzzleId: String
@@ -344,6 +352,7 @@ struct DraftMasterPuzzleDTO: Codable, Equatable {
     let slots: [BattleSlotDTO]
     let clubs: [BattleClubDTO]
     let optimalScore: Int
+    let optimalLineup: [BattleOptimalSlotDTO]?
 }
 
 /// One result from the Battle player search (`POST /daily/battle/players`).

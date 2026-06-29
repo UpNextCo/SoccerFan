@@ -184,7 +184,7 @@ async function ensureDraftMasterPuzzle(date: string): Promise<void> {
 
   try {
     const puzzle = await generateBattlePuzzle(date);
-    if (!puzzle || puzzle.clubs.length < 11) {
+    if (!puzzle || puzzle.clubs.length < 10) {
       console.warn(`Skipped draft_master for ${date}: no viable battle puzzle`);
       return;
     }
@@ -288,10 +288,11 @@ async function migrateStaleDraftMaster(date: string): Promise<void> {
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')))
     .limit(1);
-  const puzzle = rows[0]?.puzzleJson as { clubs?: unknown; optimalScore?: unknown } | undefined;
+  const puzzle = rows[0]?.puzzleJson as { clubs?: unknown; optimalScore?: unknown; optimalLineup?: unknown } | undefined;
   if (!puzzle) return;
-  // New Battle format has `clubs` + `optimalScore`; drop anything older (scenario/budget or prompts).
-  if (!Array.isArray(puzzle.clubs) || typeof puzzle.optimalScore !== 'number') {
+  // New Battle format has `clubs` + `optimalScore` + `optimalLineup`; drop anything older so it
+  // regenerates (scenario/budget puzzles, or pre-lineup/pre-GK-aware puzzles).
+  if (!Array.isArray(puzzle.clubs) || typeof puzzle.optimalScore !== 'number' || !Array.isArray(puzzle.optimalLineup)) {
     await db
       .delete(dailyPuzzles)
       .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')));

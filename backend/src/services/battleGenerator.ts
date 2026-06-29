@@ -40,11 +40,16 @@ const LEAGUE_NAME: Record<number, string> = {
 };
 const BIG5 = [39, 140, 135, 78, 61];
 
-// Fine-position 4-3-3 using only the well-covered positions (every big club fills these).
+// Goalkeepers contribute meaningfully to appearances, but ~0 to goals — so we only include the GK
+// slot for appearances categories and play an all-outfield XI for goals categories.
+function includeGk(cat: Category): boolean {
+  return cat.metric === 'appearances';
+}
+
+// Fine-position formations using only the well-covered positions (every big club fills these).
 interface Slot { id: string; position: string }
-const FORMATION_ID = '4-3-3';
-const SLOTS: Slot[] = [
-  { id: 'gk', position: 'Goalkeeper' },
+const GK_SLOT: Slot = { id: 'gk', position: 'Goalkeeper' };
+const OUTFIELD_SLOTS: Slot[] = [
   { id: 'lb', position: 'Left-Back' },
   { id: 'cb1', position: 'Centre-Back' },
   { id: 'cb2', position: 'Centre-Back' },
@@ -56,7 +61,20 @@ const SLOTS: Slot[] = [
   { id: 'cf', position: 'Centre-Forward' },
   { id: 'rw', position: 'Right Winger' },
 ];
-const CLUB_COUNT = 11;
+
+function formationFor(cat: Category): { id: string; slots: Slot[] } {
+  return includeGk(cat)
+    ? { id: '4-3-3', slots: [GK_SLOT, ...OUTFIELD_SLOTS] }
+    : { id: '4-3-3-of', slots: [...OUTFIELD_SLOTS] };
+}
+
+export interface BattleOptimalPick {
+  slotId: string;
+  position: string;
+  club: string;
+  playerName: string;
+  statValue: number;
+}
 
 export interface BattlePuzzleJson {
   modeId: 'draft_master';
@@ -67,6 +85,7 @@ export interface BattlePuzzleJson {
   slots: Array<{ id: string; position: string }>;
   clubs: Array<{ name: string; teamId: number | null; logoUrl: string | null }>;
   optimalScore: number;
+  optimalLineup: BattleOptimalPick[];
 }
 
 function hashString(input: string): number {
@@ -114,39 +133,44 @@ async function candidateClubs(cat: Category): Promise<string[]> {
   return rows.map((r) => r.club);
 }
 
-/** Max category total per (club, fine-position) for the chosen clubs — the optimal cell values. */
-async function bestCells(cat: Category, clubs: string[]): Promise<Map<string, number>> {
-  const positions = [...new Set(SLOTS.map((s) => s.position))];
+interface Cell { stat: number; name: string }
+
+/** Best player (name + category total) per (club, fine-position) — the optimal cell values. */
+async function bestCells(cat: Category, clubs: string[], slots: Slot[]): Promise<Map<string, Cell>> {
+  const positions = [...new Set(slots.map((s) => s.position))];
   const clubList = sql.join(clubs.map((c) => sql`${c}`), sql`, `);
   const posList = sql.join(positions.map((p) => sql`${p}`), sql`, `);
   const metric = sql.raw(cat.metric);
   const rows = (await db.execute(sql`
     WITH pstat AS (
-      SELECT p.id, p.sub_position AS pos,
+      SELECT p.id, p.name, p.sub_position AS pos,
         COALESCE(SUM(s.${metric}) FILTER (WHERE ${leagueScope(cat)}), 0)::int AS stat
       FROM players p JOIN player_stats s ON s.player_id = p.id
       WHERE p.sub_position IN (${posList})
-      GROUP BY p.id, p.sub_position
+      GROUP BY p.id, p.name, p.sub_position
     ),
     mem AS (
       SELECT DISTINCT m.player_id, m.team_name
       FROM player_stats m
       WHERE m.team_name IN (${clubList}) AND m.appearances > 0 AND ${membershipScope(cat)}
+    ),
+    joined AS (
+      SELECT mem.team_name AS club, pstat.pos AS pos, pstat.name AS name, pstat.stat AS stat
+      FROM mem JOIN pstat ON pstat.id = mem.player_id
     )
-    SELECT mem.team_name AS club, pstat.pos AS pos, MAX(pstat.stat)::int AS best
-    FROM mem JOIN pstat ON pstat.id = mem.player_id
-    WHERE pstat.stat > 0
-    GROUP BY mem.team_name, pstat.pos
-  `)) as unknown as Array<{ club: string; pos: string; best: number }>;
-  const m = new Map<string, number>();
-  for (const r of rows) m.set(`${r.club}|${r.pos}`, r.best);
+    SELECT DISTINCT ON (club, pos) club, pos, name, stat
+    FROM joined
+    ORDER BY club, pos, stat DESC, name
+  `)) as unknown as Array<{ club: string; pos: string; name: string; stat: number }>;
+  const m = new Map<string, Cell>();
+  for (const r of rows) m.set(`${r.club}|${r.pos}`, { stat: r.stat, name: r.name });
   return m;
 }
 
-/** Max-weight assignment (Hungarian on negated weights). Square n x n. Returns the optimal total. */
-function maxWeightAssignment(weight: number[][]): number {
+/** Max-weight assignment (Hungarian on negated weights). Square n x n. assign[club] = slot. */
+function maxWeightAssignment(weight: number[][]): { total: number; assign: number[] } {
   const n = weight.length;
-  if (n === 0) return 0;
+  if (n === 0) return { total: 0, assign: [] };
   let maxW = 0;
   for (const row of weight) for (const w of row) maxW = Math.max(maxW, w);
   const cost = weight.map((row) => row.map((w) => maxW - w)); // minimise -> maximises weight
@@ -183,23 +207,35 @@ function maxWeightAssignment(weight: number[][]): number {
   for (let j = 1; j <= n; j += 1) assign[p[j] - 1] = j - 1;
   let total = 0;
   for (let i = 0; i < n; i += 1) total += weight[i]![assign[i]!]!;
-  return total;
+  return { total, assign };
 }
 
 export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJson | null> {
   const seed = hashString(`${date}:battle`);
   const category = CATEGORIES[dayNumber(date) % CATEGORIES.length]!;
+  const formation = formationFor(category);
+  const slots = formation.slots;
+  const clubCount = slots.length;
 
   const candidates = await candidateClubs(category);
-  if (candidates.length < CLUB_COUNT) return null;
-  // Take a good pool then a seeded sample of 11, so it varies day to day but stays recognisable.
-  const clubs = seededShuffle(candidates, seed).slice(0, CLUB_COUNT);
+  if (candidates.length < clubCount) return null;
+  // Take a good pool then a seeded sample, so it varies day to day but stays recognisable.
+  const clubs = seededShuffle(candidates, seed).slice(0, clubCount);
 
-  const cells = await bestCells(category, clubs);
+  const cells = await bestCells(category, clubs, slots);
   // weight[club][slot] = best player total for that club at that slot's fine position (0 if none).
-  const weight = clubs.map((club) => SLOTS.map((slot) => cells.get(`${club}|${slot.position}`) ?? 0));
-  const optimalScore = maxWeightAssignment(weight);
+  const weight = clubs.map((club) => slots.map((slot) => cells.get(`${club}|${slot.position}`)?.stat ?? 0));
+  const { total: optimalScore, assign } = maxWeightAssignment(weight);
   if (optimalScore <= 0) return null;
+
+  // assign[clubIdx] = slotIdx -> invert so we can read the optimal pick per slot.
+  const clubForSlot = new Array<number>(slots.length).fill(-1);
+  assign.forEach((slotIdx, clubIdx) => { if (slotIdx >= 0) clubForSlot[slotIdx] = clubIdx; });
+  const optimalLineup: BattleOptimalPick[] = slots.map((slot, si) => {
+    const club = clubs[clubForSlot[si]] ?? clubs[0]!;
+    const cell = cells.get(`${club}|${slot.position}`);
+    return { slotId: slot.id, position: slot.position, club, playerName: cell?.name ?? '—', statValue: cell?.stat ?? 0 };
+  });
 
   const clubsOut = await Promise.all(clubs.map(async (name) => {
     const logo = await lookupTeamLogo(name, category.leagueId != null ? LEAGUE_NAME[category.leagueId]! : '');
@@ -211,10 +247,11 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
     puzzleId: `${date}-draft_master`,
     date,
     category: { id: category.id, title: category.title, noun: category.noun },
-    formationId: FORMATION_ID,
-    slots: SLOTS.map((s) => ({ id: s.id, position: s.position })),
+    formationId: formation.id,
+    slots: slots.map((s) => ({ id: s.id, position: s.position })),
     clubs: clubsOut,
     optimalScore,
+    optimalLineup,
   };
 }
 

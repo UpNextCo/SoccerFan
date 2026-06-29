@@ -41,6 +41,17 @@ struct BattlePick: Equatable {
     let player: BattlePlayer
 }
 
+/// The mathematically optimal pick for a slot (best club→slot assignment + best player), revealed
+/// on the result screen.
+struct BattleOptimalPick: Identifiable, Equatable {
+    let slotId: String
+    let position: String
+    let club: String
+    let playerName: String
+    let statValue: Int
+    var id: String { slotId }
+}
+
 struct BattleChallenge: Equatable {
     let id: String
     let date: String
@@ -49,6 +60,7 @@ struct BattleChallenge: Equatable {
     let slots: [BattleSlot]
     let clubs: [BattleClub]
     let optimalScore: Int
+    let optimalLineup: [BattleOptimalPick]
 }
 
 // MARK: - Game state
