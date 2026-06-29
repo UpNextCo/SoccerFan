@@ -153,7 +153,7 @@ struct OneMoreView: View {
                             )
 
                             if !viewModel.state.picks.isEmpty {
-                                VStack(spacing: 24) {
+                                VStack(spacing: 34) {
                                     OneMorePickHistory(
                                         picks: viewModel.state.picks,
                                         statLabel: viewModel.state.prompt.statNoun
@@ -442,7 +442,7 @@ private struct OneMoreScoreHero: View {
     @State private var pulseScale: CGFloat = 1
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 34) {
             HStack {
                 Text("YOUR RUN")
                     .font(BKFont.caption(11))
@@ -552,7 +552,7 @@ private struct OneMoreCashOutButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Ph.coins.fill
+                Ph.coins.regular
                     .color(BKTheme.textPrimary)
                     .frame(width: 18, height: 18)
                 Text("CASH OUT")
