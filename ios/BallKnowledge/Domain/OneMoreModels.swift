@@ -41,9 +41,9 @@ struct OneMorePrompt: Equatable {
         "Players with \(minimum)+ \(metricTitle)"
     }
 
-    /// Big card headline, e.g. "WHO HAS 50+ PREMIER LEAGUE GOALS?"
+    /// Big card headline, e.g. "Who has 50+ Premier League goals?"
     var question: String {
-        "WHO HAS \(minimum)+ \(metricTitle.uppercased())?"
+        "Who has \(minimum)+ \(metricTitle)?"
     }
 
     var ruleLine: String {

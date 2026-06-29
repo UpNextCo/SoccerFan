@@ -153,24 +153,22 @@ struct OneMoreView: View {
                             )
 
                             if !viewModel.state.picks.isEmpty {
-                                OneMorePickHistory(
-                                    picks: viewModel.state.picks,
-                                    statLabel: viewModel.state.prompt.statNoun
-                                )
+                                VStack(spacing: 24) {
+                                    OneMorePickHistory(
+                                        picks: viewModel.state.picks,
+                                        statLabel: viewModel.state.prompt.statNoun
+                                    )
+                                    if viewModel.canCashOut {
+                                        OneMoreCashOutButton { viewModel.cashOut() }
+                                            .transition(.opacity)
+                                    }
+                                }
+                                .padding(.top, 14)
                             }
                         }
                         .padding(.horizontal, 16)
-                        .padding(.top, 8)
+                        .padding(.top, 12)
                         .padding(.bottom, 16)
-                    }
-
-                    if viewModel.canCashOut {
-                        OneMoreCashOutButton(score: viewModel.state.currentScore) {
-                            viewModel.cashOut()
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
                     if let round = viewModel.state.currentRound, viewModel.state.isActive {
@@ -258,18 +256,20 @@ private struct OneMorePromptCard: View {
     let prompt: OneMorePrompt
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(prompt.question)
-                .font(BKFont.headline(18))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundStyle(BKTheme.textPrimary)
-                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
             Text(prompt.ruleLine.uppercased())
                 .font(BKFont.caption(10))
                 .tracking(0.5)
                 .foregroundStyle(BKTheme.textMuted)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity)
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
@@ -390,33 +390,33 @@ private struct OneMoreChoiceCard: View {
             .padding(.horizontal, 10)
             .background(cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(borderColor, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .disabled(revealed)
+    }
+
+    /// A slight neutral edge that only goes green/red once revealed (win/loss feedback).
+    private var borderColor: Color {
+        guard revealed else { return Color.white.opacity(0.10) }
+        if qualifies { return BKTheme.accent.opacity(0.7) }
+        return isChosen ? BKTheme.wrong.opacity(0.7) : Color.white.opacity(0.10)
     }
 
     /// FIFA/EA-style panel: dark fill that fades into the page, a faint accent slash, and a subtle
     /// diagonal line texture — no borders.
     @ViewBuilder private var cardBackground: some View {
         ZStack {
-            // Base darkens toward the bottom of the card.
-            LinearGradient(
-                colors: [BKTheme.card, BKTheme.background],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            // Lightness radiating around the player image up top, fading out.
+            // The card's own colour radiates around the player image and fades to the page colour
+            // toward the edges and bottom.
             RadialGradient(
-                colors: [Color.white.opacity(0.08), .clear],
-                center: UnitPoint(x: 0.5, y: 0.16),
-                startRadius: 4,
-                endRadius: 150
-            )
-            // Faint accent slash.
-            LinearGradient(
-                colors: [BKTheme.accent.opacity(0.10), .clear],
-                startPoint: .bottomLeading,
-                endPoint: .topTrailing
+                colors: [BKTheme.card, BKTheme.background],
+                center: UnitPoint(x: 0.5, y: 0.18),
+                startRadius: 6,
+                endRadius: 175
             )
             // Subtle diagonal texture (toned down).
             DiagonalLineTexture(color: .white.opacity(0.03), spacing: 9)
@@ -441,22 +441,22 @@ private struct OneMoreScoreHero: View {
 
     @State private var pulseScale: CGFloat = 1
 
-    private var dangerLevel: Double {
-        min(1, Double(streak) / 10)
-    }
-
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 24) {
             HStack {
+                Text("YOUR RUN")
+                    .font(BKFont.caption(11))
+                    .tracking(0.8)
+                    .foregroundStyle(BKTheme.textMuted)
+                Spacer()
                 HStack(spacing: 6) {
                     Ph.lightning.fill
                         .color(BKTheme.streak)
-                        .frame(width: 16, height: 16)
+                        .frame(width: 14, height: 14)
                     Text("\(streak) STREAK")
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textPrimary)
                 }
-                Spacer()
                 if isActive, streak > 0 {
                     Text("+\(nextPoints) NEXT")
                         .font(BKFont.caption(10))
@@ -471,28 +471,12 @@ private struct OneMoreScoreHero: View {
             Text("\(currentScore)")
                 .font(BKFont.title(52))
                 .foregroundStyle(streak > 0 ? BKTheme.accent : BKTheme.textPrimary)
+                .frame(maxWidth: .infinity)
                 .scaleEffect(pulseScale)
                 .contentTransition(.numericText())
                 .animation(.spring(response: 0.32, dampingFraction: 0.55), value: currentScore)
         }
-        .padding(18)
         .frame(maxWidth: .infinity)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            BKTheme.accent.opacity(0.10 + dangerLevel * 0.45),
-                            BKTheme.wrong.opacity(dangerLevel * 0.35),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1.5
-                )
-        }
         .onChange(of: pulseToken) { _, _ in
             pulseScale = 1.12
             withAnimation(.spring(response: 0.28, dampingFraction: 0.45)) {
@@ -515,11 +499,6 @@ private struct OneMorePickHistory: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("YOUR RUN")
-                .font(BKFont.caption(11))
-                .tracking(0.8)
-                .foregroundStyle(BKTheme.textMuted)
-
             HStack(alignment: .top, spacing: 0) {
                 ForEach(recent, id: \.pick.id) { item in
                     VStack(spacing: 5) {
@@ -568,31 +547,22 @@ private struct OneMorePickHistory: View {
 // MARK: - Cash Out
 
 private struct OneMoreCashOutButton: View {
-    let score: Int
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: "banknote.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(BKTheme.background)
-                    .frame(width: 20, height: 16)
-                Text("CASH OUT · \(score) PTS")
+                Ph.coins.fill
+                    .color(BKTheme.textPrimary)
+                    .frame(width: 18, height: 18)
+                Text("CASH OUT")
                     .font(BKFont.headline(15))
-                    .foregroundStyle(BKTheme.background)
+                    .foregroundStyle(BKTheme.textPrimary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(
-                LinearGradient(
-                    colors: [BKTheme.accent, BKTheme.accentMuted],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .clipShape(Capsule())
+            .padding(.vertical, 15)
+            .background(BKTheme.cardElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
     }

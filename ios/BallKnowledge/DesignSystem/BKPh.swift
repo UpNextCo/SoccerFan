@@ -11,6 +11,7 @@ public enum Ph: String {
     case trophy
     case bell
     case fire
+    case coins
     case checkCircle = "check-circle"
     case arrowRight = "arrow-right"
     case users
