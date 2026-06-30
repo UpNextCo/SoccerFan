@@ -157,6 +157,7 @@ struct FootballBingoPlayerDTO: Codable, Equatable {
     let premierLeagueApps: Int?
     let topLeagueGoals: Int?
     let topLeagueApps: Int?
+    let headshotUrl: String?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -172,6 +173,7 @@ struct FootballBingoPlayerDTO: Codable, Equatable {
         premierLeagueApps = try c.decodeIfPresent(Int.self, forKey: .premierLeagueApps)
         topLeagueGoals = try c.decodeIfPresent(Int.self, forKey: .topLeagueGoals)
         topLeagueApps = try c.decodeIfPresent(Int.self, forKey: .topLeagueApps)
+        headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
     }
 }
 

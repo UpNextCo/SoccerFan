@@ -42,7 +42,8 @@ enum FootballBingoSeed {
                 managers: p.managers,
                 premierLeagueApps: p.premierLeagueApps,
                 topLeagueGoals: p.topLeagueGoals,
-                topLeagueApps: p.topLeagueApps
+                topLeagueApps: p.topLeagueApps,
+                headshotUrl: p.headshotUrl
             )
         }
         return FootballBingoGame(

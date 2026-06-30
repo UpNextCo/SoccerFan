@@ -326,10 +326,32 @@ async function migrateStaleOneMore(date: string): Promise<void> {
   }
 }
 
+/**
+ * Drop a stored Football Bingo puzzle that predates player headshots (players have no headshotUrl
+ * field at all), so it regenerates with the field present.
+ */
+async function migrateStaleBingo(date: string): Promise<void> {
+  const rows = await db
+    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_bingo')))
+    .limit(1);
+  const puzzle = rows[0]?.puzzleJson as { players?: Array<Record<string, unknown>> } | undefined;
+  if (!puzzle || !Array.isArray(puzzle.players) || puzzle.players.length === 0) return;
+  const hasHeadshotKey = puzzle.players.some((p) => p && Object.prototype.hasOwnProperty.call(p, 'headshotUrl'));
+  if (!hasHeadshotKey) {
+    await db
+      .delete(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_bingo')));
+    console.log(`Removed stale football_bingo puzzle for ${date} (will regenerate)`);
+  }
+}
+
 async function ensureDailyPuzzles(date: string): Promise<void> {
   await migrateStaleBlindRank(date);
   await migrateStaleWorldCupXi(date);
   await migrateStaleDraftMaster(date);
+  await migrateStaleBingo(date);
   await migrateStaleOneMore(date);
 
   const rows = await db

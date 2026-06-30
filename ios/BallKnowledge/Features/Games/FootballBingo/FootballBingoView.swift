@@ -268,11 +268,26 @@ private struct FootballBingoPlayerPanel: View {
             }
 
             if let player {
-                Text(player.name.uppercased())
-                    .font(BKFont.title(22))
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
+                HStack(spacing: 12) {
+                    // Headshot only — the fallback stays neutral (initials, not a flag) so it never
+                    // leaks the player's nationality, which is one of the tiles to deduce.
+                    PlayerAvatar(urlString: player.headshotUrl, size: 52) {
+                        Circle()
+                            .fill(BKTheme.card)
+                            .frame(width: 52, height: 52)
+                            .overlay(
+                                Text(Self.initials(player.name))
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundStyle(BKTheme.textMuted)
+                            )
+                    }
+                    Text(player.name.uppercased())
+                        .font(BKFont.title(21))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
+                }
             } else {
                 Text("OUT OF PLAYERS")
                     .font(BKFont.headline())
@@ -281,8 +296,16 @@ private struct FootballBingoPlayerPanel: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(BKTheme.cardElevated.opacity(0.9))
+        .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+    }
+
+    private static func initials(_ name: String) -> String {
+        let parts = name.split(separator: " ")
+        let first = parts.first?.first.map(String.init) ?? ""
+        let last = parts.count > 1 ? (parts.last?.first.map(String.init) ?? "") : ""
+        return (first + last).uppercased()
     }
 }
 

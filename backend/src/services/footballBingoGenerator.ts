@@ -9,6 +9,7 @@
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import { playerHeadshotUrl } from '../constants/footballMedia.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
 const GRID = 16;
@@ -116,6 +117,7 @@ interface BingoPlayer {
   premierLeagueApps: number | null;
   topLeagueGoals: number | null;
   topLeagueApps: number | null;
+  headshotUrl: string | null;
 }
 
 export interface FootballBingoPuzzle {
@@ -212,11 +214,12 @@ async function loadPool(): Promise<BingoPlayer[]> {
     name: string;
     nationality: string;
     position: string;
+    api_football_id: number | null;
     pl_apps: number;
     top_goals: number;
     top_apps: number;
   }>(sql`
-    SELECT p.id, p.name, p.nationality, COALESCE(p.position, '') AS position,
+    SELECT p.id, p.name, p.nationality, COALESCE(p.position, '') AS position, p.api_football_id,
            COALESCE((SELECT SUM(appearances) FROM player_stats s WHERE s.player_id = p.id AND s.league_id = 39), 0)::int AS pl_apps,
            COALESCE((SELECT SUM(goals) FROM player_stats s WHERE s.player_id = p.id AND s.league_id IN (39, 140, 135, 78, 61)), 0)::int AS top_goals,
            COALESCE((SELECT SUM(appearances) FROM player_stats s WHERE s.player_id = p.id AND s.league_id IN (39, 140, 135, 78, 61)), 0)::int AS top_apps
@@ -266,6 +269,7 @@ async function loadPool(): Promise<BingoPlayer[]> {
       premierLeagueApps: b.pl_apps,
       topLeagueGoals: b.top_goals,
       topLeagueApps: b.top_apps,
+      headshotUrl: playerHeadshotUrl(b.api_football_id) ?? null,
     };
   });
 }

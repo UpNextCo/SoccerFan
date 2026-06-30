@@ -47,6 +47,7 @@ struct FootballBingoPlayer: Identifiable, Equatable {
     let premierLeagueApps: Int?
     let topLeagueGoals: Int?
     let topLeagueApps: Int?
+    var headshotUrl: String? = nil
 }
 
 struct FootballBingoGame: Equatable {
