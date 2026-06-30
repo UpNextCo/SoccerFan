@@ -43,6 +43,16 @@ export async function generateGuessWhoPuzzle(
   // awards, like Blind Rank) so it's a known name, and order by prestige so the pool is the ~500
   // most recognisable current players — good variety, never an obscure random.
   const PRESTIGE = sql`(p.market_value_tier * 10 + LEAST(COALESCE(fa.finals, 0), 6) * 4 + LEAST(COALESCE(aw.awards, 0), 4) * 6)`;
+  // Outside the Premier League we only allow the genuinely big/known clubs of each league, so the
+  // answer is never an obscure mid-table name (a random La Liga/Ligue 1 squad player is unguessable).
+  // The PL itself stays broad (most starters are recognisable), and a true mvt5 star is allowed anywhere.
+  const MARQUEE_NON_PL = [
+    'Real Madrid', 'Barcelona', 'Atletico Madrid', 'Sevilla', 'Athletic Club', 'Real Sociedad', 'Villarreal', 'Real Betis',
+    'Inter', 'Juventus', 'AC Milan', 'AS Roma', 'Napoli', 'Lazio', 'Atalanta', 'Fiorentina',
+    'Bayern München', 'Borussia Dortmund', 'Bayer Leverkusen', 'RB Leipzig',
+    'Paris Saint Germain', 'Monaco', 'Marseille', 'Lyon', 'Lille', 'Nice',
+  ];
+  const marqueeList = sql.join(MARQUEE_NON_PL.map((c) => sql`${c}`), sql`, `);
   const poolRows = (await db.execute(sql`
     WITH recent AS (
       SELECT player_id, SUM(appearances)::int AS a
@@ -51,7 +61,7 @@ export async function generateGuessWhoPuzzle(
     ),
     fa AS (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id),
     aw AS (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id)
-    SELECT p.id, ${PRESTIGE} AS prestige
+    SELECT p.id, p.current_league, ${PRESTIGE} AS prestige
     FROM players p
       JOIN recent r ON r.player_id = p.id AND r.a >= 10
       LEFT JOIN fa ON fa.player_id = p.id
@@ -59,12 +69,27 @@ export async function generateGuessWhoPuzzle(
     WHERE p.external_id IS NOT NULL
       AND p.current_league IN ('Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1')
       AND p.foot IS NOT NULL
-      AND ${PRESTIGE} >= 40
+      AND ${PRESTIGE} >= 32
+      AND (
+        p.current_league = 'Premier League'
+        OR p.market_value_tier >= 5
+        OR p.current_club IN (${marqueeList})
+      )
     ORDER BY prestige DESC, r.a DESC, p.id
-    LIMIT 500
-  `)) as unknown as Array<{ id: string }>;
+    LIMIT 600
+  `)) as unknown as Array<{ id: string; current_league: string }>;
 
-  let ids = poolRows.map((row) => row.id);
+  // ~2/3 of days the answer is a Premier League player, ~1/3 one of the other big-5 leagues.
+  const pl = poolRows.filter((r) => r.current_league === 'Premier League').map((r) => r.id);
+  const other = poolRows.filter((r) => r.current_league !== 'Premier League').map((r) => r.id);
+  // 2-in-3 cadence (every 3rd day is a non-PL league) — a clean ~2/3 PL split without the long
+  // same-league runs a string hash produces.
+  const wantPL = dayNumber(date) % 3 !== 0;
+  let ids = wantPL
+    ? (pl.length > 0 ? pl : other)
+    : (other.length > 0 ? other : pl);
+  if (ids.length === 0) ids = poolRows.map((row) => row.id);
+
   if (ids.length === 0) {
     // Safe fallback: the most valuable currently-active big-5 players — NEVER an obscure random.
     const fb = (await db.execute(sql`

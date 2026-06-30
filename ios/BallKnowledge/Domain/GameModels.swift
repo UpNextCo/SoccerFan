@@ -127,9 +127,17 @@ struct GuessWhoGameState: Equatable {
         return map
     }
 
-    /// Whether a hint can still help: there's an unrevealed attribute and room to use it without ending the game.
+    /// Real guesses made (hint rows don't count toward the "after guess 5" gate).
+    var actualGuessCount: Int {
+        guesses.filter { !$0.isHint }.count
+    }
+
+    /// Hints unlock after 5 guesses and only reveal club → nationality. Once both are known there's
+    /// nothing useful left, so the button hides.
     var canHint: Bool {
-        !isComplete && guessesRemaining > 1 && knownFields.count < GuessWhoField.allCases.count
+        guard !isComplete, actualGuessCount >= 5, guessesRemaining > 1 else { return false }
+        let knownSet = Set(knownFields)
+        return !(knownSet.contains("club") && knownSet.contains("nationality"))
     }
 
     var shareGrid: String {

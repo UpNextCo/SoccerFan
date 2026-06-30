@@ -638,17 +638,21 @@ export async function revealGuessWhoAnswer(date: string): Promise<{
 }
 
 /**
- * Reveal ONE attribute the player hasn't already nailed: pick a random field not in `known`,
- * return its (correct) value. The client renders it as a green "hint" row.
+ * Hint priority: reveal CLUB first, then NATIONALITY. If both are already known there's nothing
+ * useful left, so return an empty hint (the client hides the button). The client renders the
+ * returned field as a green "hint" row.
  */
 export async function guessWhoHint(
   date: string,
   known: string[]
 ): Promise<{ field: GuessWhoField; value: string | number } | { field: null; value: null }> {
   const answer = await loadGuessWhoAnswer(date);
-  const remaining = GUESS_WHO_FIELDS.filter((f) => !known.includes(f));
-  if (remaining.length === 0) return { field: null, value: null };
-  const field = remaining[Math.floor(Math.random() * remaining.length)]!;
+  const field: GuessWhoField | null = !known.includes('club')
+    ? 'club'
+    : !known.includes('nationality')
+      ? 'nationality'
+      : null;
+  if (field === null) return { field: null, value: null };
   return { field, value: guessWhoAttributes(answer)[field] };
 }
 
