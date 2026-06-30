@@ -269,16 +269,18 @@ struct BlindRankView: View {
     }
 
     private func rankingContent(viewModel: BlindRankViewModel) -> some View {
-        VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
+        VStack(spacing: 10) {
+            // Fill the space between the banner and the player card; the board sizes its rows to
+            // fit, so all slots stay on screen (no scrolling) and empty/filled rows are equal height.
+            GeometryReader { geo in
                 BlindRankSlotsBoard(
                     viewModel: viewModel,
                     currentPlayerId: viewModel.state.currentPlayer?.id,
-                    targetedSlot: $targetedSlot
+                    targetedSlot: $targetedSlot,
+                    availableHeight: geo.size.height
                 )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
             }
+            .padding(.horizontal, 16)
 
             if let player = viewModel.state.currentPlayer {
                 BlindRankCurrentPlayerCard(player: player)
@@ -497,27 +499,37 @@ private struct BlindRankSlotsBoard: View {
     let viewModel: BlindRankViewModel
     let currentPlayerId: String?
     @Binding var targetedSlot: Int?
+    var availableHeight: CGFloat
+
+    private let headerHeight: CGFloat = 22
+    private let rowSpacing: CGFloat = 6
 
     var body: some View {
-        VStack(spacing: 8) {
+        let n = viewModel.state.slotCount
+        let usable = availableHeight - headerHeight - rowSpacing * CGFloat(n + 1)
+        let rowHeight = min(58, max(30, usable / CGFloat(max(1, n))))
+
+        VStack(spacing: rowSpacing) {
             HStack {
                 Text("YOUR RANKING")
                     .font(BKFont.caption(11))
                     .tracking(0.8)
                     .foregroundStyle(BKTheme.textMuted)
                 Spacer()
-                Text("\(filledCount)/\(viewModel.state.slotCount)")
+                Text("\(filledCount)/\(n)")
                     .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.textMuted)
             }
+            .frame(height: headerHeight)
 
-            ForEach(0..<viewModel.state.slotCount, id: \.self) { index in
+            ForEach(0..<n, id: \.self) { index in
                 BlindRankSlotRow(
                     rank: index + 1,
                     player: viewModel.state.slots[index],
                     currentPlayerId: currentPlayerId,
                     isTargeted: targetedSlot == index,
                     canEdit: viewModel.state.phase == .ranking,
+                    height: rowHeight,
                     onDrop: { viewModel.assignCurrentPlayer(to: index) },
                     onTapEmpty: { viewModel.assignCurrentPlayer(to: index) },
                     onTargetChange: { targeted in
@@ -539,9 +551,12 @@ private struct BlindRankSlotRow: View {
     let currentPlayerId: String?
     let isTargeted: Bool
     let canEdit: Bool
+    var height: CGFloat = 48
     var onDrop: () -> Void
     var onTapEmpty: () -> Void
     var onTargetChange: (Bool) -> Void
+
+    private var avatarSize: CGFloat { min(34, height - 14) }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -551,16 +566,17 @@ private struct BlindRankSlotRow: View {
                 .frame(width: 28, alignment: .leading)
 
             if let player {
-                PlayerAvatar(urlString: player.headshotUrl, size: 30) {
+                PlayerAvatar(urlString: player.headshotUrl, size: avatarSize) {
                     Circle()
                         .fill(BKTheme.cardElevated)
-                        .frame(width: 30, height: 30)
-                        .overlay(Text(GuessWhoDisplay.nationalityFlag(player.nationality)).font(.system(size: 16)))
+                        .frame(width: avatarSize, height: avatarSize)
+                        .overlay(Text(GuessWhoDisplay.nationalityFlag(player.nationality)).font(.system(size: avatarSize * 0.55)))
                 }
                 Text(player.name)
                     .font(BKFont.headline(14))
                     .foregroundStyle(BKTheme.textPrimary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Spacer(minLength: 0)
                 Text(GuessWhoDisplay.nationalityFlag(player.nationality))
                     .font(.system(size: 20))
@@ -583,8 +599,7 @@ private struct BlindRankSlotRow: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
         .background(isTargeted && canEdit ? BKTheme.cardElevated : (player == nil ? BKTheme.card.opacity(0.55) : BKTheme.card))
         .overlay {
             RoundedRectangle(cornerRadius: 12)
@@ -609,6 +624,16 @@ private struct BlindRankSlotRow: View {
 private struct BlindRankCurrentPlayerCard: View {
     let player: BlindRankPlayer
 
+    /// Collapse a fine position into the broad role fans use.
+    static func coarsePosition(_ position: String) -> String {
+        let p = position.lowercased()
+        if p.contains("keep") || p == "gk" { return "Goalkeeper" }
+        if p.contains("back") || p.contains("defen") || p == "cb" { return "Defender" }
+        if p.contains("midfield") || p == "cm" || p == "dm" || p == "am" { return "Midfielder" }
+        if p.contains("forward") || p.contains("wing") || p.contains("strik") || p.contains("attack") || p == "cf" || p == "st" { return "Forward" }
+        return position
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             BlindRankDragHandle()
@@ -620,14 +645,19 @@ private struct BlindRankCurrentPlayerCard: View {
                     .overlay(Text(GuessWhoDisplay.nationalityFlag(player.nationality)).font(.system(size: 24)))
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(player.name)
                     .font(BKFont.headline(17))
                     .foregroundStyle(BKTheme.textPrimary)
                     .lineLimit(2)
-                Text("\(player.displayClubs) · \(player.position)")
+                Text(player.displayClubs)
                     .font(BKFont.caption(11))
                     .foregroundStyle(BKTheme.textSecondary)
+                    .lineLimit(1)
+                Text(Self.coarsePosition(player.position).uppercased())
+                    .font(BKFont.caption(10))
+                    .tracking(0.4)
+                    .foregroundStyle(BKTheme.textMuted)
             }
 
             Spacer(minLength: 0)
