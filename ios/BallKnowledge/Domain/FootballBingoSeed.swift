@@ -28,7 +28,10 @@ enum FootballBingoSeed {
                 iconValue: c.iconValue,
                 matchingRule: c.matchingRule,
                 logoUrl: c.logoUrl,
-                teamId: c.teamId
+                teamId: c.teamId,
+                logo2Url: c.logo2Url,
+                team2Id: c.team2Id,
+                flag: c.flag
             )
         }
         let players = dto.players.map { p in
@@ -45,7 +48,9 @@ enum FootballBingoSeed {
                 premierLeagueApps: p.premierLeagueApps,
                 topLeagueGoals: p.topLeagueGoals,
                 topLeagueApps: p.topLeagueApps,
-                headshotUrl: p.headshotUrl
+                headshotUrl: p.headshotUrl,
+                awards: p.awards,
+                stats: p.stats
             )
         }
         return FootballBingoGame(

@@ -9,11 +9,28 @@ enum FootballBingoMatcher {
         case .playedForClub:
             return player.clubs.contains { normalize($0) == normalize(category.matchingRule) }
 
+        case .nationClub:
+            // matchingRule = "Nation|Club"
+            let parts = category.matchingRule.components(separatedBy: "|")
+            guard parts.count == 2 else { return false }
+            return normalize(player.nationality) == normalize(parts[0])
+                && player.clubs.contains { normalize($0) == normalize(parts[1]) }
+
+        case .clubCombo:
+            // matchingRule = "ClubA|ClubB"
+            let parts = category.matchingRule.components(separatedBy: "|")
+            guard parts.count == 2 else { return false }
+            return player.clubs.contains { normalize($0) == normalize(parts[0]) }
+                && player.clubs.contains { normalize($0) == normalize(parts[1]) }
+
         case .playedInLeague:
             return player.leagues.contains { normalize($0) == normalize(category.matchingRule) }
 
         case .wonCompetition:
             return player.trophies.contains { normalize($0) == normalize(category.matchingRule) }
+
+        case .award:
+            return player.awards.contains { normalize($0) == normalize(category.matchingRule) }
 
         case .playedWithPlayer:
             return player.teammates.contains { normalize($0) == normalize(category.matchingRule) }
@@ -25,16 +42,10 @@ enum FootballBingoMatcher {
             return normalize(player.position) == normalize(category.matchingRule)
 
         case .statThreshold:
-            // Rule grammar: `<stat>>=<n>` where stat is pl_apps | goals | apps.
+            // Rule grammar: `<statKey>>=<n>` resolved against the player's stats map.
             let parts = category.matchingRule.components(separatedBy: ">=")
             guard parts.count == 2, let threshold = Int(parts[1]) else { return false }
-            let value: Int
-            switch parts[0] {
-            case "goals": value = player.topLeagueGoals ?? 0
-            case "apps": value = player.topLeagueApps ?? 0
-            default: value = player.premierLeagueApps ?? 0 // pl_apps
-            }
-            return value >= threshold
+            return (player.stats[parts[0]] ?? 0) >= threshold
         }
     }
 

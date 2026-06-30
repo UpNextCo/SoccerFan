@@ -341,11 +341,13 @@ async function migrateStaleBingo(date: string): Promise<void> {
     | undefined;
   if (!puzzle || !Array.isArray(puzzle.players) || puzzle.players.length === 0) return;
   const hasHeadshotKey = puzzle.players.some((p) => p && Object.prototype.hasOwnProperty.call(p, 'headshotUrl'));
+  // New catalog ships a per-player `stats` map (caps, CL apps, transfer fee, …).
+  const hasStatsMap = puzzle.players.some((p) => p && Object.prototype.hasOwnProperty.call(p, 'stats'));
   // Club tiles must carry a server-resolved logoUrl (added after the headshot pass).
   const clubTilesResolved = (puzzle.categories ?? [])
     .filter((c) => c && c.iconType === 'clubBadge')
     .every((c) => Object.prototype.hasOwnProperty.call(c, 'logoUrl'));
-  if (!hasHeadshotKey || !clubTilesResolved) {
+  if (!hasHeadshotKey || !hasStatsMap || !clubTilesResolved) {
     await db
       .delete(dailyPuzzles)
       .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_bingo')));

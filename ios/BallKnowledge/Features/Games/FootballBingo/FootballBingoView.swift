@@ -421,10 +421,10 @@ private struct FootballBingoTileView: View {
                 VStack(spacing: 6) {
                     FootballBingoCategoryIcon(category: category, size: 40)
                     Text(BingoTileLabel.short(for: category))
-                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .font(.system(size: 11, weight: .heavy, design: .rounded))
                         .foregroundStyle(isCompleted ? Color.black : BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .minimumScaleFactor(0.6)
                 }
                 .padding(8)
@@ -489,15 +489,24 @@ private struct FootballBingoCategoryIcon: View {
                 let parts = category.iconValue.split(separator: "|").map(String.init)
                 let club = parts.first ?? category.iconValue
                 let league = parts.count > 1 ? parts[1] : "Premier League"
-                // Use the server-resolved crest first (reliable), then the registry, then initials.
-                TeamBadgeImage(
-                    club: club,
-                    league: league,
-                    teamId: category.teamId,
-                    logoURL: category.logoUrl.flatMap(URL.init(string:)),
-                    size: size
-                ) {
-                    iconFallback(GuessWhoDisplay.clubAbbrev(club))
+                clubBadge(club: club, league: league, logo: category.logoUrl, teamId: category.teamId, size: size)
+            case .nationClub:
+                let parts = category.iconValue.split(separator: "|").map(String.init)
+                let club = parts.first ?? category.iconValue
+                let league = parts.count > 1 ? parts[1] : "Premier League"
+                clubBadge(club: club, league: league, logo: category.logoUrl, teamId: category.teamId, size: size)
+                    .overlay(alignment: .bottomTrailing) {
+                        Text(GuessWhoDisplay.nationalityFlag(category.flag ?? ""))
+                            .font(.system(size: size * 0.5))
+                            .background(Circle().fill(BKTheme.background).frame(width: size * 0.52, height: size * 0.52))
+                            .offset(x: size * 0.18, y: size * 0.1)
+                    }
+            case .clubCombo:
+                let parts = category.matchingRule.split(separator: "|").map(String.init)
+                let a = parts.first ?? "", b = parts.count > 1 ? parts[1] : ""
+                HStack(spacing: -size * 0.18) {
+                    clubBadge(club: a, league: "", logo: category.logoUrl, teamId: category.teamId, size: size * 0.78)
+                    clubBadge(club: b, league: "", logo: category.logo2Url, teamId: category.team2Id, size: size * 0.78)
                 }
             case .league:
                 LeagueBadgeImage(league: category.iconValue, size: size) {
@@ -507,11 +516,19 @@ private struct FootballBingoCategoryIcon: View {
                 Ph.trophy.fill
                     .color(BKTheme.streak)
                     .frame(width: size * 0.85, height: size * 0.85)
+            case .award:
+                Text("🏅").font(.system(size: size * 0.9))
             case .custom:
                 customIcon
             }
         }
         .frame(height: size)
+    }
+
+    private func clubBadge(club: String, league: String, logo: String?, teamId: Int?, size: CGFloat) -> some View {
+        TeamBadgeImage(club: club, league: league, teamId: teamId, logoURL: logo.flatMap(URL.init(string:)), size: size) {
+            iconFallback(GuessWhoDisplay.clubAbbrev(club), size: size)
+        }
     }
 
     @ViewBuilder
@@ -533,19 +550,21 @@ private struct FootballBingoCategoryIcon: View {
         }
     }
 
-    private func iconFallback(_ text: String) -> some View {
-        Circle()
+    private func iconFallback(_ text: String, size: CGFloat? = nil) -> some View {
+        let s = size ?? self.size
+        return Circle()
             .fill(BKTheme.background.opacity(0.5))
-            .frame(width: size, height: size)
+            .frame(width: s, height: s)
             .overlay(
                 Text(text)
-                    .font(.system(size: size * 0.3, weight: .heavy, design: .rounded))
+                    .font(.system(size: s * 0.3, weight: .heavy, design: .rounded))
                     .foregroundStyle(BKTheme.textSecondary)
             )
     }
 }
 
-/// Short tile captions (BVB, CHE, UCL…) instead of long sentences.
+/// Tile captions. Clubs get a short code (the crest carries the rest); everything else stays
+/// readable: full nation/league/trophy names, and stat tiles describe what the number means.
 private enum BingoTileLabel {
     private static let clubShort: [String: String] = [
         "borussia dortmund": "BVB", "chelsea": "CHE", "newcastle united": "NEW", "newcastle": "NEW",
@@ -561,30 +580,33 @@ private enum BingoTileLabel {
         "paris saint-germain": "PSG", "paris saint germain": "PSG", "olympique marseille": "OM", "marseille": "OM",
         "olympique lyonnais": "OL", "lyon": "OL", "as monaco": "ASM", "monaco": "ASM", "lille": "LIL",
     ]
-    private static let trophyShort: [String: String] = [
-        "champions league": "UCL", "europa league": "UEL", "uefa super cup": "USC",
-        "club world cup": "CWC", "world cup": "WC", "european championship": "EURO",
-        "copa américa": "COPA", "copa america": "COPA", "nations league": "UNL",
-        "premier league": "PL", "la liga": "LL", "serie a": "SA", "bundesliga": "BUN", "ligue 1": "L1",
-        "fa cup": "FA", "league cup": "EFL", "community shield": "CS", "copa del rey": "CDR",
-        "coppa italia": "CI", "dfb pokal": "DFB", "coupe de france": "CDF", "trophée des champions": "TDC",
-    ]
+
+    private static func clubCode(_ name: String) -> String {
+        let key = name.folding(options: .diacriticInsensitive, locale: .current).lowercased()
+        return clubShort[key] ?? GuessWhoDisplay.clubAbbrev(name)
+    }
 
     static func short(for c: FootballBingoCategory) -> String {
-        let key = c.matchingRule.folding(options: .diacriticInsensitive, locale: .current).lowercased()
         switch c.type {
         case .playedForClub:
-            return clubShort[key] ?? GuessWhoDisplay.clubAbbrev(c.matchingRule)
-        case .wonCompetition:
-            return trophyShort[key] ?? String(c.matchingRule.prefix(3)).uppercased()
-        case .playedInLeague:
-            return GuessWhoDisplay.leagueAbbrev(c.matchingRule)
-        case .nationality:
-            return String(c.matchingRule.prefix(3)).uppercased()
-        case .statThreshold, .position:
-            return c.iconValue
+            return clubCode(c.matchingRule)
+        case .nationClub:
+            // "Nation|Club" -> "NAT · CLUB" (flag overlay carries the nation too).
+            let parts = c.matchingRule.components(separatedBy: "|")
+            let nat = String((parts.first ?? "").prefix(3)).uppercased()
+            let club = parts.count > 1 ? clubCode(parts[1]) : ""
+            return "\(nat) · \(club)"
+        case .clubCombo:
+            let parts = c.matchingRule.components(separatedBy: "|")
+            let a = clubCode(parts.first ?? ""), b = parts.count > 1 ? clubCode(parts[1]) : ""
+            return "\(a) + \(b)"
+        case .statThreshold:
+            // Icon already shows the number; the title is what it counts (e.g. "Champions League Apps").
+            return c.title.uppercased()
+        case .nationality, .playedInLeague, .wonCompetition, .award, .position:
+            return c.title.uppercased()
         default:
-            return String(c.matchingRule.prefix(3)).uppercased()
+            return c.title.uppercased()
         }
     }
 }

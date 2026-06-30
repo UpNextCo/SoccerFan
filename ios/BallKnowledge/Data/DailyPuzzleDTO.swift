@@ -144,6 +144,9 @@ struct FootballBingoCategoryDTO: Codable, Equatable {
     let matchingRule: String
     let logoUrl: String?
     let teamId: Int?
+    let logo2Url: String?
+    let team2Id: Int?
+    let flag: String?
 }
 
 struct FootballBingoPlayerDTO: Codable, Equatable {
@@ -160,6 +163,8 @@ struct FootballBingoPlayerDTO: Codable, Equatable {
     let topLeagueGoals: Int?
     let topLeagueApps: Int?
     let headshotUrl: String?
+    let awards: [String]
+    let stats: [String: Int]
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -176,6 +181,8 @@ struct FootballBingoPlayerDTO: Codable, Equatable {
         topLeagueGoals = try c.decodeIfPresent(Int.self, forKey: .topLeagueGoals)
         topLeagueApps = try c.decodeIfPresent(Int.self, forKey: .topLeagueApps)
         headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
+        awards = try c.decodeIfPresent([String].self, forKey: .awards) ?? []
+        stats = try c.decodeIfPresent([String: Int].self, forKey: .stats) ?? [:]
     }
 }
 

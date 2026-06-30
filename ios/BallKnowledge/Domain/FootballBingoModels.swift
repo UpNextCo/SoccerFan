@@ -9,8 +9,11 @@ enum FootballBingoStatus: Equatable {
 enum FootballBingoCategoryType: String, Codable {
     case nationality
     case playedForClub
+    case nationClub
+    case clubCombo
     case playedInLeague
     case wonCompetition
+    case award
     case playedWithPlayer
     case managedByManager
     case statThreshold
@@ -20,8 +23,11 @@ enum FootballBingoCategoryType: String, Codable {
 enum FootballBingoIconType: String, Codable {
     case flag
     case clubBadge
+    case nationClub
+    case clubCombo
     case trophy
     case league
+    case award
     case custom
 }
 
@@ -34,6 +40,9 @@ struct FootballBingoCategory: Identifiable, Equatable {
     let matchingRule: String
     var logoUrl: String? = nil
     var teamId: Int? = nil
+    var logo2Url: String? = nil
+    var team2Id: Int? = nil
+    var flag: String? = nil
 }
 
 struct FootballBingoPlayer: Identifiable, Equatable {
@@ -50,6 +59,8 @@ struct FootballBingoPlayer: Identifiable, Equatable {
     let topLeagueGoals: Int?
     let topLeagueApps: Int?
     var headshotUrl: String? = nil
+    var awards: [String] = []
+    var stats: [String: Int] = [:]
 }
 
 struct FootballBingoGame: Equatable {
