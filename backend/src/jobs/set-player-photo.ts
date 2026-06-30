@@ -31,6 +31,9 @@ async function main() {
   // Self-applying migration so this works on any environment.
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS photo_url text`);
 
+  // Accent-insensitive match: compare both the raw name and a de-accented form, so "Luis Figo"
+  // finds "Luís Figo" and "Lothar Matthaus" finds "Lothar Matthäus".
+  const normTarget = target.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const candidates = UUID_RE.test(target)
     ? await rows<{ id: string; name: string; nationality: string }>(
         sql`SELECT id, name, nationality FROM players WHERE id = ${target}`
@@ -40,7 +43,7 @@ async function main() {
           COALESCE((SELECT string_agg(DISTINCT s.team_name, ', ') FROM player_stats s
                     WHERE s.player_id = p.id AND s.league_id IN (39,140,135,78,61)), '') AS clubs
         FROM players p
-        WHERE p.name ILIKE ${`%${target}%`}
+        WHERE p.name ILIKE ${`%${target}%`} OR p.search_text LIKE ${`%${normTarget}%`}
         ORDER BY (SELECT COALESCE(SUM(appearances),0) FROM player_stats s WHERE s.player_id = p.id) DESC
         LIMIT 12
       `);

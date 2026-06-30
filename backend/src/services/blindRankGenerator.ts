@@ -213,20 +213,33 @@ function pickSpread(pool: PoolRow[], seed: number): PoolRow[] | null {
   const start = maxStart > 0 ? seed % (maxStart + 1) : 0;
   const slice = distinct.slice(start, start + window);
 
-  const step = slice.length / BLIND_RANK_SLOT_COUNT;
+  // Sample by VALUE, not index: target 10 evenly-spaced stat values between the slice's hi and lo,
+  // then take the nearest unused player below the previous pick. This guarantees perceptible gaps
+  // between ranks (so it's actually rankable blind) instead of a cluster of near-identical stats.
+  const hi = slice[0]!.stat;
+  const lo = slice[slice.length - 1]!.stat;
   const chosen: PoolRow[] = [];
-  let last = -1;
+  const usedIdx = new Set<number>();
   for (let i = 0; i < BLIND_RANK_SLOT_COUNT; i += 1) {
-    const base = Math.floor(i * step);
-    const jitter = Math.floor(seed / (i + 7)) % Math.max(1, Math.floor(step));
-    let idx = Math.min(slice.length - 1, base + jitter);
-    if (idx <= last) idx = last + 1;
-    if (idx >= slice.length) break;
-    chosen.push(slice[idx]!);
-    last = idx;
+    const target = hi - (i / (BLIND_RANK_SLOT_COUNT - 1)) * (hi - lo);
+    let bestIdx = -1;
+    let bestDiff = Infinity;
+    for (let j = 0; j < slice.length; j += 1) {
+      if (usedIdx.has(j)) continue;
+      const stat = slice[j]!.stat;
+      // Keep a strictly descending, distinct gradient.
+      if (chosen.length > 0 && stat >= chosen[chosen.length - 1]!.stat) continue;
+      const diff = Math.abs(stat - target);
+      if (diff < bestDiff) { bestDiff = diff; bestIdx = j; }
+    }
+    if (bestIdx < 0) break;
+    usedIdx.add(bestIdx);
+    chosen.push(slice[bestIdx]!);
   }
   if (chosen.length !== BLIND_RANK_SLOT_COUNT) {
+    // Fallback: even index spacing across the slice.
     chosen.length = 0;
+    const step = slice.length / BLIND_RANK_SLOT_COUNT;
     for (let i = 0; i < BLIND_RANK_SLOT_COUNT; i += 1) chosen.push(slice[Math.min(slice.length - 1, Math.floor(i * step))]!);
   }
   // Validate via the shared rule (strict descending + spread) using a FactPackPlayer shim.
