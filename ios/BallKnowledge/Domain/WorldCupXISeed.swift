@@ -395,7 +395,17 @@ enum WorldCupXISeed {
         id: String, country: String, year: Int, formation: String, manager: String,
         captain: String, hostNation: String, topScorerClue: String, slots: [WorldCupXISlot]
     ) -> WorldCupXIPuzzle {
-        WorldCupXIPuzzle(id: id, title: "\(country) \(year)", formation: formation, slots: slots)
+        // Stamp the tournament year onto each slot so the offline fallback shows the same
+        // "{year} World Cup" header as the live game. (Club is left nil — these legacy seed clues
+        // already carry their club hints inline, and the side here is a nation, not a club.)
+        let stamped = slots.map {
+            WorldCupXISlot(
+                id: $0.id, label: $0.label, pitchPoint: $0.pitchPoint,
+                expectedName: $0.expectedName, clues: $0.clues,
+                year: year, club: nil, clubBadgeUrl: nil
+            )
+        }
+        return WorldCupXIPuzzle(id: id, title: "\(country) \(year)", formation: formation, slots: stamped)
     }
 
     private static func slot(

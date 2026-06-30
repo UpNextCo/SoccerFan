@@ -244,7 +244,40 @@ struct WorldCupXIView: View {
         NavigationStack {
             VStack(spacing: 14) {
                 if let slot = viewModel.activeSlot {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let year = slot.year {
+                            Text("\(String(year)) WORLD CUP")
+                                .font(BKFont.caption(11))
+                                .tracking(1.2)
+                                .foregroundStyle(BKTheme.accent)
+                        }
+                        if let club = slot.club, !club.isEmpty {
+                            HStack(spacing: 8) {
+                                if let yearText = slot.year.map(String.init) {
+                                    Text("In \(yearText), played for")
+                                        .font(BKFont.caption(12))
+                                        .foregroundStyle(BKTheme.textMuted)
+                                } else {
+                                    Text("Played for")
+                                        .font(BKFont.caption(12))
+                                        .foregroundStyle(BKTheme.textMuted)
+                                }
+                                if let badge = slot.clubBadgeUrl, let url = URL(string: badge) {
+                                    AsyncImage(url: url) { image in
+                                        image.resizable().scaledToFit()
+                                    } placeholder: {
+                                        Color.clear
+                                    }
+                                    .frame(width: 18, height: 18)
+                                }
+                                Text(club)
+                                    .font(BKFont.headline(13))
+                                    .foregroundStyle(BKTheme.textPrimary)
+                            }
+                        }
+
+                        Divider().overlay(BKTheme.textMuted.opacity(0.2))
+
                         Text("CLUE")
                             .font(BKFont.caption(10))
                             .tracking(0.8)

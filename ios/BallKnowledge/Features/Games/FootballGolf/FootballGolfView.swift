@@ -68,18 +68,6 @@ private func displayPrompt(_ raw: String) -> String {
     return result
 }
 
-/// The DB only stores coarse buckets (Goalkeeper/Defender/Midfielder/Forward),
-/// so map them to clean codes rather than truncating the full word.
-private func golfPositionAbbrev(_ raw: String) -> String {
-    let p = raw.lowercased()
-    if p.isEmpty { return "—" }
-    if p.contains("goal") || p == "gk" { return "GK" }
-    if p.contains("def") || p.contains("back") { return "DEF" }
-    if p.contains("mid") { return "MID" }
-    if p.contains("forward") || p.contains("attack") || p.contains("strik") || p.contains("wing") { return "FWD" }
-    return String(raw.prefix(3)).uppercased()
-}
-
 private func pluralizeLastWord(_ phrase: String) -> String {
     var core = phrase
     var trailing = ""
@@ -436,10 +424,7 @@ struct FootballGolfView: View {
                     ForEach(vm.searchResults) { r in
                         Button { withAnimation { vm.pick(r) }; inputFocused = true } label: {
                             HStack(spacing: 12) {
-                                Text(golfPositionAbbrev(r.position))
-                                    .font(.system(size: 11, weight: .heavy, design: .rounded)).tracking(0.5)
-                                    .foregroundStyle(BKTheme.textMuted)
-                                    .frame(width: 36, alignment: .leading)
+                                PlayerAvatar(urlString: r.headshotUrl, size: 32)
                                 Text(r.name.uppercased())
                                     .font(.system(size: 15, weight: .bold, design: .rounded))
                                     .foregroundStyle(BKTheme.textPrimary).lineLimit(1)

@@ -197,88 +197,184 @@ export async function nominateStinkers(
 }
 
 /**
- * Ask Claude to recall MEMORABLE players from a specific World Cup, each with a cryptic,
- * story-based clue in the style of a fan quiz ("the masked defender who had a breakout
- * tournament" → Gvardiol; "the defender who got bitten" → Chiellini). Claude supplies cultural
- * recall + clue wording ONLY; the caller MUST resolve every name to a player who was actually in
- * that tournament's squad (DB) and a human validates the bank — so no hallucinated fact ships.
- * Returns proposals, or null on failure.
+ * World Cup XI clue authoring (Claude). The game shows 11 clues as a 4-3-3 and the player must
+ * NAME each footballer, drawn from ACROSS all World Cups — so every clue must carry its own year.
+ *
+ * Claude supplies cultural recall + clue wording ONLY. The caller MUST resolve every proposal to a
+ * player who was actually in that nation's squad that year (DB) and a human validates the bank — so
+ * no hallucinated fact ships. We deliberately steer Claude toward robust, well-documented facts and
+ * away from fragile advanced metrics the DB can't check.
  */
-export interface MemorableProposal { player: string; position: 'GK' | 'DF' | 'MF' | 'FW'; clue: string; }
+export interface ClueProposal {
+  player: string;
+  country: string;
+  position: 'GK' | 'DF' | 'MF' | 'FW';
+  year: number;
+  clue: string;
+}
 
-export async function proposeMemorable(year: number, count = 35): Promise<MemorableProposal[] | null> {
+/** Shared brief describing the exact clue style/quality bar. */
+function clueSystemPrompt(): string {
+  return [
+    'You write clues for a daily football quiz called "World Cup XI". The player sees 11 clues laid',
+    'out as a 4-3-3 on a pitch and must NAME the footballer for each.',
+    '',
+    'IMPORTANT — the app already shows the player, ABOVE each clue: the tournament ("2018 World Cup")',
+    'and the club they were at then ("In 2018, played for Chelsea" + the club badge). So your clue',
+    'must NOT state the tournament year and must NOT name the player\'s club at that World Cup — that',
+    'context is given. Just write the distinguishing clue itself. (You MAY reference a DIFFERENT year',
+    'only when the feat genuinely spans tournaments, e.g. "scored at three different World Cups".)',
+    '',
+    'Each clue MUST:',
+    '- Lead with the position ("The goalkeeper who…", "The left-back who…", "The midfielder who…",',
+    '  "The striker who…") — phrased naturally.',
+    '- Hinge on ONE clearly identifying fact a knowledgeable fan can use: an award (Golden',
+    '  Boot/Ball/Glove, Best Young Player), a record (all-time top scorer, most appearances), a',
+    '  specific decisive moment (scored in the final, scored in a semi-final, sent off, an own goal,',
+    '  saved penalties in a shootout, a famous goal), a captaincy, or an age/debut record. Refer to',
+    '  the tournament generically ("the tournament", "the final", "the quarter-final") — the year is',
+    '  shown separately.',
+    '- Resolve to EXACTLY ONE player at that tournament.',
+    '- NEVER contain the player\'s name, the year, or the club they played for at that World Cup.',
+    '',
+    'EXACTLY the style and quality we want (year + club are shown above, so they are absent here):',
+    '  - "The goalkeeper who won the Golden Glove" (Casillas, 2010)',
+    '  - "The left-back who played every minute of the tournament" (Capdevila, 2010)',
+    '  - "The defender who scored a famous volley against Portugal in the group stage" (Nacho, 2018)',
+    '  - "The midfielder who assisted the winning goal in the final" (Fàbregas, 2010)',
+    '  - "The striker who has scored at three different World Cups" (Fernando Torres)',
+    '  - "The defender who scored the winning goal in the semi-final" (Puyol, 2010)',
+    '  - "The midfielder who scored the winning penalty in the last-16 shootout against Colombia" (Dier, 2018)',
+    '',
+    'TRUTHFULNESS:',
+    '- Every clue must be TRUE and unambiguous. Prefer facts that are well-documented and beyond',
+    '  dispute (awards, finals, records, captaincies, red cards, famous goals).',
+    '- Only claim a major award (Golden Ball/Boot/Glove or Best Young Player) when you are CERTAIN',
+    '  the player WON it that year — never give it to a runner-up, and do NOT claim silver/bronze',
+    '  placements (they will be rejected).',
+    '- AVOID fragile advanced metrics that are hard to verify or vary by data source (e.g. "highest',
+    '  tackles per 90", "best average rating", exact per-90 numbers). Stick to facts a fan would',
+    '  confidently agree with.',
+    '',
+    'RECOGNISABILITY: these need NOT all be iconic moments — solid, identifiable squad players are',
+    'welcome — but every player should be someone a knowledgeable fan could reasonably name from the',
+    'clue. Avoid pure journeymen with no real hook.',
+    '',
+    'Use each player\'s common full name and a position tag (GK, DF, MF or FW). Spread across',
+    'positions and INCLUDE goalkeepers, full-backs and wingers (not just centre-backs and strikers).',
+    'Return ONLY JSON.',
+  ].join('\n');
+}
+
+function avoidBlock(avoid: string[]): string {
+  if (!avoid.length) return '';
+  return [
+    '',
+    'Do NOT propose any of these players (already covered) — choose different ones:',
+    avoid.slice(0, 160).map((p) => `- ${p}`).join('\n'),
+  ].join('\n');
+}
+
+type RawClue = { player: string; country?: string; position: string; year?: number; clue: string };
+
+/**
+ * Parse the `players` array, tolerating a response that ran into the token limit mid-array: rather
+ * than discard a near-complete reply, salvage every complete object up to the last closing brace.
+ */
+function parseClueArray(text: string): RawClue[] | null {
+  const json = extractJson(text);
+  const tryParse = (s: string): RawClue[] | null => {
+    try { return ((JSON.parse(s) as { players?: RawClue[] }).players) ?? null; } catch { return null; }
+  };
+  const direct = tryParse(json);
+  if (direct) return direct;
+  // Salvage: keep the array from its '[' up to the last complete '}', then re-close it.
+  const arrStart = json.indexOf('[');
+  const lastObj = json.lastIndexOf('}');
+  if (arrStart >= 0 && lastObj > arrStart) {
+    const salvaged = tryParse(`{"players":${json.slice(arrStart, lastObj + 1)}]}`);
+    if (salvaged?.length) return salvaged;
+  }
+  return null;
+}
+
+async function runClueProposal(user: string, fallbackYear?: number): Promise<ClueProposal[] | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
-  const classic = year < 2006;
-
-  const system = [
-    'You curate a daily football quiz called "World Cup XI": the player is shown 11 cryptic clues',
-    'and must NAME each footballer. Your job: list the most MEMORABLE players from ONE World Cup,',
-    'each with a single cryptic clue a fan would smile at — favour STORIES and iconic moments over',
-    'dry stats, like these real examples:',
-    '  - "The masked defender who had a breakout tournament" (Gvardiol, 2022)',
-    '  - "The defender who got bitten at this World Cup" (Chiellini, 2014)',
-    '  - "The midfielder whose goal clearly crossed the line but was not given" (Lampard, 2010)',
-    '  - "The midfielder who finished the famous 24-pass team goal" (Cambiasso, 2006)',
-    '  - "The goalkeeper sent off, who has played in the Premier League" (Hennessey, 2022)',
-    '',
-    'RECOGNISABILITY IS THE #1 RULE. Every player must be someone a CASUAL modern football fan',
-    'would actually recognise the name of TODAY. Never include journeymen, role players, or',
-    'one-tournament names that only a hardcore fan of that era would know (no "Earnie Stewart",',
-    '"Oleg Salenko", "Christophe Dugarry" types).',
-    '',
-    ...(classic
-      ? [
-          `This is an OLDER World Cup (${year}). Be STRICT: include ONLY genuinely ICONIC, global`,
-          'household names that today\'s casual fan still instantly knows — World Cup winners,',
-          'Ballon d\'Or-level superstars, and a couple of truly unforgettable moments. If in doubt,',
-          'leave a player OUT. Quality over quantity.',
-        ]
-      : [
-          'This is a recent World Cup, so you can include the full memorable range: superstars PLUS',
-          'recognisable cult/role players and big moments (red cards, own goals, golden boot/glove,',
-          'captains, shock villains, breakout players).',
-        ]),
-    '',
-    'Rules:',
-    '- Every clue must be TRUE and specific to THAT World Cup, and resolve to exactly one player.',
-    '- The clue must NOT contain the player\'s name. Do not state the year (the puzzle adds it).',
-    '- Lead with the player\'s position word where natural ("defender", "midfielder", etc.).',
-    '- Use the common full name. Give a position tag: GK, DF, MF or FW.',
-    '',
-    'Return ONLY JSON: {"players":[{"player":"Full Name","position":"DF","clue":"The ... who ..."}]}',
-  ].join('\n');
-
-  const user = [
-    `World Cup: ${year}.`,
-    `List up to ${count} memorable players from the ${year} World Cup with a cryptic, story-led clue each.`,
-    classic
-      ? 'Only the genuinely iconic — it is fine to return fewer than the maximum.'
-      : 'Spread across positions (a few GK, several DF, several MF, several FW).',
-    'JSON only.',
-  ].join('\n');
-
   try {
     const client = new Anthropic({ apiKey });
     const resp = await client.messages.create({
       model: MODEL,
-      max_tokens: 4000,
-      system,
+      max_tokens: 8000,
+      system: clueSystemPrompt(),
       messages: [{ role: 'user', content: user }],
     });
     const text = resp.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
       .map((b) => b.text)
       .join('');
-    const parsed = JSON.parse(extractJson(text)) as { players?: MemorableProposal[] };
-    if (!parsed.players?.length) return null;
-    return parsed.players
+    const players = parseClueArray(text);
+    if (!players?.length) return null;
+    return players
       .filter((p) => p.player && p.clue && ['GK', 'DF', 'MF', 'FW'].includes(p.position))
-      .map((p) => ({ player: p.player.trim(), position: p.position, clue: p.clue.trim() }));
+      .map((p) => ({
+        player: p.player.trim(),
+        country: (p.country ?? '').trim(),
+        position: p.position as ClueProposal['position'],
+        year: Number(p.year ?? fallbackYear ?? 0),
+        clue: p.clue.trim(),
+      }))
+      .filter((p) => p.year >= 1990 && p.year <= 2030);
   } catch (err) {
-    console.warn(`Memorable proposal failed (${err instanceof Error ? err.message : String(err)}).`);
+    console.warn(`Clue proposal failed (${err instanceof Error ? err.message : String(err)}).`);
     return null;
   }
+}
+
+/**
+ * Author identifying clues for ONE national team across the World Cups it appeared in, position by
+ * position (the structure mirrors how a quiz writer thinks: a GK, full-backs, centre-backs, mids,
+ * forwards). Each proposal carries the specific year so the caller can squad-verify it.
+ */
+export async function proposeTeamClues(
+  country: string,
+  years: number[],
+  avoid: string[] = [],
+  count = 24,
+): Promise<ClueProposal[] | null> {
+  const user = [
+    `National team: ${country}.`,
+    `Tournaments to draw from: ${years.join(', ')} World Cups.`,
+    `List up to ${count} fair, single-answer clues for ${country}'s recognisable World Cup players,`,
+    'spread across goalkeeper, full-backs, centre-backs, midfielders and forwards, and across',
+    'different tournaments. Return the correct "year" for each, but do NOT put the year or the',
+    'player\'s club into the "clue" text — those are shown separately.',
+    `For each item: {"player":"Full Name","country":"${country}","position":"GK|DF|MF|FW","year":<YYYY>,"clue":"The <position> who ..."}.`,
+    avoidBlock(avoid),
+    'Return ONLY JSON: {"players":[ ... ]}.',
+  ].join('\n');
+  return runClueProposal(user);
+}
+
+/**
+ * Catch-all pass: identifying clues for recognisable players from a single World Cup across ALL
+ * nations (scoops up players the per-team passes for major nations won't reach).
+ */
+export async function proposeYearClues(
+  year: number,
+  avoid: string[] = [],
+  count = 40,
+): Promise<ClueProposal[] | null> {
+  const user = [
+    `World Cup: ${year}.`,
+    `List up to ${count} fair, single-answer clues for recognisable players from the ${year} World`,
+    'Cup, spread across positions and nationalities (include goalkeepers, full-backs and wingers).',
+    'Do NOT put the year or the player\'s club into the "clue" text — those are shown separately.',
+    `For each item: {"player":"Full Name","country":"Nation","position":"GK|DF|MF|FW","year":${year},"clue":"The <position> who ..."}.`,
+    avoidBlock(avoid),
+    'Return ONLY JSON: {"players":[ ... ]}.',
+  ].join('\n');
+  return runClueProposal(user, year);
 }
 
 function extractJson(text: string): string {

@@ -306,6 +306,26 @@ struct WorldCupXISlotDTO: Codable, Equatable {
     let y: Double
     let expectedName: String
     let clues: [String]
+    let year: Int?
+    let club: String?
+    let clubBadgeUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, x, y, expectedName, clues, year, club, clubBadgeUrl
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        label = try c.decode(String.self, forKey: .label)
+        x = try c.decode(Double.self, forKey: .x)
+        y = try c.decode(Double.self, forKey: .y)
+        expectedName = try c.decode(String.self, forKey: .expectedName)
+        clues = try c.decodeIfPresent([String].self, forKey: .clues) ?? []
+        year = try c.decodeIfPresent(Int.self, forKey: .year)
+        club = try c.decodeIfPresent(String.self, forKey: .club)
+        clubBadgeUrl = try c.decodeIfPresent(String.self, forKey: .clubBadgeUrl)
+    }
 }
 
 struct WorldCupXIPuzzleDTO: Codable, Equatable {

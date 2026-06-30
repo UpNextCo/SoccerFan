@@ -16,7 +16,10 @@ enum DailyChallengeResolver {
                     label: $0.label,
                     pitchPoint: CGPoint(x: $0.x, y: $0.y),
                     expectedName: $0.expectedName,
-                    clues: $0.clues
+                    clues: $0.clues,
+                    year: $0.year,
+                    club: $0.club,
+                    clubBadgeUrl: $0.clubBadgeUrl
                 )
             }
         )

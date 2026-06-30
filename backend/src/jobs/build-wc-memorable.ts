@@ -1,9 +1,10 @@
 /**
- * Build + QA the curated "memorable World Cup moments" clue bank for World Cup XI.
+ * Build + QA the curated World Cup XI clue bank (the SOLE source of clues for the live game).
  *
- *   build (default): ask Claude for memorable players + story clues per World Cup, DB-verify each
- *                    to that year's squad, upsert into wc_memorable (status active), and export
- *                    wc_memorable_review.csv.
+ *   build (default): ask Claude for fair, identifying, year-stamped clues — first per major nation
+ *                    (position by position, across all its World Cups), then a per-year catch-all for
+ *                    everyone else — DB-verify each to that nation+year's squad, upsert into
+ *                    wc_memorable (status active), and export wc_memorable_review.csv.
  *   apply <file>:    read the edited CSV and apply your `status` (active|rejected) changes by id.
  *
  * Workflow: run build → open the CSV → set status=rejected for any wrong/weak clue → run apply.
@@ -16,23 +17,201 @@ import 'dotenv/config';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { proposeMemorable } from '../services/llmCuration.js';
+import { proposeTeamClues, proposeYearClues, type ClueProposal } from '../services/llmCuration.js';
 
-const YEARS = [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022];
+// 2006 onwards only — recent World Cups are the recognisable ones, and these are the years we have
+// complete FBref game-by-game data to validate clues against.
+const YEARS = [2006, 2010, 2014, 2018, 2022];
+// Major footballing nations get a dedicated, position-by-position pass (this is where the most
+// recognisable World Cup players live and where structured clue-writing pays off).
+const MAJOR_TEAMS = [
+  'Brazil', 'Argentina', 'France', 'Germany', 'Spain', 'England', 'Italy', 'Netherlands',
+  'Portugal', 'Uruguay', 'Belgium', 'Croatia', 'Mexico', 'Colombia',
+];
 const FILE = 'wc_memorable_review.csv';
 const COLS = ['id', 'year', 'status', 'position', 'player', 'clue'] as const;
 
 function norm(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
-function toks(s: string): Set<string> { return new Set(norm(s).split(' ').filter((t) => t.length > 1)); }
-function surnameMatch(a: string, b: string): boolean {
-  const ta = toks(a); const tb = toks(b);
-  const la = [...ta].pop(); const lb = [...tb].pop();
-  if (!la || !lb || la !== lb) return false;
-  for (const t of ta) if (tb.has(t)) return true;
-  return false;
+function toks(s: string): string[] { return norm(s).split(' ').filter((t) => t.length > 1); }
+function lastTok(s: string): string { const t = toks(s); return t[t.length - 1] ?? ''; }
+function firstInitial(s: string): string { return (toks(s)[0] ?? '').charAt(0); }
+
+interface SquadRow { player_name: string; player_id: string; country: string }
+
+// Phrases in a clue → the canonical award row we must find in player_awards to allow it. Awards are
+// the #1 source of confidently-wrong clues (Claude hands them to the runner-up), so we hard-verify
+// every award claim against the DB and drop any that don't match the real winner for that year.
+const AWARD_PHRASES: Array<{ re: RegExp; award: string }> = [
+  { re: /golden ball/i, award: 'World Cup Golden Ball' },
+  { re: /golden boot/i, award: 'World Cup Golden Boot' },
+  { re: /golden glove/i, award: 'World Cup Golden Glove' },
+  { re: /(best young player|young player award|young player of the tournament)/i, award: 'World Cup Young Player' },
+  // FIFA's "best player of the tournament" IS the Golden Ball — verify against that winner. The
+  // (?<!young ) guard avoids matching "best YOUNG player of the tournament" (handled above).
+  { re: /(?<!young )(player of the tournament|best player of the (?:tournament|world cup)|tournament'?s best player|most valuable player)/i, award: 'World Cup Golden Ball' },
+];
+// We only store award WINNERS, so silver/bronze placements can't be verified — reject them outright.
+const UNVERIFIABLE_AWARD = /(silver|bronze)\s+(ball|boot|glove)|runner-?up for the golden/i;
+// Catch-all for invented/unverifiable trophies (e.g. "Best Player award", "assist award") that don't
+// map to one of our four real World Cup awards.
+const GENERIC_AWARD_CLAIM = /\b(won|awarded|voted|named|received|claimed)\b[^.]{0,60}\baward\b/i;
+
+type AwardSet = Set<string>; // `${playerId}|${year}|${award}`
+
+async function loadAwards(): Promise<AwardSet> {
+  const rows = (await db.execute(sql`
+    SELECT player_id AS "playerId", year, award FROM player_awards
+    WHERE award LIKE 'World Cup %' AND player_id IS NOT NULL
+  `)) as unknown as Array<{ playerId: string; year: number; award: string }>;
+  return new Set(rows.map((r) => `${r.playerId}|${r.year}|${r.award}`));
 }
+
+/**
+ * True if a clue's award claims are all backed by the DB. A clue with no award language passes; a
+ * clue claiming an award the player didn't win that year (or any silver/bronze placement we can't
+ * check) fails.
+ */
+function awardClaimReason(clue: string, playerId: string, year: number, awards: AwardSet): string | null {
+  if (UNVERIFIABLE_AWARD.test(clue)) return 'claims an unverifiable silver/bronze/runner-up award';
+  let matchedKnown = false;
+  for (const { re, award } of AWARD_PHRASES) {
+    if (re.test(clue)) {
+      matchedKnown = true;
+      if (!awards.has(`${playerId}|${year}|${award}`)) return `claims the ${award.replace('World Cup ', '')} but the DB winner is someone else`;
+    }
+  }
+  // A clue that "won an award" we couldn't map to (and verify against) a real World Cup award is
+  // unverifiable — likely invented (e.g. a per-nation "best player" award). Drop it.
+  if (!matchedKnown && GENERIC_AWARD_CLAIM.test(clue)) return 'claims an award that maps to no real World Cup trophy';
+  return null;
+}
+
+// ---- Match-event validation: verify goal/stage/opponent/hat-trick claims against the DB ----
+// `wc_match_events` goals are near-complete (totals match real World Cups), and `player_stats`
+// (league 1 = World Cup) carries a goals tally INCLUDING zero-goal players, so together they tell us
+// authoritatively whether a player scored. We verify the *claims a clue makes* and reject only when
+// the data clearly contradicts — never when we simply lack the player's events (avoids false drops
+// like Théo Hernández's 2022 semi goal, which is missing from the events table).
+const TEAM_ALIAS: Record<string, string> = {
+  usa: 'united states', 'united states of america': 'united states', us: 'united states',
+  'korea republic': 'south korea', korea: 'south korea',
+  'serbia montenegro': 'serbia and montenegro', czechia: 'czech republic', china: 'china pr',
+};
+function normTeam(s: string): string {
+  const t = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/&/g, 'and').replace(/[^a-z\s]/g, ' ').replace(/\b(the)\b/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  return TEAM_ALIAS[t] ?? t;
+}
+
+interface EvGoal { stage: string; opponent: string; matchId: number }
+interface MatchIndex {
+  statsGoals: Map<string, number>;       // pid|year -> WC goals (row exists ⇒ authoritative)
+  goals: Map<string, EvGoal[]>;          // pid|year -> goal events
+  yearOpps: Map<number, Set<string>>;    // year -> normalized opponents seen that year
+}
+
+async function loadMatchIndex(): Promise<MatchIndex> {
+  const stats = (await db.execute(sql`
+    SELECT player_id AS "playerId", season AS year, goals FROM player_stats
+    WHERE league_id = 1 AND player_id IS NOT NULL
+  `)) as unknown as Array<{ playerId: string; year: number; goals: number }>;
+  const statsGoals = new Map<string, number>();
+  for (const r of stats) statsGoals.set(`${r.playerId}|${r.year}`, Number(r.goals) || 0);
+
+  const evs = (await db.execute(sql`
+    SELECT player_id AS "playerId", year, stage, opponent, match_id AS "matchId"
+    FROM wc_match_events WHERE type = 'goal' AND player_id IS NOT NULL
+  `)) as unknown as Array<{ playerId: string; year: number; stage: string; opponent: string; matchId: number }>;
+  const goals = new Map<string, EvGoal[]>();
+  const yearOpps = new Map<number, Set<string>>();
+  for (const e of evs) {
+    const k = `${e.playerId}|${e.year}`;
+    (goals.get(k) ?? goals.set(k, []).get(k)!).push({ stage: e.stage, opponent: e.opponent, matchId: e.matchId });
+    const set = yearOpps.get(e.year) ?? yearOpps.set(e.year, new Set()).get(e.year)!;
+    if (e.opponent) set.add(normTeam(e.opponent));
+  }
+  return { statsGoals, goals, yearOpps };
+}
+
+const CLAIMS_GOAL = /\b(scored|netted|nets|brace|hat-?trick|opening goal|winning goal|the winner|equaliser|equalizer|both goals|two goals|got on the scoresheet|opened the scoring)\b/;
+const NON_GOAL_CTX = /\b(own goal|assist|assisted|set up|set-up|provided|created|teed up|laid on|missed|disallow|ruled out|chalked off|saved|conceded|clean sheet|without scoring|failed to score|denied|drew the foul|won (?:the|a) penalty)\b/;
+const SHOOTOUT_CTX = /\b(shootout|shoot-out|spot-?kicks?|penalty shoot)\b/;
+
+function wantedStage(c: string): string | null {
+  if (/third[- ]place|3rd place/.test(c)) return '3rd Place Final';
+  if (/semi-?finals?/.test(c)) return 'Semi-finals';
+  if (/quarter-?finals?/.test(c)) return 'Quarter-finals';
+  if (/round of 16|round-of-16|last[- ]16/.test(c)) return 'Round of 16';
+  if (/group stage|group-stage|group game|group match/.test(c)) return 'Group Stage';
+  if (/\bthe final\b|world cup final/.test(c) && !/\bthe final (group|whistle)\b/.test(c)) return 'Final';
+  return null;
+}
+function wantedOpponent(original: string, yearOpps: Set<string> | undefined): string | null {
+  if (!yearOpps) return null;
+  const m = original.match(/\b(?:against|versus|vs\.?|over|past)\s+([A-Z][A-Za-z'’.-]+(?:\s+(?:&\s+)?(?:and\s+)?[A-Z][A-Za-z'’.-]+)*)/);
+  if (!m) return null;
+  const opp = normTeam(m[1]!);
+  return yearOpps.has(opp) ? opp : null; // only act when it resolves to a real opponent that year
+}
+function maxGoalsInAMatch(evs: EvGoal[]): number {
+  const byMatch = new Map<number, number>();
+  for (const e of evs) byMatch.set(e.matchId, (byMatch.get(e.matchId) ?? 0) + 1);
+  return byMatch.size ? Math.max(...byMatch.values()) : 0;
+}
+
+function matchClaimReason(clue: string, playerId: string, year: number, idx: MatchIndex): string | null {
+  const c = clue.toLowerCase();
+  const key = `${playerId}|${year}`;
+  const evs = idx.goals.get(key) ?? [];
+  const statsRow = idx.statsGoals.has(key);
+  const scored = (idx.statsGoals.get(key) ?? 0) > 0 || evs.length > 0;
+
+  if (CLAIMS_GOAL.test(c) && !SHOOTOUT_CTX.test(c) && !NON_GOAL_CTX.test(c)) {
+    // Both sources agree the player didn't score that year.
+    if (!scored && statsRow) return 'claims a goal but the player did not score at that World Cup';
+    // Granular checks only when we actually hold the player's goal events (else we can't be sure).
+    if (evs.length > 0) {
+      const stage = wantedStage(c);
+      if (stage && !evs.some((e) => e.stage === stage)) return `claims a goal in the ${stage} but none is recorded`;
+      if (/hat-?trick/.test(c) && maxGoalsInAMatch(evs) < 3) return 'claims a hat-trick but no 3-goal match is recorded';
+      else if (/\b(brace|scored twice|both goals|two goals)\b/.test(c) && maxGoalsInAMatch(evs) < 2) return 'claims a brace but no 2-goal match is recorded';
+      const opp = wantedOpponent(clue, idx.yearOpps.get(year));
+      if (opp && !evs.some((e) => normTeam(e.opponent) === opp)) return 'claims a goal against an opponent the player did not score against';
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve a proposed name to exactly one real squad player, strictly. Prefers a full-name match,
+ * then a unique surname match, then surname + first-initial when a surname is shared (kills the old
+ * surname-only bug that attached e.g. Emiliano Martínez's clue to Lautaro Martínez). Returns null
+ * when ambiguous or unmatched so the clue is simply skipped.
+ */
+function resolvePlayer(squad: SquadRow[], name: string, country: string): SquadRow | null {
+  const wanted = norm(name);
+  const pool = country ? squad.filter((s) => norm(s.country) === norm(country)) : squad;
+  const search = pool.length ? pool : squad;
+
+  const exact = search.filter((s) => norm(s.player_name) === wanted);
+  if (exact.length === 1) return exact[0]!;
+
+  const tl = lastTok(name);
+  if (!tl) return null;
+  const byLast = search.filter((s) => lastTok(s.player_name) === tl);
+  if (byLast.length === 1) return byLast[0]!;
+  if (byLast.length > 1) {
+    const fi = firstInitial(name);
+    const narrowed = fi ? byLast.filter((s) => firstInitial(s.player_name) === fi) : [];
+    if (narrowed.length === 1) return narrowed[0]!;
+    return null; // ambiguous surname — don't guess
+  }
+  return null;
+}
+
 function csvCell(v: unknown): string {
   const s = String(v ?? '');
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -76,38 +255,90 @@ async function exportCsv(): Promise<void> {
   const lines = [COLS.join(',')];
   for (const r of rows) lines.push([r.id, r.year, r.status, r.position, r.player_name, r.clue].map(csvCell).join(','));
   writeFileSync(FILE, lines.join('\n'));
-  console.log(`Exported ${rows.length} memorable clues to ${FILE}.`);
+  console.log(`Exported ${rows.length} clues to ${FILE}.`);
+}
+
+/** Load every World Cup squad once, indexed by year. */
+async function loadSquadsByYear(): Promise<Map<number, SquadRow[]>> {
+  const rows = (await db.execute(sql`
+    SELECT year, player_name, player_id, country FROM wc_squads WHERE player_id IS NOT NULL
+  `)) as unknown as Array<{ year: number; player_name: string; player_id: string; country: string }>;
+  const byYear = new Map<number, SquadRow[]>();
+  for (const r of rows) {
+    const list = byYear.get(r.year) ?? byYear.set(r.year, []).get(r.year)!;
+    list.push({ player_name: r.player_name, player_id: r.player_id, country: r.country });
+  }
+  return byYear;
+}
+
+/**
+ * Verify + store a batch of proposals. Returns the canonical player names that were stored, so later
+ * passes can avoid duplicating them. Tracks (year, player_id) to avoid double-storing in one run.
+ */
+async function storeProposals(
+  proposals: ClueProposal[],
+  squadsByYear: Map<number, SquadRow[]>,
+  storedKeys: Set<string>,
+  awards: AwardSet,
+  matchIdx: MatchIndex,
+): Promise<{ stored: string[]; rejected: number }> {
+  const storedNames: string[] = [];
+  let rejected = 0;
+  for (const p of proposals) {
+    const squad = squadsByYear.get(p.year);
+    if (!squad) continue;
+    const match = resolvePlayer(squad, p.player, p.country);
+    if (!match) continue; // unverified / ambiguous — drop it
+    const bad = awardClaimReason(p.clue, match.player_id, p.year, awards)
+      ?? matchClaimReason(p.clue, match.player_id, p.year, matchIdx);
+    if (bad) { rejected += 1; continue; }
+    const key = `${p.year}|${match.player_id}`;
+    if (storedKeys.has(key)) continue;
+    storedKeys.add(key);
+    await db.execute(sql`
+      INSERT INTO wc_memorable (year, player_id, player_name, position, clue, status)
+      VALUES (${p.year}, ${match.player_id}::uuid, ${match.player_name}, ${p.position}, ${p.clue}, 'active')
+      ON CONFLICT (year, player_id) DO UPDATE SET clue = EXCLUDED.clue, position = EXCLUDED.position
+    `);
+    storedNames.push(match.player_name);
+  }
+  return { stored: storedNames, rejected };
 }
 
 async function build(): Promise<void> {
   await ensureTable();
-  // Full rebuild so older obscure entries from a previous run are removed. Recent World Cups get
-  // a deep set; pre-2006 tournaments get a small, iconic-only set.
+  // Full rebuild so older / weaker entries from a previous run are removed.
   await db.execute(sql`DELETE FROM wc_memorable`);
-  for (const year of YEARS) {
-    const count = year >= 2006 ? 35 : 14;
-    const proposals = await proposeMemorable(year, count);
-    if (!proposals) { console.log(`  ${year}: no proposals (API key / failure)`); continue; }
 
-    const squad = (await db.execute(sql`
-      SELECT player_name, player_id FROM wc_squads WHERE year = ${year} AND player_id IS NOT NULL
-    `)) as unknown as Array<{ player_name: string; player_id: string }>;
+  const squadsByYear = await loadSquadsByYear();
+  const awards = await loadAwards();
+  const matchIdx = await loadMatchIndex();
+  const storedKeys = new Set<string>();
+  const seenNames = new Set<string>(); // global avoid-list (normalised) across passes
 
-    const seen = new Set<string>();
-    let stored = 0;
-    for (const p of proposals) {
-      const match = squad.find((s) => surnameMatch(s.player_name, p.player));
-      if (!match || seen.has(match.player_id)) continue; // unverified or duplicate player
-      seen.add(match.player_id);
-      await db.execute(sql`
-        INSERT INTO wc_memorable (year, player_id, player_name, position, clue, status)
-        VALUES (${year}, ${match.player_id}::uuid, ${match.player_name}, ${p.position}, ${p.clue}, 'active')
-        ON CONFLICT (year, player_id) DO UPDATE SET clue = EXCLUDED.clue, position = EXCLUDED.position
-      `);
-      stored += 1;
-    }
-    console.log(`  ${year}: ${proposals.length} proposed · ${stored} verified & stored`);
+  const addAvoid = (names: string[]) => { for (const n of names) seenNames.add(norm(n)); };
+  const avoidList = () => [...seenNames];
+  const note = (n: number) => (n ? ` · ${n} unverifiable claims rejected` : '');
+
+  // Pass 1 — per major nation, position by position, across all its World Cups.
+  for (const team of MAJOR_TEAMS) {
+    const proposals = await proposeTeamClues(team, YEARS, avoidList(), 24);
+    if (!proposals) { console.log(`  ${team}: no proposals (API key / failure)`); continue; }
+    const { stored, rejected } = await storeProposals(proposals, squadsByYear, storedKeys, awards, matchIdx);
+    addAvoid(stored);
+    console.log(`  ${team}: ${proposals.length} proposed · ${stored.length} verified & stored${note(rejected)}`);
   }
+
+  // Pass 2 — per-year catch-all to reach smaller nations and fill positional gaps.
+  for (const year of YEARS) {
+    const count = year >= 2006 ? 40 : 18;
+    const proposals = await proposeYearClues(year, avoidList(), count);
+    if (!proposals) { console.log(`  ${year}: no proposals (API key / failure)`); continue; }
+    const { stored, rejected } = await storeProposals(proposals, squadsByYear, storedKeys, awards, matchIdx);
+    addAvoid(stored);
+    console.log(`  ${year}: ${proposals.length} proposed · ${stored.length} verified & stored${note(rejected)}`);
+  }
+
   await exportCsv();
 }
 
@@ -127,9 +358,35 @@ async function apply(file: string): Promise<void> {
   console.log(`Applied ${changed} edits from ${file}.`);
 }
 
+/**
+ * Re-run the validators (awards + match events) over the EXISTING bank — no Claude calls — and mark
+ * any active clue the DB contradicts as rejected. Pass `--dry` to only print what WOULD be rejected
+ * (review before committing). Fixes a bank in place when the rules change, without a full regenerate.
+ */
+async function revalidate(dry: boolean): Promise<void> {
+  const awards = await loadAwards();
+  const matchIdx = await loadMatchIndex();
+  const rows = (await db.execute(sql`
+    SELECT id, player_id AS "playerId", player_name AS "playerName", year, clue
+    FROM wc_memorable WHERE status = 'active' AND player_id IS NOT NULL
+  `)) as unknown as Array<{ id: string; playerId: string; playerName: string; year: number; clue: string }>;
+  let rejected = 0;
+  for (const r of rows) {
+    const reason = awardClaimReason(r.clue, r.playerId, r.year, awards)
+      ?? matchClaimReason(r.clue, r.playerId, r.year, matchIdx);
+    if (!reason) continue;
+    rejected += 1;
+    console.log(`  ${dry ? 'WOULD REJECT' : 'rejected'} [${r.year} ${r.playerName}] (${reason})\n      "${r.clue}"`);
+    if (!dry) await db.execute(sql`UPDATE wc_memorable SET status = 'rejected' WHERE id = ${r.id}::uuid`);
+  }
+  console.log(`\n${dry ? 'DRY RUN — ' : ''}Reviewed ${rows.length} active clues · ${rejected} ${dry ? 'would be ' : ''}rejected.`);
+  if (!dry) await exportCsv();
+}
+
 async function main() {
   if (process.argv[2] === 'apply') await apply(process.argv[3] ?? FILE);
   else if (process.argv[2] === 'export') await exportCsv();
+  else if (process.argv[2] === 'revalidate') await revalidate(process.argv.includes('--dry'));
   else await build();
   process.exit(0);
 }

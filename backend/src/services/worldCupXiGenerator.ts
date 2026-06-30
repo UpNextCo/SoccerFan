@@ -1,12 +1,16 @@
 /**
- * World Cup XI daily puzzle generator. Builds a positionally-balanced 4-3-3 of 11 cryptic
- * clues drawn from ACROSS all World Cups (biased to recent tournaments). Each clue names the
- * player's nationality + the year + a feat ("The French midfielder who won the Golden Ball at
- * the 2006 World Cup" → Zidane). The game is "name the player": each correct answer scores —
- * there is no year to guess.
+ * World Cup XI daily puzzle generator. Builds a positionally-balanced 4-3-3 of 11 clues drawn from
+ * ACROSS all World Cups. Clues come from the curated, human-QA'd `wc_memorable` bank (authored by
+ * Claude, squad-verified, year-stamped) — that bank is the SOLE intended source. A thin data-driven
+ * fallback fills a slot only if the curated pool can't (so a thin day never leaves a hole), but on a
+ * healthy bank it never fires. The game is "name the player": each correct answer scores.
  */
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import { lookupTeamLogo } from './teamService.js';
+
+/** Bump when the puzzle JSON shape/source changes so stored puzzles regenerate. */
+export const WCXI_VERSION = 3;
 
 // Selection weight per tournament — strong bias toward recent World Cups (more recognisable),
 // with classics appearing occasionally.
@@ -68,27 +72,55 @@ function hashString(input: string): number {
   for (let i = 0; i < input.length; i += 1) { h = (h << 5) - h + input.charCodeAt(i); h |= 0; }
   return Math.abs(h);
 }
-interface Cand { playerId: string; name: string; country: string; position: string; subPosition: string | null; year: number; mvt: number; isCaptain: boolean; }
+interface Cand { playerId: string; name: string; country: string; position: string; subPosition: string | null; year: number; mvt: number; isCaptain: boolean; club: string | null; }
 interface Ev { type: string; stage: string; opponent: string; detail: string | null; }
 interface Fact { sig: string; score: number; clue: string; }
 interface Scored { c: Cand; facts: Fact[]; }
 
 export interface WorldCupXiSlot {
   id: string; label: string; x: number; y: number; expectedName: string; clues: string[];
+  // Shown to the player ABOVE the clue: the tournament year, and the club they were at THEN (+ crest).
+  year: number; club: string | null; clubBadgeUrl: string | null;
 }
 export interface WorldCupXiPuzzleJson {
   modeId: 'world_cup_xi';
   puzzleId: string;
   date: string;
+  version: number;
   formation: string;
   title: string;
   slots: WorldCupXiSlot[];
 }
 
-/** Gather every (player, tournament) candidate across all World Cups with a ranked clue list. */
-async function gatherCandidates(): Promise<Scored[]> {
+/**
+ * The curated bank — Claude-authored, squad-verified, year-stamped clues. One candidate per
+ * (player, year) so a player can surface with different clues on different days; the `used` set keeps
+ * a player to one slot per XI. Each clue gets a UNIQUE signature so a full XI of curated clues can
+ * render (the old shared 'memorable' sig let only one curated clue appear per puzzle).
+ */
+async function gatherMemorable(): Promise<Scored[]> {
+  const rows = (await db.execute(sql`
+    SELECT m.player_id AS "playerId", p.name, m.position, p.sub_position AS "subPosition", m.year,
+           COALESCE(p.market_value_tier, 0) AS mvt, m.clue, s.club AS club
+    FROM wc_memorable m
+    JOIN players p ON p.id = m.player_id
+    LEFT JOIN wc_squads s ON s.player_id = m.player_id AND s.year = m.year
+    WHERE m.status = 'active' AND m.player_id IS NOT NULL
+  `)) as unknown as Array<{ playerId: string; name: string; position: string; subPosition: string | null; year: number; mvt: number; clue: string; club: string | null }>;
+
+  return rows.map((r) => ({
+    c: { playerId: r.playerId, name: r.name, country: '', position: r.position, subPosition: r.subPosition, year: r.year, mvt: r.mvt ?? 0, isCaptain: false, club: r.club },
+    facts: [{ sig: `mem:${r.playerId}:${r.year}`, score: 200, clue: r.clue }],
+  }));
+}
+
+/**
+ * Data-driven fallback pool (goals / awards / captaincy / career flavour), deduped to one best clue
+ * per player. Used ONLY to fill a slot the curated bank couldn't — never the primary source.
+ */
+async function gatherDataFallback(): Promise<Scored[]> {
   const cands = (await db.execute(sql`
-    SELECT s.player_id AS "playerId", p.name, s.country, s.position, p.sub_position AS "subPosition", s.year, p.market_value_tier AS mvt, s.is_captain AS "isCaptain"
+    SELECT s.player_id AS "playerId", p.name, s.country, s.position, p.sub_position AS "subPosition", s.year, COALESCE(p.market_value_tier, 0) AS mvt, s.is_captain AS "isCaptain", s.club AS club
     FROM wc_squads s JOIN players p ON p.id = s.player_id
     WHERE s.position IN ('GK','DF','MF','FW')
   `)) as unknown as Cand[];
@@ -115,12 +147,6 @@ async function gatherCandidates(): Promise<Scored[]> {
   `)) as unknown as Array<{ playerId: string; n: number }>;
   const wcScored = new Map(multiWc.map((m) => [m.playerId, m.n]));
 
-  // Curated, human-QA'd "memorable moments" clues — the premium, story-led source.
-  const memorable = (await db.execute(sql`
-    SELECT player_id AS "playerId", year, clue FROM wc_memorable WHERE status = 'active' AND player_id IS NOT NULL
-  `)) as unknown as Array<{ playerId: string; year: number; clue: string }>;
-  const memBy = new Map(memorable.map((m) => [`${m.playerId}|${m.year}`, m.clue]));
-
   const careerFlavor = (id: string): string => {
     const ls = leagueBy.get(id);
     if (ls?.has(39)) return ' who has played in the Premier League';
@@ -135,9 +161,6 @@ async function gatherCandidates(): Promise<Scored[]> {
     const cf = careerFlavor(c.playerId);
     const facts: Fact[] = [];
     const y = c.year;
-
-    const mem = memBy.get(`${c.playerId}|${y}`);
-    if (mem) facts.push({ sig: 'memorable', score: 200, clue: mem });
 
     const award = awardBy.get(`${c.playerId}|${y}`);
     if (award) facts.push({ sig: `award:${award}`, score: 100, clue: `The ${dem} ${pw} who won the ${AWARD_SHORT[award]} at the ${y} World Cup` });
@@ -168,46 +191,46 @@ async function gatherCandidates(): Promise<Scored[]> {
     return facts.sort((a, b) => b.score - a.score);
   };
 
-  return cands.map((c) => ({ c, facts: buildFacts(c) })).filter((x) => x.facts.length);
-}
-
-export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXiPuzzleJson | null> {
-  const all = await gatherCandidates();
-
-  // One entry per player: keep their best (clue strength + fame + recency). This dedupes a
-  // player appearing across multiple tournaments to a single, strongest, recency-biased clue.
+  const scored = cands.map((c) => ({ c, facts: buildFacts(c) })).filter((x) => x.facts.length);
+  // One entry per player: keep their best (clue strength + fame + recency).
   const value = (x: Scored) => x.facts[0]!.score + x.c.mvt * 8 + (YEAR_WEIGHT[x.c.year] ?? 4);
   const bestByPlayer = new Map<string, Scored>();
-  for (const x of all) {
+  for (const x of scored) {
     const prev = bestByPlayer.get(x.c.playerId);
     if (!prev || value(x) > value(prev)) bestByPlayer.set(x.c.playerId, x);
   }
-  const pool = [...bestByPlayer.values()];
+  return [...bestByPlayer.values()];
+}
 
-  // Deterministic daily shuffle within position buckets. A wide jitter (≈ the fame spread) means
-  // the day's XI rotates through the deep curated + structured pool — different almost every day —
-  // while the high base score of memorable/award clues keeps the picks recognisable.
+type Sorted = Array<{ x: Scored; j: number }>;
+interface Pools { fine: Record<string, Sorted>; coarse: Record<string, Sorted> }
+
+export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXiPuzzleJson | null> {
   const seed = hashString(`${date}:wcxi`);
-  const jitter = (x: Scored, i: number) => value(x) + ((hashString(`${seed}:${x.c.playerId}:${i}`) % 1000) / 1000) * 70;
+  const value = (x: Scored) => x.facts[0]!.score + x.c.mvt * 8 + (YEAR_WEIGHT[x.c.year] ?? 4);
+  // Wide deterministic daily jitter so the day's XI rotates through the pool — different almost
+  // every day — while the curated clues' high base score keeps the picks recognisable.
+  const jitter = (x: Scored, i: number) => value(x) + ((hashString(`${seed}:${x.c.playerId}:${x.c.year}:${i}`) % 1000) / 1000) * 70;
+  const fineSlot = (x: Scored): string | null => (x.c.subPosition ? SUBPOS_SLOT[x.c.subPosition] ?? null : null);
+
+  // FINE pools (RB only holds right-backs, etc.) tried first; COARSE pools (any DF/MF/FW) are the
+  // fallback so a thin pool never leaves a hole.
+  const buildPools = (items: Scored[]): Pools => {
+    const sortPool = (filter: (x: Scored) => boolean): Sorted =>
+      items.filter(filter).map((x, i) => ({ x, j: jitter(x, i) })).sort((a, b) => b.j - a.j);
+    const fine: Record<string, Sorted> = {};
+    for (const label of ['GK', 'RB', 'CB', 'LB', 'CM', 'RW', 'LW', 'ST']) fine[label] = sortPool((x) => fineSlot(x) === label);
+    const coarse: Record<string, Sorted> = {
+      GK: sortPool((x) => x.c.position === 'GK'), DF: sortPool((x) => x.c.position === 'DF'),
+      MF: sortPool((x) => x.c.position === 'MF'), FW: sortPool((x) => x.c.position === 'FW'),
+    };
+    return { fine, coarse };
+  };
 
   const used = new Set<string>();
   const usedSig = new Set<string>();
-  const slots: WorldCupXiSlot[] = [];
-  const fineSlot = (x: Scored): string | null => (x.c.subPosition ? SUBPOS_SLOT[x.c.subPosition] ?? null : null);
-
-  // FINE pools (RB only holds right-backs, etc.) used first; COARSE pools (any DF/MF/FW) are the
-  // fallback so a thin tournament never leaves a hole.
-  const sortPool = (filter: (x: Scored) => boolean) =>
-    pool.filter(filter).map((x, i) => ({ x, j: jitter(x, i) })).sort((a, b) => b.j - a.j);
-  const fine: Record<string, Array<{ x: Scored; j: number }>> = {};
-  for (const label of ['GK', 'RB', 'CB', 'LB', 'CM', 'RW', 'LW', 'ST']) fine[label] = sortPool((x) => fineSlot(x) === label);
-  const coarse: Record<string, Array<{ x: Scored; j: number }>> = {
-    GK: sortPool((x) => x.c.position === 'GK'), DF: sortPool((x) => x.c.position === 'DF'),
-    MF: sortPool((x) => x.c.position === 'MF'), FW: sortPool((x) => x.c.position === 'FW'),
-  };
   const cursor: Record<string, number> = {};
-
-  const take = (list: Array<{ x: Scored; j: number }>, key: string): Scored | null => {
+  const take = (list: Sorted, key: string): Scored | null => {
     cursor[key] ??= 0;
     while (cursor[key]! < list.length) {
       const { x } = list[cursor[key]!]!;
@@ -217,20 +240,50 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
     return null;
   };
 
-  for (const pos of LAYOUT) {
-    const x = take(fine[pos.label] ?? [], `fine:${pos.label}`) ?? take(coarse[pos.bucket]!, `coarse:${pos.bucket}`);
-    if (!x) continue;
-    const fact = x.facts.find((f) => !usedSig.has(f.sig)) ?? x.facts[0]!;
-    used.add(x.c.playerId);
-    usedSig.add(fact.sig);
-    slots.push({ id: `${pos.label}-${slots.length}`, label: pos.label, x: pos.x, y: pos.y, expectedName: x.c.name, clues: [fact.clue] });
+  const result: Array<WorldCupXiSlot | null> = LAYOUT.map(() => null);
+  const fillFrom = (pools: Pools, tag: string) => {
+    LAYOUT.forEach((pos, idx) => {
+      if (result[idx]) return;
+      const x = take(pools.fine[pos.label] ?? [], `${tag}-fine:${pos.label}`) ?? take(pools.coarse[pos.bucket]!, `${tag}-coarse:${pos.bucket}`);
+      if (!x) return;
+      const fact = x.facts.find((f) => !usedSig.has(f.sig)) ?? x.facts[0]!;
+      used.add(x.c.playerId);
+      usedSig.add(fact.sig);
+      result[idx] = {
+        id: `${pos.label}-${idx}`, label: pos.label, x: pos.x, y: pos.y,
+        expectedName: x.c.name, clues: [fact.clue],
+        year: x.c.year, club: x.c.club, clubBadgeUrl: null,
+      };
+    });
+  };
+
+  // Curated bank is the sole intended source.
+  fillFrom(buildPools(await gatherMemorable()), 'mem');
+  // Only touch the data fallback if the curated pool left a hole.
+  if (result.some((s) => !s)) {
+    fillFrom(buildPools(await gatherDataFallback()), 'data');
   }
+
+  const slots = result.filter((s): s is WorldCupXiSlot => s !== null);
   if (slots.length < 11) return null;
+
+  // Resolve each slot's club crest (the badge shown in the header). Cached per club name; best-effort
+  // — a club without a logo match just shows its name.
+  const badgeByClub = new Map<string, string | null>();
+  for (const s of slots) {
+    if (!s.club) continue;
+    if (!badgeByClub.has(s.club)) {
+      const logo = await lookupTeamLogo(s.club, '');
+      badgeByClub.set(s.club, logo?.logoUrl ?? null);
+    }
+    s.clubBadgeUrl = badgeByClub.get(s.club) ?? null;
+  }
 
   return {
     modeId: 'world_cup_xi',
     puzzleId: `${date}-world_cup_xi`,
     date,
+    version: WCXI_VERSION,
     formation: '4-3-3',
     title: 'Name the World Cup XI',
     slots,

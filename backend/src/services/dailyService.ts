@@ -8,7 +8,7 @@ import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzz
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
-import { generateWorldCupXiPuzzle } from './worldCupXiGenerator.js';
+import { generateWorldCupXiPuzzle, WCXI_VERSION } from './worldCupXiGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
@@ -21,7 +21,7 @@ const GAME_MODES = [
   { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9 holes, name the answers', playerCount: 7600, isAvailable: true },
   { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
   { id: 'draft_master', title: 'BATTLE MODE', subtitle: 'Beat the scenario on a budget', playerCount: 11300, isAvailable: true },
-  { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Guess the World Cup year', playerCount: 8900, isAvailable: true },
+  { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Name the mystery XI', playerCount: 8900, isAvailable: true },
 ];
 
 const DAILY_PUZZLE_MODES = [
@@ -259,8 +259,9 @@ async function migrateStaleBlindRank(date: string): Promise<void> {
 }
 
 /**
- * Drop a stored World Cup XI puzzle if it predates the cross-tournament "name the XI" format
- * (the old single-tournament version had `country`/`year` and no `title`), so it regenerates.
+ * Drop a stored World Cup XI puzzle if it predates the current format, so it regenerates. Older
+ * puzzles had `country`/no `title` (single-tournament), or lack the current `version` stamp (e.g.
+ * the pre-curated-bank build that mostly served auto-generated clues).
  */
 async function migrateStaleWorldCupXi(date: string): Promise<void> {
   const rows = await db
@@ -268,9 +269,9 @@ async function migrateStaleWorldCupXi(date: string): Promise<void> {
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'world_cup_xi')))
     .limit(1);
-  const puzzle = rows[0]?.puzzleJson as { country?: unknown; title?: unknown } | undefined;
+  const puzzle = rows[0]?.puzzleJson as { country?: unknown; title?: unknown; version?: unknown } | undefined;
   if (!puzzle) return;
-  if (puzzle.country !== undefined || typeof puzzle.title !== 'string') {
+  if (puzzle.country !== undefined || typeof puzzle.title !== 'string' || puzzle.version !== WCXI_VERSION) {
     await db
       .delete(dailyPuzzles)
       .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'world_cup_xi')));
