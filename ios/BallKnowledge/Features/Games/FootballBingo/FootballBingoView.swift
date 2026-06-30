@@ -12,6 +12,7 @@ final class FootballBingoViewModel {
     var confettiBurstToken = 0
     var wrongFlashToken = 0
     var showResult = false
+    var wildcardUsed = false
 
     init(game: FootballBingoGame = FootballBingoSeed.makeGame()) {
         self.game = game
@@ -30,6 +31,23 @@ final class FootballBingoViewModel {
         confettiBurstToken = 0
         wrongFlashToken = 0
         showResult = false
+        wildcardUsed = false
+    }
+
+    /// One-shot: instantly complete every remaining square the current player satisfies.
+    func useWildcard() {
+        guard game.isActive, !wildcardUsed, let player = game.currentPlayer else { return }
+        wildcardUsed = true
+        HapticManager.success()
+        let toComplete = game.categories.filter {
+            !game.completedCategoryIds.contains($0.id) && FootballBingoMatcher.matches(player: player, category: $0)
+        }
+        for category in toComplete {
+            game.markCompleted(categoryId: category.id)
+        }
+        advanceTurn(by: 1)
+        if game.status == .won { confettiBurstToken += 1 }
+        presentResultIfNeeded()
     }
 
     func skip() {
@@ -138,6 +156,8 @@ struct FootballBingoView: View {
                                 player: viewModel.game.currentPlayer,
                                 remaining: viewModel.game.remainingPlayers,
                                 onSkip: { viewModel.skip() },
+                                onWildcard: { viewModel.useWildcard() },
+                                wildcardAvailable: !viewModel.wildcardUsed,
                                 isActive: viewModel.game.isActive
                             )
                             .id(viewModel.playerPanelToken)
@@ -244,17 +264,30 @@ private struct FootballBingoPlayerPanel: View {
     let player: FootballBingoPlayer?
     let remaining: Int
     var onSkip: () -> Void
+    var onWildcard: () -> Void
+    let wildcardAvailable: Bool
     let isActive: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
+            HStack(spacing: 8) {
                 Text("\(remaining) PLAYERS LEFT")
                     .font(BKFont.caption(11))
                     .tracking(0.8)
                     .foregroundStyle(BKTheme.accent)
                 Spacer()
                 if isActive {
+                    if wildcardAvailable {
+                        Button(action: onWildcard) {
+                            Text("WILDCARD")
+                                .font(.system(size: 11, weight: .heavy, design: .rounded))
+                                .foregroundStyle(BKTheme.background)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(BKTheme.streak)
+                                .clipShape(Capsule())
+                        }
+                    }
                     Button(action: onSkip) {
                         Text("SKIP")
                             .font(.system(size: 11, weight: .heavy, design: .rounded))
@@ -271,16 +304,7 @@ private struct FootballBingoPlayerPanel: View {
                 HStack(spacing: 12) {
                     // Headshot only — the fallback stays neutral (initials, not a flag) so it never
                     // leaks the player's nationality, which is one of the tiles to deduce.
-                    PlayerAvatar(urlString: player.headshotUrl, size: 52) {
-                        Circle()
-                            .fill(BKTheme.card)
-                            .frame(width: 52, height: 52)
-                            .overlay(
-                                Text(Self.initials(player.name))
-                                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                                    .foregroundStyle(BKTheme.textMuted)
-                            )
-                    }
+                    PlayerAvatar(urlString: player.headshotUrl, size: 52)
                     Text(player.name.uppercased())
                         .font(BKFont.title(21))
                         .foregroundStyle(BKTheme.textPrimary)
@@ -419,7 +443,7 @@ private struct FootballBingoTileView: View {
                 }
 
                 VStack(spacing: 6) {
-                    FootballBingoCategoryIcon(category: category, size: 40)
+                    FootballBingoCategoryIcon(category: category, size: 40, isCompleted: isCompleted)
                     Text(BingoTileLabel.short(for: category))
                         .font(.system(size: 11, weight: .heavy, design: .rounded))
                         .foregroundStyle(isCompleted ? Color.black : BKTheme.textPrimary)
@@ -442,14 +466,19 @@ private struct FootballBingoTileView: View {
                     .padding(5)
                 }
             }
-            .aspectRatio(1, contentMode: .fill)
-            .clipped()
-            .scaleEffect(isPopping ? 1.06 : 1)
+            .aspectRatio(1, contentMode: .fit)
+            // Clip inside the tile so the green burst can't bleed onto neighbours (tiles are flush).
+            .clipShape(Rectangle())
+            .overlay(
+                Rectangle().stroke(
+                    isCompleted ? Color.black.opacity(0.22) : BKTheme.background.opacity(0.45),
+                    lineWidth: 0.75
+                )
+            )
             .offset(x: shakeOffset)
         }
         .buttonStyle(.plain)
         .allowsHitTesting(isEnabled)
-        .animation(.spring(response: FootballBingoTiming.tilePop, dampingFraction: 0.62), value: isPopping)
         .onChange(of: isCompleted) { _, completed in
             guard completed else {
                 greenBurstScale = 0
@@ -478,6 +507,7 @@ private struct FootballBingoTileView: View {
 private struct FootballBingoCategoryIcon: View {
     let category: FootballBingoCategory
     var size: CGFloat = 40
+    var isCompleted: Bool = false
 
     var body: some View {
         Group {
@@ -498,7 +528,7 @@ private struct FootballBingoCategoryIcon: View {
                     .overlay(alignment: .bottomTrailing) {
                         Text(GuessWhoDisplay.nationalityFlag(category.flag ?? ""))
                             .font(.system(size: size * 0.5))
-                            .background(Circle().fill(BKTheme.background).frame(width: size * 0.52, height: size * 0.52))
+                            .shadow(color: .black.opacity(0.5), radius: 1)
                             .offset(x: size * 0.18, y: size * 0.1)
                     }
             case .clubCombo:
@@ -513,9 +543,7 @@ private struct FootballBingoCategoryIcon: View {
                     iconFallback(GuessWhoDisplay.leagueAbbrev(category.iconValue))
                 }
             case .trophy:
-                Ph.trophy.fill
-                    .color(BKTheme.streak)
-                    .frame(width: size * 0.85, height: size * 0.85)
+                Text("🏆").font(.system(size: size * 0.9))
             case .award:
                 Text("🏅").font(.system(size: size * 0.9))
             case .custom:
@@ -542,7 +570,7 @@ private struct FootballBingoCategoryIcon: View {
         } else if category.type == .statThreshold || category.type == .position {
             Text(category.iconValue)
                 .font(.system(size: size * 0.42, weight: .black, design: .rounded))
-                .foregroundStyle(BKTheme.accent)
+                .foregroundStyle(isCompleted ? Color.black : BKTheme.accent)
         } else {
             Ph.sealQuestion.fill
                 .color(BKTheme.textMuted)
@@ -603,7 +631,10 @@ private enum BingoTileLabel {
         case .statThreshold:
             // Icon already shows the number; the title is what it counts (e.g. "Champions League Apps").
             return c.title.uppercased()
-        case .nationality, .playedInLeague, .wonCompetition, .award, .position:
+        case .wonCompetition:
+            if c.matchingRule.lowercased().contains("european championship") { return "EUROS WINNER" }
+            return c.title.uppercased()
+        case .nationality, .playedInLeague, .award, .position:
             return c.title.uppercased()
         default:
             return c.title.uppercased()

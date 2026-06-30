@@ -533,11 +533,9 @@ private struct BattlePitchSlot: View {
                         Circle().stroke(strokeColor, lineWidth: targeted ? 2.5 : 1.1)
                     )
                 if let pick {
-                    PlayerAvatar(urlString: pick.player.headshotUrl, size: 42) {
-                        ClubCrest(club: pick.club, league: league, size: 32)
-                    }
-                    .grayscale(pick.correct ? 0 : 0.85)
-                    .opacity(pick.correct ? 1 : 0.55)
+                    PlayerAvatar(urlString: pick.player.headshotUrl, size: 42)
+                        .grayscale(pick.correct ? 0 : 0.85)
+                        .opacity(pick.correct ? 1 : 0.55)
                 } else if let club {
                     ClubCrest(club: club, league: league, size: 34)
                 } else {
@@ -816,14 +814,7 @@ private struct BattleSearchSheet: View {
             viewModel.selectPlayer(player)
         } label: {
             HStack(spacing: 12) {
-                PlayerAvatar(urlString: player.headshotUrl, size: 32) {
-                    Circle().fill(BKTheme.cardElevated).frame(width: 32, height: 32)
-                        .overlay(
-                            Text(initials(player.name))
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
-                                .foregroundStyle(BKTheme.textMuted)
-                        )
-                }
+                PlayerAvatar(urlString: player.headshotUrl, size: 32)
                 Text(player.name.uppercased())
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(BKTheme.textPrimary)

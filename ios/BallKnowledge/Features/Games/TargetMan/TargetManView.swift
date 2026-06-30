@@ -417,18 +417,7 @@ private struct TargetManFilledSlotRow: View {
                 .background(BKTheme.accent)
                 .clipShape(Circle())
 
-            PlayerAvatar(urlString: selection.player.headshotUrl, size: 42) {
-                PlayerTeamBadge(player: selection.player, size: 34) {
-                    Circle()
-                        .fill(BKTheme.cardElevated)
-                        .frame(width: 34, height: 34)
-                        .overlay(
-                            Text(GuessWhoDisplay.clubAbbrev(selection.player.club))
-                                .font(.system(size: 9, weight: .bold, design: .rounded))
-                                .foregroundStyle(BKTheme.textMuted)
-                        )
-                }
-            }
+            PlayerAvatar(urlString: selection.player.headshotUrl, size: 42)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(selection.player.name.uppercased())

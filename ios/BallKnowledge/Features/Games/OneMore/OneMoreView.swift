@@ -336,16 +336,7 @@ private struct OneMoreChoiceCard: View {
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 8) {
-                PlayerAvatar(urlString: option.headshotUrl, size: 80) {
-                    Circle()
-                        .fill(BKTheme.card)
-                        .frame(width: 80, height: 80)
-                        .overlay(
-                            Text(initials)
-                                .font(.system(size: 26, weight: .bold, design: .rounded))
-                                .foregroundStyle(BKTheme.textMuted)
-                        )
-                }
+                PlayerAvatar(urlString: option.headshotUrl, size: 80)
                 .shadow(color: BKTheme.accent.opacity(0.5), radius: 5, y: 3) // tight green glow under the circle
 
                 Text(option.name)

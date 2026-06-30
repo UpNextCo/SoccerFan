@@ -566,12 +566,7 @@ private struct BlindRankSlotRow: View {
                 .frame(width: 28, alignment: .leading)
 
             if let player {
-                PlayerAvatar(urlString: player.headshotUrl, size: avatarSize) {
-                    Circle()
-                        .fill(BKTheme.cardElevated)
-                        .frame(width: avatarSize, height: avatarSize)
-                        .overlay(Text(GuessWhoDisplay.nationalityFlag(player.nationality)).font(.system(size: avatarSize * 0.55)))
-                }
+                PlayerAvatar(urlString: player.headshotUrl, size: avatarSize)
                 Text(player.name)
                     .font(BKFont.headline(14))
                     .foregroundStyle(BKTheme.textPrimary)
@@ -638,12 +633,7 @@ private struct BlindRankCurrentPlayerCard: View {
         HStack(spacing: 12) {
             BlindRankDragHandle()
 
-            PlayerAvatar(urlString: player.headshotUrl, size: 44) {
-                Circle()
-                    .fill(BKTheme.card)
-                    .frame(width: 44, height: 44)
-                    .overlay(Text(GuessWhoDisplay.nationalityFlag(player.nationality)).font(.system(size: 24)))
-            }
+            PlayerAvatar(urlString: player.headshotUrl, size: 44)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(player.name)

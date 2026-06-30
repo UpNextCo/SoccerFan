@@ -223,6 +223,19 @@ struct PlayerTeamBadge<Fallback: View>: View {
 
 /// A circular player headshot (API-Football quota-free CDN) that falls back to the provided view
 /// (club badge / initials) whenever we have no photo URL or the image fails to load.
+/// The shared "no photo" placeholder — a black silhouette on white (Resources/GameTiles/player.png).
+/// Loaded from the bundle (synchronous, instant), so it's the default fallback for every player.
+struct PlayerSilhouette: View {
+    var size: CGFloat = 32
+
+    var body: some View {
+        GameModeBundleImage(name: "player")
+            .scaledToFill()
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+    }
+}
+
 struct PlayerAvatar<Fallback: View>: View {
     let headshotURL: URL?
     var size: CGFloat = 32
@@ -255,6 +268,15 @@ struct PlayerAvatar<Fallback: View>: View {
             .frame(width: size, height: size)
         } else {
             fallback()
+        }
+    }
+}
+
+extension PlayerAvatar where Fallback == PlayerSilhouette {
+    /// Player headshot with the shared silhouette as the fallback (no custom fallback needed).
+    init(urlString: String?, size: CGFloat = 32) {
+        self.init(headshotURL: urlString.flatMap(URL.init(string:)), size: size) {
+            PlayerSilhouette(size: size)
         }
     }
 }
