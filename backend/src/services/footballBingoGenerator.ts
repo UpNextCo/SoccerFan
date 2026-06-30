@@ -10,6 +10,7 @@ import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { playerHeadshotUrl } from '../constants/footballMedia.js';
+import { lookupTeamLogo } from './teamService.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
 const GRID = 16;
@@ -102,6 +103,8 @@ interface BingoCategory {
   iconType: 'flag' | 'clubBadge' | 'trophy' | 'league' | 'custom';
   iconValue: string;
   matchingRule: string;
+  logoUrl?: string | null;
+  teamId?: number | null;
 }
 
 interface BingoPlayer {
@@ -356,6 +359,18 @@ export async function generateFootballBingoPuzzle(date: string): Promise<Footbal
     chosen.push(...rest.slice(0, GRID - chosen.length));
   }
   const categories = seededShuffle(chosen.slice(0, GRID), seed ^ 0x5eed);
+
+  // Resolve crest URLs server-side for club tiles (reliable badges, same as Battle/search).
+  await Promise.all(
+    categories
+      .filter((c) => c.iconType === 'clubBadge')
+      .map(async (c) => {
+        const [club, league] = c.iconValue.split('|');
+        const logo = await lookupTeamLogo(club ?? c.matchingRule, league ?? '');
+        c.logoUrl = logo?.logoUrl ?? null;
+        c.teamId = logo?.teamId ?? null;
+      })
+  );
 
   // Build a solvable queue: top matchers per category by PL apps (proxy for fame).
   const queueIds = new Set<string>();

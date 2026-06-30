@@ -142,6 +142,8 @@ struct FootballBingoCategoryDTO: Codable, Equatable {
     let iconType: String
     let iconValue: String
     let matchingRule: String
+    let logoUrl: String?
+    let teamId: Int?
 }
 
 struct FootballBingoPlayerDTO: Codable, Equatable {

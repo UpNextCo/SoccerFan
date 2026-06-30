@@ -26,7 +26,9 @@ enum FootballBingoSeed {
                 type: FootballBingoCategoryType(rawValue: c.type) ?? .nationality,
                 iconType: FootballBingoIconType(rawValue: c.iconType) ?? .custom,
                 iconValue: c.iconValue,
-                matchingRule: c.matchingRule
+                matchingRule: c.matchingRule,
+                logoUrl: c.logoUrl,
+                teamId: c.teamId
             )
         }
         let players = dto.players.map { p in

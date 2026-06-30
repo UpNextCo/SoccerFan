@@ -32,6 +32,8 @@ struct FootballBingoCategory: Identifiable, Equatable {
     let iconType: FootballBingoIconType
     let iconValue: String
     let matchingRule: String
+    var logoUrl: String? = nil
+    var teamId: Int? = nil
 }
 
 struct FootballBingoPlayer: Identifiable, Equatable {

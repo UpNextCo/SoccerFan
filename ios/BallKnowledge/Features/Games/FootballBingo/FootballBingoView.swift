@@ -368,13 +368,14 @@ private struct FootballBingoBoardView: View {
     let isEnabled: Bool
     var onTap: (FootballBingoCategory) -> Void
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 4)
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
-            ForEach(categories) { category in
+        LazyVGrid(columns: columns, spacing: 0) {
+            ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
                 FootballBingoTileView(
                     category: category,
+                    index: index,
                     isCompleted: completedIds.contains(category.id),
                     isShaking: shakeId == category.id,
                     isPopping: popId == category.id,
@@ -383,11 +384,14 @@ private struct FootballBingoBoardView: View {
                 )
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
     }
 }
 
 private struct FootballBingoTileView: View {
     let category: FootballBingoCategory
+    let index: Int
     let isCompleted: Bool
     let isShaking: Bool
     let isPopping: Bool
@@ -397,29 +401,33 @@ private struct FootballBingoTileView: View {
     @State private var shakeOffset: CGFloat = 0
     @State private var greenBurstScale: CGFloat = 0
 
+    // Checkerboard of two greys (no gaps) so adjacent tiles stay distinct.
+    private var baseColor: Color {
+        let row = index / 4, col = index % 4
+        return (row + col).isMultiple(of: 2) ? BKTheme.card : BKTheme.cardElevated
+    }
+
     var body: some View {
         Button(action: onTap) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(BKTheme.cardElevated)
+                Rectangle().fill(baseColor)
 
                 if isCompleted {
-                    RoundedRectangle(cornerRadius: 12)
+                    Rectangle()
                         .fill(BKTheme.accent)
                         .scaleEffect(greenBurstScale)
                 }
 
-                VStack(spacing: 4) {
-                    FootballBingoCategoryIcon(category: category)
-                    Text(category.title.uppercased())
-                        .font(.system(size: 9, weight: .heavy, design: .rounded))
+                VStack(spacing: 6) {
+                    FootballBingoCategoryIcon(category: category, size: 40)
+                    Text(BingoTileLabel.short(for: category))
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
                         .foregroundStyle(isCompleted ? Color.black : BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.75)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
-                .padding(6)
-                .opacity(1)
+                .padding(8)
 
                 if isCompleted {
                     VStack {
@@ -434,8 +442,8 @@ private struct FootballBingoTileView: View {
                     .padding(5)
                 }
             }
-            .frame(height: 82)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .aspectRatio(1, contentMode: .fill)
+            .clipped()
             .scaleEffect(isPopping ? 1.06 : 1)
             .offset(x: shakeOffset)
         }
@@ -469,64 +477,115 @@ private struct FootballBingoTileView: View {
 
 private struct FootballBingoCategoryIcon: View {
     let category: FootballBingoCategory
+    var size: CGFloat = 40
 
     var body: some View {
         Group {
             switch category.iconType {
             case .flag:
                 Text(GuessWhoDisplay.nationalityFlag(category.iconValue))
-                    .font(.system(size: 26))
+                    .font(.system(size: size * 0.95))
             case .clubBadge:
                 let parts = category.iconValue.split(separator: "|").map(String.init)
                 let club = parts.first ?? category.iconValue
                 let league = parts.count > 1 ? parts[1] : "Premier League"
-                TeamBadgeImage(club: club, league: league, size: 28) {
-                    iconFallback(String(club.prefix(3)).uppercased())
+                // Use the server-resolved crest first (reliable), then the registry, then initials.
+                TeamBadgeImage(
+                    club: club,
+                    league: league,
+                    teamId: category.teamId,
+                    logoURL: category.logoUrl.flatMap(URL.init(string:)),
+                    size: size
+                ) {
+                    iconFallback(GuessWhoDisplay.clubAbbrev(club))
                 }
             case .league:
-                LeagueBadgeImage(league: category.iconValue, size: 28) {
+                LeagueBadgeImage(league: category.iconValue, size: size) {
                     iconFallback(GuessWhoDisplay.leagueAbbrev(category.iconValue))
                 }
             case .trophy:
                 Ph.trophy.fill
                     .color(BKTheme.streak)
-                    .frame(width: 24, height: 24)
+                    .frame(width: size * 0.85, height: size * 0.85)
             case .custom:
                 customIcon
             }
         }
-        .frame(height: 28)
-        .opacity(1)
+        .frame(height: size)
     }
 
     @ViewBuilder
     private var customIcon: some View {
         if category.matchingRule.contains("Messi") {
-            Text("🐐").font(.system(size: 24))
+            Text("🐐").font(.system(size: size * 0.85))
         } else if category.matchingRule.contains("Guardiola") {
             Ph.users.fill
                 .color(BKTheme.textSecondary)
-                .frame(width: 22, height: 22)
+                .frame(width: size * 0.75, height: size * 0.75)
         } else if category.type == .statThreshold || category.type == .position {
             Text(category.iconValue)
-                .font(.system(size: 12, weight: .black, design: .rounded))
+                .font(.system(size: size * 0.42, weight: .black, design: .rounded))
                 .foregroundStyle(BKTheme.accent)
         } else {
             Ph.sealQuestion.fill
                 .color(BKTheme.textMuted)
-                .frame(width: 22, height: 22)
+                .frame(width: size * 0.75, height: size * 0.75)
         }
     }
 
     private func iconFallback(_ text: String) -> some View {
         Circle()
-            .fill(BKTheme.cardElevated)
-            .frame(width: 28, height: 28)
+            .fill(BKTheme.background.opacity(0.5))
+            .frame(width: size, height: size)
             .overlay(
                 Text(text)
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(BKTheme.textMuted)
+                    .font(.system(size: size * 0.3, weight: .heavy, design: .rounded))
+                    .foregroundStyle(BKTheme.textSecondary)
             )
+    }
+}
+
+/// Short tile captions (BVB, CHE, UCL…) instead of long sentences.
+private enum BingoTileLabel {
+    private static let clubShort: [String: String] = [
+        "borussia dortmund": "BVB", "chelsea": "CHE", "newcastle united": "NEW", "newcastle": "NEW",
+        "manchester united": "MUN", "manchester city": "MCI", "liverpool": "LIV", "arsenal": "ARS",
+        "tottenham hotspur": "TOT", "tottenham": "TOT", "everton": "EVE", "aston villa": "AVL",
+        "west ham united": "WHU", "west ham": "WHU", "leicester city": "LEI", "leeds united": "LEE",
+        "real madrid": "RMA", "barcelona": "BAR", "atletico madrid": "ATM", "atlético madrid": "ATM",
+        "sevilla": "SEV", "valencia": "VAL", "villarreal": "VIL", "real sociedad": "RSO", "athletic club": "ATH",
+        "juventus": "JUV", "ac milan": "MIL", "inter milan": "INT", "inter": "INT", "napoli": "NAP",
+        "as roma": "ROM", "roma": "ROM", "lazio": "LAZ", "atalanta": "ATA", "fiorentina": "FIO",
+        "bayern munich": "FCB", "bayer leverkusen": "B04", "rb leipzig": "RBL", "borussia monchengladbach": "BMG",
+        "vfl wolfsburg": "WOB", "werder bremen": "SVW", "eintracht frankfurt": "SGE", "schalke 04": "S04",
+        "paris saint-germain": "PSG", "paris saint germain": "PSG", "olympique marseille": "OM", "marseille": "OM",
+        "olympique lyonnais": "OL", "lyon": "OL", "as monaco": "ASM", "monaco": "ASM", "lille": "LIL",
+    ]
+    private static let trophyShort: [String: String] = [
+        "champions league": "UCL", "europa league": "UEL", "uefa super cup": "USC",
+        "club world cup": "CWC", "world cup": "WC", "european championship": "EURO",
+        "copa américa": "COPA", "copa america": "COPA", "nations league": "UNL",
+        "premier league": "PL", "la liga": "LL", "serie a": "SA", "bundesliga": "BUN", "ligue 1": "L1",
+        "fa cup": "FA", "league cup": "EFL", "community shield": "CS", "copa del rey": "CDR",
+        "coppa italia": "CI", "dfb pokal": "DFB", "coupe de france": "CDF", "trophée des champions": "TDC",
+    ]
+
+    static func short(for c: FootballBingoCategory) -> String {
+        let key = c.matchingRule.folding(options: .diacriticInsensitive, locale: .current).lowercased()
+        switch c.type {
+        case .playedForClub:
+            return clubShort[key] ?? GuessWhoDisplay.clubAbbrev(c.matchingRule)
+        case .wonCompetition:
+            return trophyShort[key] ?? String(c.matchingRule.prefix(3)).uppercased()
+        case .playedInLeague:
+            return GuessWhoDisplay.leagueAbbrev(c.matchingRule)
+        case .nationality:
+            return String(c.matchingRule.prefix(3)).uppercased()
+        case .statThreshold, .position:
+            return c.iconValue
+        default:
+            return String(c.matchingRule.prefix(3)).uppercased()
+        }
     }
 }
 
