@@ -12,6 +12,36 @@ export function playerHeadshotUrl(apiFootballId: number | null | undefined): str
   return apiFootballId ? `${PLAYER_PHOTO_CDN}/${apiFootballId}.png` : null;
 }
 
+/**
+ * Final headshot for a player: a manually-set override (e.g. a Wikipedia Commons photo for a
+ * legend) wins; otherwise the API-Football CDN photo.
+ */
+export function resolveHeadshot(
+  photoUrl: string | null | undefined,
+  apiFootballId: number | null | undefined
+): string | null {
+  if (photoUrl && photoUrl.trim().length > 0) return photoUrl.trim();
+  return playerHeadshotUrl(apiFootballId);
+}
+
+/**
+ * Build a stable, resizable image URL from a Wikimedia Commons reference. Accepts a File: page URL,
+ * a direct upload.wikimedia.org URL, a Special:FilePath URL, or a bare "File.jpg" name.
+ * Uses Special:FilePath, which 302-redirects to a `width`-px thumbnail (AsyncImage follows it).
+ */
+export function commonsPhotoUrl(input: string, width = 400): string {
+  let file = input.trim().split(/[?#]/)[0] ?? input.trim();
+  if (/special:filepath/i.test(file)) {
+    file = file.replace(/.*special:filepath\//i, '');
+  } else if (/file:/i.test(file)) {
+    file = file.replace(/.*file:/i, '');
+  } else if (file.includes('/')) {
+    file = file.substring(file.lastIndexOf('/') + 1);
+  }
+  file = decodeURIComponent(file).replace(/\s+/g, '_');
+  return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=${width}`;
+}
+
 export function leagueLogoUrl(leagueId: number): string {
   return `${LEAGUE_LOGO_CDN}/${leagueId}.png`;
 }

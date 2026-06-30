@@ -49,6 +49,7 @@ export const players = pgTable(
     foot: text('foot'), // 'left' | 'right' | 'both' — preferred foot, from Transfermarkt
     subPosition: text('sub_position'), // fine position from Transfermarkt (Right-Back, Centre-Back, Left Winger…)
     apiFootballId: integer('api_football_id'), // API-Football player id → headshot CDN (separate from external_id dedup key)
+    photoUrl: text('photo_url'), // manual headshot override (e.g. Wikimedia Commons) — wins over the CDN photo
     marketValueTier: integer('market_value_tier').notNull().default(3),
     marketValueEur: integer('market_value_eur'),
     peakMarketValueEur: integer('peak_market_value_eur'),

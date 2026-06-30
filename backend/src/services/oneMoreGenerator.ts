@@ -11,7 +11,8 @@
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { playerHeadshotUrl } from '../constants/footballMedia.js';
+import { resolveHeadshot } from '../constants/footballMedia.js';
+import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
 
 const ROUND_TARGET = 20;
@@ -223,11 +224,12 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
     const logo = await lookupTeamLogo(club, '');
     if (logo) logoByClub.set(club, logo);
   }
+  const overrides = await getPhotoOverrides();
   const toOption = (c: Candidate): OneMoreOption => {
     const logo = logoByClub.get(primaryClub(c.id));
     return {
       id: c.id, name: c.name, clubs: clubs.get(c.id) ?? '', position: c.position, nationality: c.nationality, value: c.value,
-      headshotUrl: playerHeadshotUrl(c.api_football_id) ?? undefined,
+      headshotUrl: resolveHeadshot(overrides.get(c.id), c.api_football_id) ?? undefined,
       teamId: logo?.teamId, teamLogoUrl: logo?.logoUrl,
     };
   };

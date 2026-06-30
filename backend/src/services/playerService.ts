@@ -6,7 +6,8 @@ import { normalizeSearchText } from '../utils/playerSearch.js';
 import { resolveSearchLimit } from '../utils/playerSearchRank.js';
 import { lookupTeamLogos } from './teamService.js';
 import { normalizeTeamName } from '../utils/teamName.js';
-import { playerHeadshotUrl } from '../constants/footballMedia.js';
+import { resolveHeadshot } from '../constants/footballMedia.js';
+import { getPhotoOverrides } from './photoOverrides.js';
 
 type SearchRow = {
   id: string;
@@ -178,6 +179,7 @@ export async function searchPlayers(
 
   const deduped: PlayerSearchResult[] = [];
   const seen = new Set<string>();
+  const overrides = await getPhotoOverrides();
 
   for (const player of rows) {
     // Dedupe by player IDENTITY, not name — two different people can share a name (e.g. Nico
@@ -194,7 +196,7 @@ export async function searchPlayers(
       nationality: player.nationality,
       position: player.position,
       priceEur: playerPriceEur(player.peak_market_value_eur, player.market_value_tier),
-      headshotUrl: playerHeadshotUrl(player.api_football_id) ?? undefined,
+      headshotUrl: resolveHeadshot(overrides.get(player.id), player.api_football_id) ?? undefined,
     });
 
     if (deduped.length >= resultLimit) break;

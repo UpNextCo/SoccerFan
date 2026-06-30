@@ -17,8 +17,9 @@
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { playerHeadshotUrl } from '../constants/footballMedia.js';
+import { resolveHeadshot } from '../constants/footballMedia.js';
 import { lookupTeamLogo } from './teamService.js';
+import { getPhotoOverrides } from './photoOverrides.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
 const GRID = 16;
@@ -283,6 +284,7 @@ async function loadPool(): Promise<BingoPlayer[]> {
   const trophiesById = new Map(trophyRows.map((r) => [r.player_id, r.trophies]));
   const awardsById = new Map(awardRows.map((r) => [r.player_id, r.awards]));
   const feeById = new Map(feeRows.map((r) => [r.player_id, r.max_fee]));
+  const overrides = await getPhotoOverrides();
 
   return base.map((b) => {
     const s = statsById.get(b.id);
@@ -315,7 +317,7 @@ async function loadPool(): Promise<BingoPlayer[]> {
       premierLeagueApps: stats.pl_apps,
       topLeagueGoals: stats.top_goals,
       topLeagueApps: stats.top_apps,
-      headshotUrl: playerHeadshotUrl(b.api_football_id) ?? null,
+      headshotUrl: resolveHeadshot(overrides.get(b.id), b.api_football_id) ?? null,
     };
   });
 }

@@ -11,7 +11,8 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { lookupTeamLogo } from './teamService.js';
-import { playerHeadshotUrl } from '../constants/footballMedia.js';
+import { resolveHeadshot } from '../constants/footballMedia.js';
+import { getPhotoOverrides } from './photoOverrides.js';
 
 interface Category {
   id: string;
@@ -301,13 +302,14 @@ export async function battlePlayers(
     GROUP BY p.id, p.name, p.api_football_id, p.nationality
     ORDER BY stat DESC
     LIMIT 25
-  `)) as unknown as Array<{ id: string; name: string; api_football_id: number | null; nationality: string | null; stat: number; played_for_club: boolean }>;
+  `  )) as unknown as Array<{ id: string; name: string; api_football_id: number | null; nationality: string | null; stat: number; played_for_club: boolean }>;
+  const overrides = await getPhotoOverrides();
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     statValue: r.stat,
     nationality: r.nationality,
     playedForClub: r.played_for_club,
-    headshotUrl: playerHeadshotUrl(r.api_football_id) ?? undefined,
+    headshotUrl: resolveHeadshot(overrides.get(r.id), r.api_football_id) ?? undefined,
   }));
 }

@@ -14,7 +14,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { playerHeadshotUrl } from '../constants/footballMedia.js';
+import { resolveHeadshot } from '../constants/footballMedia.js';
+import { getPhotoOverrides } from './photoOverrides.js';
 import {
   BLIND_RANK_SLOT_COUNT,
   PuzzleValidationError,
@@ -364,6 +365,7 @@ export async function generateBlindRankPuzzle(date: string): Promise<GeneratedDa
     const statValues: Record<string, number> = {};
     for (const c of chosen) statValues[c.id] = c.stat;
 
+    const overrides = await getPhotoOverrides();
     const presentationOrder = balancedOrder(chosen, seed ^ 0x9e37).map((c) => {
       const cl = clubs.get(c.id) ?? [];
       return {
@@ -375,7 +377,7 @@ export async function generateBlindRankPuzzle(date: string): Promise<GeneratedDa
         nationality: c.nationality,
         position: c.position,
         statValue: c.stat,
-        headshotUrl: playerHeadshotUrl(c.api_football_id) ?? undefined,
+        headshotUrl: resolveHeadshot(overrides.get(c.id), c.api_football_id) ?? undefined,
       };
     });
 
