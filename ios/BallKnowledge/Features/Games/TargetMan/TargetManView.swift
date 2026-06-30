@@ -311,19 +311,26 @@ private struct TargetManChallengeCard: View {
                     .tracking(1)
                     .foregroundStyle(BKTheme.textMuted)
                 Text(challenge.formatValue(challenge.target))
-                    .font(BKFont.title(42))
+                    .font(BKFont.title(54))
                     .foregroundStyle(BKTheme.accent)
                 Text(challenge.title.uppercased())
-                    .font(BKFont.caption(11))
+                    .font(BKFont.headline(15))
                     .tracking(0.6)
-                    .foregroundStyle(BKTheme.textSecondary)
+                    .foregroundStyle(BKTheme.textPrimary)
                     .multilineTextAlignment(.center)
+                Text("PICK 5 PLAYERS WHO TOGETHER TOTAL THIS")
+                    .font(BKFont.caption(9))
+                    .tracking(0.5)
+                    .foregroundStyle(BKTheme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 2)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .background(BKTheme.cardElevated.opacity(0.9))
+        .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
     }
 }
 
@@ -410,20 +417,20 @@ private struct TargetManFilledSlotRow: View {
                 .background(BKTheme.accent)
                 .clipShape(Circle())
 
-            PlayerAvatar(urlString: selection.player.headshotUrl, size: 34) {
-                PlayerTeamBadge(player: selection.player, size: 28) {
+            PlayerAvatar(urlString: selection.player.headshotUrl, size: 42) {
+                PlayerTeamBadge(player: selection.player, size: 34) {
                     Circle()
                         .fill(BKTheme.cardElevated)
-                        .frame(width: 28, height: 28)
+                        .frame(width: 34, height: 34)
                         .overlay(
                             Text(GuessWhoDisplay.clubAbbrev(selection.player.club))
-                                .font(.system(size: 8, weight: .bold, design: .rounded))
+                                .font(.system(size: 9, weight: .bold, design: .rounded))
                                 .foregroundStyle(BKTheme.textMuted)
                         )
                 }
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(selection.player.name.uppercased())
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(BKTheme.textPrimary)
@@ -434,9 +441,16 @@ private struct TargetManFilledSlotRow: View {
                         .foregroundStyle(BKTheme.accent)
                         .transition(.opacity.combined(with: .move(edge: .leading)))
                 } else {
-                    Text("LOCKED IN")
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textMuted)
+                    HStack(spacing: 4) {
+                        Ph.checkCircle.fill.color(BKTheme.background).frame(width: 10, height: 10)
+                        Text("SELECTED")
+                            .font(.system(size: 9, weight: .heavy, design: .rounded))
+                            .foregroundStyle(BKTheme.background)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(BKTheme.accent)
+                    .clipShape(Capsule())
                 }
             }
 
@@ -481,7 +495,7 @@ private struct TargetManSearchSection: View {
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                 )
                 .textFieldStyle(.plain)
-                .foregroundStyle(BKTheme.background)
+                .foregroundStyle(BKTheme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .focused(isSearchFocused)
@@ -492,17 +506,13 @@ private struct TargetManSearchSection: View {
                 }
 
                 if viewModel.isSearching {
-                    ProgressView().tint(BKTheme.accent)
+                    ProgressView().tint(BKTheme.textSecondary)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5)
-            )
+            .background(BKTheme.cardElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
 
             if !viewModel.searchResults.isEmpty {
                 PlayerSearchResultsList(
@@ -593,6 +603,24 @@ private struct TargetManResultView: View {
 
     private var distance: Int { abs(difference) }
 
+    private var verdict: String {
+        switch score {
+        case 1000: return "BULLSEYE"
+        case 900...: return "SHARPSHOOTER"
+        case 600...: return "ON TARGET"
+        case 250...: return "OFF THE MARK"
+        default: return "WIDE"
+        }
+    }
+
+    private var verdictColor: Color {
+        switch score {
+        case 600...: return BKTheme.accent
+        case 250...: return .orange
+        default: return BKTheme.wrong
+        }
+    }
+
     var body: some View {
         ZStack {
             BKTheme.background.ignoresSafeArea()
@@ -612,6 +640,17 @@ private struct TargetManResultView: View {
                                 .multilineTextAlignment(.center)
                         }
                         .padding(.top, 16)
+
+                        TargetBullseye(score: score, landed: step >= TargetManResultStep.points.rawValue)
+                            .frame(height: 168)
+                            .padding(.top, 4)
+
+                        if step >= TargetManResultStep.points.rawValue {
+                            Text(verdict)
+                                .font(BKFont.title(28))
+                                .foregroundStyle(verdictColor)
+                                .transition(.scale.combined(with: .opacity))
+                        }
 
                         VStack(spacing: 10) {
                             if step >= TargetManResultStep.target.rawValue {
@@ -848,6 +887,66 @@ private struct TargetManResultView: View {
                     break
                 }
             }
+        }
+    }
+}
+
+/// The result's hero: a concentric target where a marker lands closer to the bullseye the higher
+/// your score. Pure flavour for the "hit the number" fantasy.
+private struct TargetBullseye: View {
+    let score: Int
+    let landed: Bool
+
+    /// 0 = dead centre, 1 = outer edge.
+    private var miss: CGFloat { CGFloat(max(0, 1000 - score)) / 1000 }
+    /// Seeded angle so the marker lands somewhere different each time but is stable per score.
+    private var angle: CGFloat { CGFloat((score * 137 + 40) % 360) * .pi / 180 }
+
+    private let rings = 5
+
+    var body: some View {
+        GeometryReader { geo in
+            let s = min(geo.size.width, geo.size.height)
+            let maxR = s / 2 - s * 0.06
+            ZStack {
+                ForEach(0..<rings, id: \.self) { i in
+                    let frac = CGFloat(rings - i) / CGFloat(rings)
+                    Circle()
+                        .fill(ringColor(i))
+                        .frame(width: s * frac, height: s * frac)
+                        .overlay(
+                            Circle().stroke(.white.opacity(0.12), lineWidth: 1)
+                                .frame(width: s * frac, height: s * frac)
+                        )
+                }
+                Circle().fill(BKTheme.accent).frame(width: s * 0.05, height: s * 0.05)
+
+                Circle()
+                    .fill(.white)
+                    .frame(width: 16, height: 16)
+                    .overlay(Circle().stroke(.black.opacity(0.35), lineWidth: 1.5))
+                    .shadow(color: .black.opacity(0.45), radius: 3, y: 2)
+                    .offset(
+                        x: landed ? cos(angle) * miss * maxR : 0,
+                        y: landed ? sin(angle) * miss * maxR : -s * 0.75
+                    )
+                    .scaleEffect(landed ? 1 : 2.4)
+                    .opacity(landed ? 1 : 0)
+                    .animation(.interpolatingSpring(stiffness: 140, damping: 12), value: landed)
+            }
+            .frame(width: s, height: s)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    // Outer (i=0) → inner (i=rings-1): deepen toward the accent bullseye.
+    private func ringColor(_ i: Int) -> Color {
+        switch i {
+        case 0: return BKTheme.card
+        case 1: return BKTheme.cardElevated
+        case 2: return BKTheme.accent.opacity(0.25)
+        case 3: return BKTheme.accent.opacity(0.5)
+        default: return BKTheme.accent.opacity(0.8)
         }
     }
 }

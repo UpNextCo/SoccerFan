@@ -799,7 +799,7 @@ struct GuessWhoSearchSection: View {
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
                     )
                     .textFieldStyle(.plain)
-                    .foregroundStyle(BKTheme.background)
+                    .foregroundStyle(BKTheme.textPrimary)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .focused(isSearchFocused)
@@ -810,17 +810,13 @@ struct GuessWhoSearchSection: View {
 
                     if viewModel.isSubmitting {
                         ProgressView()
-                            .tint(BKTheme.accent)
+                            .tint(BKTheme.textSecondary)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1.5)
-                )
+                .background(BKTheme.cardElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 if !viewModel.searchResults.isEmpty {
                     PlayerSearchResultsList(
