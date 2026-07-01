@@ -12,6 +12,8 @@ final class WorldCupXIViewModel {
     var showSlotSheet = false
     var showResult = false
     var confettiBurstToken = 0
+    /// Slots whose "played for [club]" hint the player has chosen to reveal.
+    var revealedClubs: Set<String> = []
 
     private let practice: Bool
     private let dailyBundle: DailyBundleDTO?
@@ -46,6 +48,13 @@ final class WorldCupXIViewModel {
         searchQuery = ""
         searchResults = []
         showSlotSheet = true
+    }
+
+    /// Reveal the club hint for the open slot (kept hidden by default so the badge isn't a giveaway).
+    func revealClub() {
+        guard let id = state.activeSlotId else { return }
+        revealedClubs.insert(id)
+        HapticManager.light()
     }
 
     func search() async {
@@ -94,6 +103,7 @@ final class WorldCupXIViewModel {
         showSlotSheet = false
         showResult = false
         confettiBurstToken = 0
+        revealedClubs = []
     }
 }
 
@@ -252,27 +262,35 @@ struct WorldCupXIView: View {
                                 .foregroundStyle(BKTheme.accent)
                         }
                         if let club = slot.club, !club.isEmpty {
-                            HStack(spacing: 8) {
-                                if let yearText = slot.year.map(String.init) {
-                                    Text("In \(yearText), played for")
+                            if viewModel.revealedClubs.contains(slot.id) {
+                                HStack(spacing: 8) {
+                                    Text(slot.year.map { "In \($0), played for" } ?? "Played for")
                                         .font(BKFont.caption(12))
                                         .foregroundStyle(BKTheme.textMuted)
-                                } else {
-                                    Text("Played for")
-                                        .font(BKFont.caption(12))
-                                        .foregroundStyle(BKTheme.textMuted)
-                                }
-                                if let badge = slot.clubBadgeUrl, let url = URL(string: badge) {
-                                    AsyncImage(url: url) { image in
-                                        image.resizable().scaledToFit()
-                                    } placeholder: {
-                                        Color.clear
+                                    if let badge = slot.clubBadgeUrl, let url = URL(string: badge) {
+                                        AsyncImage(url: url) { image in
+                                            image.resizable().scaledToFit()
+                                        } placeholder: {
+                                            Color.clear
+                                        }
+                                        .frame(width: 18, height: 18)
                                     }
-                                    .frame(width: 18, height: 18)
+                                    Text(club)
+                                        .font(BKFont.headline(13))
+                                        .foregroundStyle(BKTheme.textPrimary)
                                 }
-                                Text(club)
-                                    .font(BKFont.headline(13))
-                                    .foregroundStyle(BKTheme.textPrimary)
+                            } else {
+                                // Club is a hint, not a giveaway — tap to reveal.
+                                Button { viewModel.revealClub() } label: {
+                                    Text("REVEAL CLUB")
+                                        .font(BKFont.caption(11))
+                                        .tracking(0.8)
+                                        .foregroundStyle(BKTheme.accent)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 7)
+                                        .overlay(Capsule().stroke(BKTheme.accent.opacity(0.5), lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
 

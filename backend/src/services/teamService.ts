@@ -94,6 +94,59 @@ export async function lookupTeamLogos(
   return result;
 }
 
+/**
+ * Tolerant club→crest resolver for historical squad clubs (e.g. Wikipedia spellings like
+ * "Paris Saint-Germain", "Leicester City") that the exact-match lookupTeamLogo misses. Splits on
+ * ALL non-alphanumerics (so hyphens/dots don't matter) and matches by token containment either way
+ * ("Leicester" ⊆ "Leicester City", "Paris Saint Germain" == "Paris Saint-Germain"), preferring the
+ * senior top-5-league club and the fullest token overlap.
+ */
+const CLUB_STOPWORDS = new Set(['fc', 'cf', 'sc', 'ac', 'afc', 'cd', 'ss', 'as', 'ssc', 'the']);
+// Historical squad-club spellings that differ from the teams table (native name, alias, etc.).
+const CLUB_ALIAS: Record<string, string> = {
+  'bayern munich': 'bayern munchen',
+  'athletic bilbao': 'athletic club',
+  'inter milan': 'inter', internazionale: 'inter',
+  'sporting lisbon': 'sporting cp', 'spartak moscow': 'spartak moskva',
+};
+function clubTokens(s: string): string[] {
+  return normalizeSearchText(s)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((t) => t && !CLUB_STOPWORDS.has(t));
+}
+
+export async function resolveClubLogo(club: string): Promise<TeamLogoMatch | null> {
+  let tokens = clubTokens(club);
+  const aliased = CLUB_ALIAS[tokens.join(' ')];
+  if (aliased) tokens = clubTokens(aliased);
+  if (!tokens.length) return null;
+  const first = tokens[0]!;
+  const norm = tokens.join(' ');
+  const rows = (await db.execute(sql`
+    SELECT id, name_norm AS "nameNorm", logo_url AS "logoUrl", league_id AS "leagueId"
+    FROM teams WHERE name_norm = ${norm} OR name_norm LIKE ${first + '%'}
+    LIMIT 300
+  `)) as unknown as Array<{ id: number; nameNorm: string; logoUrl: string; leagueId: number | null }>;
+
+  const clubSet = new Set(tokens);
+  let best: { row: (typeof rows)[number]; score: number } | null = null;
+  for (const r of rows) {
+    const tt = clubTokens(r.nameNorm);
+    if (!tt.length) continue;
+    const teamInClub = tt.every((t) => clubSet.has(t));
+    const clubInTeam = tokens.every((t) => tt.includes(t));
+    if (!teamInClub && !clubInTeam) continue; // unrelated club that just shares the first token
+    const overlap = tt.filter((t) => clubSet.has(t)).length;
+    let score = overlap * 10;
+    if (tt.join(' ') === norm) score += 100; // exact
+    if (r.leagueId != null && TOP5_LEAGUE_IDS.has(r.leagueId)) score += 6;
+    else if (r.leagueId != null) score += 3; // real senior club over a youth/reserve side
+    if (!best || score > best.score) best = { row: r, score };
+  }
+  return best ? { teamId: best.row.id, logoUrl: best.row.logoUrl } : null;
+}
+
 export type TeamSearchResult = {
   id: number;
   name: string;

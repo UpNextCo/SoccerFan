@@ -7,7 +7,7 @@
  */
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { lookupTeamLogo } from './teamService.js';
+import { resolveClubLogo } from './teamService.js';
 
 /** Bump when the puzzle JSON shape/source changes so stored puzzles regenerate. */
 export const WCXI_VERSION = 3;
@@ -273,7 +273,7 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
   for (const s of slots) {
     if (!s.club) continue;
     if (!badgeByClub.has(s.club)) {
-      const logo = await lookupTeamLogo(s.club, '');
+      const logo = await resolveClubLogo(s.club);
       badgeByClub.set(s.club, logo?.logoUrl ?? null);
     }
     s.clubBadgeUrl = badgeByClub.get(s.club) ?? null;

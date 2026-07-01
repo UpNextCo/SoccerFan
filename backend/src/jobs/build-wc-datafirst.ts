@@ -88,7 +88,7 @@ const OPP_DISPLAY: Record<string, string> = {
 };
 const opp = (o: string): string => OPP_DISPLAY[o] ?? o;
 
-interface Squad { playerId: string; name: string; country: string; position: string; subPosition: string | null; isCaptain: boolean; year: number; }
+interface Squad { playerId: string; name: string; country: string; position: string; subPosition: string | null; isCaptain: boolean; year: number; tier: number; }
 interface Ev { type: string; stage: string; opponent: string; detail: string | null; matchId: number; }
 interface Fact { score: number; clue: string; }
 
@@ -117,7 +117,7 @@ async function main() {
   // Famous squad members (fame floor), 2006+.
   const squads = (await db.execute(sql`
     SELECT s.player_id AS "playerId", p.name, s.country, s.position, p.sub_position AS "subPosition",
-           s.is_captain AS "isCaptain", s.year
+           s.is_captain AS "isCaptain", s.year, p.market_value_tier AS tier
     FROM wc_squads s JOIN players p ON p.id = s.player_id
     WHERE s.year >= 2006 AND s.player_id IS NOT NULL
       AND s.position IN ('GK','DF','MF','FW') AND p.market_value_tier >= ${FAME_MIN}
@@ -148,10 +148,14 @@ async function main() {
   for (const s of squads) latestYear.set(s.playerId, Math.max(latestYear.get(s.playerId) ?? 0, s.year));
 
   const buildFacts = (s: Squad): Fact[] => {
-    // Lead with nationality + the FINE role (e.g. "The Brazilian defensive midfielder") for specificity;
-    // fall back to the coarse position word when we don't have a sub-position.
-    const role = (s.subPosition ? ROLE_WORD[s.subPosition] : undefined) ?? POS_WORD[s.position] ?? 'player';
+    // Difficulty is scaled to fame: the bigger the name, the LESS we give away. Superstars (tier 5)
+    // get the coarse position and no opponent; tier 4 keeps the fine role but drops the opponent;
+    // lesser names (tier 3) get the full, most helpful clue. The revealable club hint (iOS) is the
+    // disambiguator when a vaguer clue could fit more than one player.
+    const fineRole = (s.subPosition ? ROLE_WORD[s.subPosition] : undefined) ?? POS_WORD[s.position] ?? 'player';
+    const role = s.tier >= 5 ? (POS_WORD[s.position] ?? 'player') : fineRole;
     const who = `The ${demonym(s.country)} ${role} who`;
+    const vs = (o: string) => (s.tier >= 4 ? '' : ` against ${opp(o)}`);
     const evs = evBy.get(`${s.playerId}|${s.year}`) ?? [];
     const facts: Fact[] = [];
 
@@ -176,23 +180,23 @@ async function main() {
     const brace = [...byMatch.values()].find((m) => m.n === 2);
 
     if (stages.has('Final')) facts.push({ score: 150, clue: `${who} scored in the final` });
-    if (hat) facts.push({ score: 140, clue: `${who} scored a hat-trick against ${opp(hat.opponent)}` });
-    if (stageGoal('Semi-finals')) facts.push({ score: 120, clue: `${who} scored in the semi-final against ${opp(stageGoal('Semi-finals')!.opponent)}` });
+    if (hat) facts.push({ score: 140, clue: `${who} scored a hat-trick${vs(hat.opponent)}` });
+    if (stageGoal('Semi-finals')) facts.push({ score: 120, clue: `${who} scored in the semi-final${vs(stageGoal('Semi-finals')!.opponent)}` });
     if (evs.some((e) => e.type === 'own_goal')) {
       const og = evs.find((e) => e.type === 'own_goal')!;
-      facts.push({ score: 110, clue: `${who} scored an own goal against ${opp(og.opponent)}` });
+      facts.push({ score: 110, clue: `${who} scored an own goal${vs(og.opponent)}` });
     }
     const red = evs.find((e) => e.type === 'card' && e.detail === 'Red Card');
-    if (red) facts.push({ score: 105, clue: `${who} was sent off against ${opp(red.opponent)}` });
-    if (brace) facts.push({ score: 100, clue: `${who} scored twice against ${opp(brace.opponent)}` });
-    if (stageGoal('Quarter-finals')) facts.push({ score: 95, clue: `${who} scored in the quarter-final against ${opp(stageGoal('Quarter-finals')!.opponent)}` });
+    if (red) facts.push({ score: 105, clue: `${who} was sent off${vs(red.opponent)}` });
+    if (brace) facts.push({ score: 100, clue: `${who} scored twice${vs(brace.opponent)}` });
+    if (stageGoal('Quarter-finals')) facts.push({ score: 95, clue: `${who} scored in the quarter-final${vs(stageGoal('Quarter-finals')!.opponent)}` });
     if (evs.some((e) => e.type === 'shootout_pen' && e.detail === 'scored')) {
       const so = evs.find((e) => e.type === 'shootout_pen' && e.detail === 'scored')!;
-      facts.push({ score: 90, clue: `${who} scored a penalty in the shootout against ${opp(so.opponent)}` });
+      facts.push({ score: 90, clue: `${who} scored a penalty in the shootout${vs(so.opponent)}` });
     }
     if (s.position === 'GK' && evs.some((e) => e.type === 'shootout_save')) {
       const sv = evs.find((e) => e.type === 'shootout_save')!;
-      facts.push({ score: 88, clue: `The ${demonym(s.country)} goalkeeper who saved a penalty in the shootout against ${opp(sv.opponent)}` });
+      facts.push({ score: 88, clue: `The ${demonym(s.country)} goalkeeper who saved a penalty in the shootout${vs(sv.opponent)}` });
     }
     if (s.isCaptain) facts.push({ score: 80, clue: `${who} captained ${captainedPhrase(s.country, s.year)}` });
     // NB: plain single group/last-16 goals are deliberately NOT included — "scored against
