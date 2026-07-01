@@ -22,36 +22,18 @@ final class BlindRankViewModel {
     var activeRevealSlide: Int?
     var selectedAdjustSlot: Int?
 
-    private let practice: Bool
     private let dailyBundle: DailyBundleDTO?
 
-    init(challenge: BlindRankChallenge, practice: Bool = false) {
-        self.practice = practice
-        self.dailyBundle = nil
-        self.state = BlindRankGameState(challenge: challenge)
-    }
-
-    private init(dailyBundle: DailyBundleDTO?, practice: Bool, challenge: BlindRankChallenge) {
-        self.practice = practice
+    init(dailyBundle: DailyBundleDTO? = nil, challenge: BlindRankChallenge? = nil) {
         self.dailyBundle = dailyBundle
-        self.state = BlindRankGameState(challenge: challenge)
+        self.state = BlindRankGameState(
+            challenge: challenge ?? BlindRankSeed.makeDailyChallenge(date: dailyBundle?.date)
+        )
     }
 
-    init(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false) {
-        self.practice = practice
-        self.dailyBundle = dailyBundle
-        let challenge = practice
-            ? BlindRankSeed.makePracticeChallenge()
-            : BlindRankSeed.makeDailyChallenge(date: dailyBundle?.date)
-        self.state = BlindRankGameState(challenge: challenge)
-    }
-
-    static func make(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false) async -> BlindRankViewModel {
-        if practice {
-            return BlindRankViewModel(challenge: BlindRankSeed.makePracticeChallenge(), practice: true)
-        }
+    static func make(dailyBundle: DailyBundleDTO? = nil) async -> BlindRankViewModel {
         let challenge = DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
-        return BlindRankViewModel(dailyBundle: dailyBundle, practice: false, challenge: challenge)
+        return BlindRankViewModel(dailyBundle: dailyBundle, challenge: challenge)
     }
 
     var xpEarned: Int {
@@ -101,18 +83,8 @@ final class BlindRankViewModel {
 
     func restart() {
         state = BlindRankGameState(
-            challenge: practice
-                ? BlindRankSeed.makePracticeChallenge()
-                : DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
+            challenge: DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
         )
-        showResult = false
-        confettiBurstToken = 0
-        activeRevealSlide = nil
-        selectedAdjustSlot = nil
-    }
-
-    func newPracticeRound() {
-        state = BlindRankGameState(challenge: BlindRankSeed.makePracticeChallenge())
         showResult = false
         confettiBurstToken = 0
         activeRevealSlide = nil
@@ -180,19 +152,16 @@ struct BlindRankView: View {
     @State private var viewModel: BlindRankViewModel?
     @State private var targetedSlot: Int?
     let dailyBundle: DailyBundleDTO?
-    let practice: Bool
     let allowReplay: Bool
     private let dailyDate: String?
     var onComplete: () -> Void
 
     init(
         dailyBundle: DailyBundleDTO? = nil,
-        practice: Bool = false,
-        allowReplay: Bool = true,
+        allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
         self.dailyBundle = dailyBundle
-        self.practice = practice
         self.allowReplay = allowReplay
         self.dailyDate = dailyBundle?.date
         self.onComplete = onComplete
@@ -209,8 +178,8 @@ struct BlindRankView: View {
                     .background(BKTheme.background)
             }
         }
-        .task(id: "\(dailyBundle?.date ?? "none")-\(practice)") {
-            viewModel = await BlindRankViewModel.make(dailyBundle: dailyBundle, practice: practice)
+        .task(id: dailyBundle?.date ?? "none") {
+            viewModel = await BlindRankViewModel.make(dailyBundle: dailyBundle)
         }
     }
 

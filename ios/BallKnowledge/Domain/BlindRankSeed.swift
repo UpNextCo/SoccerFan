@@ -1,7 +1,7 @@
 import Foundation
 
 enum BlindRankSeed {
-    private static let practiceSlotCount = 10
+    private static let slotCount = 10
 
     /// Offline fallback only uses categories whose values come from real seeded
     /// stats (PL goals/appearances/assists). The fabricated transfer-fee / market-value
@@ -16,16 +16,6 @@ enum BlindRankSeed {
         let dateKey = date ?? todayUTC()
         let seed = stableHash("blind_rank_\(dateKey)")
         return makeChallenge(seed: seed, id: "blind_rank_daily_\(dateKey)", isDaily: true, date: dateKey)
-    }
-
-    static func makePracticeChallenge() -> BlindRankChallenge {
-        let seed = Int.random(in: 0...999_999)
-        return makeChallenge(
-            seed: seed,
-            id: "blind_rank_practice_\(UUID().uuidString.prefix(8))",
-            isDaily: false,
-            date: nil
-        )
     }
 
     // MARK: - Private
@@ -177,8 +167,8 @@ enum BlindRankSeed {
         seed: Int,
         category: BlindRankCategory
     ) -> [BlindRankPlayer] {
-        guard sorted.count >= practiceSlotCount else {
-            return Array(sorted.prefix(practiceSlotCount))
+        guard sorted.count >= slotCount else {
+            return Array(sorted.prefix(slotCount))
         }
 
         let minSpread = category == .transferFees || category == .marketValue ? 25 : 8
@@ -186,11 +176,11 @@ enum BlindRankSeed {
         var bestStart = 0
         var bestSpread = 0
 
-        for start in 0...(sorted.count - practiceSlotCount) {
+        for start in 0...(sorted.count - slotCount) {
             let end = min(start + windowSize, sorted.count)
             let window = Array(sorted[start..<end])
-            guard window.count >= practiceSlotCount else { continue }
-            let slice = Array(window.prefix(practiceSlotCount))
+            guard window.count >= slotCount else { continue }
+            let slice = Array(window.prefix(slotCount))
             let spread = (slice.first?.statValue ?? 0) - (slice.last?.statValue ?? 0)
             if spread > bestSpread {
                 bestSpread = spread
@@ -200,13 +190,13 @@ enum BlindRankSeed {
 
         let poolStart = bestSpread >= minSpread
             ? bestStart
-            : (seed / 13) % max(sorted.count - practiceSlotCount, 1)
+            : (seed / 13) % max(sorted.count - slotCount, 1)
 
         let poolEnd = min(poolStart + windowSize, sorted.count)
         let pool = Array(sorted[poolStart..<poolEnd])
         var picks: [BlindRankPlayer] = []
         var index = 0
-        while picks.count < practiceSlotCount, !pool.isEmpty {
+        while picks.count < slotCount, !pool.isEmpty {
             let pickIndex = (seed / (index + 3)) % pool.count
             let candidate = pool[pickIndex]
             if !picks.contains(where: { $0.id == candidate.id }) {
@@ -216,15 +206,15 @@ enum BlindRankSeed {
             if index > pool.count * 3 { break }
         }
 
-        if picks.count < practiceSlotCount {
-            for player in sorted where picks.count < practiceSlotCount {
+        if picks.count < slotCount {
+            for player in sorted where picks.count < slotCount {
                 if !picks.contains(where: { $0.id == player.id }) {
                     picks.append(player)
                 }
             }
         }
 
-        return Array(picks.prefix(practiceSlotCount))
+        return Array(picks.prefix(slotCount))
     }
 
     private static func fallbackStat(_ id: String, range: ClosedRange<Int>) -> Int {

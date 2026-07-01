@@ -184,7 +184,7 @@ struct GuessWhoView: View {
     var allowReplay: Bool
     var onComplete: () -> Void
 
-    init(puzzle: GuessWhoPuzzleDTO, date: String, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
+    init(puzzle: GuessWhoPuzzleDTO, date: String, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
         _viewModel = State(initialValue: GuessWhoViewModel(puzzle: puzzle, date: date))
         self.allowReplay = allowReplay
         self.onComplete = onComplete

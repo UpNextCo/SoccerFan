@@ -15,16 +15,11 @@ final class TargetManViewModel {
     var confettiBurstToken = 0
     var showResult = false
 
-    private let practice: Bool
     private let dailyBundle: DailyBundleDTO?
 
-    init(dailyBundle: DailyBundleDTO? = nil, practice: Bool = false, challenge: TargetManChallenge? = nil) {
-        self.practice = practice
+    init(dailyBundle: DailyBundleDTO? = nil, challenge: TargetManChallenge? = nil) {
         self.dailyBundle = dailyBundle
         let resolved = challenge ?? {
-            if practice {
-                return TargetManSeed.makePracticeChallenge()
-            }
             if let dailyBundle {
                 return DailyChallengeResolver.targetManChallenge(from: dailyBundle)
             }
@@ -98,9 +93,7 @@ final class TargetManViewModel {
 
     func restart() {
         let challenge: TargetManChallenge
-        if practice {
-            challenge = TargetManSeed.makePracticeChallenge()
-        } else if let dailyBundle {
+        if let dailyBundle {
             challenge = DailyChallengeResolver.targetManChallenge(from: dailyBundle)
         } else {
             challenge = TargetManSeed.makeDailyChallenge()
@@ -110,13 +103,6 @@ final class TargetManViewModel {
         searchResults = []
         errorMessage = nil
         confettiBurstToken = 0
-        showResult = false
-    }
-
-    func newPracticeRound() {
-        state = TargetManGameState(challenge: TargetManSeed.makePracticeChallenge())
-        searchQuery = ""
-        searchResults = []
         showResult = false
     }
 
@@ -165,11 +151,10 @@ struct TargetManView: View {
 
     init(
         dailyBundle: DailyBundleDTO? = nil,
-        practice: Bool = false,
-        allowReplay: Bool = true,
+        allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
-        _viewModel = State(initialValue: TargetManViewModel(dailyBundle: dailyBundle, practice: practice))
+        _viewModel = State(initialValue: TargetManViewModel(dailyBundle: dailyBundle))
         self.allowReplay = allowReplay
         self.dailyDate = dailyBundle?.date
         self.onComplete = onComplete
@@ -236,10 +221,11 @@ struct TargetManView: View {
                             .tracking(1)
                             .foregroundStyle(BKTheme.accent)
                     }
+                    // Dev-only replay (allowReplay) re-runs today's daily; hidden for real users.
                     ToolbarItem(placement: .topBarTrailing) {
                         if allowReplay, viewModel.state.phase == .selecting {
                             Button {
-                                viewModel.newPracticeRound()
+                                viewModel.restart()
                             } label: {
                                 Text("NEW")
                                     .font(BKFont.caption(10))

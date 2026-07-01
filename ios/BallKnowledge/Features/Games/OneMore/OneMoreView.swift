@@ -12,15 +12,17 @@ final class OneMoreViewModel {
     var scorePulseToken = 0
     var lastFeedback: String?
 
-    private let practice: Bool
+    private let dailyDate: String?
+    private let serverPuzzle: OneMorePuzzleDTO?
 
-    init(practice: Bool = false, dailyDate: String? = nil, serverPuzzle: OneMorePuzzleDTO? = nil) {
-        self.practice = practice
-        let serverDaily = practice ? nil : serverPuzzle.flatMap(OneMoreSeed.makeServerPrompt)
-        let prompt = practice
-            ? OneMoreSeed.makePracticePrompt()
-            : (serverDaily ?? OneMoreSeed.makeDailyPrompt(date: dailyDate))
-        self.state = OneMoreGameState(prompt: prompt)
+    init(dailyDate: String? = nil, serverPuzzle: OneMorePuzzleDTO? = nil) {
+        self.dailyDate = dailyDate
+        self.serverPuzzle = serverPuzzle
+        self.state = OneMoreGameState(prompt: Self.makePrompt(dailyDate: dailyDate, serverPuzzle: serverPuzzle))
+    }
+
+    private static func makePrompt(dailyDate: String?, serverPuzzle: OneMorePuzzleDTO?) -> OneMorePrompt {
+        serverPuzzle.flatMap(OneMoreSeed.makeServerPrompt) ?? OneMoreSeed.makeDailyPrompt(date: dailyDate)
     }
 
     var xpEarned: Int {
@@ -93,13 +95,7 @@ final class OneMoreViewModel {
     }
 
     func restart() {
-        let prompt = practice ? OneMoreSeed.makePracticePrompt() : OneMoreSeed.makeDailyPrompt()
-        state = OneMoreGameState(prompt: prompt)
-        resetTransient()
-    }
-
-    func newPracticeRound() {
-        state = OneMoreGameState(prompt: OneMoreSeed.makePracticePrompt())
+        state = OneMoreGameState(prompt: Self.makePrompt(dailyDate: dailyDate, serverPuzzle: serverPuzzle))
         resetTransient()
     }
 
@@ -125,11 +121,10 @@ struct OneMoreView: View {
     init(
         dailyDate: String? = nil,
         serverPuzzle: OneMorePuzzleDTO? = nil,
-        practice: Bool = false,
-        allowReplay: Bool = true,
+        allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
-        _viewModel = State(initialValue: OneMoreViewModel(practice: practice, dailyDate: dailyDate, serverPuzzle: serverPuzzle))
+        _viewModel = State(initialValue: OneMoreViewModel(dailyDate: dailyDate, serverPuzzle: serverPuzzle))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete

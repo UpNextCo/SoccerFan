@@ -19,22 +19,6 @@ enum TargetManSeed {
         )
     }
 
-    static func makePracticeChallenge() -> TargetManChallenge {
-        let seed = Int.random(in: 0...999_999)
-        let league = TargetManLeague.allCases[seed % TargetManLeague.allCases.count]
-        let category = TargetManStatCategory.allCases[(seed / 11) % TargetManStatCategory.allCases.count]
-
-        return TargetManChallenge(
-            id: "target_man_practice_\(UUID().uuidString.prefix(8))",
-            leagueName: league.rawValue,
-            apiLeagueId: league.apiLeagueId,
-            category: category,
-            target: targetNumber(for: category, seed: seed),
-            isDaily: false,
-            date: nil
-        )
-    }
-
     static func statValue(
         for player: PlayerSearchResultDTO,
         league: TargetManLeague,

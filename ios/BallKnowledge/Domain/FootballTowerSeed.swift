@@ -7,11 +7,6 @@ enum FootballTowerSeed {
         return buildTower(seed: seed, dateKey: dateKey, count: 15)
     }
 
-    static func makeFreePlayTower() -> [FootballTowerQuestion] {
-        let seed = Int.random(in: 0...999_999)
-        return buildTower(seed: seed, dateKey: "free", count: 15)
-    }
-
     /// Build the daily tower from server-generated floors (answers validated server-side).
     static func makeServerTower(floors: [FootballTowerFloorDTO]) -> [FootballTowerQuestion] {
         floors
@@ -61,7 +56,7 @@ enum FootballTowerSeed {
     static func shareText(summary: FootballTowerResultSummary, mode: FootballTowerRunMode) -> String {
         var lines = [
             "Ball Knowledge — Football Tower",
-            mode == .daily ? "Daily Tower" : "Free Play",
+            "Daily Tower",
             "Floor reached: \(summary.failedFloor)",
             "Correct answers: \(summary.correctCount)",
             "Score: \(summary.score)",

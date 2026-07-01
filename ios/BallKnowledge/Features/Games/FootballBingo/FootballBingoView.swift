@@ -14,8 +14,19 @@ final class FootballBingoViewModel {
     var showResult = false
     var wildcardUsed = false
 
-    init(game: FootballBingoGame = FootballBingoSeed.makeGame()) {
-        self.game = game
+    private let dailyDate: String?
+    private let serverPuzzle: FootballBingoPuzzleDTO?
+
+    init(dailyDate: String? = nil, serverPuzzle: FootballBingoPuzzleDTO? = nil) {
+        self.dailyDate = dailyDate
+        self.serverPuzzle = serverPuzzle
+        self.game = Self.makeGame(dailyDate: dailyDate, serverPuzzle: serverPuzzle)
+    }
+
+    private static func makeGame(dailyDate: String?, serverPuzzle: FootballBingoPuzzleDTO?) -> FootballBingoGame {
+        if let serverPuzzle { return FootballBingoSeed.makeGame(from: serverPuzzle) }
+        if let dailyDate { return FootballBingoSeed.makeDailyGame(date: dailyDate) }
+        return FootballBingoSeed.makeGame()
     }
 
     /// Raw skill score submitted to the server (fewer players used → higher). The server converts
@@ -30,7 +41,7 @@ final class FootballBingoViewModel {
     }
 
     func restart() {
-        game = FootballBingoSeed.makeGame()
+        game = Self.makeGame(dailyDate: dailyDate, serverPuzzle: serverPuzzle)
         shakeCategoryId = nil
         popCategoryId = nil
         playerPanelToken = UUID()
@@ -131,16 +142,10 @@ struct FootballBingoView: View {
     init(
         dailyDate: String? = nil,
         serverPuzzle: FootballBingoPuzzleDTO? = nil,
-        allowReplay: Bool = true,
+        allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
-        if let serverPuzzle {
-            _viewModel = State(initialValue: FootballBingoViewModel(game: FootballBingoSeed.makeGame(from: serverPuzzle)))
-        } else if let dailyDate {
-            _viewModel = State(initialValue: FootballBingoViewModel(game: FootballBingoSeed.makeDailyGame(date: dailyDate)))
-        } else {
-            _viewModel = State(initialValue: FootballBingoViewModel())
-        }
+        _viewModel = State(initialValue: FootballBingoViewModel(dailyDate: dailyDate, serverPuzzle: serverPuzzle))
         self.dailyDate = dailyDate
         self.allowReplay = allowReplay
         self.onComplete = onComplete

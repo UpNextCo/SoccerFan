@@ -8,10 +8,6 @@ enum WorldCupXISeed {
         return pool[index]
     }
 
-    static func practicePuzzle() -> WorldCupXIPuzzle {
-        pool[Int.random(in: 0..<pool.count)]
-    }
-
     private static let pool: [WorldCupXIPuzzle] = [
         argentina2014,
         france2018,

@@ -22,14 +22,10 @@ enum OneMoreSeed {
         )
     }
 
-    /// Offline / practice fallback: a "Premier League goals" prompt with rounds built from the
+    /// Offline fallback: a "Premier League goals" prompt with rounds built from the
     /// local roster (one qualifier vs one short-of-the-line name per round).
     static func makeDailyPrompt(date: String? = nil) -> OneMorePrompt {
         makeLocalPrompt(id: "one_more_daily_\(date ?? todayUTC())", isDaily: true, date: date ?? todayUTC())
-    }
-
-    static func makePracticePrompt() -> OneMorePrompt {
-        makeLocalPrompt(id: "one_more_practice_\(UUID().uuidString.prefix(8))", isDaily: false, date: nil)
     }
 
     // MARK: - Local round building

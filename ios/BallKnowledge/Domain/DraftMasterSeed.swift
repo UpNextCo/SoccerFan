@@ -10,10 +10,6 @@ enum BattleSeed {
         return challenge(id: "battle_\(dateKey)", date: dateKey)
     }
 
-    static func makePracticeChallenge() -> BattleChallenge {
-        challenge(id: "battle_practice_\(UUID().uuidString.prefix(8))", date: todayUTC())
-    }
-
     static func shareText(challenge: BattleChallenge, result: BattleResult) -> String {
         [
             "Ball Knowledge — Battle Mode",

@@ -251,7 +251,7 @@ struct FootballGolfView: View {
     private let serverPuzzle: FootballGolfPuzzleDTO?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, serverPuzzle: FootballGolfPuzzleDTO? = nil, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
+    init(dailyDate: String? = nil, serverPuzzle: FootballGolfPuzzleDTO? = nil, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
         self.dailyDate = dailyDate
         self.serverPuzzle = serverPuzzle
         self.allowReplay = allowReplay

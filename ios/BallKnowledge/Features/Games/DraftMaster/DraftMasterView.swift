@@ -17,19 +17,16 @@ final class DraftMasterViewModel {
     var shakeToken = 0
     var wrongMessage: String?
 
-    private let practice: Bool
     private let dailyDate: String?
     private let dailyBundle: DailyBundleDTO?
 
-    init(practice: Bool, dailyDate: String?, dailyBundle: DailyBundleDTO?) {
-        self.practice = practice
+    init(dailyDate: String?, dailyBundle: DailyBundleDTO?) {
         self.dailyDate = dailyDate
         self.dailyBundle = dailyBundle
-        state = BattleGameState(challenge: Self.resolveChallenge(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
+        state = BattleGameState(challenge: Self.resolveChallenge(dailyDate: dailyDate, dailyBundle: dailyBundle))
     }
 
-    private static func resolveChallenge(practice: Bool, dailyDate: String?, dailyBundle: DailyBundleDTO?) -> BattleChallenge {
-        if practice { return BattleSeed.makePracticeChallenge() }
+    private static func resolveChallenge(dailyDate: String?, dailyBundle: DailyBundleDTO?) -> BattleChallenge {
         if let server = DailyChallengeResolver.battleChallenge(from: dailyBundle) { return server }
         return BattleSeed.makeDailyChallenge(date: dailyDate)
     }
@@ -40,13 +37,8 @@ final class DraftMasterViewModel {
     func start() { HapticManager.light(); state.phase = .building }
 
     func restart() {
-        state = BattleGameState(challenge: Self.resolveChallenge(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
+        state = BattleGameState(challenge: Self.resolveChallenge(dailyDate: dailyDate, dailyBundle: dailyBundle))
         state.phase = .building
-        resetTransient()
-    }
-
-    func newPractice() {
-        state = BattleGameState(challenge: BattleSeed.makePracticeChallenge())
         resetTransient()
     }
 
@@ -177,8 +169,8 @@ struct DraftMasterView: View {
     private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil, practice: Bool = false, allowReplay: Bool = true, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: DraftMasterViewModel(practice: practice, dailyDate: dailyDate, dailyBundle: dailyBundle))
+    init(dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
+        _viewModel = State(initialValue: DraftMasterViewModel(dailyDate: dailyDate, dailyBundle: dailyBundle))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete

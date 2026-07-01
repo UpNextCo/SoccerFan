@@ -16,33 +16,6 @@ struct GuessWhoGame: DailyGame {
     }
 }
 
-enum GameRegistry {
-    static let guessWho = GuessWhoGame()
-
-    static func view(for modeId: String, puzzle: GuessWhoPuzzleDTO, date: String, onComplete: @escaping () -> Void) -> AnyView {
-        switch modeId {
-        case GameModeID.guessWho.rawValue:
-            return AnyView(GuessWhoView(puzzle: puzzle, date: date, onComplete: onComplete))
-        case GameModeID.footballBingo.rawValue:
-            return AnyView(FootballBingoView(onComplete: onComplete))
-        case GameModeID.targetMan.rawValue:
-            return AnyView(TargetManView(practice: true, onComplete: onComplete))
-        case GameModeID.footballGolf.rawValue:
-            return AnyView(FootballGolfView(onComplete: onComplete))
-        case GameModeID.blindRank.rawValue:
-            return AnyView(BlindRankView(practice: true, onComplete: onComplete))
-        case GameModeID.oneMore.rawValue:
-            return AnyView(OneMoreView(practice: true, onComplete: onComplete))
-        case GameModeID.draftMaster.rawValue:
-            return AnyView(DraftMasterView(onComplete: onComplete))
-        case GameModeID.footballTower.rawValue:
-            return AnyView(FootballTowerView(onComplete: onComplete))
-        default:
-            return AnyView(ComingSoonGameView(modeId: modeId))
-        }
-    }
-}
-
 struct ComingSoonGameView: View {
     let modeId: String
     @Environment(\.dismiss) private var dismiss

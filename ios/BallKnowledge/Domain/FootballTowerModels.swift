@@ -69,7 +69,6 @@ struct FootballTowerAnswerRecord: Identifiable, Equatable {
 
 enum FootballTowerRunMode: Equatable {
     case daily
-    case freePlay
 }
 
 enum FootballTowerPhase: Equatable {

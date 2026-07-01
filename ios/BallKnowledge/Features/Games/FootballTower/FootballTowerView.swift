@@ -49,15 +49,6 @@ final class FootballTowerViewModel {
         resetSearch()
     }
 
-    func startFreePlay() {
-        state = FootballTowerGameState(
-            mode: .freePlay,
-            date: todayDate,
-            questions: FootballTowerSeed.makeFreePlayTower()
-        )
-        resetSearch()
-    }
-
     func search() async {
         guard let question = state?.currentQuestion else {
             searchResults = []
@@ -207,7 +198,7 @@ struct FootballTowerView: View {
     init(
         dailyOnly: Bool = false,
         serverPuzzle: FootballTowerPuzzleDTO? = nil,
-        allowReplay: Bool = true,
+        allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
         _viewModel = State(initialValue: FootballTowerViewModel(serverPuzzle: serverPuzzle))
@@ -268,13 +259,10 @@ struct FootballTowerView: View {
                         viewModel.showLeaderboard = true
                     },
                     onShare: { viewModel.showShare = true },
-                    onFreePlay: allowReplay ? {
+                    onReplay: allowReplay ? {
                         viewModel.showResult = false
-                        viewModel.startFreePlay()
+                        viewModel.startDaily()
                     } : nil,
-                    onMenu: {
-                        viewModel.returnToMenu()
-                    },
                     onHome: {
                         if !allowReplay, let date = viewModel.state?.date {
                             Task {
@@ -348,14 +336,6 @@ private struct FootballTowerMenuView: View {
                             title: viewModel.hasPlayedDailyToday ? "PLAY DAILY TOWER AGAIN" : "PLAY DAILY TOWER",
                             subtitle: "XP · streaks · leaderboard",
                             primary: true
-                        )
-                    }
-
-                    Button(action: viewModel.startFreePlay) {
-                        menuButton(
-                            title: "FREE PLAY",
-                            subtitle: "Unlimited practice · no ranked XP",
-                            primary: false
                         )
                     }
                 }
@@ -667,8 +647,7 @@ private struct FootballTowerResultView: View {
     let failedAnswer: String?
     var onLeaderboard: () -> Void
     var onShare: () -> Void
-    var onFreePlay: (() -> Void)?
-    var onMenu: () -> Void
+    var onReplay: (() -> Void)?   // dev-only: replay today's daily tower
     var onHome: () -> Void
 
     var body: some View {
@@ -715,20 +694,13 @@ private struct FootballTowerResultView: View {
                         Button(action: onShare) {
                             secondaryButton("SHARE RESULT")
                         }
-                        if let onFreePlay {
-                            Button(action: onFreePlay) {
-                                secondaryButton("FREE PLAY")
-                            }
-                        }
-                        if onFreePlay != nil {
-                            Button(action: onMenu) {
-                                Text("BACK TO MENU")
-                                    .font(BKFont.caption(11))
-                                    .foregroundStyle(BKTheme.textMuted)
+                        if let onReplay {
+                            Button(action: onReplay) {
+                                secondaryButton("PLAY AGAIN")
                             }
                         }
                         Button(action: onHome) {
-                            Text(onFreePlay == nil ? "DONE" : "BACK TO GAMES")
+                            Text(onReplay == nil ? "DONE" : "BACK TO GAMES")
                                 .font(BKFont.caption(11))
                                 .foregroundStyle(BKTheme.textMuted)
                         }
