@@ -78,18 +78,18 @@ function yesterdayUTC(): string {
 // `performance` is each game's result normalised to 0–1 (so "score" meaning different things per game
 // stops mattering), and MAX_XP is a modest spread reflecting length/effort — the biggest game is only
 // ~1.7× the smallest, never 10×. A loss still earns the small participation FLOOR.
-const XP_FLOOR = 10;
-const DEFAULT_MAX_XP = 70;
+const XP_FLOOR = 100;
+const DEFAULT_MAX_XP = 700;
 const MAX_XP: Record<string, number> = {
-  guess_who: 60,
-  target_man: 60,
-  blind_rank: 70,
-  one_more: 70,
-  football_bingo: 80,
-  world_cup_xi: 90,
-  draft_master: 90,
-  football_tower: 90,
-  football_golf: 100,
+  guess_who: 600,
+  target_man: 600,
+  blind_rank: 700,
+  one_more: 700,
+  football_bingo: 800,
+  world_cup_xi: 900,
+  draft_master: 900,
+  football_tower: 900,
+  football_golf: 1000,
 };
 
 const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
@@ -115,10 +115,18 @@ function modePerformance(modeId: string, score: number, guesses: number): number
   }
 }
 
+// Blind Rank lets players swap placements in a review step before submitting; each swap costs XP
+// (mirrored client-side in DailyXP.blindRankMoveCost). The swap count arrives in `guesses`.
+const BLIND_RANK_MOVE_COST = 50;
+
 function computeXp(modeId: string, score: number, guesses: number, won: boolean): number {
   if (!won) return XP_FLOOR;
   const max = MAX_XP[modeId] ?? DEFAULT_MAX_XP;
-  return Math.max(XP_FLOOR, Math.round(clamp01(modePerformance(modeId, score, guesses)) * max));
+  let xp = Math.max(XP_FLOOR, Math.round(clamp01(modePerformance(modeId, score, guesses)) * max));
+  if (modeId === 'blind_rank') {
+    xp = Math.max(XP_FLOOR, xp - guesses * BLIND_RANK_MOVE_COST);
+  }
+  return xp;
 }
 
 export function getGameModes() {

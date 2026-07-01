@@ -263,21 +263,24 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    static let floor = 10
-    static let defaultMax = 70
+    static let floor = 100
+    static let defaultMax = 700
+
+    /// XP subtracted per swap a player makes in Blind Rank's review phase (passed via `guesses`).
+    static let blindRankMoveCost = 50
 
     /// Per-mode XP ceiling on a perfect win. A modest spread reflecting length/effort so no single
     /// game dominates the day (biggest is only ~1.7× the smallest).
     static let maxXP: [String: Int] = [
-        "guess_who": 60,
-        "target_man": 60,
-        "blind_rank": 70,
-        "one_more": 70,
-        "football_bingo": 80,
-        "world_cup_xi": 90,
-        "draft_master": 90,
-        "football_tower": 90,
-        "football_golf": 100,
+        "guess_who": 600,
+        "target_man": 600,
+        "blind_rank": 700,
+        "one_more": 700,
+        "football_bingo": 800,
+        "world_cup_xi": 900,
+        "draft_master": 900,
+        "football_tower": 900,
+        "football_golf": 1000,
     ]
 
     /// Normalise a game's result to 0–1 on its own score scale. Mirror of the server switch.
@@ -298,11 +301,16 @@ enum DailyXP {
     }
 
     /// The XP banked for this result (win applies the participation floor; a loss is the floor).
+    /// For Blind Rank, `guesses` carries the number of review-phase swaps and each one costs XP.
     static func xp(mode: String, score: Int, guesses: Int = 1, won: Bool) -> Int {
         guard won else { return floor }
         let cap = maxXP[mode] ?? defaultMax
         let perf = min(1.0, max(0.0, performance(mode: mode, score: score, guesses: guesses)))
-        return max(floor, Int((perf * Double(cap)).rounded()))
+        var value = max(floor, Int((perf * Double(cap)).rounded()))
+        if mode == "blind_rank" {
+            value = max(floor, value - guesses * blindRankMoveCost)
+        }
+        return value
     }
 
     static func xp(_ mode: GameModeID, score: Int, guesses: Int = 1, won: Bool) -> Int {

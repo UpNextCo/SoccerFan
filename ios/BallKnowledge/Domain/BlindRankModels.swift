@@ -143,6 +143,7 @@ struct BlindRankChallenge: Equatable {
 
 enum BlindRankPhase: Equatable {
     case ranking
+    case adjusting   // board full, reviewing/swapping before submit
     case revealing
     case complete
 }
@@ -164,6 +165,7 @@ struct BlindRankGameState: Equatable {
     var revealedStepCount: Int
     var score: Int?
     var exactMatches: Int?
+    var moveCount: Int   // swaps made during the review/adjust phase (each costs XP)
 
     var slotCount: Int { challenge.presentationOrder.count }
 
@@ -176,6 +178,7 @@ struct BlindRankGameState: Equatable {
         revealedStepCount = 0
         score = nil
         exactMatches = nil
+        moveCount = 0
     }
 
     var isBoardFull: Bool {
@@ -228,9 +231,13 @@ enum BlindRankScoring {
         return Breakdown(exact: exact, close: close, disaster: disaster)
     }
 
-    /// XP scaled from the ranking-accuracy score (win threshold 17). Mirrors the server model.
-    static func xp(fromScore score: Int) -> Int {
-        DailyXP.xp(.blindRank, score: score, won: score >= 17)
+    /// XP cost per swap made in the review/adjust phase (mirrors DailyXP.blindRankMoveCost / server).
+    static let moveCost = DailyXP.blindRankMoveCost
+
+    /// XP scaled from the ranking-accuracy score (win threshold 17), minus a toll per review-phase
+    /// swap. Mirrors the server model — the number shown is exactly what gets banked.
+    static func xp(fromScore score: Int, moves: Int = 0) -> Int {
+        DailyXP.xp(.blindRank, score: score, guesses: moves, won: score >= 17)
     }
 
     static func verdict(forScore score: Int) -> String {

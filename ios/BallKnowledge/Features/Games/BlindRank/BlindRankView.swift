@@ -20,6 +20,7 @@ final class BlindRankViewModel {
     var showResult = false
     var confettiBurstToken = 0
     var activeRevealSlide: Int?
+    var selectedAdjustSlot: Int?
 
     private let practice: Bool
     private let dailyBundle: DailyBundleDTO?
@@ -54,7 +55,7 @@ final class BlindRankViewModel {
     }
 
     var xpEarned: Int {
-        BlindRankScoring.xp(fromScore: state.score ?? 0)
+        BlindRankScoring.xp(fromScore: state.score ?? 0, moves: state.moveCount)
     }
 
     func assignCurrentPlayer(to slot: Int) {
@@ -67,9 +68,35 @@ final class BlindRankViewModel {
         state.slots[slot] = player
         state.currentPlayerIndex += 1
 
+        // Board full → let the player review and swap before locking in (each swap costs XP).
         if state.isBoardFull {
-            beginReveal()
+            state.phase = .adjusting
+            HapticManager.success()
         }
+    }
+
+    /// Tap a slot to pick it up; tap a second slot to swap the two players (one paid "move").
+    func tapAdjustSlot(_ index: Int) {
+        guard state.phase == .adjusting, state.slots.indices.contains(index) else { return }
+        if let selected = selectedAdjustSlot {
+            if selected == index {
+                selectedAdjustSlot = nil
+            } else {
+                state.slots.swapAt(selected, index)
+                state.moveCount += 1
+                selectedAdjustSlot = nil
+                HapticManager.success()
+            }
+        } else {
+            selectedAdjustSlot = index
+            HapticManager.light()
+        }
+    }
+
+    func submitAdjustments() {
+        guard state.phase == .adjusting else { return }
+        selectedAdjustSlot = nil
+        beginReveal()
     }
 
     func restart() {
@@ -81,6 +108,7 @@ final class BlindRankViewModel {
         showResult = false
         confettiBurstToken = 0
         activeRevealSlide = nil
+        selectedAdjustSlot = nil
     }
 
     func newPracticeRound() {
@@ -88,6 +116,7 @@ final class BlindRankViewModel {
         showResult = false
         confettiBurstToken = 0
         activeRevealSlide = nil
+        selectedAdjustSlot = nil
     }
 
     func isCorrectSlot(_ index: Int) -> Bool {
@@ -198,11 +227,15 @@ struct BlindRankView: View {
 
                     if viewModel.state.phase == .ranking {
                         rankingContent(viewModel: viewModel)
+                    } else if viewModel.state.phase == .adjusting {
+                        adjustContent(viewModel: viewModel)
                     } else {
                         revealContent(viewModel: viewModel)
                     }
                 }
                 .animation(BlindRankMotion.layout, value: viewModel.state.currentPlayerIndex)
+                .animation(BlindRankMotion.layout, value: viewModel.state.moveCount)
+                .animation(BlindRankMotion.layout, value: viewModel.selectedAdjustSlot)
                 .animation(BlindRankMotion.reveal, value: viewModel.state.revealedStepCount)
                 .background(StadiumBackground())
                 .navigationBarTitleDisplayMode(.inline)
@@ -222,6 +255,10 @@ struct BlindRankView: View {
                                 .foregroundStyle(BKTheme.textSecondary)
                             if viewModel.state.phase == .ranking {
                                 Text("PLAYER \(min(viewModel.state.currentPlayerIndex + 1, viewModel.state.slotCount)) OF \(viewModel.state.slotCount)")
+                                    .font(BKFont.caption(9))
+                                    .foregroundStyle(BKTheme.textMuted)
+                            } else if viewModel.state.phase == .adjusting {
+                                Text("REVIEW & ADJUST")
                                     .font(BKFont.caption(9))
                                     .foregroundStyle(BKTheme.textMuted)
                             } else {
@@ -255,6 +292,7 @@ struct BlindRankView: View {
                                 modeId: GameModeID.blindRank.rawValue,
                                 date: dailyDate,
                                 score: viewModel.state.score ?? 0,
+                                guesses: viewModel.state.moveCount,
                                 won: (viewModel.state.score ?? 0) >= 17,
                                 context: modelContext
                             )
@@ -288,6 +326,23 @@ struct BlindRankView: View {
                     .padding(.bottom, 12)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        }
+    }
+
+    private func adjustContent(viewModel: BlindRankViewModel) -> some View {
+        VStack(spacing: 10) {
+            GeometryReader { geo in
+                BlindRankAdjustBoard(viewModel: viewModel, availableHeight: geo.size.height)
+            }
+            .padding(.horizontal, 16)
+
+            BlindRankAdjustBar(
+                moveCount: viewModel.state.moveCount,
+                selecting: viewModel.selectedAdjustSlot != nil,
+                onSubmit: { viewModel.submitAdjustments() }
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
         }
     }
 
@@ -611,6 +666,150 @@ private struct BlindRankSlotRow: View {
         } isTargeted: { targeted in
             onTargetChange(targeted)
         }
+    }
+}
+
+// MARK: - Review / Adjust Board
+
+private struct BlindRankAdjustBoard: View {
+    let viewModel: BlindRankViewModel
+    var availableHeight: CGFloat
+
+    private let headerHeight: CGFloat = 22
+    private let rowSpacing: CGFloat = 6
+
+    var body: some View {
+        let n = viewModel.state.slotCount
+        let usable = availableHeight - headerHeight - rowSpacing * CGFloat(n + 1)
+        let rowHeight = min(58, max(30, usable / CGFloat(max(1, n))))
+
+        VStack(spacing: rowSpacing) {
+            HStack {
+                Text("TAP TWO TO SWAP")
+                    .font(BKFont.caption(11))
+                    .tracking(0.8)
+                    .foregroundStyle(BKTheme.textMuted)
+                Spacer()
+                Text("VALUES STILL HIDDEN")
+                    .font(BKFont.caption(9))
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+            .frame(height: headerHeight)
+
+            ForEach(0..<n, id: \.self) { index in
+                BlindRankAdjustRow(
+                    rank: index + 1,
+                    player: viewModel.state.slots[index],
+                    isSelected: viewModel.selectedAdjustSlot == index,
+                    dimmed: viewModel.selectedAdjustSlot != nil && viewModel.selectedAdjustSlot != index,
+                    height: rowHeight,
+                    onTap: { viewModel.tapAdjustSlot(index) }
+                )
+            }
+        }
+    }
+}
+
+private struct BlindRankAdjustRow: View {
+    let rank: Int
+    let player: BlindRankPlayer?
+    let isSelected: Bool
+    var dimmed: Bool = false
+    var height: CGFloat = 48
+    var onTap: () -> Void
+
+    private var avatarSize: CGFloat { min(34, height - 14) }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                Text("#\(rank)")
+                    .font(BKFont.caption(11))
+                    .foregroundStyle(isSelected ? blindGreen : BKTheme.textMuted)
+                    .frame(width: 28, alignment: .leading)
+
+                if let player {
+                    PlayerAvatar(urlString: player.headshotUrl, size: avatarSize)
+                    Text(player.name)
+                        .font(BKFont.headline(14))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
+                    Text(GuessWhoDisplay.nationalityFlag(player.nationality))
+                        .font(.system(size: 20))
+                }
+
+                Image(systemName: isSelected ? "arrow.up.arrow.down.circle.fill" : "arrow.up.arrow.down")
+                    .font(.system(size: 14))
+                    .foregroundStyle(isSelected ? blindGreen : BKTheme.textMuted)
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .leading)
+            .background(isSelected ? BKTheme.cardElevated : BKTheme.card)
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? blindGreen : BKTheme.cardElevated, lineWidth: isSelected ? 2 : 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .opacity(dimmed ? 0.6 : 1)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct BlindRankAdjustBar: View {
+    let moveCount: Int
+    let selecting: Bool
+    var onSubmit: () -> Void
+
+    private var xpSpent: Int { moveCount * BlindRankScoring.moveCost }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("ADJUSTMENTS")
+                        .font(BKFont.caption(9))
+                        .tracking(0.6)
+                        .foregroundStyle(BKTheme.textMuted)
+                    Text("\(moveCount)")
+                        .font(BKFont.headline(16))
+                        .foregroundStyle(BKTheme.textPrimary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("XP COST")
+                        .font(BKFont.caption(9))
+                        .tracking(0.6)
+                        .foregroundStyle(BKTheme.textMuted)
+                    Text(xpSpent > 0 ? "−\(xpSpent)" : "0")
+                        .font(BKFont.headline(16))
+                        .foregroundStyle(xpSpent > 0 ? BKTheme.wrong : BKTheme.textPrimary)
+                }
+            }
+
+            Text("Each swap costs \(BlindRankScoring.moveCost) XP — only move it if you're sure.")
+                .font(BKFont.caption(10))
+                .foregroundStyle(BKTheme.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: onSubmit) {
+                Text(selecting ? "TAP ANOTHER TO SWAP" : "LOCK IN RANKING")
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(selecting ? BKTheme.textMuted : BKTheme.background)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(selecting ? BKTheme.cardElevated : BKTheme.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .disabled(selecting)
+        }
+        .padding(14)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
     }
 }
 
