@@ -28,7 +28,9 @@ struct RootView: View {
             if auth.isLoading {
                 LaunchLoadingView()
             } else if auth.isAuthenticated {
-                if completedSetup {
+                // Show the pick-team / profile setup for any account that hasn't finished it — a
+                // returning user with a club already set skips straight through.
+                if completedSetup || auth.user?.favoriteTeamId != nil {
                     MainTabView()
                 } else {
                     PostSignInSetupView()

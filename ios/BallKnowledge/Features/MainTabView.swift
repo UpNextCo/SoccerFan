@@ -337,6 +337,12 @@ enum LocalProfile {
         get { UserDefaults.standard.bool(forKey: remindersKey) }
         set { UserDefaults.standard.set(newValue, forKey: remindersKey) }
     }
+
+    /// Clear on-device profile (avatar + name override) so it doesn't carry over to the next account.
+    static func reset() {
+        removeAvatar()
+        UserDefaults.standard.removeObject(forKey: nameKey)
+    }
 }
 
 /// Self-contained local daily reminder (no backend / push infra needed).

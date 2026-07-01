@@ -125,6 +125,12 @@ enum DailyCompletionService {
         UserDefaults.standard.set(store, forKey: storageKey)
     }
 
+    /// Wipe every locally-recorded daily completion. Call on sign-out / account deletion so one
+    /// account's "games done" state never bleeds into the next account on this device.
+    static func clearAllLocalCompletions() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+
     static func recordCompletion(
         modeId: String,
         date: String,

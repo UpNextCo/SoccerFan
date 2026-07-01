@@ -69,7 +69,17 @@ final class AuthManager {
         user = nil
         isAuthenticated = false
         isDevAccount = false
-        UserDefaults.standard.set(false, forKey: UserDefaultsKeys.isDevAccount)
+        clearLocalAccountState()
+    }
+
+    /// Reset per-account state stored on this device so the next account that signs in starts clean
+    /// (runs the pick-team / profile setup, no stale "games done", avatar or display name).
+    private func clearLocalAccountState() {
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: UserDefaultsKeys.completedPostSignInSetup)
+        defaults.removeObject(forKey: UserDefaultsKeys.isDevAccount)
+        DailyCompletionService.clearAllLocalCompletions()
+        LocalProfile.reset()
     }
 
     func deleteAccount() async {

@@ -524,25 +524,26 @@ struct DailyGameCard: View {
                 }
                 .saturation(state == .completed ? 0.25 : 1)
 
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(mode.title)
-                            .font(.system(size: 16, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.8)
-                            .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
-                        Text(DailyGameCard.blurb(for: mode))
-                            .font(BKFont.body(11))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
-                    }
-                    Spacer(minLength: 6)
-                    trailingBadge
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(mode.title)
+                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                    Text(DailyGameCard.blurb(for: mode))
+                        .font(BKFont.body(11))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
+            }
+            .overlay(alignment: .topTrailing) {
+                trailingBadge
+                    .padding(10)
             }
             .frame(height: height)
             .frame(maxWidth: .infinity)
