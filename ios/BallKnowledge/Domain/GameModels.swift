@@ -255,3 +255,65 @@ enum PlayerSearchLimits {
         maxResults
     }
 }
+
+/// Single source of truth for how a daily game's result becomes XP.
+///
+/// This MIRRORS the server model in `backend/src/services/dailyService.ts`
+/// (`computeXp` / `modePerformance` / `MAX_XP` / `XP_FLOOR`). Keep the two in lockstep: the number
+/// every game shows on-screen — live and on the result card — IS the XP banked to the player's
+/// profile. No game shows an arbitrary "points" number any more.
+enum DailyXP {
+    static let floor = 10
+    static let defaultMax = 70
+
+    /// Per-mode XP ceiling on a perfect win. A modest spread reflecting length/effort so no single
+    /// game dominates the day (biggest is only ~1.7× the smallest).
+    static let maxXP: [String: Int] = [
+        "guess_who": 60,
+        "target_man": 60,
+        "blind_rank": 70,
+        "one_more": 70,
+        "football_bingo": 80,
+        "world_cup_xi": 90,
+        "draft_master": 90,
+        "football_tower": 90,
+        "football_golf": 100,
+    ]
+
+    /// Normalise a game's result to 0–1 on its own score scale. Mirror of the server switch.
+    static func performance(mode: String, score: Int, guesses: Int) -> Double {
+        let s = Double(max(0, score))
+        switch mode {
+        case "guess_who": return Double(9 - min(8, max(1, guesses))) / 8.0
+        case "world_cup_xi": return s / 1100     // correct × 100, out of 11
+        case "draft_master": return s / 100      // % of the perfect XI
+        case "football_tower": return s / 15     // floors climbed
+        case "football_golf": return s / 80      // max(0, 40 − strokesVsPar×4)
+        case "blind_rank": return s / 26         // ~win at 17
+        case "target_man": return s / 620        // ~win at 400
+        case "one_more": return s / 1000         // banked total — more risked = more XP
+        case "football_bingo": return s / 90     // 50 + remaining×3
+        default: return 0.8
+        }
+    }
+
+    /// The XP banked for this result (win applies the participation floor; a loss is the floor).
+    static func xp(mode: String, score: Int, guesses: Int = 1, won: Bool) -> Int {
+        guard won else { return floor }
+        let cap = maxXP[mode] ?? defaultMax
+        let perf = min(1.0, max(0.0, performance(mode: mode, score: score, guesses: guesses)))
+        return max(floor, Int((perf * Double(cap)).rounded()))
+    }
+
+    static func xp(_ mode: GameModeID, score: Int, guesses: Int = 1, won: Bool) -> Int {
+        xp(mode: mode.rawValue, score: score, guesses: guesses, won: won)
+    }
+
+    /// Live "so far / at risk" XP during play. Same curve as `xp`, but WITHOUT the participation floor
+    /// so it can read 0 and climb (used by One More's running meter — the XP you'd bank / lose).
+    static func projected(_ mode: GameModeID, score: Int, guesses: Int = 1) -> Int {
+        let cap = maxXP[mode.rawValue] ?? defaultMax
+        let perf = min(1.0, max(0.0, performance(mode: mode.rawValue, score: score, guesses: guesses)))
+        return Int((perf * Double(cap)).rounded())
+    }
+}

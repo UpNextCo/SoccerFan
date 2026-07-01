@@ -18,9 +18,15 @@ final class FootballBingoViewModel {
         self.game = game
     }
 
-    var xpEarned: Int {
+    /// Raw skill score submitted to the server (fewer players used → higher). The server converts
+    /// this to XP via the shared model; `xpEarned` mirrors that so the number shown == the XP banked.
+    var rawScore: Int {
         guard game.status == .won else { return 0 }
         return 50 + game.remainingPlayers * 3
+    }
+
+    var xpEarned: Int {
+        DailyXP.xp(.footballBingo, score: rawScore, won: game.status == .won)
     }
 
     func restart() {
@@ -243,7 +249,7 @@ struct FootballBingoView: View {
                             await DailyCompletionService.recordCompletion(
                                 modeId: GameModeID.footballBingo.rawValue,
                                 date: dailyDate,
-                                score: viewModel.xpEarned,
+                                score: viewModel.rawScore,
                                 won: viewModel.game.status == .won,
                                 context: modelContext
                             )

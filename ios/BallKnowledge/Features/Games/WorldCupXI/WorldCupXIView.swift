@@ -214,11 +214,11 @@ struct WorldCupXIView: View {
                     .foregroundStyle(BKTheme.accent)
             }
             VStack(alignment: .trailing, spacing: 4) {
-                Text("POINTS")
+                Text("XP")
                     .font(BKFont.caption(10))
                     .tracking(0.8)
                     .foregroundStyle(BKTheme.textMuted)
-                Text("\(viewModel.state.correctCount * WorldCupXIScoring.perCorrect)")
+                Text("\(DailyXP.projected(.worldCupXI, score: viewModel.state.correctCount * WorldCupXIScoring.perCorrect))")
                     .font(BKFont.headline(16))
                     .foregroundStyle(BKTheme.textPrimary)
             }
@@ -481,7 +481,7 @@ private struct WorldCupXIResultView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 8)
 
-                    Text("SCORE: \(result.score)")
+                    Text("+\(WorldCupXIScoring.xp(from: result.score)) XP")
                         .font(BKFont.headline(22))
                         .foregroundStyle(BKTheme.accent)
 

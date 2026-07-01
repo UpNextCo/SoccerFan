@@ -127,7 +127,7 @@ final class FootballTowerViewModel {
             run.streak += 1
             run.phase = .correctTransition
             isSuccessFeedback = true
-            feedbackMessage = "Correct · +100"
+            feedbackMessage = "Correct · +\(DailyXP.projected(.footballTower, score: 1)) XP"
             HapticManager.success()
             towerOffset = -28
 
@@ -508,7 +508,7 @@ private struct FootballTowerVisual: View {
         }
         .overlay(alignment: .topTrailing) {
             if isClimbing {
-                Text("+100")
+                Text("+\(DailyXP.projected(.footballTower, score: 1)) XP")
                     .font(BKFont.caption(11))
                     .foregroundStyle(BKTheme.accent)
                     .padding(.horizontal, 10)
@@ -696,14 +696,14 @@ private struct FootballTowerResultView: View {
                         }
                     }
 
-                    Text("\(summary.score)")
-                        .font(BKFont.title(48))
-                        .foregroundStyle(BKTheme.accent)
-
-                    if mode == .daily {
-                        Text("+\(summary.xpEarned) XP")
-                            .font(BKFont.headline(18))
+                    VStack(spacing: 2) {
+                        Text(mode == .daily ? "\(summary.xpEarned)" : "\(summary.correctCount)")
+                            .font(BKFont.title(48))
                             .foregroundStyle(BKTheme.accent)
+                        Text(mode == .daily ? "XP EARNED" : "FLOORS CLIMBED")
+                            .font(BKFont.caption(10))
+                            .tracking(1)
+                            .foregroundStyle(BKTheme.textMuted)
                     }
 
                     FootballTowerShareCardView(summary: summary, mode: mode)
@@ -798,7 +798,11 @@ struct FootballTowerShareCardView: View {
             HStack {
                 stat("CORRECT", "\(summary.correctCount)")
                 Spacer()
-                stat("SCORE", "\(summary.score)")
+                if mode == .daily {
+                    stat("XP", "\(summary.xpEarned)")
+                } else {
+                    stat("SCORE", "\(summary.score)")
+                }
                 Spacer()
                 stat("STREAK", "\(summary.bestStreak)")
             }

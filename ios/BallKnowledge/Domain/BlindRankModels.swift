@@ -228,14 +228,9 @@ enum BlindRankScoring {
         return Breakdown(exact: exact, close: close, disaster: disaster)
     }
 
-    /// XP banded by the 30-point score (small / medium / good / elite).
+    /// XP scaled from the ranking-accuracy score (win threshold 17). Mirrors the server model.
     static func xp(fromScore score: Int) -> Int {
-        switch score {
-        case 25...: return 130
-        case 17...: return 90
-        case 9...: return 50
-        default: return 25
-        }
+        DailyXP.xp(.blindRank, score: score, won: score >= 17)
     }
 
     static func verdict(forScore score: Int) -> String {

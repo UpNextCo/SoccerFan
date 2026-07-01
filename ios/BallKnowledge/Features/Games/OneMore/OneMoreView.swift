@@ -445,13 +445,19 @@ private struct OneMoreScoreHero: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 8)
 
-            Text("\(currentScore)")
-                .font(BKFont.title(52))
-                .foregroundStyle(streak > 0 ? BKTheme.accent : BKTheme.textPrimary)
-                .frame(maxWidth: .infinity)
-                .scaleEffect(pulseScale)
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.32, dampingFraction: 0.55), value: currentScore)
+            VStack(spacing: 2) {
+                Text("\(DailyXP.projected(.oneMore, score: currentScore))")
+                    .font(BKFont.title(52))
+                    .foregroundStyle(streak > 0 ? BKTheme.accent : BKTheme.textPrimary)
+                    .scaleEffect(pulseScale)
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.32, dampingFraction: 0.55), value: currentScore)
+                Text(streak > 0 ? "XP AT RISK" : "XP")
+                    .font(BKFont.caption(11))
+                    .tracking(1)
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity)
         .onChange(of: pulseToken) { _, _ in
@@ -531,7 +537,7 @@ private struct OneMorePickHistory: View {
                     .foregroundStyle(BKTheme.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                Text("+\(OneMoreScoring.points(forPick: number))")
+                Text("+\(pickXP(number))")
                     .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.accent)
             }
@@ -546,11 +552,24 @@ private struct OneMorePickHistory: View {
                     .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.textMuted)
                     .lineLimit(1)
-                Text("+\(points)")
+                Text("+\(nextXP(points))")
                     .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.textMuted)
             }
         }
+    }
+
+    /// XP that the nth correct pick added to the at-risk pot (delta of the running projected XP).
+    private func pickXP(_ number: Int) -> Int {
+        DailyXP.projected(.oneMore, score: OneMoreScoring.score(forStreak: number))
+            - DailyXP.projected(.oneMore, score: OneMoreScoring.score(forStreak: number - 1))
+    }
+
+    /// XP the upcoming pick would add on top of the current pot.
+    private func nextXP(_ points: Int) -> Int {
+        let current = OneMoreScoring.score(forStreak: picks.count)
+        return DailyXP.projected(.oneMore, score: current + points)
+            - DailyXP.projected(.oneMore, score: current)
     }
 
     private func shortName(_ name: String) -> String {
@@ -574,11 +593,11 @@ private struct OneMoreCashOutButton: View {
                         .font(BKFont.headline(15))
                         .foregroundStyle(BKTheme.textPrimary)
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text("\(score)")
+                        Text("\(DailyXP.projected(.oneMore, score: score))")
                             .font(BKFont.headline(20))
                             .foregroundStyle(BKTheme.accent)
                             .contentTransition(.numericText())
-                        Text("PTS")
+                        Text("XP")
                             .font(BKFont.caption(10))
                             .foregroundStyle(BKTheme.accent)
                     }
@@ -619,7 +638,7 @@ private struct OneMoreBustOverlay: View {
                     .foregroundStyle(BKTheme.wrong)
 
                 if lostScore > 0 {
-                    Text("Lost \(lostScore) points on the line")
+                    Text("Lost \(DailyXP.projected(.oneMore, score: lostScore)) XP on the line")
                         .font(BKFont.headline(16))
                         .foregroundStyle(BKTheme.textPrimary)
                 }
@@ -678,11 +697,17 @@ private struct OneMoreResultView: View {
                     }
                     .padding(.top, 24)
 
-                    Text("\(finalScore)")
-                        .font(BKFont.title(52))
-                        .foregroundStyle(isBusted ? BKTheme.textMuted : BKTheme.accent)
+                    VStack(spacing: 2) {
+                        Text("\(xpEarned)")
+                            .font(BKFont.title(52))
+                            .foregroundStyle(isBusted ? BKTheme.textMuted : BKTheme.accent)
+                        Text("XP EARNED")
+                            .font(BKFont.caption(11))
+                            .tracking(1)
+                            .foregroundStyle(BKTheme.textMuted)
+                    }
 
-                    Text(isBusted ? "0 points banked" : "\(streak) correct in a row")
+                    Text(isBusted ? "Run ended on a wrong pick" : "\(streak) correct in a row")
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textMuted)
 
@@ -735,10 +760,6 @@ private struct OneMoreResultView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
-
-                    Text("+\(xpEarned) XP")
-                        .font(BKFont.headline(18))
-                        .foregroundStyle(BKTheme.accent)
 
                     VStack(spacing: 10) {
                         if showPlayAgain {

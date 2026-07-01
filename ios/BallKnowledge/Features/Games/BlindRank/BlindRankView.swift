@@ -779,12 +779,13 @@ private struct BlindRankResultView: View {
                     }
                     .padding(.top, 24)
 
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text("\(score)")
+                    VStack(spacing: 2) {
+                        Text("\(xpEarned)")
                             .font(BKFont.title(48))
-                            .foregroundStyle(score >= 23 ? blindGreen : BKTheme.textPrimary)
-                        Text("/ \(maxScore)")
-                            .font(BKFont.headline(20))
+                            .foregroundStyle(score >= 17 ? blindGreen : BKTheme.textPrimary)
+                        Text("XP EARNED")
+                            .font(BKFont.caption(11))
+                            .tracking(1)
                             .foregroundStyle(BKTheme.textMuted)
                     }
 
@@ -832,9 +833,9 @@ private struct BlindRankResultView: View {
                     }
 
                     HStack(spacing: 10) {
-                        Label("\(xpEarned) XP", systemImage: "bolt.fill")
+                        Label("\(score) / \(maxScore) ranking accuracy", systemImage: "target")
                             .font(BKFont.caption(11))
-                            .foregroundStyle(BKTheme.accent)
+                            .foregroundStyle(BKTheme.textSecondary)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)

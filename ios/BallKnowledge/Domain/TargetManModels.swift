@@ -203,19 +203,19 @@ enum TargetManScoring {
     }
 
     static func xp(from score: Int) -> Int {
-        max(10, score / 5)
+        DailyXP.xp(.targetMan, score: score, won: score >= 400)
     }
 
     static func tierExplanation(forDifference difference: Int, target: Int) -> String {
-        if difference == 0 { return "Exact match — 1,000 point bullseye" }
+        if difference == 0 { return "Exact match — bullseye!" }
         let pct = Double(abs(difference)) / Double(max(target, 1))
         switch pct {
-        case ..<0.02: return "Within 2% of target — 900 point tier"
-        case ..<0.05: return "Within 5% of target — 750 point tier"
-        case ..<0.10: return "Within 10% of target — 600 point tier"
-        case ..<0.15: return "Within 15% of target — 450 point tier"
-        case ..<0.25: return "Within 25% of target — 250 point tier"
-        default: return "More than 25% away — 50 point base score"
+        case ..<0.02: return "Within 2% of target — top tier"
+        case ..<0.05: return "Within 5% of target"
+        case ..<0.10: return "Within 10% of target"
+        case ..<0.15: return "Within 15% of target"
+        case ..<0.25: return "Within 25% of target"
+        default: return "More than 25% away"
         }
     }
 

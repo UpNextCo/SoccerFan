@@ -678,7 +678,7 @@ private struct TargetManResultView: View {
                             if step >= TargetManResultStep.points.rawValue {
                                 VStack(spacing: 8) {
                                     resultRevealRow(
-                                    label: "POINTS",
+                                    label: "XP EARNED",
                                     value: "\(animatedScore)",
                                     subtitle: TargetManScoring.tierExplanation(forDifference: difference, target: challenge.target),
                                         accent: true,
@@ -735,9 +735,9 @@ private struct TargetManResultView: View {
                         }
 
                         if step >= TargetManResultStep.xp.rawValue {
-                            Text("+\(xpEarned) XP")
-                                .font(BKFont.headline(18))
-                                .foregroundStyle(BKTheme.accent)
+                            Text(score >= 600 ? "Sharp shooting!" : score >= 250 ? "Solid effort" : "Room to improve")
+                                .font(BKFont.headline(16))
+                                .foregroundStyle(BKTheme.textSecondary)
                                 .transition(.scale.combined(with: .opacity))
                         }
                     }
@@ -794,7 +794,7 @@ private struct TargetManResultView: View {
     }
 
     private var scoreBreakdownHint: String {
-        "Scoring: exact 1,000 · within 2% → 900 · 5% → 750 · 10% → 600 · 15% → 450 · 25% → 250 · further → 50"
+        "The closer your combined total lands to the target, the more XP you earn."
     }
 
     private var resultTransition: AnyTransition {
@@ -866,7 +866,7 @@ private struct TargetManResultView: View {
                         HapticManager.light()
                     }
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                        animatedScore = score
+                        animatedScore = xpEarned
                     }
                 case .breakdown, .xp:
                     HapticManager.light()

@@ -148,11 +148,9 @@ enum FootballTowerScoring {
 
     static func xp(from score: Int, mode: FootballTowerRunMode, percentile: Int) -> Int {
         guard mode == .daily else { return 0 }
-        var xp = max(50, score / 8)
-        if percentile <= 25 { xp += 100 }
-        if percentile <= 10 { xp += 150 }
-        if percentile <= 1 { xp += 250 }
-        return xp
+        // `score` here is floors × 100; the server scores by raw floor count (win at 5+).
+        let floors = score / 100
+        return DailyXP.xp(.footballTower, score: floors, won: floors >= 5)
     }
 }
 

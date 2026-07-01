@@ -126,13 +126,8 @@ enum FootballGolfScoring {
     }
 
     static func xp(total: Int) -> Int {
-        switch total {
-        case ...(-4): return 120
-        case -3, -2: return 95
-        case -1, 0: return 70
-        case 1, 2: return 50
-        default: return 30
-        }
+        // Mirror the value submitted to the server: score = max(0, 40 − strokesVsPar×4), win at/under par.
+        DailyXP.xp(.footballGolf, score: max(0, 40 - total * 4), won: total <= 0)
     }
 }
 

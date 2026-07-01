@@ -153,5 +153,7 @@ enum WorldCupXIScoring {
         )
     }
 
-    static func xp(from score: Int) -> Int { max(10, score / 10) }
+    static func xp(from score: Int) -> Int {
+        DailyXP.xp(.worldCupXI, score: score, won: score >= 6 * perCorrect)
+    }
 }

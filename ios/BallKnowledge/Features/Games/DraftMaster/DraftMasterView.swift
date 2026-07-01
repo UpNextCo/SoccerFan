@@ -866,12 +866,17 @@ private struct BattleResultView: View {
                     .padding(.top, 24)
 
                     if revealStep >= 1 {
-                        VStack(spacing: 4) {
-                            Text("\(result.percentage)%")
-                                .font(BKFont.title(56)).foregroundStyle(BKTheme.accent)
-                                .contentTransition(.numericText())
-                            Text("OF THE PERFECT XI")
-                                .font(BKFont.caption(10)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                        VStack(spacing: 10) {
+                            VStack(spacing: 4) {
+                                Text("\(result.percentage)%")
+                                    .font(BKFont.title(56)).foregroundStyle(BKTheme.accent)
+                                    .contentTransition(.numericText())
+                                Text("OF THE PERFECT XI")
+                                    .font(BKFont.caption(10)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                            }
+                            Text("+\(DailyXP.xp(.draftMaster, score: result.percentage, won: result.percentage >= 70)) XP")
+                                .font(BKFont.headline(18))
+                                .foregroundStyle(BKTheme.accent)
                         }
                         .transition(.scale.combined(with: .opacity))
                     }

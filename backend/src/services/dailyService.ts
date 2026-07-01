@@ -72,24 +72,53 @@ function yesterdayUTC(): string {
   return d.toISOString().slice(0, 10);
 }
 
-function computeXpEarned(won: boolean, guesses: number): number {
-  if (!won) return 10;
-  const bonus = Math.max(0, (8 - guesses) * 10);
-  return 50 + bonus;
+// ---- XP model ------------------------------------------------------------------------------------
+// Every game contributes a BOUNDED, comparable amount of XP so no single game can dominate the day:
+//   xp = won ? max(FLOOR, round(performance × MAX_XP[mode])) : FLOOR
+// `performance` is each game's result normalised to 0–1 (so "score" meaning different things per game
+// stops mattering), and MAX_XP is a modest spread reflecting length/effort — the biggest game is only
+// ~1.7× the smallest, never 10×. A loss still earns the small participation FLOOR.
+const XP_FLOOR = 10;
+const DEFAULT_MAX_XP = 70;
+const MAX_XP: Record<string, number> = {
+  guess_who: 60,
+  target_man: 60,
+  blind_rank: 70,
+  one_more: 70,
+  football_bingo: 80,
+  world_cup_xi: 90,
+  draft_master: 90,
+  football_tower: 90,
+  football_golf: 100,
+};
+
+const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
+
+/**
+ * Normalise a game's win result to 0–1 using each game's real score scale, so the number a game shows
+ * on-screen IS the XP it banks. Only called for wins — a loss is a flat participation FLOOR.
+ * MIRRORED CLIENT-SIDE in ios/BallKnowledge/Domain/DailyXP.swift — keep the two in lockstep.
+ */
+function modePerformance(modeId: string, score: number, guesses: number): number {
+  const s = Math.max(0, score);
+  switch (modeId) {
+    case 'guess_who': return (9 - Math.max(1, Math.min(8, guesses))) / 8; // fewer guesses → higher
+    case 'world_cup_xi': return s / 1100;   // correct × 100, out of 11
+    case 'draft_master': return s / 100;    // % of the perfect XI
+    case 'football_tower': return s / 15;   // floors climbed
+    case 'football_golf': return s / 80;    // client sends max(0, 40 − strokesVsPar×4); par≈0.5
+    case 'blind_rank': return s / 26;       // ~win at 17
+    case 'target_man': return s / 620;      // ~win at 400
+    case 'one_more': return s / 1000;       // banked total — more risked = more XP (5-in-a-row ≈ full)
+    case 'football_bingo': return s / 90;   // 50 + remaining×3 — fewer players used = more XP
+    default: return 0.8;
+  }
 }
 
-function computeClientModeXp(modeId: string, score: number, won: boolean): number {
-  if (!won) return 10;
-  const base: Record<string, number> = {
-    football_bingo: 50,
-    one_more: 40,
-    draft_master: 45,
-    football_golf: 55,
-    target_man: 50,
-    blind_rank: 50,
-  };
-  const floor = base[modeId] ?? 30;
-  return floor + Math.min(50, Math.max(0, score));
+function computeXp(modeId: string, score: number, guesses: number, won: boolean): number {
+  if (!won) return XP_FLOOR;
+  const max = MAX_XP[modeId] ?? DEFAULT_MAX_XP;
+  return Math.max(XP_FLOOR, Math.round(clamp01(modePerformance(modeId, score, guesses)) * max));
 }
 
 export function getGameModes() {
@@ -515,10 +544,7 @@ export async function completeDaily(
     throw new Error('Daily puzzle not found');
   }
 
-  const xpEarned =
-    input.modeId === 'guess_who'
-      ? computeXpEarned(input.won, input.guesses)
-      : computeClientModeXp(input.modeId, input.score, input.won);
+  const xpEarned = computeXp(input.modeId, input.score, input.guesses, input.won);
 
   await db.insert(dailyCompletions).values({
     userId,

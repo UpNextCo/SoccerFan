@@ -84,6 +84,14 @@ struct HomeView: View {
         .task {
             await viewModel.load(context: modelContext)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .dailyCompletionRecorded)) { _ in
+            // The completion POST has landed on the server — refresh XP (top bar + card) and the
+            // games-completed count now that the write is durable, avoiding the dismiss-time race.
+            Task {
+                await auth.refreshProfile()
+                await viewModel.load(context: modelContext)
+            }
+        }
         .fullScreenCover(item: $presentedMode) { mode in
             DailyGameHost(
                 mode: mode,
@@ -509,8 +517,12 @@ struct DailyGameCard: View {
     var body: some View {
         Button(action: onTap) {
             ZStack(alignment: .bottomLeading) {
-                artLayer
-                gradientLayer
+                // Dim only the artwork on completed tiles — keep the DONE badge's green vivid.
+                ZStack {
+                    artLayer
+                    gradientLayer
+                }
+                .saturation(state == .completed ? 0.25 : 1)
 
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -539,7 +551,6 @@ struct DailyGameCard: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(Color.white.opacity(0.06), lineWidth: 1)
             )
-            .saturation(state == .completed ? 0.25 : 1)
         }
         .buttonStyle(TilePressStyle())
     }

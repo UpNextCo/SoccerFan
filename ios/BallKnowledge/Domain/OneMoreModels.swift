@@ -121,7 +121,7 @@ enum OneMoreScoring {
     }
 
     static func xp(from score: Int, streak: Int) -> Int {
-        max(10, score / 4 + streak * 2)
+        DailyXP.xp(.oneMore, score: score, won: score > 0)
     }
 
     static func riskLabel(forStreak streak: Int) -> String {

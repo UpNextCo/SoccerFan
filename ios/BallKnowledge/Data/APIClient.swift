@@ -1,5 +1,11 @@
 import Foundation
 
+extension Notification.Name {
+    /// Posted whenever a daily completion is successfully recorded on the server, so any surface
+    /// showing XP / games-completed (e.g. Home) can refresh once the write has actually landed.
+    static let dailyCompletionRecorded = Notification.Name("dailyCompletionRecorded")
+}
+
 enum APIError: LocalizedError {
     case invalidResponse
     case server(String)
@@ -103,7 +109,11 @@ actor APIClient {
     }
 
     func dailyComplete(_ body: DailyCompleteRequestDTO) async throws -> DailyCompleteResponseDTO {
-        try await request("daily/complete", method: "POST", body: body)
+        let response: DailyCompleteResponseDTO = try await request("daily/complete", method: "POST", body: body)
+        await MainActor.run {
+            NotificationCenter.default.post(name: .dailyCompletionRecorded, object: nil)
+        }
+        return response
     }
 
     func dailyGuess(_ body: DailyGuessRequestDTO) async throws -> GuessResultDTO {
