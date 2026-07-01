@@ -131,9 +131,10 @@ async function main() {
   console.log(`${rows.length} events · ${matched} matched to players (${Math.round((matched / rows.length) * 100)}%)`);
 
   // Replace only the goal/own_goal/card rows for the scraped years; keep shootout data intact.
+  const yearList = sql.join(years.map((y) => sql`${y}`), sql`, `);
   await db.execute(sql`
     DELETE FROM wc_match_events
-    WHERE year = ANY(${years}) AND type IN ('goal', 'own_goal', 'card')
+    WHERE year IN (${yearList}) AND type IN ('goal', 'own_goal', 'card')
   `);
   for (let i = 0; i < rows.length; i += 400) {
     const batch = rows.slice(i, i + 400);

@@ -575,10 +575,13 @@ private struct BattlePitchSlot: View {
     }
 }
 
+// MARK: - Pitch background (shared by Battle Mode + World Cup XI)
+
 /// A drawn top-down pitch: deep, slightly desaturated mown stripes + full markings, so it reads as
 /// real turf while staying dark enough for headshots/badges to pop. Resolution-independent (scales
 /// with the flexible pitch frame), so the markings always line up with the fraction-positioned slots.
-private struct PitchBackground: View {
+/// Lives here (an in-target file) so both pitch games can share it without a separate compile unit.
+struct PitchBackground: View {
     private let grassA = Color(red: 0.11, green: 0.26, blue: 0.16)
     private let grassB = Color(red: 0.14, green: 0.31, blue: 0.19)
     private let line = Color.white.opacity(0.32)

@@ -334,7 +334,7 @@ struct WorldCupXIView: View {
 
 }
 
-// MARK: - Pitch
+// MARK: - Pitch (shared Battle-style turf + circular headshot slots)
 
 private struct WorldCupXIPitchView: View {
     let state: WorldCupXIGameState
@@ -343,38 +343,19 @@ private struct WorldCupXIPitchView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "0D3B1A"), Color(hex: "145A27"), Color(hex: "0D3B1A")],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 1.5)
-
-                Circle()
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                    .frame(width: geo.size.width * 0.22)
-
-                Rectangle()
-                    .fill(Color.white.opacity(0.12))
-                    .frame(height: 1)
-
+                PitchBackground()
                 ForEach(state.puzzle.slots) { slot in
                     WorldCupXIPitchSlot(
                         slot: slot,
                         fill: state.fills[slot.id],
                         revealAnswer: state.phase == .complete,
-                        size: geo.size,
                         onTap: { onTapSlot(slot) }
                     )
+                    .position(x: slot.pitchPoint.x * geo.size.width, y: slot.pitchPoint.y * geo.size.height)
                 }
             }
         }
-        .frame(height: 400)
+        .frame(height: 440)
     }
 }
 
@@ -382,53 +363,65 @@ private struct WorldCupXIPitchSlot: View {
     let slot: WorldCupXISlot
     let fill: WorldCupXIFill?
     let revealAnswer: Bool
-    let size: CGSize
     var onTap: () -> Void
 
-    private var chipColor: Color {
-        guard let fill else { return Color.black.opacity(0.35) }
-        return fill.isCorrect ? BKTheme.guessCorrect : BKTheme.guessWrong
-    }
+    /// Soft whitish-green for empty slot rings + the position label (matches Battle Mode).
+    private static let ringColor = Color(red: 0.80, green: 0.93, blue: 0.84).opacity(0.85)
 
-    /// When the game ends, show the right answer under any slot that was missed.
-    private var bottomName: String? {
-        if let fill { return shortName(fill.player.name) }
-        if revealAnswer { return shortName(slot.expectedName) }
-        return nil
+    private var ring: Color {
+        if let fill { return fill.isCorrect ? BKTheme.accent : BKTheme.wrong }
+        return Self.ringColor
     }
 
     var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 4) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(chipColor)
-                        .frame(width: fill == nil ? 38 : 44, height: fill == nil ? 44 : 48)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+        VStack(spacing: 3) {
+            ZStack {
+                Circle()
+                    .fill(fill != nil ? Color.black.opacity(0.30) : Color(white: 0.14).opacity(0.72))
+                    .frame(width: 46, height: 46)
+                    .overlay(Circle().stroke(ring, lineWidth: 1.1))
+
+                if let fill {
+                    PlayerAvatar(urlString: fill.player.headshotUrl, size: 42)
+                        .grayscale(fill.isCorrect ? 0 : 0.85)
+                        .opacity(fill.isCorrect ? 1 : 0.55)
+                        .overlay(alignment: .bottomTrailing) {
+                            ZStack {
+                                Circle().fill(.white).frame(width: 14, height: 14)
+                                (fill.isCorrect ? Ph.checkCircle.fill : Ph.xCircle.fill)
+                                    .color(fill.isCorrect ? BKTheme.accent : BKTheme.wrong)
+                                    .frame(width: 16, height: 16)
+                            }
+                            .offset(x: 2, y: 2)
                         }
-
-                    Text(fill == nil ? slot.label : (fill!.isCorrect ? "✓" : "✗"))
-                        .font(.system(size: fill == nil ? 10 : 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(fill == nil ? Color.white.opacity(0.85) : Color.white)
-                }
-
-                if let bottomName {
-                    Text(bottomName)
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(fill == nil ? Color.white.opacity(0.6) : Color.white)
-                        .lineLimit(1)
-                        .frame(maxWidth: 72)
+                } else {
+                    Text(slot.label)
+                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Self.ringColor)
                 }
             }
+
+            Text(slot.label)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(Color.white.opacity(0.95))
+
+            if let fill {
+                Text(shortName(fill.player.name))
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(fill.isCorrect ? .white : BKTheme.wrong)
+                    .lineLimit(1).frame(maxWidth: 72)
+            } else if revealAnswer {
+                // Game over — reveal the answer under any slot that was missed.
+                Text(shortName(slot.expectedName))
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.6))
+                    .lineLimit(1).frame(maxWidth: 72)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(fill != nil || revealAnswer)
-        .position(
-            x: slot.pitchPoint.x * size.width,
-            y: slot.pitchPoint.y * size.height
-        )
+        .shadow(color: .black.opacity(0.55), radius: 2, x: 0, y: 1)
+        .frame(width: 76)
+        .contentShape(Rectangle())
+        .onTapGesture { if fill == nil && !revealAnswer { onTap() } }
     }
 
     private func shortName(_ name: String) -> String {

@@ -110,6 +110,7 @@ interface EvGoal { stage: string; opponent: string; matchId: number }
 interface MatchIndex {
   statsGoals: Map<string, number>;       // pid|year -> WC goals (row exists ⇒ authoritative)
   goals: Map<string, EvGoal[]>;          // pid|year -> goal events
+  ownGoals: Set<string>;                 // pid|year with a recorded own goal
   yearOpps: Map<number, Set<string>>;    // year -> normalized opponents seen that year
 }
 
@@ -122,18 +123,26 @@ async function loadMatchIndex(): Promise<MatchIndex> {
   for (const r of stats) statsGoals.set(`${r.playerId}|${r.year}`, Number(r.goals) || 0);
 
   const evs = (await db.execute(sql`
-    SELECT player_id AS "playerId", year, stage, opponent, match_id AS "matchId"
-    FROM wc_match_events WHERE type = 'goal' AND player_id IS NOT NULL
-  `)) as unknown as Array<{ playerId: string; year: number; stage: string; opponent: string; matchId: number }>;
+    SELECT player_id AS "playerId", year, type, stage, opponent, match_id AS "matchId"
+    FROM wc_match_events WHERE type IN ('goal', 'own_goal') AND player_id IS NOT NULL
+  `)) as unknown as Array<{ playerId: string; year: number; type: string; stage: string; opponent: string; matchId: number }>;
   const goals = new Map<string, EvGoal[]>();
+  const ownGoals = new Set<string>();
   const yearOpps = new Map<number, Set<string>>();
   for (const e of evs) {
     const k = `${e.playerId}|${e.year}`;
+    if (e.type === 'own_goal') { ownGoals.add(k); continue; }
     (goals.get(k) ?? goals.set(k, []).get(k)!).push({ stage: e.stage, opponent: e.opponent, matchId: e.matchId });
     const set = yearOpps.get(e.year) ?? yearOpps.set(e.year, new Set()).get(e.year)!;
     if (e.opponent) set.add(normTeam(e.opponent));
   }
-  return { statsGoals, goals, yearOpps };
+  return { statsGoals, goals, ownGoals, yearOpps };
+}
+
+/** Claude occasionally "thinks out loud" and leaves a self-correction in the clue — always garbled. */
+function garbledReason(clue: string): string | null {
+  if (/\bwait\b/i.test(clue) || /\bthat was \d{4}\b/i.test(clue)) return 'contains a self-correction ("wait") — garbled';
+  return null;
 }
 
 const CLAIMS_GOAL = /\b(scored|netted|nets|brace|hat-?trick|opening goal|winning goal|the winner|equaliser|equalizer|both goals|two goals|got on the scoresheet|opened the scoring)\b/;
@@ -141,13 +150,18 @@ const NON_GOAL_CTX = /\b(own goal|assist|assisted|set up|set-up|provided|created
 const SHOOTOUT_CTX = /\b(shootout|shoot-out|spot-?kicks?|penalty shoot)\b/;
 
 function wantedStage(c: string): string | null {
-  if (/third[- ]place|3rd place/.test(c)) return '3rd Place Final';
-  if (/semi-?finals?/.test(c)) return 'Semi-finals';
-  if (/quarter-?finals?/.test(c)) return 'Quarter-finals';
-  if (/round of 16|round-of-16|last[- ]16/.test(c)) return 'Round of 16';
-  if (/group stage|group-stage|group game|group match/.test(c)) return 'Group Stage';
-  if (/\bthe final\b|world cup final/.test(c) && !/\bthe final (group|whistle)\b/.test(c)) return 'Final';
-  return null;
+  // Only treat a stage as the GOAL's stage when it's phrased as the goal happening "in/of/during the
+  // {stage}". This avoids incidental mentions that aren't where the goal was scored — e.g. "into the
+  // quarter-finals", "round-of-16 exit", "reached the semi-finals", "three consecutive quarter-finals".
+  const m = c.match(/\b(?:in|of|during)\s+(?:the\s+|a\s+)?(?:\d{4}\s+)?(third[- ]place|3rd place|semi-?finals?|quarter-?finals?|round of 16|round-of-16|last[- ]16|group stage|group-stage|final)\b/);
+  if (!m) return null;
+  const s = m[1]!;
+  if (/third|3rd/.test(s)) return '3rd Place Final';
+  if (/semi/.test(s)) return 'Semi-finals';
+  if (/quarter/.test(s)) return 'Quarter-finals';
+  if (/16/.test(s)) return 'Round of 16';
+  if (/group/.test(s)) return 'Group Stage';
+  return 'Final';
 }
 function wantedOpponent(original: string, yearOpps: Set<string> | undefined): string | null {
   if (!yearOpps) return null;
@@ -181,6 +195,15 @@ function matchClaimReason(clue: string, playerId: string, year: number, idx: Mat
       const opp = wantedOpponent(clue, idx.yearOpps.get(year));
       if (opp && !evs.some((e) => normTeam(e.opponent) === opp)) return 'claims a goal against an opponent the player did not score against';
     }
+  }
+
+  // Own-goal claim (the player themselves putting it in their own net — not assisting/benefiting
+  // from someone else's). Verify against recorded own goals; only reject when we have the player on
+  // file (statsRow) so a match gap can't cause a false drop.
+  const claimsOwnGoal = /own goal/.test(c)
+    && !/\b(assist|assisted|set up|set-up|provided|cross|led to|off (?:a|the)|deflect)/.test(c);
+  if (claimsOwnGoal && statsRow && !idx.ownGoals.has(key)) {
+    return 'claims an own goal but none is recorded';
   }
   return null;
 }
@@ -289,7 +312,8 @@ async function storeProposals(
     if (!squad) continue;
     const match = resolvePlayer(squad, p.player, p.country);
     if (!match) continue; // unverified / ambiguous — drop it
-    const bad = awardClaimReason(p.clue, match.player_id, p.year, awards)
+    const bad = garbledReason(p.clue)
+      ?? awardClaimReason(p.clue, match.player_id, p.year, awards)
       ?? matchClaimReason(p.clue, match.player_id, p.year, matchIdx);
     if (bad) { rejected += 1; continue; }
     const key = `${p.year}|${match.player_id}`;
@@ -372,7 +396,8 @@ async function revalidate(dry: boolean): Promise<void> {
   `)) as unknown as Array<{ id: string; playerId: string; playerName: string; year: number; clue: string }>;
   let rejected = 0;
   for (const r of rows) {
-    const reason = awardClaimReason(r.clue, r.playerId, r.year, awards)
+    const reason = garbledReason(r.clue)
+      ?? awardClaimReason(r.clue, r.playerId, r.year, awards)
       ?? matchClaimReason(r.clue, r.playerId, r.year, matchIdx);
     if (!reason) continue;
     rejected += 1;

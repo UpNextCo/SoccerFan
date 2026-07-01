@@ -74,6 +74,12 @@ def page_loaded(html: str) -> bool:
     return 'class="scorebox"' in html or "scorebox" in html[:20000] or 'id="events_wrap"' in html
 
 
+def team_name(cell):
+    """Clean national-team name from a schedule cell — the <a> link text (no flag code)."""
+    a = cell.find("a")
+    return (a.get_text(strip=True) if a else cell.get_text(strip=True)).strip()
+
+
 def parse_schedule(html: str):
     """Return [{stage, home, away, date, url}] for matches that have a report link."""
     soup = BeautifulSoup(html, "lxml")
@@ -92,8 +98,10 @@ def parse_schedule(html: str):
         home_el, away_el = cell("home_team"), cell("away_team")
         if not home_el or not away_el:
             continue
-        home = home_el.get_text(strip=True)
-        away = away_el.get_text(strip=True)
+        # The cell text glues on FBref's flag code ("IR Iranir", "ptPortugal"); the team LINK
+        # holds the clean name, so prefer the anchor text.
+        home = team_name(home_el)
+        away = team_name(away_el)
         if not home or not away:
             continue
         report = cell("match_report")
