@@ -309,9 +309,10 @@ struct WorldCupXISlotDTO: Codable, Equatable {
     let year: Int?
     let club: String?
     let clubBadgeUrl: String?
+    let nation: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, label, x, y, expectedName, clues, year, club, clubBadgeUrl
+        case id, label, x, y, expectedName, clues, year, club, clubBadgeUrl, nation
     }
 
     init(from decoder: Decoder) throws {
@@ -325,6 +326,7 @@ struct WorldCupXISlotDTO: Codable, Equatable {
         year = try c.decodeIfPresent(Int.self, forKey: .year)
         club = try c.decodeIfPresent(String.self, forKey: .club)
         clubBadgeUrl = try c.decodeIfPresent(String.self, forKey: .clubBadgeUrl)
+        nation = try c.decodeIfPresent(String.self, forKey: .nation)
     }
 }
 

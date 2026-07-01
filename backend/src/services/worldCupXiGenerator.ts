@@ -10,7 +10,7 @@ import { db } from '../db/index.js';
 import { resolveClubLogo } from './teamService.js';
 
 /** Bump when the puzzle JSON shape/source changes so stored puzzles regenerate. */
-export const WCXI_VERSION = 3;
+export const WCXI_VERSION = 4;
 
 // Selection weight per tournament — strong bias toward recent World Cups (more recognisable),
 // with classics appearing occasionally.
@@ -79,8 +79,9 @@ interface Scored { c: Cand; facts: Fact[]; }
 
 export interface WorldCupXiSlot {
   id: string; label: string; x: number; y: number; expectedName: string; clues: string[];
-  // Shown to the player ABOVE the clue: the tournament year, and the club they were at THEN (+ crest).
-  year: number; club: string | null; clubBadgeUrl: string | null;
+  // Shown to the player ABOVE the clue: the tournament year, the club they were at THEN (+ crest),
+  // and their nation (rendered as a flag emoji on the client).
+  year: number; club: string | null; clubBadgeUrl: string | null; nation: string;
 }
 export interface WorldCupXiPuzzleJson {
   modeId: 'world_cup_xi';
@@ -101,15 +102,15 @@ export interface WorldCupXiPuzzleJson {
 async function gatherMemorable(): Promise<Scored[]> {
   const rows = (await db.execute(sql`
     SELECT m.player_id AS "playerId", p.name, m.position, p.sub_position AS "subPosition", m.year,
-           COALESCE(p.market_value_tier, 0) AS mvt, m.clue, s.club AS club
+           COALESCE(p.market_value_tier, 0) AS mvt, m.clue, s.club AS club, s.country AS country
     FROM wc_memorable m
     JOIN players p ON p.id = m.player_id
     LEFT JOIN wc_squads s ON s.player_id = m.player_id AND s.year = m.year
     WHERE m.status = 'active' AND m.player_id IS NOT NULL
-  `)) as unknown as Array<{ playerId: string; name: string; position: string; subPosition: string | null; year: number; mvt: number; clue: string; club: string | null }>;
+  `)) as unknown as Array<{ playerId: string; name: string; position: string; subPosition: string | null; year: number; mvt: number; clue: string; club: string | null; country: string | null }>;
 
   return rows.map((r) => ({
-    c: { playerId: r.playerId, name: r.name, country: '', position: r.position, subPosition: r.subPosition, year: r.year, mvt: r.mvt ?? 0, isCaptain: false, club: r.club },
+    c: { playerId: r.playerId, name: r.name, country: r.country ?? '', position: r.position, subPosition: r.subPosition, year: r.year, mvt: r.mvt ?? 0, isCaptain: false, club: r.club },
     facts: [{ sig: `mem:${r.playerId}:${r.year}`, score: 200, clue: r.clue }],
   }));
 }
@@ -229,22 +230,31 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
 
   const used = new Set<string>();
   const usedSig = new Set<string>();
-  const cursor: Record<string, number> = {};
-  const take = (list: Sorted, key: string): Scored | null => {
-    cursor[key] ??= 0;
-    while (cursor[key]! < list.length) {
-      const { x } = list[cursor[key]!]!;
-      cursor[key] += 1;
-      if (!used.has(x.c.playerId)) return x;
-    }
+  // Each slot targets a tournament year (a date-seeded rotation of the World Cups) so the daily XI
+  // spreads across years instead of clumping on the most recent — different spread every day.
+  const wcYears = [2006, 2010, 2014, 2018, 2022];
+  const shuffledYears = [...wcYears].sort((a, b) => hashString(`${seed}:y:${a}`) - hashString(`${seed}:y:${b}`));
+  const targetYear = (idx: number): number => shuffledYears[idx % shuffledYears.length]!;
+
+  // First unused candidate in the (jitter-sorted) list matching a predicate; null if none.
+  const firstUnused = (list: Sorted, pred: (x: Scored) => boolean): Scored | null => {
+    for (const { x } of list) if (!used.has(x.c.playerId) && pred(x)) return x;
     return null;
   };
 
   const result: Array<WorldCupXiSlot | null> = LAYOUT.map(() => null);
-  const fillFrom = (pools: Pools, tag: string) => {
+  const fillFrom = (pools: Pools) => {
     LAYOUT.forEach((pos, idx) => {
       if (result[idx]) return;
-      const x = take(pools.fine[pos.label] ?? [], `${tag}-fine:${pos.label}`) ?? take(pools.coarse[pos.bucket]!, `${tag}-coarse:${pos.bucket}`);
+      const fine = pools.fine[pos.label] ?? [];
+      const coarse = pools.coarse[pos.bucket]!;
+      const wy = targetYear(idx);
+      // Prefer the slot's target year (fine → coarse), then fall back to any year (fine → coarse).
+      const x =
+        firstUnused(fine, (c) => c.c.year === wy) ??
+        firstUnused(coarse, (c) => c.c.year === wy) ??
+        firstUnused(fine, () => true) ??
+        firstUnused(coarse, () => true);
       if (!x) return;
       const fact = x.facts.find((f) => !usedSig.has(f.sig)) ?? x.facts[0]!;
       used.add(x.c.playerId);
@@ -252,16 +262,16 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
       result[idx] = {
         id: `${pos.label}-${idx}`, label: pos.label, x: pos.x, y: pos.y,
         expectedName: x.c.name, clues: [fact.clue],
-        year: x.c.year, club: x.c.club, clubBadgeUrl: null,
+        year: x.c.year, club: x.c.club, clubBadgeUrl: null, nation: x.c.country,
       };
     });
   };
 
   // Curated bank is the sole intended source.
-  fillFrom(buildPools(await gatherMemorable()), 'mem');
+  fillFrom(buildPools(await gatherMemorable()));
   // Only touch the data fallback if the curated pool left a hole.
   if (result.some((s) => !s)) {
-    fillFrom(buildPools(await gatherDataFallback()), 'data');
+    fillFrom(buildPools(await gatherDataFallback()));
   }
 
   const slots = result.filter((s): s is WorldCupXiSlot => s !== null);

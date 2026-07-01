@@ -7,10 +7,12 @@ struct WorldCupXISlot: Identifiable, Equatable {
     let pitchPoint: CGPoint
     let expectedName: String
     let clues: [String]
-    /// Context shown ABOVE the clue: the tournament year and the club the player was at THEN (+ crest).
+    /// Context shown ABOVE the clue: the tournament year, the club the player was at THEN (+ crest),
+    /// and their nation (shown as a flag emoji).
     let year: Int?
     let club: String?
     let clubBadgeUrl: String?
+    let nation: String?
 
     init(
         id: String,
@@ -20,7 +22,8 @@ struct WorldCupXISlot: Identifiable, Equatable {
         clues: [String],
         year: Int? = nil,
         club: String? = nil,
-        clubBadgeUrl: String? = nil
+        clubBadgeUrl: String? = nil,
+        nation: String? = nil
     ) {
         self.id = id
         self.label = label
@@ -30,6 +33,7 @@ struct WorldCupXISlot: Identifiable, Equatable {
         self.year = year
         self.club = club
         self.clubBadgeUrl = clubBadgeUrl
+        self.nation = nation
     }
 
     var primaryClue: String { clues.first ?? "" }

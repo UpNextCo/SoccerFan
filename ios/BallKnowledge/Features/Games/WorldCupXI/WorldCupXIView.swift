@@ -254,6 +254,7 @@ struct WorldCupXIView: View {
         NavigationStack {
             VStack(spacing: 14) {
                 if let slot = viewModel.activeSlot {
+                    HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 10) {
                         if let year = slot.year {
                             Text("\(String(year)) WORLD CUP")
@@ -306,6 +307,12 @@ struct WorldCupXIView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                        if let nation = slot.nation, !nation.isEmpty {
+                            Text(GuessWhoDisplay.nationalityFlag(nation))
+                                .font(.system(size: 40))
+                        }
+                    }
                     .padding(14)
                     .background(BKTheme.card)
                     .clipShape(RoundedRectangle(cornerRadius: 14))

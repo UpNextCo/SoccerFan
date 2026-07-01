@@ -402,7 +402,7 @@ enum WorldCupXISeed {
             WorldCupXISlot(
                 id: $0.id, label: $0.label, pitchPoint: $0.pitchPoint,
                 expectedName: $0.expectedName, clues: $0.clues,
-                year: year, club: nil, clubBadgeUrl: nil
+                year: year, club: nil, clubBadgeUrl: nil, nation: country
             )
         }
         return WorldCupXIPuzzle(id: id, title: "\(country) \(year)", formation: formation, slots: stamped)

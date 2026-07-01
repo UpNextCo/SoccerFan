@@ -19,7 +19,8 @@ enum DailyChallengeResolver {
                     clues: $0.clues,
                     year: $0.year,
                     club: $0.club,
-                    clubBadgeUrl: $0.clubBadgeUrl
+                    clubBadgeUrl: $0.clubBadgeUrl,
+                    nation: $0.nation
                 )
             }
         )
