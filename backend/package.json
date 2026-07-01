@@ -76,6 +76,7 @@
     "job:ingest-wc-events-fbref": "tsx src/jobs/ingest-wc-events-fbref.ts",
     "job:ingest-sub-positions": "tsx src/jobs/ingest-sub-positions.ts",
     "job:build-wc-memorable": "tsx src/jobs/build-wc-memorable.ts",
+    "job:build-wc-datafirst": "tsx src/jobs/build-wc-datafirst.ts",
     "job:normalize-nationalities": "tsx src/jobs/normalize-nationalities.ts",
     "job:dedupe-stat-rows": "tsx src/jobs/dedupe-stat-rows.ts",
     "job:refresh-current-club": "tsx src/jobs/refresh-current-club.ts",

@@ -377,6 +377,51 @@ export async function proposeYearClues(
   return runClueProposal(user, year);
 }
 
+/**
+ * Polish DATA-DERIVED clues for natural wording. The facts are already true (built from the DB);
+ * Claude may ONLY rephrase — never add a fact, name, year, club, number, opponent, stage or
+ * descriptor, and never write in a corny/flowery way. Returns id→clue for whatever it rephrased;
+ * the caller re-validates each output and falls back to the original draft on anything suspicious.
+ */
+export async function polishClues(items: Array<{ id: string; draft: string }>): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || items.length === 0) return out;
+
+  const system = [
+    'You lightly rewrite one-sentence clues for a football quiz. Each clue states a REAL thing a',
+    'player did at a World Cup. Your ONLY job is wording — make each read naturally and confidently.',
+    '',
+    'HARD RULES:',
+    '- DO NOT add, remove or change any fact. No new opponent, stage, number, award, competition,',
+    '  year, club or descriptor. If a draft says "scored in the final" you may NOT write "scored the',
+    '  winner in the final"; if it says "scored twice against Tunisia" you may NOT add how or when.',
+    '- NEVER mention a year, the player\'s club, or the player\'s name.',
+    '- Keep it to ONE sentence that STARTS with the position ("The goalkeeper who…", "The defender',
+    '  who…", "The midfielder who…", "The forward who…").',
+    '- Write plainly. NO corny, cryptic, flowery or over-dramatic language — no "talismanic",',
+    '  "mercurial", "iconic", "cult hero", "netted", "the man who". Just clear and natural.',
+    '- Many drafts are already fine — a light touch (or leaving it as-is) is perfectly good. Do not pad.',
+    '',
+    'Return ONLY JSON: {"clues":[{"id":"<id>","clue":"<rewrite>"}]} covering every id.',
+  ].join('\n');
+
+  const client = new Anthropic({ apiKey });
+  for (let i = 0; i < items.length; i += 40) {
+    const batch = items.slice(i, i + 40);
+    const user = `Rewrite each clue's wording only.\n${batch.map((b) => `[${b.id}] ${b.draft}`).join('\n')}\n\nJSON only.`;
+    try {
+      const resp = await client.messages.create({ model: MODEL, max_tokens: 4000, system, messages: [{ role: 'user', content: user }] });
+      const text = resp.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map((b) => b.text).join('');
+      const parsed = JSON.parse(extractJson(text)) as { clues?: Array<{ id: string; clue: string }> };
+      for (const c of parsed.clues ?? []) if (c.id && c.clue) out.set(c.id, c.clue.trim());
+    } catch (err) {
+      console.warn(`Polish batch failed (${err instanceof Error ? err.message : String(err)}); keeping drafts.`);
+    }
+  }
+  return out;
+}
+
 function extractJson(text: string): string {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenced?.[1]) return fenced[1].trim();
