@@ -254,7 +254,6 @@ struct WorldCupXIView: View {
         NavigationStack {
             VStack(spacing: 14) {
                 if let slot = viewModel.activeSlot {
-                    HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 10) {
                         if let year = slot.year {
                             Text("\(String(year)) WORLD CUP")
@@ -265,7 +264,7 @@ struct WorldCupXIView: View {
                         if let club = slot.club, !club.isEmpty {
                             if viewModel.revealedClubs.contains(slot.id) {
                                 HStack(spacing: 8) {
-                                    Text(slot.year.map { "In \($0), played for" } ?? "Played for")
+                                    Text(verbatim: slot.year.map { "In \(String($0)), played for" } ?? "Played for")
                                         .font(BKFont.caption(12))
                                         .foregroundStyle(BKTheme.textMuted)
                                     if let badge = slot.clubBadgeUrl, let url = URL(string: badge) {
@@ -297,22 +296,26 @@ struct WorldCupXIView: View {
 
                         Divider().overlay(BKTheme.textMuted.opacity(0.2))
 
-                        Text("CLUE")
-                            .font(BKFont.caption(10))
-                            .tracking(0.8)
-                            .foregroundStyle(BKTheme.textMuted)
-                        Text(slot.primaryClue)
-                            .font(BKFont.headline(15))
-                            .foregroundStyle(BKTheme.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("CLUE")
+                                    .font(BKFont.caption(10))
+                                    .tracking(0.8)
+                                    .foregroundStyle(BKTheme.textMuted)
+                                Text(slot.primaryClue)
+                                    .font(BKFont.headline(15))
+                                    .foregroundStyle(BKTheme.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                        if let nation = slot.nation, !nation.isEmpty {
-                            Text(GuessWhoDisplay.nationalityFlag(nation))
-                                .font(.system(size: 40))
+                            if let nation = slot.nation, !nation.isEmpty {
+                                Text(GuessWhoDisplay.nationalityFlag(nation))
+                                    .font(.system(size: 40))
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
                     .background(BKTheme.card)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
