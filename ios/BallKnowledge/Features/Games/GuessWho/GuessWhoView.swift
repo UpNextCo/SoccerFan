@@ -140,32 +140,28 @@ final class GuessWhoViewModel {
             revealedAnswer = try? await APIClient.shared.revealGuessWhoAnswer(date: date)
         }
         let score = state.won ? max(10, 100 - (state.guesses.count - 1) * 10) : 0
-        let request = DailyCompleteRequestDTO(
-            modeId: state.puzzle.modeId,
-            date: date,
-            score: score,
-            guesses: state.guesses.count,
-            won: state.won,
-            shareGrid: state.shareGrid
-        )
 
-        do {
-            completionResult = try await APIClient.shared.dailyComplete(request)
-            DailyCompletionService.markLocallyCompleted(.guessWho, date: date)
-            if state.won {
-                try await Task.sleep(for: .seconds(GuessWhoTiming.winShareDelay))
+        // Shared completion path (same as every other game): locks the daily locally first so it
+        // can't be replayed even when the POST fails, then queues offline for a later sync.
+        if let context {
+            completionResult = await DailyCompletionService.recordCompletion(
+                modeId: state.puzzle.modeId,
+                date: date,
+                score: score,
+                guesses: state.guesses.count,
+                won: state.won,
+                shareGrid: state.shareGrid,
+                context: context
+            )
+            if completionResult == nil {
+                errorMessage = "Completed — will sync when online"
             }
-            showShare = true
-        } catch {
-            if let context {
-                try? OfflineCache.queueCompletion(request, context: context)
-            }
-            errorMessage = "Completed — will sync when online"
-            if state.won {
-                try? await Task.sleep(for: .seconds(GuessWhoTiming.winShareDelay))
-            }
-            showShare = true
         }
+
+        if state.won {
+            try? await Task.sleep(for: .seconds(GuessWhoTiming.winShareDelay))
+        }
+        showShare = true
     }
 
     var shareCard: ShareCard {
@@ -292,7 +288,7 @@ struct GuessWhoView: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "lightbulb.fill")
                                         .font(.system(size: 11, weight: .bold))
-                                    Text("HINT")
+                                    Text("HINT (−1 GUESS)")
                                         .font(.system(size: 12, weight: .heavy, design: .rounded))
                                         .tracking(0.5)
                                 }
@@ -470,7 +466,7 @@ struct GuessWhoGuessCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "lightbulb.fill")
                         .font(.system(size: 12, weight: .bold))
-                    Text("HINT")
+                    Text("HINT — USED A GUESS")
                         .font(.system(size: 15, weight: .heavy, design: .rounded))
                         .tracking(0.5)
                 }

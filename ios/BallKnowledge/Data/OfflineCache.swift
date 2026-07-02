@@ -190,6 +190,12 @@ enum OfflineCache {
     static func syncPendingCompletions(context: ModelContext) async {
         let pending = (try? context.fetch(FetchDescriptor<PendingDailyCompletion>())) ?? []
         for item in pending {
+            // The server only accepts today's (or, for the midnight-rollover case, yesterday's)
+            // daily — anything older can never be credited, so drop it instead of wedging the queue.
+            guard let acceptable = acceptableSyncDates(), acceptable.contains(item.date) else {
+                context.delete(item)
+                continue
+            }
             do {
                 _ = try await APIClient.shared.dailyComplete(DailyCompleteRequestDTO(
                     modeId: item.modeId,
@@ -205,6 +211,19 @@ enum OfflineCache {
             }
         }
         try? context.save()
+    }
+
+    /// UTC "today" and "yesterday" date strings — mirrors the server's completion-date window.
+    private static func acceptableSyncDates() -> Set<String>? {
+        var calendar = Calendar(identifier: .gregorian)
+        guard let utc = TimeZone(identifier: "UTC") else { return nil }
+        calendar.timeZone = utc
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = utc
+        let today = Date()
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else { return nil }
+        return [formatter.string(from: today), formatter.string(from: yesterday)]
     }
 }
 
@@ -239,6 +258,10 @@ enum DailyCompletionService {
         UserDefaults.standard.removeObject(forKey: storageKey)
     }
 
+    /// Record a finished daily: lock it locally first (so it can't be replayed even offline), then
+    /// POST to the server — queueing for later sync on failure. Returns the server response (XP,
+    /// streak, …) when online, nil when the completion was queued offline.
+    @discardableResult
     static func recordCompletion(
         modeId: String,
         date: String,
@@ -247,7 +270,7 @@ enum DailyCompletionService {
         won: Bool,
         shareGrid: String = "",
         context: ModelContext
-    ) async {
+    ) async -> DailyCompleteResponseDTO? {
         let normalized = GameModeCatalog.normalizedModeId(modeId)
         if let mode = GameModeID(rawValue: normalized) {
             markLocallyCompleted(mode, date: date)
@@ -263,9 +286,10 @@ enum DailyCompletionService {
         )
 
         do {
-            _ = try await APIClient.shared.dailyComplete(request)
+            return try await APIClient.shared.dailyComplete(request)
         } catch {
             try? OfflineCache.queueCompletion(request, context: context)
+            return nil
         }
     }
 

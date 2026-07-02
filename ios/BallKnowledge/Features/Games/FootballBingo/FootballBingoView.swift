@@ -14,19 +14,11 @@ final class FootballBingoViewModel {
     var showResult = false
     var wildcardUsed = false
 
-    private let dailyDate: String?
-    private let serverPuzzle: FootballBingoPuzzleDTO?
+    private let serverPuzzle: FootballBingoPuzzleDTO
 
-    init(dailyDate: String? = nil, serverPuzzle: FootballBingoPuzzleDTO? = nil) {
-        self.dailyDate = dailyDate
+    init(serverPuzzle: FootballBingoPuzzleDTO) {
         self.serverPuzzle = serverPuzzle
-        self.game = Self.makeGame(dailyDate: dailyDate, serverPuzzle: serverPuzzle)
-    }
-
-    private static func makeGame(dailyDate: String?, serverPuzzle: FootballBingoPuzzleDTO?) -> FootballBingoGame {
-        if let serverPuzzle { return FootballBingoSeed.makeGame(from: serverPuzzle) }
-        if let dailyDate { return FootballBingoSeed.makeDailyGame(date: dailyDate) }
-        return FootballBingoSeed.makeGame()
+        self.game = FootballBingoSeed.makeGame(from: serverPuzzle)
     }
 
     /// Raw skill score submitted to the server (fewer players used → higher). The server converts
@@ -62,7 +54,7 @@ final class FootballBingoViewModel {
     }
 
     func restart() {
-        game = Self.makeGame(dailyDate: dailyDate, serverPuzzle: serverPuzzle)
+        game = FootballBingoSeed.makeGame(from: serverPuzzle)
         shakeCategoryId = nil
         popCategoryId = nil
         playerPanelToken = UUID()
@@ -162,11 +154,11 @@ struct FootballBingoView: View {
 
     init(
         dailyDate: String? = nil,
-        serverPuzzle: FootballBingoPuzzleDTO? = nil,
+        serverPuzzle: FootballBingoPuzzleDTO,
         allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
-        _viewModel = State(initialValue: FootballBingoViewModel(dailyDate: dailyDate, serverPuzzle: serverPuzzle))
+        _viewModel = State(initialValue: FootballBingoViewModel(serverPuzzle: serverPuzzle))
         self.dailyDate = dailyDate
         self.allowReplay = allowReplay
         self.onComplete = onComplete

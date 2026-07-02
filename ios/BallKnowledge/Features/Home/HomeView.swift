@@ -96,7 +96,11 @@ struct HomeView: View {
                 refreshInProgress()
             }
         }
-        .fullScreenCover(item: $presentedMode) { mode in
+        .fullScreenCover(item: $presentedMode, onDismiss: {
+            // Fires however the game closes — including tapping X mid-game — so an "In Progress"
+            // tile shows up immediately (not only after a force-close + relaunch).
+            refreshInProgress()
+        }) { mode in
             DailyGameHost(
                 mode: mode,
                 dailyBundle: viewModel.dailyBundle,
@@ -268,7 +272,7 @@ enum HomeActivity {
                 icon: "flame.fill",
                 tint: BKTheme.streak,
                 title: streak > 0 ? "Keep your \(streak)-day streak alive" : "Start your streak today",
-                message: "Play today's games before midnight to \(streak > 0 ? "extend" : "begin") your streak.",
+                message: "Play today's games before the daily resets to \(streak > 0 ? "extend" : "begin") your streak.",
                 unread: true
             ))
         } else {
@@ -427,7 +431,7 @@ struct DailySection: View {
                 }
                 Spacer()
                 TimelineView(.periodic(from: .now, by: 60)) { context in
-                    Text((allComplete ? "New in " : "Resets in ") + DailyTime.untilMidnight(from: context.date))
+                    Text((allComplete ? "New in " : "Resets in ") + DailyTime.untilReset(from: context.date))
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textMuted)
                 }
@@ -507,6 +511,17 @@ struct DailySection: View {
     private var dateline: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE d MMM"
+        // Show the daily's actual (UTC) date from the bundle — around UTC midnight the device's
+        // local date can differ from the puzzle day the player is completing.
+        if let bundleDate = bundle?.date {
+            let parser = DateFormatter()
+            parser.dateFormat = "yyyy-MM-dd"
+            parser.timeZone = TimeZone(identifier: "UTC")
+            formatter.timeZone = TimeZone(identifier: "UTC")
+            if let d = parser.date(from: bundleDate) {
+                return formatter.string(from: d)
+            }
+        }
         return formatter.string(from: Date())
     }
 
@@ -654,7 +669,12 @@ struct DailyGameCard: View {
 }
 
 enum DailyTime {
-    static func untilMidnight(from date: Date, calendar: Calendar = .current) -> String {
+    /// Time until the next daily reset. The server rolls puzzles + streaks at **UTC midnight**
+    /// (`todayUTC()` in dailyService.ts), so the countdown must use a UTC calendar — a local-time
+    /// countdown would promise players hours they don't actually have.
+    static func untilReset(from date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
         let startOfToday = calendar.startOfDay(for: date)
         guard let midnight = calendar.date(byAdding: .day, value: 1, to: startOfToday) else {
             return "tomorrow"
@@ -693,6 +713,9 @@ struct DailyGameHost: View {
     let allowReplay: Bool
     let onFinished: () -> Void
 
+    // Every game is server-puzzle-only: if today's puzzle isn't in the bundle we show the
+    // "unavailable" placeholder rather than silently swapping in a local practice puzzle that
+    // wouldn't match what everyone else is playing.
     var body: some View {
         Group {
             switch mode {
@@ -708,25 +731,46 @@ struct DailyGameHost: View {
                     DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
                 }
             case .targetMan:
-                TargetManView(dailyBundle: dailyBundle, allowReplay: allowReplay, onComplete: onFinished)
+                if let challenge = DailyChallengeResolver.targetManChallenge(from: dailyBundle) {
+                    TargetManView(challenge: challenge, allowReplay: allowReplay, onComplete: onFinished)
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
             case .blindRank:
-                BlindRankView(dailyBundle: dailyBundle, allowReplay: allowReplay, onComplete: onFinished)
+                if let challenge = DailyChallengeResolver.blindRankChallenge(from: dailyBundle) {
+                    BlindRankView(challenge: challenge, allowReplay: allowReplay, onComplete: onFinished)
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
             case .footballBingo:
-                FootballBingoView(
-                    dailyDate: dailyBundle?.date,
-                    serverPuzzle: dailyBundle?.footballBingoPuzzle,
-                    allowReplay: allowReplay,
-                    onComplete: onFinished
-                )
+                if let bundle = dailyBundle, let puzzle = bundle.footballBingoPuzzle {
+                    FootballBingoView(
+                        dailyDate: bundle.date,
+                        serverPuzzle: puzzle,
+                        allowReplay: allowReplay,
+                        onComplete: onFinished
+                    )
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
             case .oneMore:
-                OneMoreView(
-                    dailyDate: dailyBundle?.date,
-                    serverPuzzle: dailyBundle?.oneMorePuzzle,
-                    allowReplay: allowReplay,
-                    onComplete: onFinished
-                )
+                if let bundle = dailyBundle, let puzzle = bundle.oneMorePuzzle,
+                   let prompt = OneMoreSeed.makeServerPrompt(from: puzzle) {
+                    OneMoreView(
+                        dailyDate: bundle.date,
+                        prompt: prompt,
+                        allowReplay: allowReplay,
+                        onComplete: onFinished
+                    )
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
             case .draftMaster:
-                DraftMasterView(dailyDate: dailyBundle?.date, dailyBundle: dailyBundle, allowReplay: allowReplay, onComplete: onFinished)
+                if let bundle = dailyBundle, let challenge = DailyChallengeResolver.battleChallenge(from: bundle) {
+                    DraftMasterView(dailyDate: bundle.date, challenge: challenge, allowReplay: allowReplay, onComplete: onFinished)
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
             case .footballGolf:
                 FootballGolfView(
                     dailyDate: dailyBundle?.date,
@@ -742,7 +786,11 @@ struct DailyGameHost: View {
                     onComplete: onFinished
                 )
             case .worldCupXI:
-                WorldCupXIView(dailyDate: dailyBundle?.date, dailyBundle: dailyBundle, allowReplay: allowReplay, onComplete: onFinished)
+                if let bundle = dailyBundle, let puzzle = DailyChallengeResolver.worldCupXIPuzzle(from: bundle) {
+                    WorldCupXIView(dailyDate: bundle.date, puzzle: puzzle, allowReplay: allowReplay, onComplete: onFinished)
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
             }
         }
     }

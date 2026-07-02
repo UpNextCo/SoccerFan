@@ -17,18 +17,8 @@ final class DraftMasterViewModel {
     var shakeToken = 0
     var wrongMessage: String?
 
-    private let dailyDate: String?
-    private let dailyBundle: DailyBundleDTO?
-
-    init(dailyDate: String?, dailyBundle: DailyBundleDTO?) {
-        self.dailyDate = dailyDate
-        self.dailyBundle = dailyBundle
-        state = BattleGameState(challenge: Self.resolveChallenge(dailyDate: dailyDate, dailyBundle: dailyBundle))
-    }
-
-    private static func resolveChallenge(dailyDate: String?, dailyBundle: DailyBundleDTO?) -> BattleChallenge {
-        if let server = DailyChallengeResolver.battleChallenge(from: dailyBundle) { return server }
-        return BattleSeed.makeDailyChallenge(date: dailyDate)
+    init(challenge: BattleChallenge) {
+        state = BattleGameState(challenge: challenge)
     }
 
     var challenge: BattleChallenge { state.challenge }
@@ -52,7 +42,7 @@ final class DraftMasterViewModel {
     func start() { HapticManager.light(); state.phase = .building }
 
     func restart() {
-        state = BattleGameState(challenge: Self.resolveChallenge(dailyDate: dailyDate, dailyBundle: dailyBundle))
+        state = BattleGameState(challenge: state.challenge)
         state.phase = .building
         resetTransient()
     }
@@ -184,8 +174,8 @@ struct DraftMasterView: View {
     private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: DraftMasterViewModel(dailyDate: dailyDate, dailyBundle: dailyBundle))
+    init(dailyDate: String? = nil, challenge: BattleChallenge, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
+        _viewModel = State(initialValue: DraftMasterViewModel(challenge: challenge))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete
@@ -342,7 +332,7 @@ private struct BattleIntroView: View {
                 }
                 .padding(.top, 16)
 
-                Text("Drag each club onto a position, then name a player from that club who plays there. Every pick scores their total \(challenge.category.title.lowercased()). Beat the perfect XI.")
+                Text("Drag each club onto a position, then name a player from that club who plays there. Every pick scores their career total \(challenge.category.title.lowercased()). Reach 70% of the perfect XI's total to win.")
                     .font(BKFont.body(14)).foregroundStyle(BKTheme.textSecondary)
                     .multilineTextAlignment(.center).padding(.horizontal, 8)
 

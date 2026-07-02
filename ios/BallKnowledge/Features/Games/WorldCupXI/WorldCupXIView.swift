@@ -15,19 +15,8 @@ final class WorldCupXIViewModel {
     /// Slots whose "played for [club]" hint the player has chosen to reveal.
     var revealedClubs: Set<String> = []
 
-    private let dailyBundle: DailyBundleDTO?
-    private let dailyDate: String?
-
-    init(dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil) {
-        self.dailyBundle = dailyBundle
-        self.dailyDate = dailyDate
-        self.state = WorldCupXIGameState(puzzle: Self.resolvePuzzle(dailyDate: dailyDate, dailyBundle: dailyBundle))
-    }
-
-    /// Prefer the server-generated puzzle; fall back to the local seed (offline).
-    private static func resolvePuzzle(dailyDate: String?, dailyBundle: DailyBundleDTO?) -> WorldCupXIPuzzle {
-        if let server = DailyChallengeResolver.worldCupXIPuzzle(from: dailyBundle) { return server }
-        return WorldCupXISeed.puzzle(for: dailyDate)
+    init(puzzle: WorldCupXIPuzzle) {
+        self.state = WorldCupXIGameState(puzzle: puzzle)
     }
 
     var activeSlot: WorldCupXISlot? {
@@ -94,7 +83,7 @@ final class WorldCupXIViewModel {
     }
 
     func restart() {
-        state = WorldCupXIGameState(puzzle: Self.resolvePuzzle(dailyDate: dailyDate, dailyBundle: dailyBundle))
+        state = WorldCupXIGameState(puzzle: state.puzzle)
         searchQuery = ""
         searchResults = []
         showSlotSheet = false
@@ -129,8 +118,8 @@ struct WorldCupXIView: View {
     private let dailyDate: String?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, dailyBundle: DailyBundleDTO? = nil, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: WorldCupXIViewModel(dailyDate: dailyDate, dailyBundle: dailyBundle))
+    init(dailyDate: String? = nil, puzzle: WorldCupXIPuzzle, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
+        _viewModel = State(initialValue: WorldCupXIViewModel(puzzle: puzzle))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete
@@ -256,7 +245,7 @@ struct WorldCupXIView: View {
 
     private var answerSection: some View {
         VStack(spacing: 10) {
-            Text("Tap a position, read the clue, and name the player. Get as many as you can.")
+            Text("Tap a position, read the clue, and name the player. One guess per slot — get 6 or more right to win.")
                 .font(BKFont.caption(11))
                 .foregroundStyle(BKTheme.textMuted)
                 .multilineTextAlignment(.center)

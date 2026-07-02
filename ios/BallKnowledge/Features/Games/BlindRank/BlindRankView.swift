@@ -22,18 +22,8 @@ final class BlindRankViewModel {
     var activeRevealSlide: Int?
     var selectedAdjustSlot: Int?
 
-    private let dailyBundle: DailyBundleDTO?
-
-    init(dailyBundle: DailyBundleDTO? = nil, challenge: BlindRankChallenge? = nil) {
-        self.dailyBundle = dailyBundle
-        self.state = BlindRankGameState(
-            challenge: challenge ?? BlindRankSeed.makeDailyChallenge(date: dailyBundle?.date)
-        )
-    }
-
-    static func make(dailyBundle: DailyBundleDTO? = nil) async -> BlindRankViewModel {
-        let challenge = DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
-        return BlindRankViewModel(dailyBundle: dailyBundle, challenge: challenge)
+    init(challenge: BlindRankChallenge) {
+        self.state = BlindRankGameState(challenge: challenge)
     }
 
     var xpEarned: Int {
@@ -99,9 +89,7 @@ final class BlindRankViewModel {
     }
 
     func restart() {
-        state = BlindRankGameState(
-            challenge: DailyChallengeResolver.blindRankChallenge(from: dailyBundle)
-        )
+        state = BlindRankGameState(challenge: state.challenge)
         showResult = false
         confettiBurstToken = 0
         activeRevealSlide = nil
@@ -166,53 +154,40 @@ final class BlindRankViewModel {
 struct BlindRankView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var viewModel: BlindRankViewModel?
+    @State private var viewModel: BlindRankViewModel
     @State private var targetedSlot: Int?
-    let dailyBundle: DailyBundleDTO?
     let allowReplay: Bool
     private let dailyDate: String?
     var onComplete: () -> Void
 
     init(
-        dailyBundle: DailyBundleDTO? = nil,
+        challenge: BlindRankChallenge,
         allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
-        self.dailyBundle = dailyBundle
+        _viewModel = State(initialValue: BlindRankViewModel(challenge: challenge))
         self.allowReplay = allowReplay
-        self.dailyDate = dailyBundle?.date
+        self.dailyDate = challenge.date
         self.onComplete = onComplete
     }
 
     var body: some View {
-        Group {
-            if let viewModel {
-                blindRankContent(viewModel: viewModel)
-                    .persistsGameProgress(
-                        viewModel.state,
-                        isResumable: viewModel.isResumable,
-                        modeId: GameModeID.blindRank.rawValue,
-                        date: dailyDate,
-                        version: BlindRankGameState.progressVersion,
-                        enabled: !allowReplay
-                    )
-            } else {
-                ProgressView()
-                    .tint(BKTheme.accent)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(BKTheme.background)
+        blindRankContent(viewModel: viewModel)
+            .persistsGameProgress(
+                viewModel.state,
+                isResumable: viewModel.isResumable,
+                modeId: GameModeID.blindRank.rawValue,
+                date: dailyDate,
+                version: BlindRankGameState.progressVersion,
+                enabled: !allowReplay
+            )
+            .onAppear {
+                guard !allowReplay, let dailyDate,
+                      let saved = GameProgressStore.load(
+                        BlindRankGameState.self, modeId: GameModeID.blindRank.rawValue,
+                        date: dailyDate, version: BlindRankGameState.progressVersion, context: modelContext) else { return }
+                viewModel.restore(saved)
             }
-        }
-        .task(id: dailyBundle?.date ?? "none") {
-            let vm = await BlindRankViewModel.make(dailyBundle: dailyBundle)
-            if !allowReplay, let dailyDate,
-               let saved = GameProgressStore.load(
-                    BlindRankGameState.self, modeId: GameModeID.blindRank.rawValue,
-                    date: dailyDate, version: BlindRankGameState.progressVersion, context: modelContext) {
-                vm.restore(saved)
-            }
-            viewModel = vm
-        }
     }
 
     @ViewBuilder
@@ -384,6 +359,10 @@ private struct BlindRankCategoryBanner: View {
                 .multilineTextAlignment(.center)
             Text(challenge.rankHint.uppercased())
                 .font(BKFont.caption(10))
+                .tracking(0.5)
+                .foregroundStyle(BKTheme.textMuted)
+            Text("3 PTS PER EXACT SPOT · SCORE 17+ / 30 TO WIN")
+                .font(BKFont.caption(9))
                 .tracking(0.5)
                 .foregroundStyle(BKTheme.textMuted)
         }

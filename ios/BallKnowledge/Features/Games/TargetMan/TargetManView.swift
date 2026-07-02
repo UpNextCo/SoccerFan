@@ -15,17 +15,8 @@ final class TargetManViewModel {
     var confettiBurstToken = 0
     var showResult = false
 
-    private let dailyBundle: DailyBundleDTO?
-
-    init(dailyBundle: DailyBundleDTO? = nil, challenge: TargetManChallenge? = nil) {
-        self.dailyBundle = dailyBundle
-        let resolved = challenge ?? {
-            if let dailyBundle {
-                return DailyChallengeResolver.targetManChallenge(from: dailyBundle)
-            }
-            return TargetManSeed.makeDailyChallenge()
-        }()
-        self.state = TargetManGameState(challenge: resolved)
+    init(challenge: TargetManChallenge) {
+        self.state = TargetManGameState(challenge: challenge)
     }
 
     var xpEarned: Int {
@@ -105,13 +96,7 @@ final class TargetManViewModel {
     }
 
     func restart() {
-        let challenge: TargetManChallenge
-        if let dailyBundle {
-            challenge = DailyChallengeResolver.targetManChallenge(from: dailyBundle)
-        } else {
-            challenge = TargetManSeed.makeDailyChallenge()
-        }
-        state = TargetManGameState(challenge: challenge)
+        state = TargetManGameState(challenge: state.challenge)
         searchQuery = ""
         searchResults = []
         errorMessage = nil
@@ -163,13 +148,13 @@ struct TargetManView: View {
     var onComplete: () -> Void
 
     init(
-        dailyBundle: DailyBundleDTO? = nil,
+        challenge: TargetManChallenge,
         allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
-        _viewModel = State(initialValue: TargetManViewModel(dailyBundle: dailyBundle))
+        _viewModel = State(initialValue: TargetManViewModel(challenge: challenge))
         self.allowReplay = allowReplay
-        self.dailyDate = dailyBundle?.date
+        self.dailyDate = challenge.date
         self.onComplete = onComplete
     }
 
@@ -338,6 +323,11 @@ private struct TargetManChallengeCard: View {
                     .foregroundStyle(BKTheme.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.top, 2)
+                Text("CLOSER = MORE POINTS · 400+ PTS TO WIN")
+                    .font(BKFont.caption(9))
+                    .tracking(0.5)
+                    .foregroundStyle(BKTheme.textMuted)
+                    .multilineTextAlignment(.center)
             }
         }
         .padding(16)

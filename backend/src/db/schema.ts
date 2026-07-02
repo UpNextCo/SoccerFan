@@ -452,7 +452,11 @@ export const dailyCompletions = pgTable(
     shareGrid: text('share_grid').notNull(),
     completedAt: timestamp('completed_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('daily_completions_user_date_idx').on(table.userId, table.date)]
+  (table) => [
+    // One completion per user/day/mode — enforced in the DB so concurrent requests can't double-award XP.
+    uniqueIndex('daily_completions_user_date_mode_unique').on(table.userId, table.date, table.modeId),
+    index('daily_completions_user_date_idx').on(table.userId, table.date),
+  ]
 );
 
 /** Per-user, per-day, per-mode XP ledger — powers daily/weekly/team/overall leagues. */

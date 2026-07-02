@@ -36,6 +36,13 @@
       "when": 1782257376373,
       "tag": "0005_crazy_sentry",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782834000000,
+      "tag": "0011_daily_completions_unique",
+      "breakpoints": true
     }
   ]
 }

@@ -20,7 +20,7 @@ const GAME_MODES = [
   { id: 'guess_who', title: 'GUESS WHO?', subtitle: 'Wordle-style player guess', playerCount: 22100, isAvailable: true },
   { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9 holes, name the answers', playerCount: 7600, isAvailable: true },
   { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
-  { id: 'draft_master', title: 'BATTLE MODE', subtitle: 'Beat the scenario on a budget', playerCount: 11300, isAvailable: true },
+  { id: 'draft_master', title: 'BATTLE MODE', subtitle: 'Build the highest-scoring XI', playerCount: 11300, isAvailable: true },
   { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Name the mystery XI', playerCount: 8900, isAvailable: true },
 ];
 
@@ -53,14 +53,6 @@ export const DAILY_PLAYABLE_MODES = [
   'world_cup_xi',
   'football_golf',
 ] as const;
-
-const CLIENT_SEED_MODES = new Set<string>([
-  'football_bingo',
-  'one_more',
-  'draft_master',
-  'world_cup_xi',
-  'football_golf',
-]);
 
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10);
@@ -526,19 +518,45 @@ export async function completeDaily(
     shareGrid: string;
   }
 ): Promise<DailyCompleteResponse> {
-  const existing = await db
+  // Only today's daily can be completed. The one legitimate stale case is the offline queue
+  // syncing yesterday's finish after UTC midnight, so allow exactly today or yesterday.
+  if (input.date !== todayUTC() && input.date !== yesterdayUTC()) {
+    throw new Error('Completion date is not the current daily');
+  }
+
+  const puzzle = await db
     .select()
-    .from(dailyCompletions)
-    .where(
-      and(
-        eq(dailyCompletions.userId, userId),
-        eq(dailyCompletions.date, input.date),
-        eq(dailyCompletions.modeId, input.modeId)
-      )
-    )
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, input.date), eq(dailyPuzzles.modeId, input.modeId)))
     .limit(1);
 
-  if (existing.length > 0) {
+  // Every mode is server-generated and shipped in the bundle — a completion for a puzzle that
+  // doesn't exist means the client played something that wasn't the global daily.
+  if (!puzzle[0]) {
+    throw new Error('Daily puzzle not found');
+  }
+
+  const xpEarned = computeXp(input.modeId, input.score, input.guesses, input.won);
+
+  // The unique index on (user_id, date, mode_id) makes this the single source of truth for
+  // "already completed" — concurrent requests race here and exactly one row wins.
+  const inserted = await db
+    .insert(dailyCompletions)
+    .values({
+      userId,
+      date: input.date,
+      modeId: input.modeId,
+      score: input.score,
+      guesses: input.guesses,
+      won: input.won,
+      shareGrid: input.shareGrid,
+    })
+    .onConflictDoNothing({
+      target: [dailyCompletions.userId, dailyCompletions.date, dailyCompletions.modeId],
+    })
+    .returning({ id: dailyCompletions.id });
+
+  if (inserted.length === 0) {
     const progress = await db
       .select()
       .from(userProgress)
@@ -553,28 +571,6 @@ export async function completeDaily(
       todayXp: p.todayXp,
     };
   }
-
-  const puzzle = await db
-    .select()
-    .from(dailyPuzzles)
-    .where(and(eq(dailyPuzzles.date, input.date), eq(dailyPuzzles.modeId, input.modeId)))
-    .limit(1);
-
-  if (!puzzle[0] && !CLIENT_SEED_MODES.has(input.modeId)) {
-    throw new Error('Daily puzzle not found');
-  }
-
-  const xpEarned = computeXp(input.modeId, input.score, input.guesses, input.won);
-
-  await db.insert(dailyCompletions).values({
-    userId,
-    date: input.date,
-    modeId: input.modeId,
-    score: input.score,
-    guesses: input.guesses,
-    won: input.won,
-    shareGrid: input.shareGrid,
-  });
 
   const progressRows = await db
     .select()

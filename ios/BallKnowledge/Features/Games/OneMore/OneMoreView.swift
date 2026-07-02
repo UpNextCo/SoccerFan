@@ -12,17 +12,8 @@ final class OneMoreViewModel {
     var scorePulseToken = 0
     var lastFeedback: String?
 
-    private let dailyDate: String?
-    private let serverPuzzle: OneMorePuzzleDTO?
-
-    init(dailyDate: String? = nil, serverPuzzle: OneMorePuzzleDTO? = nil) {
-        self.dailyDate = dailyDate
-        self.serverPuzzle = serverPuzzle
-        self.state = OneMoreGameState(prompt: Self.makePrompt(dailyDate: dailyDate, serverPuzzle: serverPuzzle))
-    }
-
-    private static func makePrompt(dailyDate: String?, serverPuzzle: OneMorePuzzleDTO?) -> OneMorePrompt {
-        serverPuzzle.flatMap(OneMoreSeed.makeServerPrompt) ?? OneMoreSeed.makeDailyPrompt(date: dailyDate)
+    init(prompt: OneMorePrompt) {
+        self.state = OneMoreGameState(prompt: prompt)
     }
 
     var xpEarned: Int {
@@ -108,7 +99,7 @@ final class OneMoreViewModel {
     }
 
     func restart() {
-        state = OneMoreGameState(prompt: Self.makePrompt(dailyDate: dailyDate, serverPuzzle: serverPuzzle))
+        state = OneMoreGameState(prompt: state.prompt)
         resetTransient()
     }
 
@@ -133,11 +124,11 @@ struct OneMoreView: View {
 
     init(
         dailyDate: String? = nil,
-        serverPuzzle: OneMorePuzzleDTO? = nil,
+        prompt: OneMorePrompt,
         allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
-        _viewModel = State(initialValue: OneMoreViewModel(dailyDate: dailyDate, serverPuzzle: serverPuzzle))
+        _viewModel = State(initialValue: OneMoreViewModel(prompt: prompt))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete

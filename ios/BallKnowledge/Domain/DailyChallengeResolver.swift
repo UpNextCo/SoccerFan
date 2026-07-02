@@ -27,8 +27,9 @@ enum DailyChallengeResolver {
     }
 
     /// Map the server Battle Mode challenge into the game model (nil → caller uses local seed).
+    /// Goals categories ship an all-outfield XI (10 slots, no GK), appearances ship 11 — accept both.
     static func battleChallenge(from bundle: DailyBundleDTO?) -> BattleChallenge? {
-        guard let dto = bundle?.draftMasterPuzzle, dto.clubs.count >= 11, dto.slots.count >= 11 else { return nil }
+        guard let dto = bundle?.draftMasterPuzzle, dto.clubs.count >= 10, dto.slots.count >= 10 else { return nil }
         return BattleChallenge(
             id: dto.puzzleId,
             date: dto.date,
@@ -45,20 +46,17 @@ enum DailyChallengeResolver {
         )
     }
 
-    static func targetManChallenge(from bundle: DailyBundleDTO?) -> TargetManChallenge {
-        guard let bundle, let puzzle = bundle.targetManPuzzle else {
-            return TargetManSeed.makeDailyChallenge()
-        }
+    /// Map the server Target Man puzzle into the game model. nil when there's no usable server
+    /// puzzle — the daily is server-only (no local fallback), so the caller shows "unavailable".
+    static func targetManChallenge(from bundle: DailyBundleDTO?) -> TargetManChallenge? {
+        guard let bundle, let puzzle = bundle.targetManPuzzle else { return nil }
         return targetManChallenge(from: puzzle, date: bundle.date)
     }
 
-    static func targetManChallenge(from puzzle: TargetManPuzzleDTO, date: String) -> TargetManChallenge {
-        // Server now drives the category (Peak Value, CL Goals, Penalties, Trophies, …): the
-        // challenge carries display labels + a categoryId the app values guesses against. Fall
-        // back to the local seed only when there is genuinely no usable server puzzle.
-        guard !puzzle.categoryId.isEmpty, puzzle.target > 0 else {
-            return TargetManSeed.makeDailyChallenge(date: date)
-        }
+    static func targetManChallenge(from puzzle: TargetManPuzzleDTO, date: String) -> TargetManChallenge? {
+        // Server drives the category (Peak Value, CL Goals, Penalties, Trophies, …): the
+        // challenge carries display labels + a categoryId the app values guesses against.
+        guard !puzzle.categoryId.isEmpty, puzzle.target > 0 else { return nil }
         return TargetManChallenge(
             id: puzzle.puzzleId,
             leagueName: "",
@@ -75,20 +73,18 @@ enum DailyChallengeResolver {
         )
     }
 
-    /// Build the Blind Rank challenge from the daily bundle. The server now embeds
-    /// each player's stat value, so this is a pure, offline-safe transform — no
-    /// per-player network calls and no silent swap to a different puzzle. We only
-    /// fall back to the local seed when there is genuinely no server puzzle.
-    static func blindRankChallenge(from bundle: DailyBundleDTO?) -> BlindRankChallenge {
-        guard let bundle, let puzzle = bundle.blindRankPuzzle,
-              let challenge = blindRankChallenge(from: puzzle, date: bundle.date) else {
-            return BlindRankSeed.makeDailyChallenge(date: bundle?.date)
-        }
-        return challenge
+    /// Build the Blind Rank challenge from the daily bundle. The server embeds each player's
+    /// stat value, so this is a pure, offline-safe transform. nil when there's no valid server
+    /// puzzle — the daily is server-only (no local fallback), so the caller shows "unavailable".
+    static func blindRankChallenge(from bundle: DailyBundleDTO?) -> BlindRankChallenge? {
+        guard let bundle, let puzzle = bundle.blindRankPuzzle else { return nil }
+        return blindRankChallenge(from: puzzle, date: bundle.date)
     }
 
     static func blindRankChallenge(from puzzle: BlindRankPuzzleDTO, date: String) -> BlindRankChallenge? {
-        guard puzzle.presentationOrder.count >= 2 else { return nil }
+        // The daily is always 10 slots (matches the server's BLIND_RANK_SLOT_COUNT validator) —
+        // reject anything shorter (e.g. a stale cached bundle) rather than playing a cut-down game.
+        guard puzzle.presentationOrder.count == 10 else { return nil }
 
         let players = puzzle.presentationOrder.map { entry in
             BlindRankPlayer(
