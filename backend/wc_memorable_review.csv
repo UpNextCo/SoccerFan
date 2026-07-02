@@ -1,242 +1,589 @@
-year,position,player,clue
-2006,DF,Cafú,The Brazilian defender who captained the side to the quarter-finals
-2006,DF,Éric Abidal,The French left-back who scored in the final
-2006,DF,Fabio Cannavaro,The Italian defender who captained the champions
-2006,DF,Fabio Grosso,The Italian defender who scored in the final
-2006,DF,Gianluca Zambrotta,The Italian defender who scored in the quarter-final
-2006,DF,Marco Materazzi,The Italian defender who scored in the final
-2006,DF,Roberto Ayala,The Argentine defender who scored in the quarter-final
-2006,DF,Vladyslav Vashchuk,The Ukrainian defender who was sent off against Spain
-2006,DF,Willy Sagnol,The French defender who scored in the final
-2006,FW,Alessandro Del Piero,The Italian forward who scored in the final
-2006,FW,Andriy Shevchenko,The Ukrainian forward who captained the side to the quarter-finals
-2006,FW,Cristiano Ronaldo,The Portuguese forward who scored in the quarter-final
-2006,FW,David Villa,The Spanish striker who scored twice
-2006,FW,Didier Drogba,The Ivorian striker who captained the side
-2006,FW,Dwight Yorke,The Trinidadian forward who captained the side
-2006,FW,Fernando Torres,The Spanish striker who scored twice
-2006,FW,Julio Cruz,The Argentine forward who scored in the quarter-final against Germany
-2006,FW,Luca Toni,The Italian striker who scored twice against Ukraine
-2006,FW,Lukas Podolski,The German striker who won the Best Young Player award
-2006,FW,Mark Viduka,The Australian forward who captained the side
-2006,FW,Miroslav Klose,The German striker who won the Golden Boot
-2006,FW,Oliver Neuville,The German forward who scored in the quarter-final
-2006,FW,Raúl,The Spanish forward who captained the side
-2006,FW,Sylvain Wiltord,The French forward who scored in the final
-2006,FW,Thierry Henry,The French forward who scored in the quarter-final
-2006,FW,Wayne Rooney,The English striker who was sent off
-2006,GK,Edwin van der Sar,The Dutch goalkeeper who captained the side
-2006,GK,Gianluigi Buffon,The Italian goalkeeper who won the Golden Glove
-2006,MF,Andrea Pirlo,The Italian defensive midfielder who scored in the final
-2006,MF,Bastian Schweinsteiger,The German central midfielder who scored twice
-2006,MF,Costinha,The Portuguese midfielder who was sent off
-2006,MF,Daniele De Rossi,The Italian defensive midfielder who scored in the final
-2006,MF,David Beckham,The English right midfielder who captained the side to the quarter-finals
-2006,MF,Deco,The Portuguese midfielder who was sent off
-2006,MF,Johann Vogel,The Swiss midfielder who captained the side
-2006,MF,Luís Figo,The Portuguese midfielder who captained the side to the semi-finals
-2006,MF,Michael Ballack,The German midfielder who scored in the quarter-final
-2006,MF,Owen Hargreaves,The English midfielder who scored in the quarter-final
-2006,MF,Simão,The Portuguese winger who scored in the quarter-final against England
-2006,MF,Tim Borowski,The German midfielder who scored in the quarter-final against Argentina
-2006,MF,Tomas Rosicky,The Czech attacking midfielder who scored twice against the United States
-2006,MF,Zinédine Zidane,The French midfielder who won the Golden Ball
-2010,DF,Arne Friedrich,The German defender who scored in the quarter-final against Argentina
-2010,DF,Carles Puyol,The Spanish centre-back who scored in the semi-final against Germany
-2010,DF,Daniel Agger,The Danish centre-back who scored an own goal against Netherlands
-2010,DF,Fabio Cannavaro,The Italian defender who captained the side
-2010,DF,John Heitinga,The Dutch centre-back who was sent off against Spain
-2010,DF,Lúcio,The Brazilian centre-back who captained the side to the quarter-finals
-2010,DF,Maxi Pereira,The Uruguayan defender who scored in the semi-final against Netherlands
-2010,DF,Philipp Lahm,The German right-back who captained the side to the semi-finals
-2010,FW,Arjen Robben,The Dutch winger who scored in the semi-final
-2010,FW,Carlos Tevez,The Argentine forward who scored twice
-2010,FW,Cristiano Ronaldo,The Portuguese forward who captained the side
-2010,FW,David Villa,The Spanish striker who scored twice
-2010,FW,Didier Drogba,The Ivorian striker who captained the side
-2010,FW,Diego Forlán,The Uruguayan forward who scored in the semi-final against Netherlands
-2010,FW,Gonzalo Higuaín,The Argentine forward who scored a hat-trick
-2010,FW,Harry Kewell,The Australian forward who was sent off
-2010,FW,Luís Fabiano,The Brazilian forward who scored twice
-2010,FW,Luis Suárez,The Uruguayan forward who was sent off
-2010,FW,Miroslav Klose,The German striker who was sent off against Serbia
-2010,FW,Nwankwo Kanu,The Nigerian forward who captained the side
-2010,FW,Robinho,The Brazilian winger who scored in the quarter-final
-2010,FW,Samuel Eto'o,The Cameroonian striker who captained the side
-2010,FW,Thierry Henry,The French forward who captained the side
-2010,GK,Claudio Bravo,The Chilean goalkeeper who captained the side
-2010,GK,Iker Casillas,The Spanish goalkeeper who won the Golden Glove
-2010,MF,Andrés Iniesta,The Spanish midfielder who scored in the final
-2010,MF,Dejan Stankovic,The Serbian midfielder who captained the side
-2010,MF,Giorgos Karagounis,The Greek central midfielder who captained the side
-2010,MF,Javier Mascherano,The Argentine defensive midfielder who captained the side to the quarter-finals
-2010,MF,Kaká,The Brazilian midfielder who was sent off
-2010,MF,Marek Hamsik,The Slovak central midfielder who captained the side
-2010,MF,Park Ji-sung,The South Korean attacking midfielder who captained the side
-2010,MF,Steven Gerrard,The English central midfielder who captained the side
-2010,MF,Sulley Muntari,The Ghanaian central midfielder who scored in the quarter-final against Uruguay
-2010,MF,Thomas Müller,The German midfielder who won the Best Young Player award
-2010,MF,Wesley Sneijder,The Dutch attacking midfielder who scored in the semi-final
-2010,MF,Yoann Gourcuff,The French attacking midfielder who was sent off against South Africa
-2014,DF,Darijo Srna,The Croatian right-back who captained the side
-2014,DF,David Luiz,The Brazilian centre-back who scored twice against Chile
-2014,DF,Diego Godín,The Uruguayan centre-back who captained the side
-2014,DF,Dirk Kuyt,The Dutch winger who scored in the semi-final against Argentina
-2014,DF,Ezequiel Garay,The Argentine centre-back who scored in the semi-final against Netherlands
-2014,DF,Mats Hummels,The German centre-back who scored in the quarter-final
-2014,DF,Maxi Pereira,The Uruguayan defender who was sent off against Costa Rica
-2014,DF,Pepe,The Portuguese centre-back who was sent off against Germany
-2014,DF,Philipp Lahm,The German right-back who captained the champions
-2014,DF,Thiago Silva,The Brazilian centre-back who scored in the quarter-final
-2014,DF,Vasili Berezutski,The Russian defender who captained the side
-2014,DF,Vincent Kompany,The Belgian centre-back who captained the side to the quarter-finals
-2014,FW,Ahmed Musa,The Nigerian winger who scored twice against Argentina
-2014,FW,André Schürrle,The German winger who scored in the semi-final against Brazil
-2014,FW,Ante Rebić,The Croatian winger who was sent off
-2014,FW,Arjen Robben,The Dutch winger who scored in the semi-final
-2014,FW,Clint Dempsey,The American forward who captained the side
-2014,FW,Cristiano Ronaldo,The Portuguese forward who captained the side
-2014,FW,Didier Drogba,The Ivorian striker who captained the side
-2014,FW,Gonzalo Higuaín,The Argentine forward who scored in the quarter-final
-2014,FW,Jackson Martínez,The Colombian striker who scored twice
-2014,FW,Karim Benzema,The French striker who scored twice
-2014,FW,Lionel Messi,The Argentine forward who won the Golden Ball
-2014,FW,Luis Suárez,The Uruguayan forward who scored twice
-2014,FW,Mario Mandzukic,The Croatian striker who scored twice against Cameroon
-2014,FW,Miroslav Klose,The German striker who is the all-time top scorer at the World Cup
-2014,FW,Neymar,The Brazilian forward who scored twice
-2014,FW,Robin van Persie,The Dutch striker who scored twice
-2014,FW,Samuel Eto'o,The Cameroonian striker who captained the side
-2014,FW,Sergio Agüero,The Argentine forward who scored in the semi-final
-2014,FW,Thomas Müller,The German forward who scored a hat-trick
-2014,GK,Claudio Bravo,The Chilean goalkeeper who captained the side
-2014,GK,Gianluigi Buffon,The Italian goalkeeper who captained the side
-2014,GK,Hugo Lloris,The French goalkeeper who captained the side to the quarter-finals
-2014,GK,Iker Casillas,The Spanish goalkeeper who captained the side
-2014,GK,Manuel Neuer,The German goalkeeper who won the Golden Glove
-2014,MF,Alex Song,The Cameroonian defensive midfielder who was sent off against Croatia
-2014,MF,Antonio Valencia,The Ecuadorian right-back who was sent off against France
-2014,MF,Claudio Marchisio,The Italian central midfielder who was sent off against Uruguay
-2014,MF,Giorgos Karagounis,The Greek central midfielder who captained the side
-2014,MF,Gökhan Inler,The Swiss defensive midfielder who captained the side
-2014,MF,James Rodríguez,The Colombian midfielder who won the Golden Boot
-2014,MF,Kostas Katsouranis,The Greek midfielder who was sent off against Japan
-2014,MF,Mario Götze,The German attacking midfielder who scored in the final
-2014,MF,Oscar,The Brazilian attacking midfielder who scored in the semi-final
-2014,MF,Paul Pogba,The French midfielder who won the Best Young Player award
-2014,MF,Sami Khedira,The German central midfielder who scored in the semi-final
-2014,MF,Steven Gerrard,The English central midfielder who captained the side
-2014,MF,Toni Kroos,The German midfielder who scored in the semi-final
-2014,MF,Wesley Sneijder,The Dutch attacking midfielder who scored in the quarter-final
-2014,MF,Wilson Palacios,The Honduran defensive midfielder who was sent off against France
-2014,MF,Xherdan Shaqiri,The Swiss attacking midfielder who scored a hat-trick against Honduras
-2018,DF,Aleksandar Kolarov,The Serbian left-back who captained the side
-2018,DF,Diego Godín,The Uruguayan centre-back who captained the side to the quarter-finals
-2018,DF,Edson Álvarez,The Mexican defensive midfielder who scored an own goal
-2018,DF,Gerard Piqué,The Spanish centre-back who scored a penalty in the shootout
-2018,DF,Harry Maguire,The English defender who scored in the quarter-final
-2018,DF,Jérôme Boateng,The German centre-back who was sent off
-2018,DF,John Stones,The English centre-back who scored twice
-2018,DF,Kieran Trippier,The English right-back who scored in the semi-final
-2018,DF,Medhi Benatia,The Moroccan centre-back who captained the side
-2018,DF,Raphaël Varane,The French defender who scored in the quarter-final
-2018,DF,Samuel Umtiti,The French defender who scored in the semi-final
-2018,DF,Sergei Ignashevich,The Russian defender who scored an own goal
-2018,DF,Sergio Ramos,The Spanish centre-back who scored a penalty in the shootout
-2018,DF,Stephan Lichtsteiner,The Swiss right-back who captained the side
-2018,DF,Thiago Silva,The Brazilian centre-back who captained the side to the quarter-finals
-2018,FW,Ahmed Musa,The Nigerian winger who scored twice against Iceland
-2018,FW,Andrej Kramaric,The Croatian attacking midfielder who scored in the quarter-final
-2018,FW,Antoine Griezmann,The French forward who scored in the final
-2018,FW,Cristiano Ronaldo,The Portuguese forward who scored a hat-trick
-2018,FW,Diego Costa,The Spanish striker who scored twice
-2018,FW,Eden Hazard,The Belgian forward who scored twice
-2018,FW,Edinson Cavani,The Uruguayan striker who scored twice
-2018,FW,Harry Kane,The English forward who won the Golden Boot
-2018,FW,Ivan Perišić,The Croatian winger who scored in the final
-2018,FW,Kylian Mbappé,The French forward who won the Best Young Player award
-2018,FW,Lionel Messi,The Argentine forward who captained the side
-2018,FW,Luis Muriel,The Colombian striker who scored a penalty in the shootout against England
-2018,FW,Marcus Rashford,The English forward who scored a penalty in the shootout
-2018,FW,Mario Mandzukic,The Croatian striker who scored in the final
-2018,FW,Radamel Falcao,The Colombian striker who scored a penalty in the shootout
-2018,FW,Robert Lewandowski,The Polish forward who captained the side
-2018,FW,Romelu Lukaku,The Belgian forward who scored twice
-2018,GK,Hugo Lloris,The French goalkeeper who captained the champions
-2018,GK,Igor Akinfeev,The Russian goalkeeper who saved a penalty in the shootout against Spain
-2018,GK,Jordan Pickford,The English goalkeeper who saved a penalty in the shootout
-2018,GK,Manuel Neuer,The German goalkeeper who captained the side
-2018,GK,Thibaut Courtois,The Belgian goalkeeper who won the Golden Glove
-2018,MF,Alan Dzagoev,The Russian central midfielder who scored in the quarter-final against Croatia
-2018,MF,Aleksandr Golovin,The Russian attacking midfielder who scored a penalty in the shootout against Spain
-2018,MF,Andrés Iniesta,The Spanish midfielder who scored a penalty in the shootout
-2018,MF,Dele Alli,The English midfielder who scored in the quarter-final
-2018,MF,Eric Dier,The English centre-back who scored a penalty in the shootout
-2018,MF,Fernandinho,The Brazilian defensive midfielder who scored an own goal against Belgium
-2018,MF,Ivan Rakitic,The Croatian midfielder who scored in the quarter-final
-2018,MF,Juan Cuadrado,The Colombian right midfielder who scored a penalty in the shootout against England
-2018,MF,Kevin De Bruyne,The Belgian midfielder who scored in the quarter-final
-2018,MF,Luka Modrić,The Croatian central midfielder who won the Golden Ball
-2018,MF,Marcelo Brozović,The Croatian defensive midfielder who scored in the quarter-final
-2018,MF,Paul Pogba,The French midfielder who scored in the final
-2018,MF,Renato Augusto,The Brazilian central midfielder who scored in the quarter-final against Belgium
-2022,DF,Achraf Hakimi,The Moroccan defender who scored a penalty in the shootout
-2022,DF,Denzel Dumfries,The Dutch right-back who was sent off
-2022,DF,Diego Godín,The Uruguayan centre-back who captained the side
-2022,DF,Gonzalo Montiel,The Argentine right-back who scored in the final
-2022,DF,Kalidou Koulibaly,The Senegalese defender who captained the side
-2022,DF,Nahuel Molina,The Argentine right-back who scored in the quarter-final
-2022,DF,Nayef Aguerd,The Moroccan centre-back who scored an own goal
-2022,DF,Theo Hernández,The French left-back who scored in the semi-final
-2022,DF,Thiago Silva,The Brazilian centre-back who captained the side to the quarter-finals
-2022,DF,Virgil van Dijk,The Dutch defender who captained the side to the quarter-finals
-2022,FW,André Ayew,The Ghanaian striker who captained the side
-2022,FW,Andrej Kramaric,The Croatian attacking midfielder who scored twice
-2022,FW,Ángel Di María,The Argentine winger who scored in the final
-2022,FW,Bukayo Saka,The English forward who scored twice
-2022,FW,Cristiano Ronaldo,The Portuguese forward who captained the side to the quarter-finals
-2022,FW,Dušan Tadić,The Serbian winger who captained the side
-2022,FW,Eden Hazard,The Belgian forward who captained the side
-2022,FW,Ferran Torres,The Spanish striker who scored twice
-2022,FW,Gareth Bale,The Welsh forward who captained the side
-2022,FW,Gonçalo Ramos,The Portuguese striker who scored a hat-trick
-2022,FW,Harry Kane,The English forward who scored in the quarter-final
-2022,FW,Julián Alvarez,The Argentine forward who scored in the semi-final
-2022,FW,Kai Havertz,The German forward who scored twice
-2022,FW,Kylian Mbappé,The French forward who won the Golden Boot
-2022,FW,Lautaro Martínez,The Argentine forward who scored in the quarter-final
-2022,FW,Lionel Messi,The Argentine forward with the most World Cup appearances
-2022,FW,Marcus Rashford,The English forward who scored twice
-2022,FW,Mehdi Taremi,The Iranian striker who scored twice against England
-2022,FW,Neymar,The Brazilian forward who scored in the quarter-final
-2022,FW,Olivier Giroud,The French striker who scored twice against Australia
-2022,FW,Paulo Dybala,The Argentine forward who scored in the final
-2022,FW,Pedro,The Brazilian striker who scored in the quarter-final against Croatia
-2022,FW,Randal Kolo Muani,The French forward who scored in the final
-2022,FW,Richarlison,The Brazilian striker who scored twice
-2022,FW,Robert Lewandowski,The Polish forward who captained the side
-2022,FW,Vincent Aboubakar,The Cameroonian striker who was sent off against Brazil
-2022,FW,Wout Weghorst,The Dutch striker who scored a hat-trick against Argentina
-2022,FW,Youssef En-Nesyri,The Moroccan striker who scored in the quarter-final
-2022,GK,Dominik Livakovic,The Croatian goalkeeper who saved a penalty in the shootout against Japan
-2022,GK,Emiliano Martínez,The Argentine goalkeeper who won the Golden Glove
-2022,GK,Hugo Lloris,The French goalkeeper who captained the runners-up
-2022,GK,Manuel Neuer,The German goalkeeper who scored an own goal
-2022,GK,Unai Simón,The Spanish goalkeeper who saved a penalty in the shootout against Morocco
-2022,GK,Yassine Bounou,The Moroccan goalkeeper who saved a penalty in the shootout against Spain
-2022,MF,Aurélien Tchouaméni,The French midfielder who scored in the quarter-final
-2022,MF,Bruno Fernandes,The Portuguese midfielder who scored twice
-2022,MF,Casemiro,The Brazilian midfielder who scored in the quarter-final
-2022,MF,Enzo Fernández,The Argentine midfielder who won the Best Young Player award
-2022,MF,Granit Xhaka,The Swiss defensive midfielder who captained the side
-2022,MF,Hakim Ziyech,The Moroccan winger who scored a penalty in the shootout
-2022,MF,Leandro Paredes,The Argentine defensive midfielder who scored in the final
-2022,MF,Lovro Majer,The Croatian attacking midfielder who scored in the quarter-final against Brazil
-2022,MF,Luka Modrić,The Croatian central midfielder who scored in the quarter-final
-2022,MF,Marcelo Brozović,The Croatian defensive midfielder who scored a penalty in the shootout
-2022,MF,Mario Pašalić,The Croatian central midfielder who scored a penalty in the shootout against Japan
-2022,MF,Mohammed Kudus,The Ghanaian winger who scored twice
-2022,MF,Nikola Vlašić,The Croatian attacking midfielder who scored in the quarter-final against Brazil
-2022,MF,Sergio Busquets,The Spanish midfielder who captained the side
-2022,MF,Teun Koopmeiners,The Dutch defensive midfielder who scored in the quarter-final
-2022,MF,Tyler Adams,The American defensive midfielder who captained the side
+id,year,status,position,player,clue
+0532652a-e475-4ad8-9e5d-3dbc6fab0e62,1994,active,DF,Aldair,The centre-back who was part of the defence that kept a clean sheet in the final before the penalty shootout
+2dd56d86-23b8-4958-9df8-36ad3d023761,1994,active,DF,Alessandro Costacurta,The centre-back who was suspended for the final after accumulating yellow cards
+d4cad7e8-4b76-435b-a2fb-e0e9ccc904d2,1994,active,DF,Andrés Escobar,"The defender who scored a tragic own goal against the hosts in the group stage, in what proved to be his final-ever match"
+1ae63082-74c3-4a43-aaad-f475a5dd553d,1994,active,DF,Claudio Suárez,"The defender who captained Mexico and earned over 170 caps, making him one of the most capped players in history"
+9b7cc614-581e-4300-9a0e-a3f689db6484,1994,active,DF,Franco Baresi,The defender who captained his side to the final but missed his penalty in the shootout
+184b56a7-30ec-4894-a69d-4f0c11d526a9,1994,active,DF,Jürgen Kohler,The defender who was tasked with man-marking Roberto Baggio throughout the tournament
+9f16ebe6-985c-4cad-bc9a-05e3dd670e49,1994,active,DF,Márcio Santos,The defender who missed the first penalty in the final shootout against Italy
+92590434-f58e-4f8a-9b52-38a6aa81af44,1994,active,DF,Mauro Tassotti,The defender who escaped a red card after elbowing Luis Enrique and breaking his nose in the quarter-final
+61fce26b-6ed2-4c07-9ba8-12436c012c2d,1994,active,DF,Paolo Maldini,The left-back who was a runner-up as his side lost the final on penalties
+1abfa6c6-d5aa-4e20-a730-23b53ae86ad4,1994,active,DF,Philippe Albert,The centre-back who scored from open play at the tournament and was known for his forward runs from defence
+59ba7151-3e65-40f6-a2a0-c8b6b1cfc7e4,1994,active,FW,Bebeto,The striker who scored four goals and celebrated with a famous baby-rocking goal celebration
+be8d1f0c-1cdf-465d-961b-d98a3a8d5d16,1994,active,FW,Faustino Asprilla,The flamboyant striker who started upfront alongside his fellow Colombian forwards as they arrived as one of the tournament favourites
+c34e5127-fced-4c89-ad3c-f07676090462,1994,active,FW,Oleg Salenko,"The striker who scored five goals in a single match against Cameroon, a World Cup record for one game"
+700ea34e-8185-455d-9aa1-8f4af98c011e,1994,active,FW,Roberto Baggio,"The striker who missed the decisive penalty in the final shootout, having almost single-handedly carried his side to that stage"
+2bc972dd-2a51-471d-bad4-bef6e1ff7206,1994,active,FW,Romário,The striker who won the Golden Ball at the tournament
+e2632e82-784d-4f6a-9584-061b8efe0b12,1994,active,FW,Ronaldo,The striker who won the tournament as a teenager without starting a single match
+342b9c2e-ddc8-4311-bed6-547dbc51a956,1994,active,FW,Rudi Völler,The striker who managed the squad as head coach eight years later but played his last World Cup here
+9c002e6d-fbfa-4bd3-9d1a-14663045ba5d,1994,active,GK,Andoni Zubizarreta,"The goalkeeper who was controversially sent off against South Korea in the group stage, ending his World Cup in dramatic fashion"
+e5112645-a601-46cd-8038-f7e194171dde,1994,active,GK,Andreas Köpke,The goalkeeper who wore the captain's armband during the tournament
+c8673f4a-b4c3-417d-afd9-dfdf3e37b5b6,1994,active,GK,Cláudio Taffarel,The goalkeeper who saved the decisive penalty in the final shootout to win the tournament
+ea531040-b64c-462b-99d5-f6651856bb84,1994,active,GK,Gianluca Pagliuca,"The goalkeeper who was sent off in the group stage, forcing his side to play the remainder of the match with ten men"
+9653dbec-880e-4128-8f7d-c5526dcf1cd1,1994,active,GK,Michel Preud'homme,The goalkeeper who won the Golden Glove at the tournament
+fc9bea05-983e-4130-96a8-cf0b8ca11135,1994,active,MF,Carlos Valderrama,The iconic playmaker with the distinctive afro haircut who captained his country at three consecutive World Cups
+94abde92-47b3-45a0-a3cd-d49aefb09120,1994,active,MF,Diego Maradona,The midfielder who scored a stunning long-range goal against Greece but was sent home after failing a drug test
+930d4a2c-e984-4421-b44d-b06f51dfb8b8,1994,active,MF,Dunga,The midfielder who captained Brazil and lifted the trophy after victory in the final shootout
+8d0ec7fd-f6f5-459b-9358-60645e0897e3,1994,active,MF,Frank Rijkaard,The midfielder who came out of international retirement to captain his side at the tournament in the United States
+808f6299-08d2-4d7a-b4e2-81faec85c62d,1994,active,MF,Gheorghe Hagi,The midfielder who captained Romania and was named in the tournament's All-Star Team
+735e3633-b75b-4078-b2af-617b08ebce86,1994,active,MF,Luis Enrique,The midfielder who had his nose broken by an elbow in the quarter-final against Italy but played on
+3731cb0f-3e48-493b-a7d2-88b6b4a01b58,1994,active,MF,Mazinho,The midfielder who scored a penalty in the final shootout against Italy to help Brazil win the title
+f0f0aebc-723a-42d3-8bb6-2a7498075d9a,1994,active,MF,Tomas Brolin,The midfielder who scored the winner against Romania to send Sweden into the semi-finals
+49b62f2b-605c-4de5-911c-c0f844a4860a,1998,active,DF,Bixente Lizarazu,The left-back who played every minute of the tournament as his nation were crowned world champions
+08cbebe8-bdc2-43d2-acc8-2031effce9be,1998,active,DF,Carlos Gamarra,The centre-back who marshalled a resilient Paraguay defence that kept clean sheets to earn draws against both Spain and Bulgaria
+45b9d8d7-2c67-43c3-99eb-8c842498c26f,1998,active,DF,Dunga,"The captain and defensive midfielder who led Brazil to the final, only to end on the losing side"
+5ae20aba-5e8e-4364-88cc-b2055fbf9ca9,1998,active,DF,Fernando Hierro,The defender who captained the side and was their leading scorer at the tournament
+0193a721-1791-446e-9cb5-872c3b0485c6,1998,active,DF,Iván Córdoba,The centre-back who captained his country's defence at the tournament and went on to win multiple Serie A titles with his club
+80ad06ee-31a7-4c7b-b9ad-9793b418fabe,1998,active,DF,Laurent Blanc,"The defender who scored the first-ever golden goal in World Cup history, then missed the final through suspension after a red card"
+9548359e-ab33-4ea1-8b6a-6b0870ab62c9,1998,active,DF,Lilian Thuram,The defender who scored both goals in the semi-final victory over Croatia — the only international goals of his career
+ffb75c0b-18e5-427b-97d8-9081eec2ca3f,1998,active,DF,Marcel Desailly,The defender who was sent off in the final yet still ended the tournament as a world champion
+6adcf757-44d3-483e-a66b-9e57e8bf9dff,1998,active,DF,Robert Jarni,The left-back who provided the assist for Davor Šuker's goal in the semi-final against France
+47826189-df03-49cb-9447-1835f2702585,1998,active,DF,Roberto Carlos,The left-back who started the final against France and was famous for his thunderous free-kicks throughout the tournament
+2d3e61d1-8945-4e8b-ba50-8eceb6e41be5,1998,active,DF,Slaven Bilić,"The defender whose challenge led to the controversial penalty in the semi-final against France, later becoming a celebrated manager"
+9fb5b766-bfdc-41e5-831d-17493bbb1451,1998,active,DF,Sol Campbell,The centre-back who had a goal disallowed in the last-16 match against Argentina
+de037da5-0254-458d-abbe-5da54f20d515,1998,active,FW,Christian Vieri,The striker who finished as Italy's top scorer with five goals in the tournament
+7f8bcd91-d07d-4111-bdf4-2fcfd148667c,1998,active,FW,Claudio López,The striker who scored a memorable individual goal against England in the group stage
+147a4300-18f2-42b2-bfc0-48d4bd37870f,1998,active,FW,Davor Šuker,The striker who won the Golden Boot at the tournament
+ace9af65-4b95-4cc6-be5c-793f9d59d5a2,1998,active,FW,Dennis Bergkamp,The striker who scored one of the greatest goals in World Cup history with a stunning last-minute control and finish against Argentina in the quarter-final
+dc33f11b-1308-4bd6-b7e7-2e24f9769f83,1998,active,FW,Gabriel Batistuta,The striker who scored a hat-trick against Jamaica and netted in all three group-stage matches
+9a70c5a9-4349-4d91-beb4-b29a55c5a5d3,1998,active,FW,Goran Vlaović,The striker who scored the decisive penalty in the round-of-16 shootout against Germany
+737c95ae-6dd5-4fdb-b996-4d084155329d,1998,active,FW,Luc Nilis,The striker who scored Belgium's goal in their group stage draw against South Korea
+04879a85-8c28-411b-a34c-d6e9889c72e5,1998,active,FW,Luis Hernández,"The striker who finished as Mexico's top scorer with four goals, including a memorable bicycle-kick finish"
+9d29f7f2-1a4d-4821-9ed1-228a0111d4c8,1998,active,FW,Marc Overmars,The winger who set up the opening goal in the semi-final against Brazil with a trademark run
+4ca0ca85-3ad0-4290-998e-252fbdca6b6f,1998,active,FW,Michael Owen,"The striker who scored a stunning individual goal against Argentina in the last 16, winning him the FIFA Goal of the Tournament award"
+ca16bede-455a-4f95-8ce9-ebbfa55225d3,1998,active,FW,Oliver Bierhoff,The striker who scored a golden goal to win the Euro two years prior but failed to replicate that form at this tournament
+d796f00a-701f-4531-a71e-c2aa3d28c7af,1998,active,FW,Patrick Kluivert,The striker who scored a late equaliser as a substitute in the semi-final against Brazil to force a penalty shootout
+1b39e921-778f-4a82-a308-08f481798ea9,1998,active,FW,Predrag Mijatović,The striker who scored the winning goal in the Champions League final just weeks before the tournament
+73aab7dc-87cb-4b5f-93fd-12f8b08d2023,1998,active,FW,Roberto Baggio,"The striker who scored in the quarter-final shootout against France, only to be eliminated on penalties again"
+7b26edff-eb8f-4bba-949b-df9d61cbc349,1998,active,FW,Robert Pires,"The winger who was part of the squad that won the tournament on home soil, earning his first major international honour early in his career"
+347032b6-add2-446f-88ca-3dfd87fccf15,1998,active,GK,Andoni Zubizarreta,"The goalkeeper who made his final World Cup appearance, ending a Spain career spanning four tournaments"
+7acef949-adcd-48dd-a30d-d43ebec7082d,1998,active,GK,Cláudio Taffarel,The goalkeeper who kept goal in the final against the host nation
+80dd1826-ca16-4ea4-822a-f12e99cbce00,1998,active,GK,David Seaman,The goalkeeper who was lobbed by Ronaldinho's long-range free kick in the quarter-final
+4f0e3725-bdd3-4b9a-9c02-407f9a4f78cc,1998,active,GK,Dražen Ladić,The goalkeeper who kept a clean sheet in the third-place play-off as Croatia finished third on their first World Cup appearance as an independent nation
+0381d736-e742-4801-9bf0-93d43afb98e1,1998,active,GK,Edwin van der Sar,The goalkeeper who was named in the tournament's All-Star squad after helping his side reach the semi-finals
+dafa851d-353f-4e9d-838a-0d2dcda19f66,1998,active,GK,Fabien Barthez,The goalkeeper who kept a clean sheet in the final as France lifted the trophy on home soil
+64dc5d2b-479e-42eb-91e1-fc7dda07c15a,1998,active,GK,Óscar Córdoba,The goalkeeper who started all of his country's group-stage matches and conceded the late Rivaldo free-kick that ended their tournament
+a0afd3ee-97db-4ddb-b58b-b35b2a0b314d,1998,active,GK,Peter Schmeichel,The goalkeeper who captained his nation and saved a penalty in the round-of-16 shootout against Brazil
+e837b7dc-a54e-4e1a-bf49-344ee45c5951,1998,active,MF,Clarence Seedorf,The midfielder who was part of the star-studded midfield that helped his side reach the semi-finals before losing to Brazil on penalties
+a74a9373-f2ed-4e22-bad2-37c7a3881145,1998,active,MF,Cuauhtémoc Blanco,The midfielder famous for the 'cuauhtemiña' — dribbling with the ball gripped between his feet — during the tournament
+a5d0153d-f97f-4e2a-b6b9-3deb5d01a4c4,1998,active,MF,Edgar Davids,The combative midfielder known for his distinctive goggles who helped his side reach the semi-finals
+497b0098-5156-47f1-aba6-f4e41d01a64f,1998,active,MF,Emmanuel Petit,The midfielder who scored the third goal in the final to seal his nation's world championship
+a9501f0d-8e20-4120-9ec5-1f58163422f3,1998,active,MF,Patrick Vieira,The midfielder who captained France at a later tournament but in this winning campaign was a key squad member collecting his first winner's medal
+10b1878f-a81f-4306-a3e6-4a32ccea02bb,1998,active,MF,Phillip Cocu,The midfielder who converted his penalty successfully in the semi-final shootout against Brazil
+9a812554-4796-4817-87f8-ccd97ab55981,1998,active,MF,Robert Prosinečki,"The midfielder who scored against Jamaica, becoming one of very few players to score at a World Cup for two different nations"
+d0b51743-a115-4e57-822e-9b1e846c0c62,1998,active,MF,Youri Djorkaeff,The midfielder who scored in both the group stage and the second round as his nation marched to the title on home soil
+0114cd44-65ab-4b8a-9bb7-0151cabfb63f,1998,active,MF,Zvonimir Boban,The midfielder who captained Croatia to their historic third-place finish and is regarded as one of the greatest players in the nation's history
+49b919c9-ad34-481d-a49a-1b46f60f45b2,2002,active,DF,Alessandro Nesta,The centre-back who was forced to withdraw from the tournament through injury after the group stage
+96cfecd5-7a6b-4da7-899b-f806082f07f7,2002,active,DF,Alpay Özalan,The defender who was sent off in the ill-tempered third-place play-off against South Korea
+3d6cbb4f-a66b-4b0b-9e31-0b6613f38850,2002,active,DF,Cafu,"The right-back and captain who lifted the trophy, becoming the first man to appear in three World Cup finals"
+ad3d6566-a37f-4dc9-a6dd-04d1d5e20f5b,2002,active,DF,Edmílson,"The defender who played a key role in Brazil's title-winning campaign, often deployed in a holding role in front of the back four"
+0c45b6e9-46a2-497c-bf33-590bbd71fdbe,2002,active,DF,Lilian Thuram,The defender who played in the infamous group-stage defeat to Senegal as the holders crashed out without scoring a goal
+08ac6524-2f40-45f7-bb1e-cebf9652a32d,2002,active,DF,Rio Ferdinand,The centre-back who captained England's defence through the group stage before injury ended his tournament
+b1c4ade7-3cd1-4c6a-8125-e802b04cde67,2002,active,DF,Roberto Carlos,The left-back who played every minute and lifted the trophy as part of the winning squad
+61f41489-4ace-48b7-b842-a1317746e22d,2002,active,FW,Diego Forlán,"The striker who failed to score in any group stage game, prompting widespread criticism before going on to become one of the world's best"
+364a2649-1a1f-4826-bff0-4ce2482ac400,2002,active,FW,Emile Heskey,The striker who set up Michael Owen's winner against Argentina with a clever lay-off in the group stage
+b006c4df-b315-4509-a6b2-7b2f0511e1ad,2002,active,FW,Francesco Totti,The forward who was sent off for a controversial simulation against South Korea in the round of 16
+e078a607-a89c-45ff-b689-a76708e72a98,2002,active,FW,Jared Borgetti,The striker who scored a stunning header against Italy in the group stage
+e7a142e9-5646-44a3-a720-d0374d074b72,2002,active,FW,Luís Figo,The winger who captained the side despite their shock group-stage elimination
+a8d7f46e-a08f-4fad-a163-0a7c78bffb53,2002,active,FW,Pauleta,The striker who scored a hat-trick against Poland in the group stage
+037c84b1-4903-4b24-8789-9ec0581d0b15,2002,active,FW,Richard Morales,"The striker who scored Uruguay's only goal of the tournament, a consolation against Senegal in the group stage"
+0b097ce0-b860-4098-afbd-1af861d031bd,2002,active,FW,Rivaldo,The striker who scored a famous bicycle-kick winner against England in the quarter-final
+234a45d7-64cf-44d1-9735-0c123d12aae5,2002,active,FW,Vincenzo Montella,The striker nicknamed 'the little aeroplane' who featured as Italy were knocked out by the co-hosts in controversial circumstances
+1d8b289f-0b22-4806-af65-7316d49fe47c,2002,active,FW,Wesley Sonck,The striker who came off the bench to score a late equaliser against Russia in the group stage
+67786244-e615-4dfa-a524-ce954e143b64,2002,active,GK,David Seaman,The goalkeeper who saved penalties in the last-16 shootout against Argentina
+da9665ed-98e2-42bc-b819-983f2b73ae90,2002,active,GK,Gianluigi Buffon,The goalkeeper whose side were controversially eliminated in the round of 16 by a golden goal from South Korea
+951bf6ac-88be-4f2d-ba68-a7319c000ec8,2002,active,GK,Lee Woon-jae,The goalkeeper who saved the decisive penalty in the quarter-final shootout against Spain to send his nation into the semi-finals
+49cde491-9694-4dc4-b0cc-4c1ef4e9bdfe,2002,active,GK,Oliver Kahn,The goalkeeper who won the Golden Ball despite finishing on the losing side in the final
+623404f3-a160-4817-b029-2297111fff77,2002,active,GK,Rüştü Reçber,The goalkeeper who kept goal for the surprise third-place finishers throughout the tournament
+8ef05b65-7778-4f5e-8ccb-d052964721d1,2002,active,MF,Álvaro Recoba,The attacking midfielder renowned as one of South America's most gifted playmakers of his generation who featured at this tournament
+e5763fe2-59e6-4774-992c-b797f971844d,2002,active,MF,Bernd Schneider,The midfielder who provided the assist for the goal that knocked the USA out in the quarter-final
+59995e5a-0050-49d3-a914-53b1ae78b8e8,2002,active,MF,Claudio Reyna,"The midfielder and captain who led the United States to a surprise quarter-final, their best World Cup finish in decades"
+455630f6-375d-4c8b-8c9a-d815e58310a2,2002,active,MF,Denílson,"The midfielder who came on as a substitute in the final, collecting a winner's medal as Brazil lifted the trophy for a record fifth time"
+4bfa9b97-7876-40c8-88bc-d9ec069fb214,2002,active,MF,Gaizka Mendieta,The midfielder who converted a penalty in the quarter-final shootout against South Korea
+f35c83c4-db28-42b0-8054-3ecdf5b28d6a,2002,active,MF,Ronaldinho,The midfielder who scored a stunning long-range lob against England in the quarter-final
+6c406aac-13df-4356-b590-2148cacaa97f,2002,active,MF,Rui Costa,The midfielder who scored a brilliant individual goal against Poland in the group stage
+be4b021d-7250-49d6-b15c-a068bf0da378,2006,active,DF,Alessandro Nesta,The centre-back who was a key part of Italy's miserly defence but had to watch the final from the sidelines due to injury
+1dfe2c8d-8f2e-43b3-8684-0e8220e99209,2006,active,DF,Ashley Cole,The left-back who played every minute of the tournament as England reached the quarter-finals
+cb6a3aff-6dfc-4974-9ee7-728c40d48ed1,2006,active,DF,Cafú,The Brazilian defender who captained the side to the quarter-finals
+c97c79f8-7a3c-4fb5-b35e-06222142f0d6,2006,active,DF,Carles Puyol,The centre-back who captained Spain at the tournament and was sent off in the round of 16 against France
+d1d516fc-64e7-43d2-a9ad-6b3a6ca21224,2006,active,DF,Éric Abidal,The French left-back who scored in the final
+9268bf49-9dd6-4bd1-9ac7-63efb678661e,2006,active,DF,Fabio Cannavaro,The Italian defender who captained the champions
+8b528fb3-fd20-4512-a69c-42c38650fdc6,2006,active,DF,Fabio Grosso,The Italian defender who scored in the final
+71f5eff4-661e-46da-a2b8-7d8fea0c9497,2006,active,DF,Gary Neville,The right-back who was sent off in the quarter-final against Portugal after coming on as a substitute
+4ce6038a-f9c3-4526-a67e-39c58250f8f5,2006,active,DF,Gianluca Zambrotta,The Italian defender who scored in the quarter-final
+267bd151-808f-4418-8c41-2a1ed71fc11a,2006,active,DF,John Terry,The centre-back who captained England at the tournament and missed the crucial penalty in the quarter-final shootout against Portugal
+36ed7915-5b78-4997-bb05-a6d6bcb5c42b,2006,active,DF,Josip Šimunić,The defender who was controversially shown a yellow card by the referee despite already having received two earlier in the same match
+8e627044-4c9c-45c0-8666-53d6a3c6b3a4,2006,active,DF,Khalid Boulahrouz,The defender who was sent off after being shown a second yellow card in the ferocious round-of-16 match against Portugal
+0b5c7bbf-af0f-4404-b028-fa36cb4dd6ec,2006,active,DF,Lilian Thuram,The defender who became his country's most-capped international during the tournament
+c01e67e7-a466-484f-94bc-7c2496d25e9c,2006,active,DF,Marco Materazzi,The Italian defender who scored in the final
+a070cd3f-7365-45ef-bb3f-59d18c8cc853,2006,active,DF,Nuno Valente,The left-back who played every minute of the tournament as Portugal reached the semi-finals
+cd07d26a-0df0-4585-b637-b47a42479a4f,2006,active,DF,Philipp Lahm,The full-back who scored the opening goal of the tournament
+01e11c0a-c44c-453f-98f8-aa227f65bd52,2006,active,DF,Ricardo Carvalho,The centre-back who was part of Portugal's miserly defensive unit that conceded only once in open play throughout the tournament
+3256679e-f217-4efd-97c0-290b43f3ea5e,2006,active,DF,Rio Ferdinand,The centre-back who captained England in the quarter-final defeat on penalties to Portugal
+0118f058-caeb-4c51-9b39-376a47ecef03,2006,active,DF,Roberto Ayala,The Argentine defender who scored in the quarter-final
+87968ec5-be6c-4a2f-bd70-7fa32859a5ee,2006,active,DF,Sol Campbell,The centre-back who captained the side in the absence of the first-choice skipper during the tournament
+0fa718bb-fd90-49bc-8712-cca3a49a8f01,2006,active,DF,Vladyslav Vashchuk,The Ukrainian defender who was sent off against Spain
+910a12f2-fd5a-4fba-a906-7104b0455bdd,2006,active,DF,Willy Sagnol,The French defender who scored in the final
+b5fc08cc-aa0e-41a3-a290-60fb5f8d7f2f,2006,active,FW,Adriano,The striker who started the tournament but struggled for form and was dropped before the quarter-final exit
+da0cffa7-0de2-4545-aaa2-df86e7a7bab0,2006,active,FW,Alessandro Del Piero,The Italian forward who scored in the final
+3834bcae-8286-497f-a91e-1738f121b0e7,2006,active,FW,Andriy Shevchenko,The Ukrainian forward who captained the side to the quarter-finals
+36c47704-89e1-4861-837a-bcc118415197,2006,active,FW,Cristiano Ronaldo,The Portuguese forward who scored in the quarter-final
+310fc6b6-1ae2-4350-89fd-f408d71714b8,2006,active,FW,David Trezeguet,"The striker who missed the crucial penalty in the final shootout, hitting the crossbar"
+ecbd61d1-1c3d-484d-9682-b38777946a8c,2006,active,FW,David Villa,The Spanish striker who scored twice
+4f782cde-c147-4896-b09e-3a73583ac9d0,2006,active,FW,Didier Drogba,The Ivorian striker who captained the side
+9894c609-a0af-490a-b518-ef2a873f1559,2006,active,FW,Dwight Yorke,The Trinidadian forward who captained the side
+d2d5d440-c00c-4a90-adc7-45eecfbab005,2006,active,FW,Fernando Torres,The Spanish striker who scored twice
+bce66773-51c3-45a3-a53a-49ac9be458e8,2006,active,FW,Francesco Totti,The attacking midfielder who scored a crucial penalty against Australia in the round of 16 and was sent off at the previous tournament
+aaf09c0e-e691-4b12-b843-0e08609b0969,2006,active,FW,Hélder Postiga,The striker who scored in the quarter-final shootout victory over England
+47e54bba-94df-4ca2-9c42-bfd540777e7a,2006,active,FW,Hernán Crespo,The striker who scored three goals in the group stage as Argentina progressed with a perfect record before their quarter-final exit
+ace2f526-3e70-40a0-8788-7c9d130fea04,2006,active,FW,Ivan Klasnić,"The striker who came off the bench to score against Australia, completing a famous comeback in the group stage"
+417c1478-d6ee-4a07-a1ec-cdfe43db3c2a,2006,active,FW,Jared Borgetti,The striker who became Mexico's all-time leading World Cup scorer at the time of the tournament
+8bfa4c2a-a507-4cf3-a005-0fb72b0487a5,2006,active,FW,Julio Cruz,The Argentine forward who scored in the quarter-final against Germany
+7994825b-8562-4e2d-a1a7-f5fbcadd285d,2006,active,FW,Luca Toni,The Italian striker who scored twice against Ukraine
+afd07cd3-8308-4fa7-b322-c218db9d2c79,2006,active,FW,Lukas Podolski,The German striker who won the Best Young Player award
+2ebe62c2-465b-414e-abeb-094b7de88bb2,2006,active,FW,Mark Viduka,The Australian forward who captained the side
+d340fc77-319a-4cc8-bdaf-f6ddb95f0ef2,2006,active,FW,Michael Owen,"The striker who suffered a serious knee injury in England's opening group-stage match against Sweden, ruling him out for the rest of the tournament"
+72235d25-46af-41f3-9ece-8b7aaed77fe4,2006,active,FW,Miroslav Klose,The German striker who won the Golden Boot
+b340306c-8bde-4795-85cd-7ee9907081c1,2006,active,FW,Oliver Neuville,The German forward who scored in the quarter-final
+04b4a766-199b-4453-9501-dfceef167fe2,2006,active,FW,Pauleta,The striker who became Portugal's all-time leading scorer at the tournament before being surpassed years later
+ea418591-897f-4d19-82dc-4730a146bdae,2006,active,FW,Peter Crouch,The striker who scored with a header against Trinidad & Tobago to break the deadlock in England's second group game
+4459c71c-bc54-414a-875a-263819b396df,2006,active,FW,Raúl,The Spanish forward who captained the side
+c420aee2-54ae-48cc-a742-c6111104b1e2,2006,active,FW,Ruud van Nistelrooy,The striker who scored three goals in the group stage including the opener against Ivory Coast
+e26b2213-af16-4921-b073-b6babcd4ac7f,2006,active,FW,Sylvain Wiltord,The French forward who scored in the final
+9946e3e4-92b5-4d06-a8bf-b2c9d62e6b07,2006,active,FW,Thierry Henry,The French forward who scored in the quarter-final
+35cefe9f-05dd-471a-9be2-6229831f7e75,2006,active,FW,Wayne Rooney,The English striker who was sent off
+7b8909c6-9136-4526-ad90-ebfa29deacff,2006,active,GK,Edwin van der Sar,The Dutch goalkeeper who captained the side
+a6411936-aaa9-479a-adb3-b4da1597640d,2006,active,GK,Gianluigi Buffon,The Italian goalkeeper who won the Golden Glove
+9c402b9b-03a3-4d8f-af6c-28e427a78cf2,2006,active,GK,Jens Lehmann,The goalkeeper who saved two penalties in the quarter-final shootout against Argentina
+d1e5e414-fcf1-43fd-a389-60a3e37faefc,2006,active,GK,Oswaldo Sánchez,The goalkeeper who kept a clean sheet in the group stage against Iran and Portugal
+b1a8d97c-c426-41b0-a611-09e5bc0262e1,2006,active,GK,Pepe Reina,The goalkeeper who saved three penalties in the last-16 shootout against France
+d2d4e7c9-d24c-40a8-a1ce-be89a6c7c6f9,2006,active,GK,Petr Čech,The goalkeeper who captained his nation at the tournament despite his side being eliminated in the group stage
+63ae6425-5f3e-4f79-bb76-9cd09842a566,2006,active,GK,Ricardo,The goalkeeper who saved three penalties in a shootout against England in the quarter-final
+daa8abf6-7437-470a-aa95-f732ab1d5631,2006,active,GK,Stipe Pletikosa,The goalkeeper who captained Croatia during the tournament
+0feabac1-f37c-47f3-a75e-a38249c036a9,2006,active,MF,Alou Diarra,"The defensive midfielder who was one of the standout performers as his side reached the quarter-finals, eliminating Spain along the way"
+a5993b0a-0cb7-48b0-ab55-83a55ab816c6,2006,active,MF,Andrea Pirlo,The Italian defensive midfielder who scored in the final
+9d6ecb47-9ced-4438-9078-e3751ea1e801,2006,active,MF,Bastian Schweinsteiger,The German central midfielder who scored twice
+44efc74b-f38c-4fe9-8df3-8701d87e55ce,2006,active,MF,Claude Makélélé,"The defensive midfielder who was integral to France's run to the final, widely regarded as the engine of their midfield"
+8256261c-05af-434f-bbaa-082eee75ead8,2006,active,MF,Costinha,The Portuguese midfielder who was sent off
+cc8323ce-389c-4bdf-a13f-2b219eff277d,2006,active,MF,Daniele De Rossi,The Italian defensive midfielder who scored in the final
+0d69b842-26f6-49a0-bda2-56ba4f255bc5,2006,active,MF,David Beckham,The English right midfielder who captained the side to the quarter-finals
+b6c1b2a5-0307-40f4-9cf2-3086152c2d2f,2006,active,MF,Deco,The Portuguese midfielder who was sent off
+ed366b46-8a6b-4cd2-b414-5c773b284fb0,2006,active,MF,Esteban Cambiasso,The midfielder who scored the famous finishing goal in a sweeping 24-pass move against Serbia and Montenegro
+80ded828-605a-4f3d-9c69-e6ca2fb28fa8,2006,active,MF,Franck Ribéry,"The winger who was one of France's most dangerous attackers on their run to the final, making his World Cup debut at the tournament"
+63d84881-80cd-4410-b087-515d78bc7612,2006,active,MF,Frank Lampard,The midfielder who missed a penalty in the quarter-final shootout against Portugal
+609eb2d9-5987-43d6-84a8-db470008851a,2006,active,MF,Gennaro Gattuso,The combative midfielder who was cautioned in the final and was renowned as the engine of the world champion side
+d76227ea-6c71-46f8-ba9a-2ba0162bd9a5,2006,active,MF,Harry Kewell,The winger who scored a dramatic late equaliser against Croatia to send Australia into the round of 16
+24a20df2-0d02-41e6-a03d-8e83fd5c67ba,2006,active,MF,Joe Cole,The midfielder who scored a memorable long-range volley against Sweden in the group stage
+a42c1c1c-979f-4b04-9b4c-1f0203564f5e,2006,active,MF,Johann Vogel,The Swiss midfielder who captained the side
+21233973-d79d-49fb-a4af-aacbf7ecc0f5,2006,active,MF,Luís Figo,The Portuguese midfielder who captained the side to the semi-finals
+fe6ea436-ae39-4163-b10c-8a95a2e5e91f,2006,active,MF,Maniche,The midfielder who scored a thunderous long-range strike against Iran in the group stage
+a7270909-2150-4871-bde1-19955f7489f3,2006,active,MF,Mauro Camoranesi,The right midfielder who won a winner's medal despite being controversially left out of the final squad selection for the match itself
+4bf3fbee-13a9-47ac-87cf-5fecb294705e,2006,active,MF,Maxi Rodríguez,The midfielder who scored an extraordinary extra-time volley to knock Mexico out in the last 16
+4de11b8c-0cf7-488a-b2f5-8832595b766e,2006,active,MF,Michael Ballack,The German midfielder who scored in the quarter-final
+f6935068-3d4f-446b-aa20-ee009056839e,2006,active,MF,Niko Kovač,The midfielder who captained Croatia at the tournament and later managed the national team
+f390503d-2af9-4aa1-a88f-ecd788cfe678,2006,active,MF,Owen Hargreaves,The English midfielder who scored in the quarter-final
+4ecdc366-2f90-4867-8e22-927863f748bd,2006,active,MF,Patrick Vieira,"The midfielder who started France's final against Italy before being substituted, playing his last major tournament game"
+fcea7f03-49e0-4167-9827-3dae67b44313,2006,active,MF,Ronaldinho,The midfielder who arrived as the reigning world footballer of the year but was sent off in the quarter-final defeat
+18730ea1-8d54-434d-b9fd-c1ae5dcbee24,2006,active,MF,Simão,The Portuguese winger who scored in the quarter-final against England
+0dcfee2b-0f75-4139-ac39-ba37875efa88,2006,active,MF,Tim Borowski,The German midfielder who scored in the quarter-final against Argentina
+4f8ccf7d-d734-43e0-9bea-a7b63de23b45,2006,active,MF,Tim Cahill,The midfielder who scored twice as a substitute against Japan to turn a 1-0 deficit into a famous comeback win
+81e26133-4838-423f-a91d-660e01395549,2006,active,MF,Tomas Rosicky,The Czech attacking midfielder who scored twice against the United States
+93dc3487-3e2d-405b-8335-eb3e67041d15,2006,active,MF,Torsten Frings,The midfielder who was suspended for the semi-final after being caught striking an opponent in the quarter-final
+f41f30c8-2b59-46f2-b630-b7670d1869a4,2006,active,MF,Zinédine Zidane,The French midfielder who won the Golden Ball
+d560c065-b9fa-4e3b-ad76-012b35f31873,2010,active,DF,Álvaro Arbeloa,The right-back who provided cover across the defence throughout the tournament-winning campaign
+a504e578-df84-42f0-b3f6-73cdb5d957b4,2010,active,DF,Arne Friedrich,The German defender who scored in the quarter-final against Argentina
+0dc60a3e-80de-4b58-83f2-403caa9c097f,2010,active,DF,Carles Puyol,The Spanish centre-back who scored in the semi-final against Germany
+be8da4ea-a2ef-499f-b323-461f55d085c3,2010,active,DF,Carlos Bocanegra,The defender who captained the United States throughout the tournament
+8bfa4f41-1ea5-4180-9089-73bfde6e0177,2010,active,DF,Daniel Agger,The Danish centre-back who scored an own goal against Netherlands
+37f8e16e-a46a-4b7b-8ef6-b5545127296a,2010,active,DF,Diego Lugano,The centre-back who captained the side during their run to the semi-finals
+aa6d61cd-ddb5-4daa-8022-aac73ef7f72c,2010,active,DF,Fabio Cannavaro,The Italian defender who captained the side
+61527577-5d70-41e4-a24f-eff2386a9c3f,2010,active,DF,Giorgio Chiellini,"The defender who would go on to captain Italy to European Championship glory eleven years later, but was part of a side knocked out in the group stage here"
+3697ad2d-d591-44e5-9dfd-a6e98960cc77,2010,active,DF,Glen Johnson,The right-back whose long-range curling effort struck the post late in the group stage against Slovenia
+5e687eaf-18b2-41e3-9c1c-f7544afa6bd9,2010,active,DF,Joan Capdevila,The left-back who played every minute of the tournament
+692c0fd4-da29-4f0c-a363-972d0850bc89,2010,active,DF,John Heitinga,The Dutch centre-back who was sent off against Spain
+4043e709-ed92-44c7-bfc1-11d5d092d5f4,2010,active,DF,John Terry,The defender who captained England and was at the centre of a pre-tournament off-field controversy
+1c0b377a-57cc-4eef-9242-db297721771d,2010,active,DF,Lúcio,The Brazilian centre-back who captained the side to the quarter-finals
+efdca20b-271d-4a33-afe9-6435feeaa75f,2010,active,DF,Maicon,The right-back whose individual goal against North Korea was one of the most celebrated of the group stage
+9bfa3a0d-35ce-4917-b152-4d00e089c31c,2010,active,DF,Maxi Pereira,The Uruguayan defender who scored in the semi-final against Netherlands
+b42ad763-e060-4932-9cd9-4ef0cea00cb9,2010,active,DF,Nicolás Otamendi,The defender who made his World Cup debut as a young centre-back in Argentina's quarter-final defeat to Germany
+a24755e8-66cb-4fbd-a03e-02c2e316a187,2010,active,DF,Patrice Evra,The left-back at the centre of the infamous player revolt who delivered a heated speech to coaching staff on the training ground
+cfbad408-5d46-48f9-a5d5-62dae0a04552,2010,active,DF,Philipp Lahm,The German right-back who captained the side to the semi-finals
+ec2d15d2-0c65-426f-8f69-599cea1357e9,2010,active,DF,Ricardo Carvalho,The centre-back who captained Portugal and helped them keep a clean sheet in their 7–0 thrashing of North Korea
+348ec206-3d8b-449b-9301-d47df23b23f6,2010,active,FW,Arjen Robben,The Dutch winger who scored in the semi-final
+14bc45f8-f82e-421c-a2c4-c2326b2e52ff,2010,active,FW,Asamoah Gyan,The striker who missed a last-minute penalty against Uruguay in the quarter-final that would have sent his country to the semi-finals
+dcc91806-97a0-4f4f-b59d-04a52ee6152f,2010,active,FW,Carlos Tevez,The Argentine forward who scored twice
+70829653-1db6-4b98-8f79-207c314442f9,2010,active,FW,Cristiano Ronaldo,The Portuguese forward who captained the side
+142bd595-18dc-49d8-b092-e9f35125254b,2010,active,FW,David Villa,The Spanish striker who scored twice
+585d5356-cfbe-46c2-9831-676f2786e1c3,2010,active,FW,Didier Drogba,The Ivorian striker who captained the side
+f8b11645-6be2-4243-91a9-9c028e986529,2010,active,FW,Diego Forlán,The Uruguayan forward who scored in the semi-final against Netherlands
+5c37838b-bc08-4ee8-abf9-16fb599d1971,2010,active,FW,Dirk Kuyt,The forward who played a key role throughout the tournament and set up the equaliser in the final before his side lost to Spain
+5bfada83-1589-4eaa-a59a-62194c504e2f,2010,active,FW,Gonzalo Higuaín,The Argentine forward who scored a hat-trick
+ebb9e660-c2a7-499e-b5c5-25cc0b43d92f,2010,active,FW,Harry Kewell,The Australian forward who was sent off
+9016da9f-16b2-44d0-93ae-1dba17113f4a,2010,active,FW,Hugo Almeida,The striker who came off the bench to score against North Korea in a famous seven-goal group stage thrashing
+5a349402-7979-431a-a61f-7ca06fdbffd5,2010,active,FW,Jozy Altidore,The striker who set up Clint Dempsey's equaliser against England in the group stage
+8678fafb-a18c-419e-9768-0969a2bc8a72,2010,active,FW,Lionel Messi,The forward who captained his country but famously failed to score in the knockout stages as Argentina were eliminated by Germany
+1132b23c-3511-4d28-84f7-c026ea5afa01,2010,active,FW,Luís Fabiano,The Brazilian forward who scored twice
+bb72fe33-5d44-41c2-8c02-df92d015c104,2010,active,FW,Luis Suárez,The Uruguayan forward who was sent off
+2095d4de-4382-4117-b66d-6b107788e430,2010,active,FW,Miroslav Klose,The German striker who was sent off against Serbia
+7c0f93f4-4887-41cf-8c95-e2d58d909e5a,2010,active,FW,Nwankwo Kanu,The Nigerian forward who captained the side
+a953a6b4-02b5-4740-b04f-f103f7fdae1b,2010,active,FW,Robinho,The Brazilian winger who scored in the quarter-final
+cdbededa-3a3b-4ffc-8d56-cde20a68af48,2010,active,FW,Samuel Eto'o,The Cameroonian striker who captained the side
+d12d59e0-1806-4e20-bc32-d1951355d805,2010,active,FW,Sebastián Abreu,The striker who scored the decisive Panenka penalty in the quarter-final shootout against Ghana
+a0780278-bc65-41e2-a03f-b206a897ab5c,2010,active,FW,Thierry Henry,The French forward who captained the side
+4868aa95-4e58-429d-8d9c-f0e87f32453d,2010,active,GK,Claudio Bravo,The Chilean goalkeeper who captained the side
+db1c86ad-a2d3-44e1-835e-89cc75563cf5,2010,active,GK,David James,"The goalkeeper who made his record 53rd England appearance at the tournament, becoming his country's most-capped keeper"
+9465f4e3-7e52-4546-9024-eeae473b71ec,2010,active,GK,Fernando Muslera,The goalkeeper who kept a clean sheet in the quarter-final victory over Ghana
+524a02ea-fef3-4303-9cfe-b778056fd92a,2010,active,GK,Gianluigi Buffon,The goalkeeper who kept a clean sheet in all three of his country's group-stage matches
+827bed51-22e0-4639-a1cf-ebe91f115152,2010,active,GK,Iker Casillas,The Spanish goalkeeper who won the Golden Glove
+a1fb168f-0e59-427b-8fbd-ad684a7ef522,2010,active,GK,Júlio César,The goalkeeper who captained his country in the quarter-final after the regular captain was suspended
+ba9982ae-be1f-4f50-a1b9-607dcd3585db,2010,active,GK,Maarten Stekelenburg,"The goalkeeper who started every match as his side reached the final, conceding his only goal of the tournament in extra time of the final"
+717d9819-d693-4080-8236-758a69908650,2010,active,GK,Robert Green,The goalkeeper whose error allowed Clint Dempsey's shot to squirm in during the group stage
+6cfbca4e-d821-4fa0-8bbc-80eda17205fd,2010,active,GK,Steve Mandanda,The goalkeeper who started the tournament as France's number one despite the squad's infamous revolt
+65c65878-71fb-4018-82b7-d25729197b44,2010,active,GK,Tim Howard,The goalkeeper who made a remarkable 10 saves against Ghana in the round of 16
+7600804b-da26-476e-8e5c-192145f4b59a,2010,active,MF,Andrés Iniesta,The Spanish midfielder who scored in the final
+70bd1427-db5f-4574-afcf-2e76f43fbada,2010,active,MF,Cesc Fàbregas,The midfielder who scored the decisive penalty in the last-16 shootout against Paraguay
+0f9ef8ac-7388-4b09-aeb6-e588f0147312,2010,active,MF,Clint Dempsey,The midfielder who scored a memorable scrappy equaliser against England when the goalkeeper fumbled his long-range effort
+233f4307-5517-45bf-9093-c4db44ba3c56,2010,active,MF,Dejan Stankovic,The Serbian midfielder who captained the side
+538a0ad3-2c97-4220-bcb1-708c3f18773a,2010,active,MF,Egidio Arévalo Ríos,The defensive midfielder who was suspended for the semi-final after accumulating yellow cards during the tournament
+c285739d-f18f-4402-b0ec-5c87f90ffc08,2010,active,MF,Frank Lampard,The midfielder whose shot crossed the goal line but was not given against Germany in the last 16
+f1f34bb7-0b36-4daa-9ab1-bc244e33b468,2010,active,MF,Gerardo Torrado,The defensive midfielder who anchored Mexico's midfield across three consecutive World Cups
+73b8f98b-5f64-4a39-8be0-2e8ee7d9f6f9,2010,active,MF,Giorgos Karagounis,The Greek central midfielder who captained the side
+ecaad640-b83f-4ff1-8dc4-c9005e56b439,2010,active,MF,Javier Mascherano,The Argentine defensive midfielder who captained the side to the quarter-finals
+dcab56d3-5089-4003-b2c0-b3713102fc40,2010,active,MF,Jérôme Boateng,The midfielder who started the tournament but later switched international allegiance to Ghana
+69b97f3a-28b4-4548-bc51-ebcd0945a7f5,2010,active,MF,Kaká,The Brazilian midfielder who was sent off
+a2828957-00c2-46dc-92b5-f48231a63728,2010,active,MF,Landon Donovan,The midfielder who scored a dramatic injury-time winner against Algeria to send his country through to the round of 16
+7649a7b9-9139-4e9b-b585-b73ae45bfabc,2010,active,MF,Marek Hamsik,The Slovak central midfielder who captained the side
+0f192f7a-ed02-4fa8-a751-72985d4e42c5,2010,active,MF,Nigel de Jong,The midfielder who received a yellow card for a notorious high boot on Xabi Alonso's chest in the final
+f0754de9-4ed7-4930-abc7-406da61fcda3,2010,active,MF,Park Ji-sung,The South Korean attacking midfielder who captained the side
+a2bdc3a7-71b9-4cf2-a2b3-e1688322665c,2010,active,MF,Siphiwe Tshabalala,The midfielder who scored the very first goal of the tournament in the opening match
+c41c4097-6537-48c9-a1ff-87184276220c,2010,active,MF,Steven Gerrard,The English central midfielder who captained the side
+6d7de467-e1b2-478f-8b04-aebbb5da9407,2010,active,MF,Sulley Muntari,The Ghanaian central midfielder who scored in the quarter-final against Uruguay
+e55e93a6-67e2-42e6-b8de-3c18172f7de7,2010,active,MF,Thomas Müller,The German midfielder who won the Best Young Player award
+dd84d722-34b5-4e38-bd4d-76bbc664ba7c,2010,active,MF,Wesley Sneijder,The Dutch attacking midfielder who scored in the semi-final
+8dc54912-92fe-4e32-8cf2-49d5b3b32ce9,2010,active,MF,Yoann Gourcuff,The French attacking midfielder who was sent off against South Africa
+a19cf9bd-bcce-413c-b020-92c3a74cbdd9,2014,active,DF,Bacary Sagna,The right-back who played every minute of the tournament as France reached the quarter-finals
+6a57314f-d48d-4c5e-a188-e5b2347e0586,2014,active,DF,Benedikt Höwedes,"The defender who played as a makeshift left-back throughout the tournament, hitting the post in the final"
+9f9f03af-f1cb-4db9-8609-3821e3c209f1,2014,active,DF,Daley Blind,"The defender who played a key role at left-back as his side finished third, the son of a former Netherlands international"
+016f864a-6fb5-4936-8df3-41ebc31351dd,2014,active,DF,Dani Alves,The right-back who captained the side in several matches and was one of Brazil's most experienced players at the tournament
+17bb99d9-d66d-436e-87fd-bb9e2d3f089c,2014,active,DF,Daniel Van Buyten,The centre-back who came out of international retirement to represent Belgium at the tournament as the eldest member of the squad
+c372721f-50d2-4206-af4a-ef75b6a5b6cc,2014,active,DF,Darijo Srna,The Croatian right-back who captained the side
+a2d3e886-a583-4be0-93b0-dde21f5fa765,2014,active,DF,David Luiz,The Brazilian centre-back who scored twice against Chile
+2c590741-1b84-4380-adee-b121c56bfc18,2014,active,DF,Diego Godín,The Uruguayan centre-back who captained the side
+84d68eb3-762c-4d49-89d4-c1b29f3ff828,2014,active,DF,Diego Lugano,The centre-back who captained the side and was sent off in the round of 16 against Colombia
+dae7a02b-c1d0-4b70-af5e-3309cec94a98,2014,active,DF,Dirk Kuyt,The Dutch winger who scored in the semi-final against Argentina
+3a1a14d3-a99c-4d3f-99ea-4c56a341dc73,2014,active,DF,Ezequiel Garay,The Argentine centre-back who scored in the semi-final against Netherlands
+67ef6943-fc0a-4454-923d-9f34b5cd5f84,2014,active,DF,Giorgio Chiellini,"The centre-back who was bitten by an opponent during the group stage, sparking a major controversy"
+d8900b56-3f62-436e-846e-e808a8f229ba,2014,active,DF,John Brooks,The defender who came off the bench to score a late winner against Ghana in the group stage
+36308273-1963-4de5-b5d0-153887dd5ad2,2014,active,DF,Jordi Alba,The left-back who started all three group games as the holders crashed out at the group stage
+812dddc1-47b8-4833-a2e1-0bb1dad4c263,2014,active,DF,Maicon,The right-back who came off the bench and scored the equaliser against Croatia in the opening group match
+5fa4eb81-4648-4675-963d-bdfa5059fb39,2014,active,DF,Marcelo,The left-back who scored a famous own goal in the opening match of the tournament
+056f69b6-bfaf-4ef1-944b-db3ff8913299,2014,active,DF,Marcos Rojo,The defender who scored the last-minute winner against Nigeria to send Argentina through from the group stage
+8a2523a4-f846-4b88-888e-f7e25e1c293b,2014,active,DF,Mario Yepes,The experienced captain and centre-back who led the defence as Colombia reached the quarter-finals for the first time since 1990
+f569c868-508e-438f-b9d4-d74cfb285cbc,2014,active,DF,Mats Hummels,The German centre-back who scored in the quarter-final
+c8617bbb-f42f-468d-bf89-f2b4350f7f1c,2014,active,DF,Maxi Pereira,The Uruguayan defender who was sent off against Costa Rica
+0ea6c449-e09d-4b3c-a5eb-c1ce80d87725,2014,active,DF,Pablo Armero,The left-back who provided the cross that led to his country's opening goal of the tournament in the very first group game
+f6587559-f3c0-4e1e-b7f0-e925fff48a55,2014,active,DF,Pepe,The Portuguese centre-back who was sent off against Germany
+aee61709-392b-4d40-b2be-a26aae4fcfae,2014,active,DF,Per Mertesacker,The centre-back who lifted the trophy as one of the team's senior defensive leaders and was notably involved in the post-match celebrations
+de754a6a-a361-4a73-9658-f7fd79cb4dcc,2014,active,DF,Philipp Lahm,The German right-back who captained the champions
+36d1cd75-c028-435a-bedd-baddd73723a6,2014,active,DF,Thiago Silva,The Brazilian centre-back who scored in the quarter-final
+463290bb-dde0-4778-8762-2d6f259f513f,2014,active,DF,Vasili Berezutski,The Russian defender who captained the side
+900c52bc-a8ef-47b1-9c56-ffb1505958cb,2014,active,DF,Vincent Kompany,The Belgian centre-back who captained the side to the quarter-finals
+8b6d20af-879a-4563-8ecf-51fe3bb52f90,2014,active,FW,Ahmed Musa,The Nigerian winger who scored twice against Argentina
+0af30c67-5669-466f-98af-0be1acbba5a6,2014,active,FW,André Schürrle,The German winger who scored in the semi-final against Brazil
+394d6c61-20d1-430b-bbeb-37a62f63b96b,2014,active,FW,Ante Rebić,The Croatian winger who was sent off
+be56c1f1-d29d-432c-84f5-7f3c94c2ed45,2014,active,FW,Arjen Robben,The Dutch winger who scored in the semi-final
+c936ff1e-3233-4c8a-a64f-f0b1bbc9eb96,2014,active,FW,Asamoah Gyan,The striker who became Africa's all-time leading World Cup scorer when he netted in the group stage
+32550ad6-8086-4405-892b-0da7336f856b,2014,active,FW,Clint Dempsey,The American forward who captained the side
+49030cc7-b530-4561-871f-5da235473c8e,2014,active,FW,Cristiano Ronaldo,The Portuguese forward who captained the side
+2e8f221e-0587-497f-9297-3431feb32304,2014,active,FW,Didier Drogba,The Ivorian striker who captained the side
+05e41453-2d05-4bcb-8a67-686fd008bf86,2014,active,FW,Edin Džeko,"The striker who scored his nation's first ever World Cup goal, a header against Argentina"
+b3394962-5bef-4a62-9efd-602e0123682d,2014,active,FW,Enner Valencia,"The striker who scored both of his country's goals in the tournament, finishing as their joint top scorer"
+53f5bd77-171e-43e8-8fd3-d109b95235cd,2014,active,FW,Fred,The striker who scored the first goal of the tournament after a controversial penalty in the opening match
+9690a89c-d789-4aed-b448-c2b3256a252c,2014,active,FW,Georgios Samaras,The striker who converted a stoppage-time penalty against Ivory Coast to send his country into the last 16
+99c83b24-eaa1-4d6d-b291-9731d45f8161,2014,active,FW,Gonzalo Higuaín,The Argentine forward who scored in the quarter-final
+64d7f52e-c4d0-4175-8326-9aa4af09be17,2014,active,FW,Jackson Martínez,The Colombian striker who scored twice
+1e1e1f6b-7ce2-43ad-b333-b6d87e89b055,2014,active,FW,Joel Campbell,The winger who scored against Uruguay to help his side to a famous group stage victory
+2e5068d7-c559-4bb0-85bf-6a739b3b9730,2014,active,FW,Karim Benzema,The French striker who scored twice
+4d2391cc-d184-4237-aada-34a5df1c0601,2014,active,FW,Lionel Messi,The Argentine forward who won the Golden Ball
+6258c27b-1796-413e-9d45-c4a653b430ca,2014,active,FW,Lorenzo Insigne,The winger who came off the bench in the last-16 defeat to Uruguay and was part of a side that exited in the group stage
+359fdf87-4e9e-4d39-b723-0f98123912f8,2014,active,FW,Luis Suárez,The Uruguayan forward who scored twice
+3958214f-02e6-4375-8991-98d20c20d6b4,2014,active,FW,Mario Mandzukic,The Croatian striker who scored twice against Cameroon
+b5241285-da37-42df-b25d-0d1b75c53e4e,2014,active,FW,Memphis Depay,The winger who came off the bench to score the winner against Chile in the group stage
+4b7c2dfe-598f-4e61-941f-5d635dfeb912,2014,active,FW,Miroslav Klose,The German striker who is the all-time top scorer at the World Cup
+84d95e3b-612a-4922-a832-5f13a3d377bf,2014,active,FW,Neymar,The Brazilian forward who scored twice
+0f8c425d-5595-45a8-83f7-abf3304a5505,2014,active,FW,Oribe Peralta,The striker who scored against Cameroon in the opening group-stage win
+f5a2bf29-04b3-47e0-91c5-846aedf61e9e,2014,active,FW,Robin van Persie,The Dutch striker who scored twice
+cae801ef-66bf-4082-8c5e-89673da16bce,2014,active,FW,Romelu Lukaku,The striker who came off the bench to score two late goals against the United States in the round of 16 extra time
+d5d6e378-629c-4aba-b202-69ecd531f8c6,2014,active,FW,Samuel Eto'o,The Cameroonian striker who captained the side
+2030ea6a-d259-4a2d-9314-62fa528df697,2014,active,FW,Sergio Agüero,The Argentine forward who scored in the semi-final
+a2219ab5-1af1-4e45-bd39-35ce3a6fb390,2014,active,FW,Shinji Okazaki,The striker who scored a spectacular overhead kick against Ivory Coast in the group stage
+54034141-bce8-484b-96bd-5f2af7351951,2014,active,FW,Thomas Müller,The German forward who scored a hat-trick
+70c485cc-16fb-4292-a7c5-2a43f8efc2e0,2014,active,FW,Wilfried Bony,"The striker who scored against Greece to give his side a late lead in the group stage, only for Greece to equalise in stoppage time"
+48d727ec-ce60-484d-9c59-2b4c938f5fde,2014,active,GK,Claudio Bravo,The Chilean goalkeeper who captained the side
+a6a4389d-faba-43f9-b171-e6c6deda2005,2014,active,GK,David Ospina,The goalkeeper who kept a clean sheet in the quarter-final against Brazil and saved a penalty in the round of 16 shootout against Uruguay
+c10263a1-8578-4659-8340-d70d6846441c,2014,active,GK,Faryd Mondragón,"The goalkeeper who, when substituted on in the final group game, became the oldest player ever to appear at a World Cup finals at 43 years and 3 days"
+26d53d8f-024e-48e2-9851-b1e9e282c9e8,2014,active,GK,Fernando Muslera,The goalkeeper who captained the side after the suspension of their first-choice striker in the group stage
+4944a5be-ac80-4a51-948e-5597f67f991e,2014,active,GK,Gianluigi Buffon,The Italian goalkeeper who captained the side
+99157ca0-795c-46fc-9d70-634d7799829e,2014,active,GK,Guillermo Ochoa,The goalkeeper who made a stunning save from a Neymar header to earn a group-stage draw against Brazil
+6f5684e4-5907-4c40-b099-a34e4ca4de50,2014,active,GK,Hugo Lloris,The French goalkeeper who captained the side to the quarter-finals
+57ba57cb-3323-4d97-bd02-f0ddf2ca560f,2014,active,GK,Iker Casillas,The Spanish goalkeeper who captained the side
+7ed8db98-7d07-4b51-ada5-a1fb407952fc,2014,active,GK,Jasper Cillessen,The goalkeeper who came on as a substitute specifically for the semi-final penalty shootout against Costa Rica and saved a spot-kick
+a173c4c6-38f7-4545-9aea-0bb354962358,2014,active,GK,Júlio César,The goalkeeper who conceded seven goals in the semi-final against Germany
+4b46bbfc-1d22-43c0-88d7-fc9fd81bcebb,2014,active,GK,Keylor Navas,The goalkeeper who saved three penalties in the quarter-final shootout against the Netherlands
+cc840dd6-42f8-46b7-aa15-6736d11a64ab,2014,active,GK,Manuel Neuer,The German goalkeeper who won the Golden Glove
+05a207e0-5e86-4994-afef-91d3e37b8b9d,2014,active,GK,Raïs M'Bolhi,The goalkeeper who kept a clean sheet against Russia and made a string of vital saves to help his side reach the last 16 for the first time
+353aa611-7861-4902-819f-f46dfb580f9e,2014,active,GK,Sergio Romero,The goalkeeper who saved two penalties in the semi-final shootout against the Netherlands
+2115f629-682e-40b4-86bf-027466a8a863,2014,active,GK,Stéphane Ruffier,"The goalkeeper who was named in the squad as backup but never featured, with his side reaching the quarter-finals"
+9176a8c0-ef1a-4e34-bf13-7afb5ba74b0f,2014,active,GK,Tim Howard,"The goalkeeper who made a record 16 saves in a single World Cup match, against Belgium"
+e1a3650b-2a83-4033-bae3-2fe0b7e32700,2014,active,MF,Abel Aguilar,"The defensive midfielder who was sent off in the quarter-final against Brazil, leaving his side down to ten men"
+e794afd8-ea62-4a71-80c4-edc170ffbd26,2014,active,MF,Alex Song,The Cameroonian defensive midfielder who was sent off against Croatia
+a87acf26-f6c3-430f-bb8e-c1f57a7be9d5,2014,active,MF,Antonio Valencia,The Ecuadorian right-back who was sent off against France
+fafaac74-d02c-43b3-ac5a-643c53726c73,2014,active,MF,Blaise Matuidi,"The midfielder who was sent off in the quarter-final against Germany, leaving his side with ten men"
+b1976a81-c265-490f-add7-a217b82a2184,2014,active,MF,Bryan Ruiz,The midfielder who captained his side during their remarkable run to the quarter-finals
+f32433d0-d9b0-45a6-99c3-8fab14e6c62c,2014,active,MF,Claudio Marchisio,The Italian central midfielder who was sent off against Uruguay
+b5bdaaa2-393e-48de-8504-3513e3a19a5f,2014,active,MF,Fredy Guarín,The powerful midfielder who scored a stunning long-range strike against Japan in the group stage
+96291301-be99-4844-92fa-1ce9e28108a3,2014,active,MF,Giorgos Karagounis,The Greek central midfielder who captained the side
+c4507afc-997f-495e-8bfa-81371ab4095e,2014,active,MF,Gökhan Inler,The Swiss defensive midfielder who captained the side
+4063ec2d-4bca-41b3-bf16-ee6ad6e93c00,2014,active,MF,James Rodríguez,The Colombian midfielder who won the Golden Boot
+68976328-26ed-46a4-a4da-a946b3608340,2014,active,MF,João Moutinho,The midfielder who started all four of Portugal's matches and wore the captain's armband during the tournament
+ebf5fd95-345c-4d79-aced-bf7600b6d25c,2014,active,MF,Kostas Katsouranis,The Greek midfielder who was sent off against Japan
+845b4cf8-742a-4db8-8412-0fa11412641a,2014,active,MF,Mario Götze,The German attacking midfielder who scored in the final
+b8fef85e-f81f-4f8f-98b4-8e15064d6664,2014,active,MF,Marouane Fellaini,The midfielder who scored a crucial headed equaliser against Algeria in the group stage to spark a comeback victory
+8e39b497-4f83-4bcb-8f60-a274455fe0de,2014,active,MF,Mesut Özil,The midfielder who provided the assist for the extra-time winning goal in the final
+73e61b5e-8f69-43bd-b5d6-3b9475ff9d65,2014,active,MF,Michael Bradley,The midfielder who captained his side in the group stage and set up the opening goal against Ghana
+57322ea3-9f2a-4b0d-a29e-969347c98572,2014,active,MF,Nani,"The winger who scored against the United States in the group stage, helping his side earn a draw in the final seconds"
+cb602a43-ceaf-429c-bc82-d46a3624bf9d,2014,active,MF,Nicolás Lodeiro,The midfielder who came on as a substitute and was sent off in the round of 16 against Colombia
+c88d1602-22f7-4bd0-a69a-b2b77b2b8cdc,2014,active,MF,Nigel de Jong,The midfielder who came on as a substitute in the semi-final against Argentina and featured in the third-place play-off victory
+3df146e7-0452-4810-a92a-1e053e2c9537,2014,active,MF,Oscar,The Brazilian attacking midfielder who scored in the semi-final
+d2f79220-0043-4efa-97ec-08564c83ad2d,2014,active,MF,Paulinho,The midfielder who scored twice in the third-place play-off against the Netherlands
+f71aae3a-10b9-4d9d-9c41-48e84245c0bf,2014,active,MF,Paul Pogba,The French midfielder who won the Best Young Player award
+d42de87e-fee1-4c55-8f54-ef5b83953165,2014,active,MF,Sami Khedira,The German central midfielder who scored in the semi-final
+8d385bcd-b80a-461a-85d8-4f741bdd5afb,2014,active,MF,Steven Gerrard,The English central midfielder who captained the side
+02c66ffc-6222-4525-aad1-633d2f113ae7,2014,active,MF,Toni Kroos,The German midfielder who scored in the semi-final
+f4329987-6899-4a52-8dcc-3a61f358b20d,2014,active,MF,Wesley Sneijder,The Dutch attacking midfielder who scored in the quarter-final
+b4e60654-1add-4409-918c-ebd03f142e3e,2014,active,MF,Wilson Palacios,The Honduran defensive midfielder who was sent off against France
+5d392b1a-e61d-471a-9642-8d750a732b0b,2014,active,MF,Xherdan Shaqiri,The Swiss attacking midfielder who scored a hat-trick against Honduras
+66889599-5015-45fc-8faa-c7e243f8f9ed,2018,active,DF,Aleksandar Kolarov,The Serbian left-back who captained the side
+a67cae3b-aaf0-4815-b847-fdcb215c2497,2018,active,DF,Aziz Bouhaddouz,The defender who scored an own goal that condemned his side to defeat in their opening group match
+f9b82c66-b654-454e-becb-1d455ad3e92e,2018,active,DF,Benjamin Pavard,"The defender who scored a stunning long-range volley against Argentina in the last 16, later voted Goal of the Tournament"
+4bf9143c-92e7-4832-a9ad-72c2cb8180aa,2018,active,DF,César Azpilicueta,The right-back who captained Spain after the coach was replaced on the eve of the tournament
+459547c1-4a43-45a7-bf00-2fe67e7fcccd,2018,active,DF,Diego Godín,The Uruguayan centre-back who captained the side to the quarter-finals
+b2cb5ecc-688f-40f9-9156-55d4ddc5c1eb,2018,active,DF,Diego Laxalt,The left-back who started every knockout match for the tournament's fourth-placed finisher and provided the cross for a crucial group-stage goal
+c11a48de-61a4-4f96-b416-515770d5cb22,2018,active,DF,Domagoj Vida,The defender who scored in the quarter-final shootout victory over Russia
+dca95700-c80c-4f0a-b1b5-d824521b3ad2,2018,active,DF,Edson Álvarez,The Mexican defensive midfielder who scored an own goal
+d707cb15-31a6-48a6-945e-959cf0a1961b,2018,active,DF,Gerard Piqué,The Spanish centre-back who scored a penalty in the shootout
+e4be5fa0-7df6-4a88-a8ed-96b8f6530f26,2018,active,DF,Harry Maguire,The English defender who scored in the quarter-final
+11d50b7e-1705-4e68-8022-18bd2adb2d22,2018,active,DF,Jérôme Boateng,The German centre-back who was sent off
+f6d6d062-a1ef-478e-88b1-f38efbb156b4,2018,active,DF,Johan Mojica,The left-back who started the last-16 match against England as Colombia's regular option on the left side of defence
+4ef961e1-5949-4ffe-9425-cef74e1850f4,2018,active,DF,John Stones,The English centre-back who scored twice
+07cc2f22-234d-46dc-9779-250834682683,2018,active,DF,José Giménez,The defender who headed in an injury-time winner in the group stage against Egypt
+6f13a6df-2f84-4155-85ca-bbc865f9f78b,2018,active,DF,Kieran Trippier,The English right-back who scored in the semi-final
+6d01329f-17dd-4df8-a5f9-fcbd4454740e,2018,active,DF,Lucas Hernandez,The left-back who played every minute of his nation's victorious World Cup campaign
+e741f966-45f3-4df1-a0f7-7c58d1203727,2018,active,DF,Marcelo,The left-back who scored an own goal in the opening minutes of a group-stage match
+f0344cf5-d385-43d4-b196-21e611ab3b9b,2018,active,DF,Marcos Rojo,The defender who scored a dramatic late winner against Nigeria in the group stage to send Argentina through
+37fa1d29-b386-41ce-8a25-097bc7b94d5e,2018,active,DF,Martín Cáceres,The veteran right-back who started Uruguay's round of 16 victory over Portugal
+6fe49b42-79cb-4132-a1b3-91f4472ecc5e,2018,active,DF,Medhi Benatia,The Moroccan centre-back who captained the side
+40215048-e16e-4fb6-b2a4-d6b5c586f722,2018,active,DF,Miguel Layún,The right-back who provided key defensive cover and played every knockout minute before the round-of-16 exit
+02f2ad05-6646-4820-a544-27fd6efec8a9,2018,active,DF,Nacho,The defender who scored a stunning volley against Portugal in the group stage
+8dc11c2d-c003-46c1-8cf3-1f210fb0229d,2018,active,DF,Nicolás Tagliafico,"The left-back who was his country's most consistent defender throughout the tournament, starting every match as captain Rojo's deputy"
+96277e01-211c-4323-a593-d7d885ce655d,2018,active,DF,Presnel Kimpembe,The centre-back who conceded a penalty in the semi-final after a handball that was confirmed by VAR
+06c2cfa3-aa9b-48c8-aae0-27cb2d337862,2018,active,DF,Rafael Márquez,The defender who became the first player from any nation to captain his country at five World Cups
+f281efca-136c-48e3-86e4-9df39d017158,2018,active,DF,Raphaël Varane,The French defender who scored in the quarter-final
+d68e04f7-1cca-4e86-ad36-6d504374d7e7,2018,active,DF,Samuel Umtiti,The French defender who scored in the semi-final
+8b242757-83cf-49e7-9f8f-9740ff2ce7fe,2018,active,DF,Sergei Ignashevich,The Russian defender who scored an own goal
+76fc7958-8134-4b5a-8faa-27af4b4b570a,2018,active,DF,Sergio Ramos,The Spanish centre-back who scored a penalty in the shootout
+7381c5df-a1b3-47d5-a067-5c722491b335,2018,active,DF,Stephan Lichtsteiner,The Swiss right-back who captained the side
+34a2b88f-78eb-4902-9c03-16e550262e01,2018,active,DF,Thiago Silva,The Brazilian centre-back who captained the side to the quarter-finals
+c42f7f59-9890-4ead-a88c-13a8885804a6,2018,active,DF,Yerry Mina,"The centre-back who scored in each of the three knockout-round knockout ties at the tournament, including a dramatic late equaliser against England in the last 16"
+ac996e0c-7832-421d-b1fd-7d15c1d282ac,2018,active,FW,Adnan Januzaj,The winger who scored the only goal against England in the group stage with a curling long-range effort
+83aa46e9-f598-4aca-bdd1-76c193ce76ac,2018,active,FW,Ahmed Musa,The Nigerian winger who scored twice against Iceland
+30a21cae-e1ff-474c-b87f-36d0d2e16c61,2018,active,FW,Andrej Kramaric,The Croatian attacking midfielder who scored in the quarter-final
+a854596c-6913-4944-81d1-6ad4171c5ee1,2018,active,FW,Antoine Griezmann,The French forward who scored in the final
+c1086d23-8fe3-46e8-8acf-9ebd084ec8c4,2018,active,FW,Artem Dzyuba,The striker who came off the bench to score on his World Cup debut and later scored a penalty in the quarter-final shootout against Spain
+40045718-b362-47c6-a921-8ded4f6a2c05,2018,active,FW,Cristiano Ronaldo,The Portuguese forward who scored a hat-trick
+720cee08-b8ae-4b1d-af17-97ee98877bac,2018,active,FW,Diego Costa,The Spanish striker who scored twice
+23d12f26-1eea-4237-9f85-3ddbab1025d5,2018,active,FW,Dries Mertens,The forward who opened the scoring against Panama with a long-range volley
+b5831e20-6ede-4b1c-8116-df348f5030c2,2018,active,FW,Eden Hazard,The Belgian forward who scored twice
+adc21592-8306-402f-a127-c4514ca8d2f2,2018,active,FW,Edinson Cavani,The Uruguayan striker who scored twice
+fe8a9dcd-6ea4-436e-9f85-4391353ed363,2018,active,FW,Fyodor Smolov,The striker who missed a penalty in the quarter-final shootout against Croatia
+43ce3667-f9cb-4ce5-9ba8-00a3ea87c004,2018,active,FW,Harry Kane,The English forward who won the Golden Boot
+754e2c18-6f4d-4360-acb4-0e309f6473bb,2018,active,FW,Hirving Lozano,The winger who scored the only goal as Mexico beat the defending champions Germany in the group stage
+4885d6c5-11bc-48af-b215-613a3d9cf8c1,2018,active,FW,Ivan Perišić,The Croatian winger who scored in the final
+41f77686-25f5-43ab-ade8-24b6e7799b0c,2018,active,FW,Kylian Mbappé,The French forward who won the Best Young Player award
+1cb8851b-e6a0-450d-b15d-9d08a8673822,2018,active,FW,Lionel Messi,The Argentine forward who captained the side
+eb307c0e-e4fa-4047-a80c-2c8790e4f24b,2018,active,FW,Luis Muriel,The Colombian striker who scored a penalty in the shootout against England
+005667f0-4389-40da-955d-bde6e1c444fc,2018,active,FW,Marcus Rashford,The English forward who scored a penalty in the shootout
+ab197e2d-de52-41fb-8139-145e64fa3bf5,2018,active,FW,Mario Mandzukic,The Croatian striker who scored in the final
+b1c0178f-aea6-4a04-9117-d72633bae99b,2018,active,FW,Maxi Gómez,The striker who started the group stage matches as Uruguay's centre-forward alongside their star attackers
+ccd7d3ad-4bdb-479a-af55-63b81db1e9ab,2018,active,FW,Nikola Kalinić,The striker who was sent home from the tournament by the team management for refusing to come on as a substitute
+302aa076-e2cb-4cb5-b659-078154d8e5e1,2018,active,FW,Olivier Giroud,The striker who became France's all-time record international scorer but did not register a single shot on target throughout the tournament
+11e5f321-4e80-4d35-ae57-9c6b7269ca2c,2018,active,FW,Radamel Falcao,The Colombian striker who scored a penalty in the shootout
+3a9f34d3-a04a-48fc-8dd7-22e00cf12246,2018,active,FW,Raheem Sterling,"The winger who started all of England's matches and reached the semi-final, finishing as one of the team's most used attackers throughout the tournament"
+043b4611-3cbb-4c3f-8307-0e5a1c67c0f9,2018,active,FW,Robert Lewandowski,The Polish forward who captained the side
+96bbdcdb-eda7-4e69-9494-c45cef66c495,2018,active,FW,Romelu Lukaku,The Belgian forward who scored twice
+1a3c378d-0a58-401b-bd6e-756d939175e8,2018,active,FW,Takashi Inui,The winger who scored a long-range strike to give Japan the lead against Belgium in the round of 16
+a97332d5-1181-44ec-b31e-c8021121bd90,2018,active,GK,Danijel Subašić,The goalkeeper who saved three penalties in a single shootout during the tournament
+6fdd48d2-a878-4db2-a26e-5025377fc7c3,2018,active,GK,David de Gea,"The goalkeeper who failed to stop Cristiano Ronaldo's long-range free kick in a famous group-stage draw, drawing widespread criticism"
+678432a4-c11d-4349-b949-b8c2f222a5a9,2018,active,GK,Guillermo Ochoa,The goalkeeper who saved a penalty from Robert Lewandowski in the group stage
+a786b96e-34b5-4c38-a19a-2bf570d4dfd0,2018,active,GK,Hugo Lloris,The French goalkeeper who captained the champions
+741d7a10-fafc-43d4-a2b6-25af65c818b8,2018,active,GK,Igor Akinfeev,The Russian goalkeeper who saved a penalty in the shootout against Spain
+720254b2-4fa4-4ec3-b4b3-c5eb99437318,2018,active,GK,Jordan Pickford,The English goalkeeper who saved a penalty in the shootout
+925f3bbb-0e31-4b00-911c-17e30af9169c,2018,active,GK,Kasper Schmeichel,The goalkeeper who saved a penalty in the last-16 shootout against Croatia
+97786395-16e4-4f08-80dd-ae124dffc30b,2018,active,GK,Manuel Neuer,The German goalkeeper who captained the side
+5f8db73e-5294-4cc5-866e-3082fc963950,2018,active,GK,Rui Patrício,"The goalkeeper who kept a clean sheet in the quarter-final defeat on penalties against Uruguay's opponents, having helped his side top their group"
+475d9f70-9b90-4334-bac4-ab9ec1dcc54a,2018,active,GK,Thibaut Courtois,The Belgian goalkeeper who won the Golden Glove
+f473ced5-d764-4dde-acb7-a1a14f17c1c2,2018,active,GK,Wojciech Szczęsny,The goalkeeper who saved a penalty from Lionel Messi in the group stage
+30680d2a-1ead-4fc8-814a-86294d7155a5,2018,active,MF,Alan Dzagoev,The Russian central midfielder who scored in the quarter-final against Croatia
+d1296aae-db2f-41d8-bca9-08371486203d,2018,active,MF,Aleksandr Golovin,The Russian attacking midfielder who scored a penalty in the shootout against Spain
+bfcda241-0233-4ca0-aa20-e7d41a19d9a5,2018,active,MF,Andrés Iniesta,The Spanish midfielder who scored a penalty in the shootout
+a43f9fda-acc6-42b0-88d3-cc004b4f2c72,2018,active,MF,Blaise Matuidi,The midfielder who played every minute of the final and won his first World Cup winners' medal after a career of near-misses
+7b25b3d8-2fda-427e-b9fb-85cbcfa2e1a7,2018,active,MF,Dele Alli,The English midfielder who scored in the quarter-final
+548bcfcb-5bcb-46ca-a8ff-7d52210bbc98,2018,active,MF,Eric Dier,The English centre-back who scored a penalty in the shootout
+ea2abe58-1a0c-40b7-b987-937765b1a214,2018,active,MF,Fernandinho,The Brazilian defensive midfielder who scored an own goal against Belgium
+16af7c48-9917-4d6b-8ddd-d9881d979ffa,2018,active,MF,Gelson Fernandes,The midfielder who scored the winning goal against Costa Rica — his nation's first World Cup goal in 60 years
+fe429afa-339a-45a3-a170-8d932197625f,2018,active,MF,Ivan Rakitic,The Croatian midfielder who scored in the quarter-final
+6f2abfe7-c6eb-4b6c-8ae1-2331f477e624,2018,active,MF,Juan Cuadrado,The Colombian right midfielder who scored a penalty in the shootout against England
+2e2b9df5-d217-435e-bad8-2d2204962c1f,2018,active,MF,Kevin De Bruyne,The Belgian midfielder who scored in the quarter-final
+d68d6a6a-8b75-4db1-8907-b55a1ce0c2c9,2018,active,MF,Luka Modrić,The Croatian central midfielder who won the Golden Ball
+45adf99e-d6f9-49ae-aa2d-d8a822ac6def,2018,active,MF,Marcelo Brozović,The Croatian defensive midfielder who scored in the quarter-final
+e5982597-a4d0-4f7f-a6b9-79d75affc680,2018,active,MF,Mateo Kovačić,The midfielder who played every minute of Croatia's run to the final without being substituted off once during the knockout rounds
+51746973-d83e-4508-9238-22802a1339db,2018,active,MF,Nacer Chadli,The midfielder who scored a dramatic injury-time winner against Japan in the round of 16 to complete a remarkable comeback
+b8328579-85e6-4786-9d09-297fc3f8e3f9,2018,active,MF,N'Golo Kanté,The midfielder renowned for his tireless pressing who was pivotal in France's World Cup-winning campaign
+d93f64fd-6725-4a1b-a4ea-6beb8a1ee429,2018,active,MF,Paul Pogba,The French midfielder who scored in the final
+6e62ee95-0a52-46f3-ae9c-8e15fa76d57f,2018,active,MF,Renato Augusto,The Brazilian central midfielder who scored in the quarter-final against Belgium
+ff3462f2-1db8-4479-83f1-6b2eaa7aef5c,2018,active,MF,Steven Zuber,The midfielder who scored a late equaliser against Brazil in the group stage with a header
+e3ee7783-f6aa-4592-a377-9100b36caed5,2018,active,MF,Wilmar Barrios,"The defensive midfielder who was sent off in the last-16 match against England, a game his side ultimately lost on penalties"
+d5fc610c-8c16-4c1a-b151-1c7fcb042111,2022,active,DF,Achraf Hakimi,The Moroccan defender who scored a penalty in the shootout
+9e219cae-f3a7-4262-8f63-2316464895a5,2022,active,DF,Alphonso Davies,The left-back who scored Canada's first-ever World Cup goal
+26e90c40-8d6a-4554-8291-77e25524e59d,2022,active,DF,Bremer,"The centre-back who came on as a substitute and scored in the quarter-final shootout against Croatia, only for his effort to be cancelled out in the same shootout"
+d64d36fa-3ccc-4551-8481-e4dc7da379ef,2022,active,DF,Cristian Romero,The centre-back who was part of the World Cup-winning defence and won the tournament without a yellow card despite his aggressive style
+b6598987-0dff-49a3-933a-6b89ebb27e63,2022,active,DF,Dayot Upamecano,The centre-back who started every match as France reached the final
+3f134847-e59f-4aaa-90cb-004cb621029e,2022,active,DF,Denzel Dumfries,The Dutch right-back who was sent off
+2101debb-9292-4200-a2ad-a15ecb6361df,2022,active,DF,Diego Godín,The Uruguayan centre-back who captained the side
+3c7a86aa-a262-4b4d-9680-38d4145e131b,2022,active,DF,Gonzalo Montiel,The Argentine right-back who scored in the final
+1d1e8acf-75e6-4640-a382-deb5ea7f3444,2022,active,DF,Jordi Alba,The left-back who provided multiple assists in Spain's opening 7-0 victory
+3167d875-3665-4413-a077-1da623d2444f,2022,active,DF,Kalidou Koulibaly,The Senegalese defender who captained the side
+ec4203d2-9531-4507-bae7-2db32e013919,2022,active,DF,Kim Min-jae,The centre-back who captained South Korea and marshalled their defence in their run to the last sixteen
+85da776e-60cf-48a1-9227-a1797aaa71a3,2022,active,DF,Lucas Hernandez,The defender who suffered a serious knee injury in the opening minutes of the tournament and did not play again
+94cd61b5-bc20-4cd3-8aee-9d260ce932e4,2022,active,DF,Nahuel Molina,The Argentine right-back who scored in the quarter-final
+eff3a2ea-f01a-4afa-84a5-8224266ab527,2022,active,DF,Nayef Aguerd,The Moroccan centre-back who scored an own goal
+95817909-f053-4531-aba3-bc7c19e65526,2022,active,DF,Nicolás Otamendi,The centre-back who captained Argentina in the absence of Lionel Messi during the tournament
+f5fb0352-687c-4421-a47e-063c15ca6ede,2022,active,DF,Noussair Mazraoui,The right-back who scored in the penalty shootout victory over Spain in the last 16
+d3560940-91b9-4dc2-a89d-110a84305b53,2022,active,DF,Pau Torres,The centre-back who missed the decisive penalty in the last-16 shootout against Morocco
+547c733c-01f4-41d6-8eb8-3f0a34913cb3,2022,active,DF,Raphaël Guerreiro,The left-back who scored in the round of 16 rout against Switzerland
+54924b07-6661-4c46-8621-4b39a26024e0,2022,active,DF,Richie Laryea,The right-back who started for Canada in their first World Cup appearance in 36 years
+218acd2c-5431-494a-b25c-8262ac67b47c,2022,active,DF,Romain Saïss,The captain who led Morocco through the group stage before being forced off injured in the knockout rounds
+d48e8f7b-f40b-4ad7-9ab0-7f8adf7e35e7,2022,active,DF,Theo Hernández,The French left-back who scored in the semi-final
+0e531ffa-ff9d-470c-9550-9881fe8d8b3a,2022,active,DF,Thiago Silva,The Brazilian centre-back who captained the side to the quarter-finals
+71f58bbf-a608-4908-98e2-3f83aba502a1,2022,active,DF,Virgil van Dijk,The Dutch defender who captained the side to the quarter-finals
+ef27d6fe-265a-41a8-909e-e1ac970cffe7,2022,active,FW,André Ayew,The Ghanaian striker who captained the side
+78fa5015-c153-4671-9cc5-5afcae25961d,2022,active,FW,Andrej Kramaric,The Croatian attacking midfielder who scored twice
+afe69459-8483-4285-9a4a-492e60d16e30,2022,active,FW,Ángel Di María,The Argentine winger who scored in the final
+d43a0997-6053-4170-ab78-47829a707011,2022,active,FW,Bruno Petković,The striker who scored a dramatic late equaliser against Brazil in the quarter-final to force extra time
+3dbd3f2c-b482-4996-b40c-95e3c5538af8,2022,active,FW,Bukayo Saka,The English forward who scored twice
+db7cf7a6-a75c-4c5a-8a8c-5fdbb5ac099a,2022,active,FW,Cody Gakpo,The forward who scored in each of the three group-stage matches
+c11e313f-dd51-45af-afba-82ccd3bb3259,2022,active,FW,Cristiano Ronaldo,The Portuguese forward who captained the side to the quarter-finals
+f511be9c-80cb-4ad0-88de-81b73dfbfb8c,2022,active,FW,Darwin Núñez,The striker who came off the bench and was involved in a brawl with South Korea players at the final whistle of their group stage match
+aba4dc01-6094-4e88-bba1-cc26521f5b91,2022,active,FW,Dušan Tadić,The Serbian winger who captained the side
+3df9b72a-a20d-4793-878f-37cde7e1121e,2022,active,FW,Eden Hazard,The Belgian forward who captained the side
+d74b5b27-6046-47b5-9bc0-00fa3779eaf1,2022,active,FW,Enner Valencia,The striker who scored both goals in the opening match of the tournament
+2d7ef86b-6807-49c6-aaea-6dd256a25f7e,2022,active,FW,Ferran Torres,The Spanish striker who scored twice
+55892043-d0a6-4230-a959-67d39d11095d,2022,active,FW,Gareth Bale,The Welsh forward who captained the side
+6b92d547-1880-4b9e-88a9-45bd7dd95ce7,2022,active,FW,Gonçalo Ramos,The Portuguese striker who scored a hat-trick
+36e4989e-f5f8-4342-8fd5-c8f94dad33e8,2022,active,FW,Harry Kane,The English forward who scored in the quarter-final
+41bd2a24-dd4d-4de4-8dab-bcb03b574c88,2022,active,FW,Hwang Hee-chan,The striker who scored the last-minute winner against Portugal to send South Korea into the last 16
+07281075-89b4-407b-ab15-bb871590b0d1,2022,active,FW,Julián Alvarez,The Argentine forward who scored in the semi-final
+e18ec939-0c49-49e1-a0f5-975bf437b403,2022,active,FW,Kai Havertz,The German forward who scored twice
+218d3dc1-1e9d-4758-8a95-cde19262a72b,2022,active,FW,Kylian Mbappé,The French forward who won the Golden Boot
+0e649f7e-1815-4e18-af20-4cde52a85b07,2022,active,FW,Lautaro Martínez,The Argentine forward who scored in the quarter-final
+ac543a85-6bd8-408d-a556-4ad13abf26b7,2022,active,FW,Lionel Messi,The Argentine forward with the most World Cup appearances
+14e4c2ca-e5e6-4d87-90b9-797146cabce0,2022,active,FW,Marcus Rashford,The English forward who scored twice
+8a6fc8fa-6e7d-4c85-b590-67bb2da7af2c,2022,active,FW,Mehdi Taremi,The Iranian striker who scored twice against England
+1fbc86f2-166c-46d6-a9b6-073defde3fea,2022,active,FW,Memphis Depay,The striker who scored a stunning solo goal against the United States in the round of sixteen
+5deb748a-b944-4445-a10e-b84c13917eff,2022,active,FW,Neymar,The Brazilian forward who scored in the quarter-final
+d8656498-ecb8-42fd-aed2-6e399b8c5a9c,2022,active,FW,Niclas Füllkrug,The striker who scored on his World Cup debut as a substitute to equalise against Spain
+d8d44344-b101-4d84-be84-7b362b6aa5cf,2022,active,FW,Olivier Giroud,The French striker who scored twice against Australia
+135ad89e-63b4-4541-840a-fa1553c8e76b,2022,active,FW,Ousmane Dembélé,The winger who provided the assist for the equalising goal in the final before France were beaten on penalties
+34792547-6786-47e5-b537-789750a4f7e5,2022,active,FW,Paulo Dybala,The Argentine forward who scored in the final
+772e9e53-a44e-4399-81ee-3e474f3e3d2e,2022,active,FW,Pedro,The Brazilian striker who scored in the quarter-final against Croatia
+814ce194-4b80-4655-8d75-ba85c26fac5b,2022,active,FW,Randal Kolo Muani,The French forward who scored in the final
+f2b65bd5-f8f7-4050-88b5-67df16c79e70,2022,active,FW,Richarlison,The Brazilian striker who scored twice
+4856e73f-1c2a-48d3-8b8c-4f6da7e496d7,2022,active,FW,Robert Lewandowski,The Polish forward who captained the side
+758770e1-69bf-4309-9e7f-cc187c527715,2022,active,FW,Son Heung-min,The forward who captained South Korea and wore a protective mask throughout the tournament
+66cf050f-213e-4315-85c1-475e3cdde9e5,2022,active,FW,Vincent Aboubakar,The Cameroonian striker who was sent off against Brazil
+f26d0ee1-26a8-4bfd-a171-89c4c511af4c,2022,active,FW,Walid Cheddira,The striker who was sent off in the semi-final against France
+203ade85-1302-4a0c-ad3c-2a1eba2e2db0,2022,active,FW,Wout Weghorst,The Dutch striker who scored a hat-trick against Argentina
+3c19891d-7eea-49c2-bad4-110e17a81030,2022,active,FW,Youssef En-Nesyri,The Moroccan striker who scored in the quarter-final
+de303a93-b13e-4e19-a236-04c6b710d751,2022,active,GK,Andries Noppert,"The goalkeeper who made his international debut at the tournament, keeping a clean sheet in the group stage opener against Senegal"
+0c3fe8a6-0527-470b-8588-2a2a75f06676,2022,active,GK,Dominik Livakovic,The Croatian goalkeeper who saved a penalty in the shootout against Japan
+2cf4e728-d2f1-4b03-9b75-dd2e8619c712,2022,active,GK,Emiliano Martínez,The Argentine goalkeeper who won the Golden Glove
+126a02f0-33df-4493-b116-86e3f55139d7,2022,active,GK,Guillermo Ochoa,The goalkeeper appearing at his fifth World Cup for Mexico
+d93bd619-9f6d-4013-ada1-f7a2434a2800,2022,active,GK,Hugo Lloris,The French goalkeeper who captained the runners-up
+4603603b-7116-4483-bb4e-bca6b5af2dcb,2022,active,GK,Manuel Neuer,The German goalkeeper who scored an own goal
+0b284b19-ab82-4721-bb44-488bb31a2025,2022,active,GK,Matt Turner,The goalkeeper who made a crucial fingertip save to deny a point-blank header from Gareth Bale in the group stage
+7af38b8b-dd56-4939-abc9-8b18e5d9ba1c,2022,active,GK,Rui Patrício,The goalkeeper who saved a crucial penalty in the round of 16 against Switzerland
+b1ad5e50-ff7a-4078-a817-db9786f5cf76,2022,active,GK,Unai Simón,The Spanish goalkeeper who saved a penalty in the shootout against Morocco
+4d558767-4a71-4dc2-b099-77c9e7430644,2022,active,GK,Wojciech Szczęsny,The goalkeeper who saved a penalty from Lionel Messi in the group stage
+67fa9f67-0352-4858-ac92-efe85adcb68a,2022,active,GK,Yann Sommer,The goalkeeper who saved Xherdan Shaqiri's fellow countryman's penalty to eliminate Portugal in the last 16
+eab39afe-c05b-4cfb-aa75-98d11857b7e4,2022,active,GK,Yassine Bounou,The Moroccan goalkeeper who saved a penalty in the shootout against Spain
+f1c156bf-e64f-4191-9c46-11b635eb8d6f,2022,active,MF,Adrien Rabiot,The midfielder who scored and assisted in the same quarter-final match against England
+15b8db67-164b-434d-a745-258e99196a5a,2022,active,MF,Alexis Mac Allister,The midfielder who scored Argentina's first goal in the comeback victory over Poland
+cd8121f2-622a-4905-89c6-244f15c62d70,2022,active,MF,Aurélien Tchouaméni,The French midfielder who scored in the quarter-final
+ee3c784e-dee1-4b9c-a9b4-21061bff128d,2022,active,MF,Azzedine Ounahi,The midfielder who was one of Morocco's breakout stars in their historic semi-final run
+c509ce89-06b1-4ec8-9867-0f3659d38961,2022,active,MF,Bruno Fernandes,The Portuguese midfielder who scored twice
+bac1835b-c3a7-41ec-a1a2-ebe4b15c7283,2022,active,MF,Casemiro,The Brazilian midfielder who scored in the quarter-final
+0c92b112-7d25-41ab-b3e9-54358b53ebe5,2022,active,MF,Declan Rice,The midfielder who was England's defensive anchor in every match of the tournament
+30dc508f-7977-4447-bba3-438903ea231a,2022,active,MF,Enzo Fernández,The Argentine midfielder who won the Best Young Player award
+cc340d51-0a8f-4caa-a043-77ecdb7c3c46,2022,active,MF,Gavi,The midfielder who scored Spain's second goal in their 7-0 thrashing of Costa Rica
+91d3e17d-78b3-4bb1-aa29-c9e8d9a404ee,2022,active,MF,Granit Xhaka,The Swiss defensive midfielder who captained the side
+151c8fb6-d674-4d3d-adff-47edae6437bb,2022,active,MF,Hakim Ziyech,The Moroccan winger who scored a penalty in the shootout
+cfab8b5d-3cca-4c6b-962c-16a350c083b2,2022,active,MF,İlkay Gündoğan,The midfielder who captained Germany during the tournament
+cbe51c77-620c-47ed-b97e-08af1095ccf1,2022,active,MF,Jamal Musiala,The midfielder who was Germany's standout creative player despite their group-stage elimination
+7cbadcf0-1122-4a4a-adc7-ef2179bd20ed,2022,active,MF,Leandro Paredes,The Argentine defensive midfielder who scored in the final
+57dc6be7-fb53-4163-958a-68659918c296,2022,active,MF,Lovro Majer,The Croatian attacking midfielder who scored in the quarter-final against Brazil
+a1e78352-ae98-4286-972f-0083bccb65dc,2022,active,MF,Luka Modrić,The Croatian central midfielder who scored in the quarter-final
+e8973832-911d-4171-aa17-5027fccb0ec1,2022,active,MF,Marcelo Brozović,The Croatian defensive midfielder who scored a penalty in the shootout
+e01dff12-c29c-454e-9738-116030c16d1f,2022,active,MF,Mario Pašalić,The Croatian central midfielder who scored a penalty in the shootout against Japan
+2c797ef2-3cc0-484f-94a9-ca59b018b318,2022,active,MF,Mohammed Kudus,The Ghanaian winger who scored twice
+870748ba-8fd5-4ff5-a260-225f8d455813,2022,active,MF,Nikola Vlašić,The Croatian attacking midfielder who scored in the quarter-final against Brazil
+4142d718-3428-43e1-bfa3-4996436cd5c0,2022,active,MF,Phil Foden,The midfielder who scored England's opening goal against Wales in the group stage
+ded2a571-d79b-4cfc-9dbe-55b127855e62,2022,active,MF,Ritsu Dōan,The midfielder who scored the equaliser against Spain that helped Japan top their group
+00474888-d0a5-4ba5-89ba-cca8227238ab,2022,active,MF,Rodrigo Bentancur,The midfielder who was one of Uruguay's key creative players as they were eliminated in the group stage despite beating Ghana
+2f0f2a29-e848-4abe-a625-d6824dd677d6,2022,active,MF,Rodrigo De Paul,The midfielder who started every match and was Lionel Messi's tireless engine in the centre of the pitch throughout the tournament
+487e13ba-0809-49a5-a671-dadd92de2255,2022,active,MF,Sergio Busquets,The Spanish midfielder who captained the side
+f5dc2ebc-e373-4f93-a9b1-8a2a5237476e,2022,active,MF,Sofiane Boufal,The midfielder who danced on the pitch with his mother after Morocco's historic semi-final qualification
+99bd288d-8eba-4ce8-b3cc-b1ccfdb53b42,2022,active,MF,Sofyan Amrabat,The midfielder who was named man of the match multiple times as Morocco reached the semi-finals
+2cf79673-5ba8-483c-af3f-831e46ff35af,2022,active,MF,Teun Koopmeiners,The Dutch defensive midfielder who scored in the quarter-final
+2dc2f7b7-49de-49e1-a83b-539fcead0f79,2022,active,MF,Tyler Adams,The American defensive midfielder who captained the side
+93235d71-3d9f-4b10-88de-c0a7be1e517a,2026,active,DF,Achraf Hakimi,The right-back who captained Morocco and was named in the tournament's Best XI
+3132392e-d846-4d0e-a79d-81fabaedcb4e,2026,active,DF,Alphonso Davies,The left-back who captained the host nation's side as they played on home soil for the first time at a World Cup
+46debe06-1927-4a73-a70c-6a417729c31d,2026,active,DF,Antonio Rüdiger,The centre-back known for his barnstorming runs who captained his side at the tournament
+6fa42873-ac9c-4fc8-9a90-3b52e767dbaf,2026,active,DF,Diogo Dalot,The right-back who played every minute of the tournament for his side
+f81633db-1cfa-4e52-a303-d4a602729869,2026,active,DF,João Cancelo,The right-back who provided the most assists for any defender in the tournament
+ff670536-2c99-417e-8dad-d12bd59b8c78,2026,active,DF,Marquinhos,The centre-back who captained Brazil and scored from a corner in the round of 16
+4b04fb4c-ae58-4046-b8c5-a13a00022cc2,2026,active,DF,Noussair Mazraoui,The right-back who scored a crucial goal to help his side advance in the knockout rounds
+df1b1922-2ce8-4707-a3f3-18f6e8284a4f,2026,active,DF,Ronald Araújo,The centre-back who captained Uruguay and kept a clean sheet in their opening two group games
+d04883a0-91e6-4b90-a079-dcab0d785407,2026,active,DF,Rúben Dias,The centre-back who captained his side throughout the tournament
+a81b5606-a9f1-4f9d-a200-2498726c7103,2026,active,DF,Théo Hernandez,The left-back who scored in the semi-final to put France ahead on their way to the final
+bd334b41-d614-4d98-a5f8-0c492a012085,2026,active,DF,Virgil van Dijk,The centre-back who captained his nation and scored a crucial header in the group stage
+c4b5d10a-7c87-44eb-b2a2-094fe8074f60,2026,active,DF,William Saliba,"The centre-back who was part of the meanest defence in the tournament, helping his side reach the final"
+a148a303-b64f-4f2b-b8ff-79507fb46599,2026,active,FW,Christian Pulisic,The captain and star attacker who scored in both of the host nation's opening group games
+23d9cb5c-aaff-4721-9c54-10410ac46832,2026,active,FW,Cody Gakpo,The striker who scored in each of the Netherlands' three group-stage matches
+846b22e5-6dad-4832-9d44-e157d8d221d8,2026,active,FW,Donyell Malen,The right winger who scored twice in the round of 16 as the Netherlands knocked out the defending champions
+2dda2d3d-ace0-4a25-a1e1-223680a620a6,2026,active,FW,Erling Haaland,The striker who scored the most goals of any player in the group stage
+8ff25d9a-4587-4e5c-9ca8-26c5a11b7d97,2026,active,FW,Nico Williams,The left winger who scored Spain's second goal in the final to seal the title
+5317a313-76a3-4454-8721-66c051ee7569,2026,active,FW,Rafael Leão,The left winger who came off the bench to score in three different matches throughout the tournament
+7d5da259-41ae-461c-a0e2-efae38f14e2f,2026,active,FW,Vinícius Júnior,The left winger who scored in three consecutive knockout games for Brazil
+51446e71-326a-4613-aa6e-dd55519ad0d2,2026,active,GK,Diogo Costa,The goalkeeper who saved three penalties in a shootout to send his side through to the quarter-finals
+0600759f-f8a1-4be2-a932-2a1aa8b923e3,2026,active,GK,Gregor Kobel,The goalkeeper who captained his side through the knockout rounds in North America
+2febb493-c4de-4cde-bfd3-889962acc28c,2026,active,GK,Mike Maignan,The goalkeeper who kept a clean sheet in the semi-final as France reached the final
+c9f6a931-d20e-4aa4-91d8-38854a008e6a,2026,active,MF,Alexis Mac Allister,The midfielder who scored from the spot in a shootout as Argentina defended their world title
+f0644e74-1f5e-4fce-8d14-d3cc48c1c2a5,2026,active,MF,Daichi Kamada,The midfielder who captained Japan and scored the penalty that sent them into the quarter-finals
+95c84623-9a6a-4495-a07c-ae6c1eaf2d4a,2026,active,MF,Declan Rice,The midfielder who played every minute of England's campaign and was named in the tournament's Best XI
+c8c81a70-54b3-493b-aa28-2b1b03a28a5d,2026,active,MF,Gavi,The midfielder who assisted the opening goal in the final and was named in the tournament's Best XI
+1c142de3-dd54-4e77-807c-dbe412cc1b65,2026,active,MF,Hakan Çalhanoğlu,The midfielder who captained Turkey and scored two free-kicks during the group stage
+a8eace20-771a-41d1-81d2-4d70a6f301cd,2026,active,MF,Ibrahim Sangaré,The defensive midfielder who captained Ivory Coast and was their most important player as they reached the round of 16
+35243635-a374-4b72-b333-a6d1c27ff206,2026,active,MF,Jude Bellingham,The midfielder who captained England and scored in the quarter-final to send his side through
+302816a0-6f65-4fef-a47c-bc3977196b87,2026,active,MF,Rodri,The midfielder who controlled Spain's tempo from deep and scored the opening goal in the final
+efdcb584-6840-464c-a0fd-fa6db6313273,2026,active,MF,Rúben Neves,The midfielder who captained Portugal in the group stage and scored with a thunderous long-range strike
+14c3f5b9-a067-42e7-b771-d5012dc2e01e,2026,active,MF,Warren Zaïre-Emery,"The youngest player in France's squad, who scored his first World Cup goal in the group stage"

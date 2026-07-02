@@ -257,6 +257,18 @@ async function loadPool(): Promise<BingoPlayer[]> {
   `);
   const statsById = new Map(statRows.map((r) => [r.player_id, r]));
 
+  // player_stats has almost no national-team rows — the real international caps/goals live in
+  // player_extra_stats (Wikipedia list ingest). Take the max of both sources.
+  const extraRows = await rows<{ player_id: string; intl_caps: number; intl_goals: number }>(sql`
+    SELECT player_id, intl_caps, intl_goals FROM player_extra_stats WHERE player_id IN (${idList})
+  `);
+  for (const e of extraRows) {
+    const s = statsById.get(e.player_id);
+    if (!s) continue;
+    s.intl_caps = Math.max(s.intl_caps, e.intl_caps);
+    s.intl_goals = Math.max(s.intl_goals, e.intl_goals);
+  }
+
   const clubRows = await rows<{ player_id: string; clubs: string[] }>(sql`
     SELECT player_id, array_agg(DISTINCT team_name) AS clubs
     FROM player_stats

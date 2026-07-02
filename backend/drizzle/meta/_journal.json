@@ -43,6 +43,13 @@
       "when": 1782834000000,
       "tag": "0011_daily_completions_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782847000000,
+      "tag": "0012_intl_goals",
+      "breakpoints": true
     }
   ]
 }

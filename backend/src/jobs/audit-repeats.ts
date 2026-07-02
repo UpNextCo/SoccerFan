@@ -244,7 +244,9 @@ async function main() {
   console.log(`\n=== FAILURES (${failures.length}) ===`);
   for (const f of failures) console.log(f);
   if (failures.length === 0) console.log('none');
-  process.exit(0);
+  // No process.exit(0): let stdout flush naturally, then force-exit only if a stray DB handle
+  // keeps the loop alive.
+  setTimeout(() => process.exit(0), 3000).unref();
 }
 
 main().catch((err) => {

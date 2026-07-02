@@ -41,6 +41,7 @@ const CLUB_ALIASES: Record<string, string[]> = {
   'rb leipzig': ['rasenballsport leipzig', 'leipzig'],
   roma: ['as roma'],
   hoffenheim: ['1899 hoffenheim', 'tsg hoffenheim', 'tsg 1899 hoffenheim'],
+  'wigan athletic': ['wigan'],
 };
 
 function aliasKeys(club: string): Set<string> {

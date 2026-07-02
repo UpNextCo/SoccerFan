@@ -22,6 +22,7 @@
     "job:gen-onemore": "tsx src/services/oneMoreGenerator.ts",
     "job:set-photo": "tsx src/jobs/set-player-photo.ts",
     "job:ingest-hattricks": "tsx src/jobs/ingest-hattricks-wiki.ts",
+    "job:ingest-intl-stats": "tsx src/jobs/ingest-intl-stats-wiki.ts",
     "job:map-tm-ids": "tsx src/jobs/map-transfermarkt-ids.ts",
     "job:tm-targets": "tsx src/jobs/tm-targets.ts",
     "job:import-tm-seasons": "tsx src/jobs/import-tm-seasons.ts",

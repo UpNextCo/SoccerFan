@@ -10,18 +10,20 @@
  * Workflow: run build → open the CSV → set status=rejected for any wrong/weak clue → run apply.
  * The generator draws only active rows.
  *
- * Usage: DATABASE_URL=... ANTHROPIC_API_KEY=... npx tsx src/jobs/build-wc-memorable.ts
+ * Usage: DATABASE_URL=... ANTHROPIC_API_KEY=... npx tsx src/jobs/build-wc-memorable.ts             # FULL rebuild (wipes QA!)
+ *        DATABASE_URL=... ANTHROPIC_API_KEY=... npx tsx src/jobs/build-wc-memorable.ts --append    # top-up: only ADDS new player-years, QA preserved
  *        DATABASE_URL=... npx tsx src/jobs/build-wc-memorable.ts apply wc_memorable_review.csv
  */
 import 'dotenv/config';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { proposeTeamClues, proposeYearClues, type ClueProposal } from '../services/llmCuration.js';
+import { proposePositionClues, proposeTeamClues, proposeYearClues, type ClueProposal } from '../services/llmCuration.js';
 
-// 2006 onwards only — recent World Cups are the recognisable ones, and these are the years we have
-// complete FBref game-by-game data to validate clues against.
-const YEARS = [2006, 2010, 2014, 2018, 2022];
+// All tournaments with squad data. Claims are verified against wc_match_events / player_stats,
+// which never reject on ABSENT data (only on contradictions), so thinner 90s event coverage is
+// safe — it just verifies less per clue. Older years get smaller ask-counts in the year pass.
+const YEARS = [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022, 2026];
 // Major footballing nations get a dedicated, position-by-position pass (this is where the most
 // recognisable World Cup players live and where structured clue-writing pays off).
 const MAJOR_TEAMS = [
@@ -329,16 +331,32 @@ async function storeProposals(
   return { stored: storedNames, rejected };
 }
 
-async function build(): Promise<void> {
+async function build(append: boolean): Promise<void> {
   await ensureTable();
-  // Full rebuild so older / weaker entries from a previous run are removed.
-  await db.execute(sql`DELETE FROM wc_memorable`);
 
   const squadsByYear = await loadSquadsByYear();
   const awards = await loadAwards();
   const matchIdx = await loadMatchIndex();
   const storedKeys = new Set<string>();
   const seenNames = new Set<string>(); // global avoid-list (normalised) across passes
+
+  if (append) {
+    // Top-up mode: keep every existing row (including your QA rejections) and only ADD clues for
+    // player-years the bank doesn't have yet. Rejected player-years stay off-limits so a clue you
+    // rejected can't sneak back in with new wording.
+    const existing = (await db.execute(sql`
+      SELECT year, player_id AS "playerId", player_name AS "playerName" FROM wc_memorable WHERE player_id IS NOT NULL
+    `)) as unknown as Array<{ year: number; playerId: string; playerName: string }>;
+    for (const r of existing) {
+      storedKeys.add(`${r.year}|${r.playerId}`);
+      seenNames.add(norm(r.playerName));
+    }
+    console.log(`Append mode: ${existing.length} existing player-years preserved.`);
+  } else {
+    // Full rebuild so older / weaker entries from a previous run are removed. NOTE: this wipes
+    // human QA status — prefer --append once a bank has been reviewed.
+    await db.execute(sql`DELETE FROM wc_memorable`);
+  }
 
   const addAvoid = (names: string[]) => { for (const n of names) seenNames.add(norm(n)); };
   const avoidList = () => [...seenNames];
@@ -361,6 +379,16 @@ async function build(): Promise<void> {
     const { stored, rejected } = await storeProposals(proposals, squadsByYear, storedKeys, awards, matchIdx);
     addAvoid(stored);
     console.log(`  ${year}: ${proposals.length} proposed · ${stored.length} verified & stored${note(rejected)}`);
+  }
+
+  // Pass 3 — GK/DF top-up. The general passes skew heavily to forwards (FW 96 vs GK 20 in the
+  // first bank), and thin keeper/defender pools are what force the game onto dry data clues.
+  for (const year of YEARS) {
+    const proposals = await proposePositionClues(year, ['GK', 'DF'], avoidList(), 12);
+    if (!proposals) { console.log(`  ${year} GK/DF: no proposals (API key / failure)`); continue; }
+    const { stored, rejected } = await storeProposals(proposals, squadsByYear, storedKeys, awards, matchIdx);
+    addAvoid(stored);
+    console.log(`  ${year} GK/DF top-up: ${proposals.length} proposed · ${stored.length} verified & stored${note(rejected)}`);
   }
 
   await exportCsv();
@@ -412,7 +440,7 @@ async function main() {
   if (process.argv[2] === 'apply') await apply(process.argv[3] ?? FILE);
   else if (process.argv[2] === 'export') await exportCsv();
   else if (process.argv[2] === 'revalidate') await revalidate(process.argv.includes('--dry'));
-  else await build();
+  else await build(process.argv.includes('--append'));
   process.exit(0);
 }
 

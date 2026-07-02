@@ -341,6 +341,8 @@ export const playerExtraStats = pgTable('player_extra_stats', {
   firstGoalAgeDays: integer('first_goal_age_days'),
   debutAgeDays: integer('debut_age_days'),
   intlCaps: integer('intl_caps').notNull().default(0),
+  /** International goals from the Wikipedia 50+ goals / 100+ caps lists (ingest-intl-stats-wiki). */
+  intlGoals: integer('intl_goals').notNull().default(0),
   /** Penalty goals PER LEAGUE from FBref (all eras), so categories can be precise and accurate
    *  ("Premier League penalties") rather than a fuzzy, undercounted all-competitions "career"
    *  total. fbrefPenalties (Big-5 sum) is retained but no longer drives a category. */

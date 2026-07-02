@@ -378,6 +378,31 @@ export async function proposeYearClues(
 }
 
 /**
+ * Position-targeted pass: identifying clues for recognisable players of the given POSITIONS from a
+ * single World Cup, across all nations. Used to top up the bank's thin spots (goalkeepers and
+ * defenders get far fewer clues from the general passes than forwards do).
+ */
+export async function proposePositionClues(
+  year: number,
+  positions: Array<'GK' | 'DF' | 'MF' | 'FW'>,
+  avoid: string[] = [],
+  count = 12,
+): Promise<ClueProposal[] | null> {
+  const posLabel = positions.join(' and ');
+  const user = [
+    `World Cup: ${year}. Positions: ${posLabel} ONLY.`,
+    `List up to ${count} fair, single-answer clues for recognisable ${posLabel} players from the`,
+    `${year} World Cup, across different nations. Defensive actions, penalty saves, marking jobs,`,
+    'famous errors and leadership moments all make good clues — not just goals.',
+    'Do NOT put the year or the player\'s club into the "clue" text — those are shown separately.',
+    `For each item: {"player":"Full Name","country":"Nation","position":"${positions.join('|')}","year":${year},"clue":"The <position> who ..."}.`,
+    avoidBlock(avoid),
+    'Return ONLY JSON: {"players":[ ... ]}.',
+  ].join('\n');
+  return runClueProposal(user, year);
+}
+
+/**
  * Polish DATA-DERIVED clues for natural wording. The facts are already true (built from the DB);
  * Claude may ONLY rephrase — never add a fact, name, year, club, number, opponent, stage or
  * descriptor, and never write in a corny/flowery way. Returns id→clue for whatever it rephrased;

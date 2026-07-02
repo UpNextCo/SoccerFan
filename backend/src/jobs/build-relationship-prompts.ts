@@ -14,7 +14,7 @@ import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
-import { normClub, playersUnderAll } from '../services/managerRules.js';
+import { normClub, playersUnderManager } from '../services/managerRules.js';
 import { sampleFamousPlayers } from '../services/towerRules.js';
 
 const CLUB_LEAGUES = sql`(39,140,135,78,61,2,3,135)`; // exclude national teams (1,4)
@@ -129,10 +129,6 @@ interface PromptDef {
   build: () => Promise<string[]>;
 }
 
-function mgr(name: string): string {
-  return normClub(name);
-}
-
 async function awardSet(award: string, placements?: string[]): Promise<string[]> {
   const pl = placements ? sql`AND placement IN (${sql.join(placements.map((p) => sql`${p}`), sql`, `)})` : sql``;
   const rows = (await db.execute(sql`
@@ -152,21 +148,39 @@ async function defs(): Promise<PromptDef[]> {
     },
   });
 
-  // --- Managers: played under (single = easier, pairs = harder) ---
-  for (const m of ['Pep Guardiola', 'José Mourinho', 'Sir Alex Ferguson', 'Jürgen Klopp', 'Diego Simeone', 'Carlo Ancelotti', 'Arsène Wenger']) {
-    out.push({ text: `Name a player who played under ${m}.`, build: () => playersUnderAll([mgr(m)]).then((s) => [...s]) });
+  // --- Managers: played under (single = easier, pairs = harder). Generated dynamically from the
+  // full manager_tenures bank: every seeded manager gets a single prompt, and every pair of
+  // managers whose player sets genuinely intersect gets a pair prompt. Thin/impossible pools are
+  // dropped by the recallable filter at store time, so we can propose broadly here.
+  const managerRows = (await db.execute(sql`
+    SELECT DISTINCT manager, manager_norm AS "managerNorm" FROM manager_tenures ORDER BY manager
+  `)) as unknown as Array<{ manager: string; managerNorm: string }>;
+
+  // Compute each manager's player set ONCE, then intersect in memory for all pairs — 125 sets
+  // beats 7,750 pairwise DB round-trips.
+  const setByNorm = new Map<string, Set<string>>();
+  for (const m of managerRows) {
+    setByNorm.set(m.managerNorm, await playersUnderManager(m.managerNorm));
   }
-  const mgrPairs: Array<[string, string]> = [
-    ['José Mourinho', 'Pep Guardiola'],
-    ['Carlo Ancelotti', 'Pep Guardiola'],
-    ['Sir Alex Ferguson', 'José Mourinho'],
-    ['Jürgen Klopp', 'Pep Guardiola'],
-    ['Zinedine Zidane', 'Carlo Ancelotti'],
-    ['Antonio Conte', 'Massimiliano Allegri'],
-    ['José Mourinho', 'Carlo Ancelotti'],
-  ];
-  for (const [a, b] of mgrPairs) {
-    out.push({ text: `Name a player who played under both ${a} and ${b}.`, build: () => playersUnderAll([mgr(a), mgr(b)]).then((s) => [...s]) });
+
+  for (const m of managerRows) {
+    const ids = setByNorm.get(m.managerNorm)!;
+    if (ids.size < 12) continue; // too thin to be a fair "name one" prompt
+    out.push({ text: `Name a player who played under ${m.manager}.`, build: async () => [...ids] });
+  }
+
+  const MIN_PAIR_POOL = 3; // below this even elite knowledge can't fairly find the link
+  for (let i = 0; i < managerRows.length; i += 1) {
+    for (let j = i + 1; j < managerRows.length; j += 1) {
+      const a = managerRows[i]!;
+      const b = managerRows[j]!;
+      const setA = setByNorm.get(a.managerNorm)!;
+      const setB = setByNorm.get(b.managerNorm)!;
+      if (setA.size === 0 || setB.size === 0) continue;
+      const inter = [...setA].filter((id) => setB.has(id));
+      if (inter.length < MIN_PAIR_POOL) continue;
+      out.push({ text: `Name a player who played under both ${a.manager} and ${b.manager}.`, build: async () => inter });
+    }
   }
 
   // --- Finals ---
@@ -238,18 +252,6 @@ async function defs(): Promise<PromptDef[]> {
   out.push({ text: "Name a player who won both the Ballon d'Or and the World Cup.", build: async () => intersect(await awardSet("Ballon d'Or", ['1st']), await finalsSet('World Cup', 'won')) });
   out.push({ text: "Name a player who won the Ballon d'Or and a Champions League final.", build: async () => intersect(await awardSet("Ballon d'Or", ['1st']), await finalsSet('Champions League', 'won')) });
   out.push({ text: 'Name a player who won the European Golden Shoe and a Champions League final.', build: async () => intersect(await awardSet('European Golden Shoe'), await finalsSet('Champions League', 'won')) });
-
-  // --- More manager pairs (rarer intersections) ---
-  const morePairs: Array<[string, string]> = [
-    ['Jürgen Klopp', 'Thomas Tuchel'],
-    ['Zinedine Zidane', 'José Mourinho'],
-    ['Mauricio Pochettino', 'Antonio Conte'],
-    ['Pep Guardiola', 'Luis Enrique'],
-    ['Carlo Ancelotti', 'Antonio Conte'],
-  ];
-  for (const [a, b] of morePairs) {
-    out.push({ text: `Name a player who played under both ${a} and ${b}.`, build: () => playersUnderAll([mgr(a), mgr(b)]).then((s) => [...s]) });
-  }
 
   return out;
 }

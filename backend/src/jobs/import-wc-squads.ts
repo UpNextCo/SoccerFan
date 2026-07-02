@@ -20,7 +20,7 @@ import { db } from '../db/index.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
 import { canonicalNationality } from '../utils/nationality.js';
 
-const YEARS = [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022];
+const YEARS = [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022, 2026];
 
 async function fetchWikitext(title: string): Promise<string | null> {
   const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json&formatversion=2&redirects=1`;

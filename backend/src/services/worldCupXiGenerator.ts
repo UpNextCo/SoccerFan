@@ -19,7 +19,7 @@ const WCXI_REPEAT_WINDOW_DAYS = 30;
 // Selection weight per tournament — strong bias toward recent World Cups (more recognisable),
 // with classics appearing occasionally.
 const YEAR_WEIGHT: Record<number, number> = {
-  2022: 34, 2018: 32, 2014: 26, 2010: 22, 2006: 16, 2002: 8, 1998: 5, 1994: 4,
+  2026: 38, 2022: 34, 2018: 32, 2014: 26, 2010: 22, 2006: 16, 2002: 8, 1998: 5, 1994: 4,
 };
 
 const DEMONYM: Record<string, string> = {
@@ -245,7 +245,7 @@ export async function generateWorldCupXiPuzzle(
   const usedSig = new Set<string>();
   // Each slot targets a tournament year (a date-seeded rotation of the World Cups) so the daily XI
   // spreads across years instead of clumping on the most recent — different spread every day.
-  const wcYears = [2006, 2010, 2014, 2018, 2022];
+  const wcYears = [2006, 2010, 2014, 2018, 2022, 2026];
   const shuffledYears = [...wcYears].sort((a, b) => hashString(`${seed}:y:${a}`) - hashString(`${seed}:y:${b}`));
   const targetYear = (idx: number): number => shuffledYears[idx % shuffledYears.length]!;
 
