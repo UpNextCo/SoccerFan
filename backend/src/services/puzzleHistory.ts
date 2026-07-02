@@ -1,0 +1,143 @@
+/**
+ * Repeat suppression: what content has already shipped recently?
+ *
+ * Every daily puzzle is retained in daily_puzzles, so generators read back a rolling window of
+ * their own history and exclude recently-used content (answers, questions, pairs, tiles…).
+ * Selection *within* the eligible set stays seeded-random, so nothing settles into a fixed
+ * repeat schedule — content only comes back by chance once it leaves the window.
+ *
+ * Each helper returns a Set of mode-specific keys used in the `days` before `date` (exclusive).
+ * Generators accept these as an optional override so audit dry-runs can emulate history
+ * without writing to the DB.
+ */
+import { sql } from 'drizzle-orm';
+import { db } from '../db/index.js';
+
+async function recentRows(
+  modeId: string,
+  date: string,
+  days: number
+): Promise<Array<{ pj: Record<string, unknown>; apid: string | null }>> {
+  const window = Math.max(1, Math.floor(days));
+  return (await db.execute(sql`
+    SELECT puzzle_json AS pj, answer_player_id AS apid
+    FROM daily_puzzles
+    WHERE mode_id = ${modeId}
+      AND date < ${date}
+      AND date >= (${date}::date - ${window}::int)
+  `)) as unknown as Array<{ pj: Record<string, unknown>; apid: string | null }>;
+}
+
+/** Guess Who: answer player ids used in the window. */
+export async function recentGuessWhoAnswerIds(date: string, days: number): Promise<Set<string>> {
+  const rows = await recentRows('guess_who', date, days);
+  return new Set(rows.map((r) => r.apid).filter((id): id is string => !!id));
+}
+
+export function targetManQuestionKey(categoryId: string, target: number): string {
+  return `${categoryId}:${target}`;
+}
+
+/** Target Man: exact questions (category + target) used in the window. */
+export async function recentTargetManQuestions(date: string, days: number): Promise<Set<string>> {
+  const rows = await recentRows('target_man', date, days);
+  const out = new Set<string>();
+  for (const { pj } of rows) {
+    const categoryId = pj['categoryId'];
+    const target = pj['target'];
+    if (typeof categoryId === 'string' && typeof target === 'number') {
+      out.add(targetManQuestionKey(categoryId, target));
+    }
+  }
+  return out;
+}
+
+export function blindRankTenKey(playerIds: string[]): string {
+  return [...playerIds].sort().join('|');
+}
+
+/** Blind Rank: exact sets of ten used in the window. */
+export async function recentBlindRankTens(date: string, days: number): Promise<Set<string>> {
+  const rows = await recentRows('blind_rank', date, days);
+  const out = new Set<string>();
+  for (const { pj } of rows) {
+    const order = pj['presentationOrder'];
+    if (Array.isArray(order)) {
+      const ids = order.map((p) => (p as { id?: string }).id).filter((id): id is string => !!id);
+      if (ids.length > 0) out.add(blindRankTenKey(ids));
+    }
+  }
+  return out;
+}
+
+export function oneMorePairKey(metricId: string, idA: string, idB: string): string {
+  return `${metricId}:${[idA, idB].sort().join('|')}`;
+}
+
+/** One More: exact (metric, player-pair) rounds used in the window. */
+export async function recentOneMorePairs(date: string, days: number): Promise<Set<string>> {
+  const rows = await recentRows('one_more', date, days);
+  const out = new Set<string>();
+  for (const { pj } of rows) {
+    // puzzleId is `${date}-one_more`; the metric id isn't stored, so key on the title (stable per metric).
+    const title = typeof pj['title'] === 'string' ? (pj['title'] as string) : '';
+    const rounds = pj['rounds'];
+    if (!Array.isArray(rounds)) continue;
+    for (const r of rounds) {
+      const options = (r as { options?: Array<{ id?: string }> }).options;
+      if (Array.isArray(options) && options.length === 2 && options[0]?.id && options[1]?.id) {
+        out.add(oneMorePairKey(title, options[0].id, options[1].id));
+      }
+    }
+  }
+  return out;
+}
+
+export function wcxiPlayerYearKey(name: string, year: number | null | undefined): string {
+  return `${name}|${year ?? '?'}`;
+}
+
+/** World Cup XI: player+tournament-year slots used in the window. */
+export async function recentWcxiPlayerYears(date: string, days: number): Promise<Set<string>> {
+  const rows = await recentRows('world_cup_xi', date, days);
+  const out = new Set<string>();
+  for (const { pj } of rows) {
+    const slots = pj['slots'];
+    if (!Array.isArray(slots)) continue;
+    for (const s of slots) {
+      const slot = s as { expectedName?: string; year?: number };
+      if (slot.expectedName) out.add(wcxiPlayerYearKey(slot.expectedName, slot.year));
+    }
+  }
+  return out;
+}
+
+/** Football Bingo: tile (category) ids used in the window. */
+export async function recentBingoTileIds(date: string, days: number): Promise<Set<string>> {
+  const rows = await recentRows('football_bingo', date, days);
+  const out = new Set<string>();
+  for (const { pj } of rows) {
+    const categories = pj['categories'];
+    if (!Array.isArray(categories)) continue;
+    for (const c of categories) {
+      const id = (c as { id?: string }).id;
+      if (id) out.add(id);
+    }
+  }
+  return out;
+}
+
+/** Football Golf: prompts (lowercased) used in the window. */
+export async function recentGolfPrompts(date: string, days: number): Promise<Set<string>> {
+  const rows = await recentRows('football_golf', date, days);
+  const out = new Set<string>();
+  for (const { pj } of rows) {
+    const holes = pj['holes'];
+    if (!Array.isArray(holes)) continue;
+    for (const h of holes) {
+      const prompt = (h as { prompt?: string }).prompt;
+      if (prompt) out.add(prompt.toLowerCase());
+    }
+  }
+  return out;
+}

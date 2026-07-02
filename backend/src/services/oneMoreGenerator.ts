@@ -14,9 +14,21 @@ import { db } from '../db/index.js';
 import { resolveHeadshot } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
+import { oneMorePairKey, recentOneMorePairs } from './puzzleHistory.js';
 
 const ROUND_TARGET = 20;
 const MIN_ROUNDS = 10;
+/** An exact (metric, pair) round can't recur inside this window. */
+const ONE_MORE_REPEAT_WINDOW_DAYS = 180;
+
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
+}
 
 const BIG6 = ['Manchester United', 'Manchester City', 'Chelsea', 'Arsenal', 'Liverpool', 'Tottenham'];
 const big6Sql = sql.join(BIG6.map((t) => sql`${t}`), sql`, `);
@@ -138,14 +150,21 @@ async function clubsByPlayer(ids: string[]): Promise<Map<string, string>> {
   return new Map([...top].map(([id, c]) => [id, c.join(' · ')]));
 }
 
-export async function generateOneMorePuzzle(date: string): Promise<{ puzzle: OneMorePuzzle; pool: number }> {
+export async function generateOneMorePuzzle(
+  date: string,
+  opts?: { recentPairs?: Set<string> }
+): Promise<{ puzzle: OneMorePuzzle; pool: number }> {
   const stride = 7; // coprime with metric count
   const start = ((dayNumber(date) * stride) % METRICS.length + METRICS.length) % METRICS.length;
+
+  // Repeat suppression: the same metric coming back every ~15 days is fine, but it must bring
+  // DIFFERENT rounds — exact (metric, player-pair) combos from the window are excluded.
+  const recentPairs = opts?.recentPairs ?? (await recentOneMorePairs(date, ONE_MORE_REPEAT_WINDOW_DAYS));
 
   let fallback: { puzzle: OneMorePuzzle; pool: number } | null = null;
   for (let offset = 0; offset < METRICS.length; offset += 1) {
     const metric = METRICS[(start + offset) % METRICS.length]!;
-    const built = await assembleMetric(metric, date);
+    const built = await assembleMetric(metric, date, recentPairs);
     if (!built) continue;
     if (built.pool >= MIN_ROUNDS) return built;
     if (!fallback || built.pool > fallback.pool) fallback = built;
@@ -170,7 +189,11 @@ function nearPools(rows: Candidate[], min: number, above: number, below: number,
   return { Q, D };
 }
 
-async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: OneMorePuzzle; pool: number } | null> {
+async function assembleMetric(
+  metric: Metric,
+  date: string,
+  recentPairs: Set<string>
+): Promise<{ puzzle: OneMorePuzzle; pool: number } | null> {
   const rows = (await db.execute(sql`
     ${AGG}
     SELECT id, name, position, nationality, birth_year, api_football_id, prestige, ${sql.raw(metric.col)} AS value
@@ -210,7 +233,37 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
   // Salvio…) deeper into the run, where the stakes are higher anyway.
   Q.sort((a, b) => b.prestige - a.prestige);
   D.sort((a, b) => b.prestige - a.prestige);
-  const pairs = Array.from({ length: n }, (_, i) => ({ q: Q[i]!, d: D[i]! }));
+
+  // Day-to-day variety: jitter each fame ranking by a few seeded positions so different players
+  // surface (and pairings differ) every time this metric comes round — each round still pairs
+  // two similarly-famous names.
+  const jitterKey = (salt: string, id: string, i: number) =>
+    i + (hashStr(`${date}:${metric.id}:${salt}:${id}`) % 500) / 100; // shifts of 0–5 places
+  const Qs = Q.map((c, i) => ({ c, k: jitterKey('q', c.id, i) })).sort((a, b) => a.k - b.k).map((x) => x.c);
+  const Ds = D.map((c, i) => ({ c, k: jitterKey('d', c.id, i) })).sort((a, b) => a.k - b.k).map((x) => x.c);
+
+  // Pair each qualifier with the nearest-fame unused distractor whose exact pairing hasn't
+  // shipped inside the repeat window; only if every option is exhausted accept a recent pair.
+  const usedD = new Set<number>();
+  const pickDistractor = (qi: number, allowRecent: boolean): number => {
+    for (let span = 0; span < Ds.length; span += 1) {
+      for (const di of [qi - span, qi + span]) {
+        if (di < 0 || di >= Ds.length || usedD.has(di)) continue;
+        if (!allowRecent && recentPairs.has(oneMorePairKey(metric.title, Qs[qi]!.id, Ds[di]!.id))) continue;
+        return di;
+      }
+    }
+    return -1;
+  };
+  const pairs: Array<{ q: Candidate; d: Candidate }> = [];
+  for (let qi = 0; qi < Qs.length && pairs.length < n; qi += 1) {
+    let di = pickDistractor(qi, false);
+    if (di < 0) di = pickDistractor(qi, true);
+    if (di < 0) continue;
+    usedD.add(di);
+    pairs.push({ q: Qs[qi]!, d: Ds[di]! });
+  }
+  if (pairs.length < MIN_ROUNDS) return null;
   pairs.sort((a, b) =>
     (b.q.prestige + b.d.prestige) - (a.q.prestige + a.d.prestige)
     || (b.q.value - b.d.value) - (a.q.value - a.d.value));
@@ -256,7 +309,7 @@ async function assembleMetric(metric: Metric, date: string): Promise<{ puzzle: O
 
   return {
     puzzle: { modeId: 'one_more', puzzleId: `${date}-one_more`, date, title: metric.title, valueNoun: metric.noun, minimum, rounds },
-    pool: n,
+    pool: pairs.length,
   };
 }
 

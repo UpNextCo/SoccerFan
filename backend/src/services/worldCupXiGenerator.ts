@@ -8,9 +8,13 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { resolveClubLogo } from './teamService.js';
+import { recentWcxiPlayerYears, wcxiPlayerYearKey } from './puzzleHistory.js';
 
 /** Bump when the puzzle JSON shape/source changes so stored puzzles regenerate. */
 export const WCXI_VERSION = 4;
+
+/** A player+tournament from a recent XI is skipped (relaxed only if slots can't fill). */
+const WCXI_REPEAT_WINDOW_DAYS = 30;
 
 // Selection weight per tournament — strong bias toward recent World Cups (more recognisable),
 // with classics appearing occasionally.
@@ -206,8 +210,17 @@ async function gatherDataFallback(): Promise<Scored[]> {
 type Sorted = Array<{ x: Scored; j: number }>;
 interface Pools { fine: Record<string, Sorted>; coarse: Record<string, Sorted> }
 
-export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXiPuzzleJson | null> {
+export async function generateWorldCupXiPuzzle(
+  date: string,
+  opts?: { recentPlayerYears?: Set<string> }
+): Promise<WorldCupXiPuzzleJson | null> {
   const seed = hashString(`${date}:wcxi`);
+
+  // Repeat suppression: a player+tournament used in a recent XI is skipped, forcing selection
+  // deeper into the curated bank / data fallback instead of the same top names anchoring every
+  // day. If the banks genuinely can't fill a slot without a recent name, the relax pass below
+  // allows one rather than failing the day.
+  const recentPlayerYears = opts?.recentPlayerYears ?? (await recentWcxiPlayerYears(date, WCXI_REPEAT_WINDOW_DAYS));
   const value = (x: Scored) => x.facts[0]!.score + x.c.mvt * 8 + (YEAR_WEIGHT[x.c.year] ?? 4);
   // Wide deterministic daily jitter so the day's XI rotates through the pool — different almost
   // every day — while the curated clues' high base score keeps the picks recognisable.
@@ -243,7 +256,8 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
   };
 
   const result: Array<WorldCupXiSlot | null> = LAYOUT.map(() => null);
-  const fillFrom = (pools: Pools) => {
+  const fillFrom = (pools: Pools, respectRecency: boolean) => {
+    const fresh = (c: Scored) => !respectRecency || !recentPlayerYears.has(wcxiPlayerYearKey(c.c.name, c.c.year));
     LAYOUT.forEach((pos, idx) => {
       if (result[idx]) return;
       const fine = pools.fine[pos.label] ?? [];
@@ -251,10 +265,10 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
       const wy = targetYear(idx);
       // Prefer the slot's target year (fine → coarse), then fall back to any year (fine → coarse).
       const x =
-        firstUnused(fine, (c) => c.c.year === wy) ??
-        firstUnused(coarse, (c) => c.c.year === wy) ??
-        firstUnused(fine, () => true) ??
-        firstUnused(coarse, () => true);
+        firstUnused(fine, (c) => c.c.year === wy && fresh(c)) ??
+        firstUnused(coarse, (c) => c.c.year === wy && fresh(c)) ??
+        firstUnused(fine, fresh) ??
+        firstUnused(coarse, fresh);
       if (!x) return;
       const fact = x.facts.find((f) => !usedSig.has(f.sig)) ?? x.facts[0]!;
       used.add(x.c.playerId);
@@ -268,10 +282,22 @@ export async function generateWorldCupXiPuzzle(date: string): Promise<WorldCupXi
   };
 
   // Curated bank is the sole intended source.
-  fillFrom(buildPools(await gatherMemorable()));
+  const memorablePools = buildPools(await gatherMemorable());
+  fillFrom(memorablePools, true);
   // Only touch the data fallback if the curated pool left a hole.
+  let fallbackPools: Pools | null = null;
   if (result.some((s) => !s)) {
-    fillFrom(buildPools(await gatherDataFallback()));
+    fallbackPools = buildPools(await gatherDataFallback());
+    fillFrom(fallbackPools, true);
+  }
+  // Relax pass: if recency exclusion left holes (bank too thin for the window), allow recently
+  // used players rather than failing the day.
+  if (result.some((s) => !s)) {
+    fillFrom(memorablePools, false);
+    if (result.some((s) => !s)) {
+      fallbackPools ??= buildPools(await gatherDataFallback());
+      fillFrom(fallbackPools, false);
+    }
   }
 
   const slots = result.filter((s): s is WorldCupXiSlot => s !== null);

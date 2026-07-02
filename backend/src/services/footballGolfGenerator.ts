@@ -14,6 +14,9 @@ import { db } from '../db/index.js';
 import { enumeratePlayers, type AnswerPlayer, type TowerRule } from './towerRules.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
 
+/** Prompts used within this window are excluded (shrunk adaptively if the bank runs thin). */
+const GOLF_PROMPT_REPEAT_WINDOW_DAYS = 28;
+
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'ultraRare';
 
 export interface GolfAnswer {
@@ -134,13 +137,20 @@ async function recentPrompts(days: number): Promise<Set<string>> {
   return out;
 }
 
-export async function generateFootballGolfCourse(date: string): Promise<FootballGolfPuzzle> {
+export async function generateFootballGolfCourse(
+  date: string,
+  opts?: { recentPromptsOverride?: Set<string> }
+): Promise<FootballGolfPuzzle> {
   // Source prompts: active player prompts from the bank (closed-set + rule-based).
   const prompts = (await db.execute(sql`
     SELECT prompt, rule FROM tower_prompts WHERE status = 'active' AND answer_type = 'player'
   `)) as unknown as Array<{ prompt: string; rule: TowerRule }>;
 
-  const avoid = await recentPrompts(14);
+  // Repeat suppression: prompts used in the last 28 days are excluded; if the bank can't fill a
+  // course under that window (too many prompts also fail the quality thresholds), shrink it
+  // rather than fail the day.
+  const fullAvoid = opts?.recentPromptsOverride ?? (await recentPrompts(GOLF_PROMPT_REPEAT_WINDOW_DAYS));
+  const shorterAvoid = opts?.recentPromptsOverride ?? null;
 
   // Deterministic daily shuffle.
   const seed = hashStr(`${date}:golf`);
@@ -149,6 +159,50 @@ export async function generateFootballGolfCourse(date: string): Promise<Football
     .sort((a, b) => a.k - b.k)
     .map((x) => x.p);
 
+  let candidates = await scanCandidates(ordered, fullAvoid);
+  if (candidates.length < HOLES) {
+    for (const window of [14, 7, 0]) {
+      const avoid = shorterAvoid ?? (window > 0 ? await recentPrompts(window) : new Set<string>());
+      candidates = await scanCandidates(ordered, window > 0 ? avoid : new Set<string>());
+      if (candidates.length >= HOLES) break;
+    }
+  }
+
+  if (candidates.length < HOLES) {
+    throw new Error(`Only ${candidates.length} golf candidates for ${date} (need ${HOLES})`);
+  }
+
+  // Assign pars: broadest prompts get the highest pars, and every par is CLAMPED to
+  // (famous − 2) so the hole is always completable from common knowledge.
+  const chosen = candidates.slice(0, HOLES).sort((a, b) => b.famous - a.famous);
+  const parsDesc = [...PAR_SEQUENCE].sort((a, b) => b - a); // [5,5,4,4,4,3,3,3,2]
+  const withPar = chosen.map((c, i) => ({
+    ...c,
+    par: Math.max(2, Math.min(parsDesc[i]!, c.famous - 2)) as 2 | 3 | 4 | 5,
+  }));
+
+  // Re-order holes for the round (deterministic), so pars aren't monotonic.
+  withPar.sort((a, b) => hashStr(`${seed}:order:${a.prompt}`) - hashStr(`${seed}:order:${b.prompt}`));
+
+  const holes: GolfHole[] = withPar.map((c, i) => ({
+    id: `${date}-h${i + 1}`,
+    holeNumber: i + 1,
+    par: c.par,
+    prompt: c.prompt,
+    category: categoryFor(c.rule, c.prompt),
+    answers: c.answers,
+    hints: hintsFor(c.answers),
+  }));
+
+  const totalPar = holes.reduce((s, h) => s + h.par, 0);
+  return { modeId: 'football_golf', puzzleId: `${date}-football_golf`, date, title: 'Daily Football Golf', totalPar, holes };
+}
+
+/** Scan the day's shuffled prompt order, enumerating answers until 9 quality holes are found. */
+async function scanCandidates(
+  ordered: Array<{ prompt: string; rule: TowerRule }>,
+  avoid: Set<string>
+): Promise<Candidate[]> {
   const candidates: Candidate[] = [];
   const usedClubs = new Set<string>();
   const catCount = new Map<string, number>();
@@ -201,34 +255,7 @@ export async function generateFootballGolfCourse(date: string): Promise<Football
     catCount.set(cat, (catCount.get(cat) ?? 0) + 1);
   }
 
-  if (candidates.length < HOLES) {
-    throw new Error(`Only ${candidates.length} golf candidates for ${date} (need ${HOLES})`);
-  }
-
-  // Assign pars: broadest prompts get the highest pars, and every par is CLAMPED to
-  // (famous − 2) so the hole is always completable from common knowledge.
-  const chosen = candidates.slice(0, HOLES).sort((a, b) => b.famous - a.famous);
-  const parsDesc = [...PAR_SEQUENCE].sort((a, b) => b - a); // [5,5,4,4,4,3,3,3,2]
-  const withPar = chosen.map((c, i) => ({
-    ...c,
-    par: Math.max(2, Math.min(parsDesc[i]!, c.famous - 2)) as 2 | 3 | 4 | 5,
-  }));
-
-  // Re-order holes for the round (deterministic), so pars aren't monotonic.
-  withPar.sort((a, b) => hashStr(`${seed}:order:${a.prompt}`) - hashStr(`${seed}:order:${b.prompt}`));
-
-  const holes: GolfHole[] = withPar.map((c, i) => ({
-    id: `${date}-h${i + 1}`,
-    holeNumber: i + 1,
-    par: c.par,
-    prompt: c.prompt,
-    category: categoryFor(c.rule, c.prompt),
-    answers: c.answers,
-    hints: hintsFor(c.answers),
-  }));
-
-  const totalPar = holes.reduce((s, h) => s + h.par, 0);
-  return { modeId: 'football_golf', puzzleId: `${date}-football_golf`, date, title: 'Daily Football Golf', totalPar, holes };
+  return candidates;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

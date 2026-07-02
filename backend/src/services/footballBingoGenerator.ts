@@ -20,6 +20,7 @@ import { db } from '../db/index.js';
 import { resolveHeadshot } from '../constants/footballMedia.js';
 import { lookupTeamLogo } from './teamService.js';
 import { getPhotoOverrides } from './photoOverrides.js';
+import { recentBingoTileIds } from './puzzleHistory.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
 const GRID = 16;
@@ -28,6 +29,10 @@ const MIN_POOL_MATCHERS = 6; // a category needs this many matchers in the pool
 const MIN_COMBO_MATCHERS = 5; // combos are rarer, allow a slightly lower floor
 const MATCHERS_PER_CATEGORY = 5;
 const MAX_QUEUE = 55;
+/** Prefer tiles that haven't shipped within this many days. */
+const BINGO_TILE_REPEAT_WINDOW_DAYS = 10;
+/** Every tile should keep at least this many matchers in the shipped queue (timer fairness). */
+const MIN_QUEUE_MATCHERS = 3;
 const TOP_CLUB_COUNT = 22; // marquee clubs = the most-represented clubs in the famous pool
 
 function norm(v: string): string {
@@ -427,12 +432,20 @@ function buildCandidates(pool: BingoPlayer[], clubLeagues: Map<string, string>, 
   };
 }
 
-export async function generateFootballBingoPuzzle(date: string): Promise<FootballBingoPuzzle> {
+export async function generateFootballBingoPuzzle(
+  date: string,
+  opts?: { recentTileIds?: Set<string> }
+): Promise<FootballBingoPuzzle> {
   const [pool, clubLeagues] = await Promise.all([loadPool(), loadClubLeagues()]);
   if (pool.length < 50) throw new Error('Not enough players in pool for Football Bingo');
 
   const seed = hashStr(`${date}:football_bingo`);
   const candidates = buildCandidates(pool, clubLeagues, seed);
+
+  // Repeat suppression: prefer tiles that haven't shipped in the last few days, so the same
+  // "France" / "Played for Liverpool" square doesn't anchor half the week's grids. Thin types
+  // (awards, stat milestones) fall back to recent tiles rather than dropping below the mix.
+  const recentTiles = opts?.recentTileIds ?? (await recentBingoTileIds(date, BINGO_TILE_REPEAT_WINDOW_DAYS));
 
   // Target mix; tops up from leftovers if a type is short.
   const target: Array<[CatType, number]> = [
@@ -447,17 +460,22 @@ export async function generateFootballBingoPuzzle(date: string): Promise<Footbal
 
   const chosen: BingoCategory[] = [];
   const usedRules = new Set<string>();
-  for (const [type, n] of target) {
+  const takeForType = (type: CatType, n: number, allowRecent: boolean) => {
     for (const c of candidates[type]) {
       if (chosen.filter((x) => x.type === type).length >= n) break;
       if (usedRules.has(c.id)) continue;
+      if (!allowRecent && recentTiles.has(c.id)) continue;
       usedRules.add(c.id);
       chosen.push(c);
     }
+  };
+  for (const [type, n] of target) {
+    takeForType(type, n, false);
+    takeForType(type, n, true); // fill any shortfall with recent tiles
   }
   if (chosen.length < GRID) {
     const rest = seededShuffle(Object.values(candidates).flat().filter((c) => !usedRules.has(c.id)), seed);
-    for (const c of rest) {
+    for (const c of [...rest.filter((c) => !recentTiles.has(c.id)), ...rest.filter((c) => recentTiles.has(c.id))]) {
       if (chosen.length >= GRID) break;
       usedRules.add(c.id);
       chosen.push(c);
@@ -499,7 +517,32 @@ export async function generateFootballBingoPuzzle(date: string): Promise<Footbal
       if (!queueIds.has(p.id)) { queueIds.add(p.id); queue.push(p); }
     }
   }
-  const players = seededShuffle(queue, seed ^ 0x9f00).slice(0, MAX_QUEUE);
+  let players = seededShuffle(queue, seed ^ 0x9f00).slice(0, MAX_QUEUE);
+
+  // The shuffle+slice can cut a tile down to 1–2 surviving matchers — technically solvable but
+  // brutal under the turn timer. Top tiles back up to ≥3 matchers (or all it has), swapping out
+  // the least-useful player whose removal doesn't starve another tile.
+  const inQueue = new Set(players.map((p) => p.id));
+  const countIn = (cat: BingoCategory) => players.filter((p) => matches(p, cat)).length;
+  for (const cat of categories) {
+    const available = queue.filter((p) => matches(p, cat));
+    const desired = Math.min(MIN_QUEUE_MATCHERS, available.length);
+    for (const cand of available) {
+      if (countIn(cat) >= desired) break;
+      if (inQueue.has(cand.id)) continue;
+      if (players.length >= MAX_QUEUE) {
+        const removable = players
+          .filter((p) => !categories.some((c2) => matches(p, c2) && countIn(c2) <= MIN_QUEUE_MATCHERS))
+          .sort((a, b) => categories.filter((c2) => matches(a, c2)).length - categories.filter((c2) => matches(b, c2)).length)[0];
+        if (!removable) break;
+        players = players.filter((p) => p.id !== removable.id);
+        inQueue.delete(removable.id);
+      }
+      players.push(cand);
+      inQueue.add(cand.id);
+    }
+  }
+  players = seededShuffle(players, seed ^ 0x77aa);
 
   return { modeId: 'football_bingo', puzzleId: `${date}-football_bingo`, date, title: 'Daily Football Bingo', categories, players };
 }

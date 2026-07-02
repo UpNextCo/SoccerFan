@@ -22,6 +22,10 @@ import {
   validateBlindRankSelection,
 } from './puzzleValidator.js';
 import type { FactPackPlayer, GeneratedDailyPuzzle } from './dailyPuzzleTypes.js';
+import { blindRankTenKey, recentBlindRankTens } from './puzzleHistory.js';
+
+/** Identical tens can't recur inside this window; salted re-draws provide the variety. */
+const BLIND_RANK_REPEAT_WINDOW_DAYS = 240;
 
 /**
  * Vetted "stinker" bank (recognisable flops per theme), built offline by
@@ -340,8 +344,16 @@ async function clubsByPlayer(ids: string[]): Promise<Map<string, string[]>> {
   return m;
 }
 
-export async function generateBlindRankPuzzle(date: string): Promise<GeneratedDailyPuzzle> {
+export async function generateBlindRankPuzzle(
+  date: string,
+  opts?: { recentTens?: Set<string> }
+): Promise<GeneratedDailyPuzzle> {
   const seed = hashString(`${date}:blind_rank`);
+
+  // Repeat suppression: the same theme × category returning every ~39 days is fine (different
+  // players), but the IDENTICAL ten must not recur for months. Salted re-draws slide the
+  // sample window; if a pair can't produce a fresh ten we fall through to the next pair.
+  const recentTens = opts?.recentTens ?? (await recentBlindRankTens(date, BLIND_RANK_REPEAT_WINDOW_DAYS));
 
   // All (theme, category) pairs, rotated by date so the daily varies and cycles evenly.
   const pairs = THEMES.flatMap((t) => t.cats.map((c) => ({ theme: t, cat: c })));
@@ -366,11 +378,20 @@ export async function generateBlindRankPuzzle(date: string): Promise<GeneratedDa
     `)) as unknown as UniverseRow[];
     if (pool.length < BLIND_RANK_SLOT_COUNT) continue;
 
-    // Spread 10 across the stat within the recognisable pool, then maybe swap in a curated stinker.
+    // Spread 10 across the stat within the recognisable pool, then maybe swap in a curated
+    // stinker. Re-draw with a salted seed if this exact ten shipped within the repeat window.
     const byStat = [...pool].sort((a, b) => b.stat - a.stat);
-    const spread = pickSpread(byStat, seed);
-    if (!spread) continue;
-    const chosen = await injectStinker(spread, theme, category.col, seed);
+    let chosen: PoolRow[] | null = null;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const attemptSeed = attempt === 0 ? seed : hashString(`${date}:blind_rank:${theme.id}:${cat}:${attempt}`);
+      const spread = pickSpread(byStat, attemptSeed);
+      if (!spread) continue;
+      const trial = await injectStinker(spread, theme, category.col, attemptSeed);
+      if (recentTens.has(blindRankTenKey(trial.map((c) => c.id)))) continue;
+      chosen = trial;
+      break;
+    }
+    if (!chosen) continue;
 
     const clubs = await clubsByPlayer(chosen.map((c) => c.id));
     const ranked = [...chosen].sort((a, b) => b.stat - a.stat);

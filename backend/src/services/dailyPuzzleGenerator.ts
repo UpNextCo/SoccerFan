@@ -6,8 +6,26 @@ import type { DailyFactPack, GeneratedDailyPuzzle } from './dailyPuzzleTypes.js'
 import { TARGET_CATEGORIES, topPlayersForCategory } from './targetManCategories.js';
 import { PuzzleValidationError, validateGeneratedPuzzle } from './puzzleValidator.js';
 import { generateBlindRankPuzzle as generateThemedBlindRank } from './blindRankGenerator.js';
+import { recentGuessWhoAnswerIds, recentTargetManQuestions, targetManQuestionKey } from './puzzleHistory.js';
 
 const DAILY_MODES = ['guess_who', 'target_man', 'blind_rank'] as const;
+
+// Repeat-suppression windows (days). Content used inside the window can't be picked again;
+// once outside it only returns by seeded chance — never on a fixed schedule.
+const GUESS_WHO_REPEAT_WINDOW_DAYS = 180;
+const TARGET_MAN_REPEAT_WINDOW_DAYS = 240;
+
+/** Seeded Fisher–Yates (LCG) — deterministic per seed, no Math.random. */
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const r = [...arr];
+  let state = BigInt(seed === 0 ? 1 : seed);
+  for (let i = r.length - 1; i > 0; i -= 1) {
+    state = (state * 6364136223846793005n + 1n) & ((1n << 64n) - 1n);
+    const j = Number(state % BigInt(i + 1));
+    [r[i], r[j]] = [r[j]!, r[i]!];
+  }
+  return r;
+}
 
 function hashString(input: string): number {
   let hash = 0;
@@ -30,11 +48,17 @@ function roundTarget(value: number, step: number): number {
 
 export async function generateGuessWhoPuzzle(
   date: string,
-  factPack: DailyFactPack
+  factPack: DailyFactPack,
+  opts?: { recentAnswerIds?: Set<string> }
 ): Promise<GeneratedDailyPuzzle> {
   if (factPack.playerCount === 0) {
     throw new PuzzleValidationError('No players available for Guess Who');
   }
+
+  // Repeat suppression: never reuse an answer from the last ~6 months. The pool is ~530+, so
+  // excluding ≤180 recent answers always leaves hundreds of candidates; selection within the
+  // remainder stays hash-random, so there's no fixed comeback schedule either.
+  const recentAnswers = opts?.recentAnswerIds ?? (await recentGuessWhoAnswerIds(date, GUESS_WHO_REPEAT_WINDOW_DAYS));
 
   // The answer must be recognisable AND CURRENTLY ACTIVE. We require recent big-5 minutes
   // (season >= 2024): that keeps the deduction attributes (club/league/age) current AND drops
@@ -79,16 +103,20 @@ export async function generateGuessWhoPuzzle(
     LIMIT 600
   `)) as unknown as Array<{ id: string; current_league: string }>;
 
+  // Drop recently-used answers (fall back to the full pool only if that somehow empties it).
+  const freshRows = poolRows.filter((r) => !recentAnswers.has(r.id));
+  const eligibleRows = freshRows.length > 0 ? freshRows : poolRows;
+
   // ~2/3 of days the answer is a Premier League player, ~1/3 one of the other big-5 leagues.
-  const pl = poolRows.filter((r) => r.current_league === 'Premier League').map((r) => r.id);
-  const other = poolRows.filter((r) => r.current_league !== 'Premier League').map((r) => r.id);
+  const pl = eligibleRows.filter((r) => r.current_league === 'Premier League').map((r) => r.id);
+  const other = eligibleRows.filter((r) => r.current_league !== 'Premier League').map((r) => r.id);
   // 2-in-3 cadence (every 3rd day is a non-PL league) — a clean ~2/3 PL split without the long
   // same-league runs a string hash produces.
   const wantPL = dayNumber(date) % 3 !== 0;
   let ids = wantPL
     ? (pl.length > 0 ? pl : other)
     : (other.length > 0 ? other : pl);
-  if (ids.length === 0) ids = poolRows.map((row) => row.id);
+  if (ids.length === 0) ids = eligibleRows.map((row) => row.id);
 
   if (ids.length === 0) {
     // Safe fallback: the most valuable currently-active big-5 players — NEVER an obscure random.
@@ -101,7 +129,8 @@ export async function generateGuessWhoPuzzle(
       WHERE p.external_id IS NOT NULL AND p.market_value_tier >= 4
       ORDER BY p.market_value_tier DESC, p.id LIMIT 200
     `)) as unknown as Array<{ id: string }>;
-    ids = fb.map((row) => row.id);
+    const fresh = fb.map((row) => row.id).filter((id) => !recentAnswers.has(id));
+    ids = fresh.length > 0 ? fresh : fb.map((row) => row.id);
   }
   if (ids.length === 0) {
     throw new PuzzleValidationError('No eligible players for Guess Who');
@@ -127,9 +156,14 @@ export async function generateGuessWhoPuzzle(
 
 export async function generateTargetManPuzzle(
   date: string,
-  _factPack: DailyFactPack
+  _factPack: DailyFactPack,
+  opts?: { recentQuestions?: Set<string> }
 ): Promise<GeneratedDailyPuzzle> {
   const seed = hashString(`${date}:target_man`);
+
+  // Repeat suppression: the same category coming back every ~19 days is fine (it's a fresh
+  // number), but the EXACT question (category + target) must not recur for months.
+  const recentQuestions = opts?.recentQuestions ?? (await recentTargetManQuestions(date, TARGET_MAN_REPEAT_WINDOW_DAYS));
 
   // Rotate across the curated category list with a coprime stride, then walk the list so a
   // thin pool falls through to the next category instead of failing the whole mode.
@@ -140,19 +174,27 @@ export async function generateTargetManPuzzle(
   for (let offset = 0; offset < cats.length; offset += 1) {
     const def = cats[(start + offset) % cats.length]!;
 
-    const ranked = await topPlayersForCategory(def, 25);
+    const ranked = await topPlayersForCategory(def, 30);
     if (ranked.length < 5) continue;
 
-    // Pick 5 from the mid-table so the target is challenging, not just the elite.
-    const middle = ranked.slice(4, 14);
-    const sample = middle.length >= 5 ? middle : ranked.slice(0, 5);
-    const pickOffset = seed % Math.max(sample.length - 4, 1);
-    const chosen = sample.slice(pickOffset, pickOffset + 5);
-    if (chosen.length < 5) continue;
-
-    const combined = chosen.reduce((sum, player) => sum + player.statValue, 0);
-    const target = roundTarget(combined, def.round);
-    if (target <= 0) continue;
+    // Pick 5 from below the elite tier so the target is challenging, not just the top names.
+    // A seeded 5-of-N draw (not a sliding window of 6 offsets) gives thousands of possible
+    // samples per category; salted re-draws dodge any target used in the last few months.
+    const sample = ranked.length >= 9 ? ranked.slice(4) : ranked;
+    let chosen: typeof ranked = [];
+    let target = 0;
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      const draw = seededShuffle(sample, hashString(`${date}:${def.id}:${attempt}:${seed}`)).slice(0, 5);
+      if (draw.length < 5) break;
+      const combined = draw.reduce((sum, player) => sum + player.statValue, 0);
+      const rounded = roundTarget(combined, def.round);
+      if (rounded <= 0) continue;
+      if (recentQuestions.has(targetManQuestionKey(def.id, rounded))) continue;
+      chosen = draw;
+      target = rounded;
+      break;
+    }
+    if (chosen.length < 5 || target <= 0) continue;
 
     const puzzleJson = {
       modeId: 'target_man' as const,
