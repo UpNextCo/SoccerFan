@@ -126,8 +126,8 @@ enum FootballGolfScoring {
     }
 
     static func xp(total: Int) -> Int {
-        // Mirror the value submitted to the server: score = max(0, 40 − strokesVsPar×4), win at/under par.
-        DailyXP.xp(.footballGolf, score: max(0, 40 - total * 4), won: total <= 0)
+        // Golf is scored straight off strokes-vs-par (this `total`); the server does the same.
+        DailyXP.golfXp(total: total)
     }
 }
 

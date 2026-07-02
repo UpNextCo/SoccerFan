@@ -9,17 +9,24 @@ function computeLevel(xp: number): number {
   return Math.max(1, Math.floor(Math.sqrt(xp / 100)));
 }
 
+function todayUTC(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function toUserProfile(
   user: typeof users.$inferSelect,
   progress: typeof userProgress.$inferSelect
 ): UserProfile {
+  // "Today's XP" only counts if the stored tally is actually from today — otherwise it's
+  // yesterday's total and should read 0 (the dailies have reset for the new day).
+  const todayXp = progress.todayXpDate === todayUTC() ? progress.todayXp : 0;
   return {
     id: user.id,
     displayName: user.displayName,
     xp: progress.xp,
     level: progress.level,
     streak: progress.streak,
-    todayXp: progress.todayXp,
+    todayXp,
     favoriteTeamId: user.favoriteTeamId ?? null,
   };
 }

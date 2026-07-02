@@ -119,7 +119,19 @@ function modePerformance(modeId: string, score: number, guesses: number): number
 // (mirrored client-side in DailyXP.blindRankMoveCost). The swap count arrives in `guesses`.
 const BLIND_RANK_MOVE_COST = 50;
 
+// Football Golf is scored directly off strokes-vs-par (negative = under). It's the longest game and
+// par/under-par is fairly attainable, so the curve is deliberately demanding at the top and gives
+// graduated (not flat) XP when over par. `score` carries the strokes-relative-to-par total.
+//   ≤ −15 → 1000 · −10 → 900 (+20/stroke to −15) · par → 400 (+50/stroke to −10) · over → −50/stroke, floor 100
+function golfXp(total: number): number {
+  if (total <= -15) return 1000;
+  if (total <= -10) return 900 + (-total - 10) * 20;
+  if (total <= 0) return 400 + -total * 50;
+  return Math.max(XP_FLOOR, 400 - total * 50);
+}
+
 function computeXp(modeId: string, score: number, guesses: number, won: boolean): number {
+  if (modeId === 'football_golf') return golfXp(score);
   if (!won) return XP_FLOOR;
   const max = MAX_XP[modeId] ?? DEFAULT_MAX_XP;
   let xp = Math.max(XP_FLOOR, Math.round(clamp01(modePerformance(modeId, score, guesses)) * max));

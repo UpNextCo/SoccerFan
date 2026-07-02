@@ -104,6 +104,10 @@ final class FootballGolfViewModel {
     var showResult = false
     var confettiToken = 0
 
+    /// Guards against a single tap registering multiple guesses: the suggestion list / reveal
+    /// animate out over a few frames and stay hit-testable, so fast taps could double-count.
+    var isResolving = false
+
     // autocomplete
     var searchResults: [PlayerSearchResultDTO] = []
     var isSearching = false
@@ -146,9 +150,10 @@ final class FootballGolfViewModel {
     }
 
     func submitGuess() {
-        guard phase == .playing, let hole = currentHole else { return }
+        guard phase == .playing, !isResolving, let hole = currentHole else { return }
         let trimmed = guess.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        lockResolve()
 
         if let answer = FootballGolfMatcher.match(guess: trimmed, in: hole.answers, alreadyMatched: matchedIds) {
             matched.append(answer)
@@ -180,10 +185,13 @@ final class FootballGolfViewModel {
 
     /// Tapped an autocomplete suggestion — validate by id against the hole's answers.
     func pick(_ r: PlayerSearchResultDTO) {
-        guard phase == .playing, let hole = currentHole else { return }
+        guard phase == .playing, !isResolving, let hole = currentHole else { return }
+        // Re-tapping an answer you've already scored is an accidental double-tap, not a wrong guess.
+        guard !matchedIds.contains(r.id) else { return }
+        lockResolve()
         searchResults = []
         guess = ""
-        if let answer = hole.answers.first(where: { $0.id == r.id && !matchedIds.contains($0.id) }) {
+        if let answer = hole.answers.first(where: { $0.id == r.id }) {
             matched.append(answer)
             lastRevealed = answer
             revealToken += 1
@@ -194,6 +202,15 @@ final class FootballGolfViewModel {
             HapticManager.error()
         }
         checkComplete()
+    }
+
+    /// Briefly ignore further guesses while the current one's reveal/list animates out.
+    private func lockResolve() {
+        isResolving = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            isResolving = false
+        }
     }
 
     func skipHole() {
@@ -232,6 +249,7 @@ final class FootballGolfViewModel {
         guess = ""
         searchResults = []
         lastRevealed = nil
+        isResolving = false
         phase = .playing
     }
 
@@ -490,7 +508,7 @@ struct FootballGolfView: View {
                 await DailyCompletionService.recordCompletion(
                     modeId: GameModeID.footballGolf.rawValue,
                     date: dailyDate,
-                    score: max(0, 40 - total * 4),
+                    score: total,   // strokes vs par (negative = under); server maps via golfXp
                     won: total <= 0,
                     context: modelContext
                 )

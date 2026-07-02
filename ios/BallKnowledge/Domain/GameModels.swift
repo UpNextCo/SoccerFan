@@ -300,9 +300,20 @@ enum DailyXP {
         }
     }
 
+    /// Football Golf is scored straight off strokes-vs-par (negative = under par). Mirror of the
+    /// server `golfXp`: ≤ −15 → 1000, −10 → 900 (+20/stroke to −15), par → 400 (+50/stroke to −10),
+    /// over par → −50/stroke down to the 100 floor.
+    static func golfXp(total: Int) -> Int {
+        if total <= -15 { return 1000 }
+        if total <= -10 { return 900 + (-total - 10) * 20 }
+        if total <= 0 { return 400 + -total * 50 }
+        return max(floor, 400 - total * 50)
+    }
+
     /// The XP banked for this result (win applies the participation floor; a loss is the floor).
     /// For Blind Rank, `guesses` carries the number of review-phase swaps and each one costs XP.
     static func xp(mode: String, score: Int, guesses: Int = 1, won: Bool) -> Int {
+        if mode == "football_golf" { return golfXp(total: score) }
         guard won else { return floor }
         let cap = maxXP[mode] ?? defaultMax
         let perf = min(1.0, max(0.0, performance(mode: mode, score: score, guesses: guesses)))
