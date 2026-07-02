@@ -34,6 +34,21 @@ final class DraftMasterViewModel {
     var challenge: BattleChallenge { state.challenge }
     var category: BattleCategory { state.challenge.category }
 
+    /// Mid-build and worth saving: started assigning clubs or picking players.
+    var isResumable: Bool {
+        state.phase == .building && (!state.picks.isEmpty || !state.assignments.isEmpty)
+    }
+
+    func restore(_ saved: BattleGameState) {
+        state = saved
+        searchQuery = ""
+        results = []
+        activeSlot = nil
+        selectionError = nil
+        showResult = false
+        showShare = false
+    }
+
     func start() { HapticManager.light(); state.phase = .building }
 
     func restart() {
@@ -205,6 +220,21 @@ struct DraftMasterView: View {
                 .zIndex(999)
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: viewModel.state.phase)
+        .persistsGameProgress(
+            viewModel.state,
+            isResumable: viewModel.isResumable,
+            modeId: GameModeID.draftMaster.rawValue,
+            date: dailyDate,
+            version: BattleGameState.progressVersion,
+            enabled: !allowReplay
+        )
+        .onAppear {
+            guard !allowReplay, let dailyDate,
+                  let saved = GameProgressStore.load(
+                    BattleGameState.self, modeId: GameModeID.draftMaster.rawValue,
+                    date: dailyDate, version: BattleGameState.progressVersion, context: modelContext) else { return }
+            viewModel.restore(saved)
+        }
         .sheet(item: Binding(get: { viewModel.activeSlot }, set: { if $0 == nil { viewModel.closeSlot() } })) { slot in
             BattleSearchSheet(viewModel: viewModel, slot: slot)
         }

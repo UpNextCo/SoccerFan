@@ -40,6 +40,27 @@ final class FootballBingoViewModel {
         DailyXP.xp(.footballBingo, score: rawScore, won: game.status == .won)
     }
 
+    /// Snapshot for save/restore (board + the one-shot wildcard flag).
+    var snapshot: FootballBingoProgress {
+        FootballBingoProgress(game: game, wildcardUsed: wildcardUsed)
+    }
+
+    /// Mid-game and worth saving: at least one turn taken, not finished.
+    var isResumable: Bool {
+        game.status == .active && (game.completedCount > 0 || game.currentPlayerIndex > 0)
+    }
+
+    func restore(_ p: FootballBingoProgress) {
+        game = p.game
+        wildcardUsed = p.wildcardUsed
+        shakeCategoryId = nil
+        popCategoryId = nil
+        playerPanelToken = UUID()
+        confettiBurstToken = 0
+        wrongFlashToken = 0
+        showResult = false
+    }
+
     func restart() {
         game = Self.makeGame(dailyDate: dailyDate, serverPuzzle: serverPuzzle)
         shakeCategoryId = nil
@@ -228,6 +249,21 @@ struct FootballBingoView: View {
                 .zIndex(999)
         }
         .animation(.spring(response: FootballBingoTiming.playerSlide, dampingFraction: 0.82), value: viewModel.playerPanelToken)
+        .persistsGameProgress(
+            viewModel.snapshot,
+            isResumable: viewModel.isResumable,
+            modeId: GameModeID.footballBingo.rawValue,
+            date: dailyDate,
+            version: FootballBingoProgress.progressVersion,
+            enabled: !allowReplay
+        )
+        .onAppear {
+            guard !allowReplay, let dailyDate,
+                  let saved = GameProgressStore.load(
+                    FootballBingoProgress.self, modeId: GameModeID.footballBingo.rawValue,
+                    date: dailyDate, version: FootballBingoProgress.progressVersion, context: modelContext) else { return }
+            viewModel.restore(saved)
+        }
         .onChange(of: viewModel.wrongFlashToken) { _, _ in
             withAnimation(.easeOut(duration: FootballBingoTiming.wrongFlashIn)) {
                 wrongFlashOpacity = 0.22

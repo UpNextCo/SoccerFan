@@ -44,6 +44,7 @@ struct HomeView: View {
     @State private var presentedMode: GameModeID?
     @State private var showAlreadyPlayedAlert = false
     @State private var alreadyPlayedTitle = ""
+    @State private var inProgressModes: Set<String> = []
     @Binding var selectedTab: AppTab
 
     private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
@@ -62,6 +63,7 @@ struct HomeView: View {
                         bundle: viewModel.dailyBundle,
                         allowUnlimitedPlay: allowsUnlimitedDailyPlay,
                         todayXp: auth.user?.todayXp ?? 0,
+                        inProgressModes: inProgressModes,
                         onSelect: { mode in
                             guard let bundle = viewModel.dailyBundle else { return }
                             openMode(mode, bundle: bundle)
@@ -83,6 +85,7 @@ struct HomeView: View {
         }
         .task {
             await viewModel.load(context: modelContext)
+            refreshInProgress()
         }
         .onReceive(NotificationCenter.default.publisher(for: .dailyCompletionRecorded)) { _ in
             // The completion POST has landed on the server — refresh XP (top bar + card) and the
@@ -90,6 +93,7 @@ struct HomeView: View {
             Task {
                 await auth.refreshProfile()
                 await viewModel.load(context: modelContext)
+                refreshInProgress()
             }
         }
         .fullScreenCover(item: $presentedMode) { mode in
@@ -123,10 +127,22 @@ struct HomeView: View {
 
     private func handleModeFinished(_ mode: GameModeID) {
         presentedMode = nil
+        refreshInProgress()
         Task {
             await auth.refreshProfile()
             await viewModel.load(context: modelContext)
+            refreshInProgress()
         }
+    }
+
+    /// Recompute which games have saved mid-game progress for today, and drop stale (past-day) snapshots.
+    private func refreshInProgress() {
+        guard let date = viewModel.dailyBundle?.date else {
+            inProgressModes = []
+            return
+        }
+        GameProgressStore.clearStale(keepingDate: date, context: modelContext)
+        inProgressModes = GameProgressStore.inProgressModes(date: date, context: modelContext)
     }
 }
 
@@ -355,6 +371,7 @@ struct DailySection: View {
     let bundle: DailyBundleDTO?
     var allowUnlimitedPlay = false
     let todayXp: Int
+    var inProgressModes: Set<String> = []
     var onSelect: (GameModeMetaDTO) -> Void
 
     @State private var glow = false
@@ -494,9 +511,13 @@ struct DailySection: View {
     }
 
     private func state(for mode: GameModeMetaDTO) -> DailyTileState {
-        let modeId = GameModeID(rawValue: GameModeCatalog.normalizedModeId(mode.id))
+        let normalized = GameModeCatalog.normalizedModeId(mode.id)
+        let modeId = GameModeID(rawValue: normalized)
         if let bundle, !allowUnlimitedPlay, let modeId, bundle.isCompleted(modeId) {
             return .completed
+        }
+        if inProgressModes.contains(normalized) {
+            return .inProgress
         }
         return .available
     }
@@ -600,6 +621,15 @@ struct DailyGameCard: View {
             .padding(.vertical, 6)
             .background(.black.opacity(0.45))
             .clipShape(Capsule())
+        case .inProgress:
+            HStack(spacing: 5) {
+                Circle().fill(BKTheme.inProgress).frame(width: 7, height: 7)
+                Text("IN PROGRESS").font(BKFont.caption(10)).foregroundStyle(.white)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.45))
+            .clipShape(Capsule())
         case .available:
             EmptyView()
         }
@@ -645,6 +675,7 @@ enum DailyTime {
 
 enum DailyTileState {
     case completed
+    case inProgress
     case available
 }
 

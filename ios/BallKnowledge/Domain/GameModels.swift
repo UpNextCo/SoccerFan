@@ -93,15 +93,16 @@ struct ShareCard: Equatable {
     }
 }
 
-struct GuessWhoGuessRow: Identifiable, Equatable {
-    let id = UUID()
+struct GuessWhoGuessRow: Identifiable, Equatable, Codable {
+    var id = UUID()
     let player: PlayerSearchResultDTO
     let feedback: [GuessFeedbackFieldDTO]
     let isCorrect: Bool
     var isHint: Bool = false
 }
 
-struct GuessWhoGameState: Equatable {
+struct GuessWhoGameState: Equatable, Codable {
+    static let progressVersion = 1
     let puzzle: GuessWhoPuzzleDTO
     var guesses: [GuessWhoGuessRow] = []
     var isComplete = false

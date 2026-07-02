@@ -102,6 +102,20 @@ final class WorldCupXIViewModel {
         confettiBurstToken = 0
         revealedClubs = []
     }
+
+    /// Mid-game and worth saving: named at least one player, not yet finished.
+    var isResumable: Bool {
+        state.phase == .playing && !state.fills.isEmpty
+    }
+
+    func restore(_ saved: WorldCupXIGameState) {
+        state = saved
+        searchQuery = ""
+        searchResults = []
+        showSlotSheet = false
+        showResult = false
+        revealedClubs = []
+    }
 }
 
 // MARK: - Main View
@@ -155,6 +169,21 @@ struct WorldCupXIView: View {
                 FootballConfettiView(burstToken: viewModel.confettiBurstToken)
                     .allowsHitTesting(false)
             }
+        }
+        .persistsGameProgress(
+            viewModel.state,
+            isResumable: viewModel.isResumable,
+            modeId: GameModeID.worldCupXI.rawValue,
+            date: dailyDate,
+            version: WorldCupXIGameState.progressVersion,
+            enabled: !allowReplay
+        )
+        .onAppear {
+            guard !allowReplay, let dailyDate,
+                  let saved = GameProgressStore.load(
+                    WorldCupXIGameState.self, modeId: GameModeID.worldCupXI.rawValue,
+                    date: dailyDate, version: WorldCupXIGameState.progressVersion, context: modelContext) else { return }
+            viewModel.restore(saved)
         }
         .sheet(isPresented: $viewModel.showSlotSheet) {
             slotSheet

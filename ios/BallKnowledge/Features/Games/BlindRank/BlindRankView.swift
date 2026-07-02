@@ -40,6 +40,15 @@ final class BlindRankViewModel {
         BlindRankScoring.xp(fromScore: state.score ?? 0, moves: state.moveCount)
     }
 
+    /// Mid-game and worth saving: started placing players, or reviewing before submit.
+    var isResumable: Bool {
+        switch state.phase {
+        case .ranking: return state.currentPlayerIndex > 0
+        case .adjusting: return true
+        case .revealing, .complete: return false
+        }
+    }
+
     func assignCurrentPlayer(to slot: Int) {
         guard state.phase == .ranking,
               state.slots.indices.contains(slot),
@@ -79,6 +88,14 @@ final class BlindRankViewModel {
         guard state.phase == .adjusting else { return }
         selectedAdjustSlot = nil
         beginReveal()
+    }
+
+    /// Rehydrate from a saved snapshot (resuming a left game).
+    func restore(_ saved: BlindRankGameState) {
+        state = saved
+        selectedAdjustSlot = nil
+        showResult = false
+        activeRevealSlide = nil
     }
 
     func restart() {
@@ -171,6 +188,14 @@ struct BlindRankView: View {
         Group {
             if let viewModel {
                 blindRankContent(viewModel: viewModel)
+                    .persistsGameProgress(
+                        viewModel.state,
+                        isResumable: viewModel.isResumable,
+                        modeId: GameModeID.blindRank.rawValue,
+                        date: dailyDate,
+                        version: BlindRankGameState.progressVersion,
+                        enabled: !allowReplay
+                    )
             } else {
                 ProgressView()
                     .tint(BKTheme.accent)
@@ -179,7 +204,14 @@ struct BlindRankView: View {
             }
         }
         .task(id: dailyBundle?.date ?? "none") {
-            viewModel = await BlindRankViewModel.make(dailyBundle: dailyBundle)
+            let vm = await BlindRankViewModel.make(dailyBundle: dailyBundle)
+            if !allowReplay, let dailyDate,
+               let saved = GameProgressStore.load(
+                    BlindRankGameState.self, modeId: GameModeID.blindRank.rawValue,
+                    date: dailyDate, version: BlindRankGameState.progressVersion, context: modelContext) {
+                vm.restore(saved)
+            }
+            viewModel = vm
         }
     }
 

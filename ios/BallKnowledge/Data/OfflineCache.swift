@@ -35,16 +35,124 @@ final class PendingDailyCompletion {
     }
 }
 
+/// Persisted mid-game progress so a player can leave / force-close and resume where they left off.
+/// One row per (modeId, date); cleared when the game is completed or the day rolls over.
 @Model
-final class GuessWhoSession {
-    @Attribute(.unique) var puzzleId: String
+final class GameProgress {
+    @Attribute(.unique) var key: String   // "modeId#date"
+    var modeId: String
+    var date: String
+    var version: Int
     var stateData: Data
     var updatedAt: Date
 
-    init(puzzleId: String, stateData: Data) {
-        self.puzzleId = puzzleId
+    init(key: String, modeId: String, date: String, version: Int, stateData: Data) {
+        self.key = key
+        self.modeId = modeId
+        self.date = date
+        self.version = version
         self.stateData = stateData
         self.updatedAt = .now
+    }
+}
+
+/// Save/restore for in-progress daily games. State blobs are the game's own `…GameState` encoded as
+/// JSON, tagged with a per-game `version` so an incompatible snapshot is discarded rather than crashing.
+enum GameProgressStore {
+    private static func key(_ modeId: String, _ date: String) -> String { "\(modeId)#\(date)" }
+
+    static func save<T: Encodable>(_ state: T, modeId: String, date: String, version: Int, context: ModelContext) {
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        let k = key(modeId, date)
+        let existing = (try? context.fetch(FetchDescriptor<GameProgress>(predicate: #Predicate { $0.key == k }))) ?? []
+        if let row = existing.first {
+            row.stateData = data
+            row.version = version
+            row.updatedAt = .now
+        } else {
+            context.insert(GameProgress(key: k, modeId: modeId, date: date, version: version, stateData: data))
+        }
+        try? context.save()
+    }
+
+    static func load<T: Decodable>(_ type: T.Type, modeId: String, date: String, version: Int, context: ModelContext) -> T? {
+        let k = key(modeId, date)
+        guard let row = (try? context.fetch(FetchDescriptor<GameProgress>(predicate: #Predicate { $0.key == k })))?.first else {
+            return nil
+        }
+        guard row.version == version, let decoded = try? JSONDecoder().decode(T.self, from: row.stateData) else {
+            context.delete(row)
+            try? context.save()
+            return nil
+        }
+        return decoded
+    }
+
+    static func clear(modeId: String, date: String, context: ModelContext) {
+        let k = key(modeId, date)
+        let rows = (try? context.fetch(FetchDescriptor<GameProgress>(predicate: #Predicate { $0.key == k }))) ?? []
+        rows.forEach { context.delete($0) }
+        try? context.save()
+    }
+
+    /// Mode ids that have saved progress for `date` — drives the home "In Progress" badge.
+    static func inProgressModes(date: String, context: ModelContext) -> Set<String> {
+        let rows = (try? context.fetch(FetchDescriptor<GameProgress>(predicate: #Predicate { $0.date == date }))) ?? []
+        return Set(rows.map(\.modeId))
+    }
+
+    /// Drop snapshots from previous days (called when today's bundle loads).
+    static func clearStale(keepingDate date: String, context: ModelContext) {
+        let rows = (try? context.fetch(FetchDescriptor<GameProgress>(predicate: #Predicate { $0.date != date }))) ?? []
+        rows.forEach { context.delete($0) }
+        try? context.save()
+    }
+}
+
+/// Drop-in persistence for a game screen: writes the game's state whenever it changes (so a
+/// force-close mid-move is safe) and when the app backgrounds, and clears the snapshot once the
+/// game is no longer resumable (finished). Restore is done by each game on open (it must hydrate
+/// its own view model). Disabled for dev replay.
+private struct GameProgressPersistence<State: Codable & Equatable>: ViewModifier {
+    let state: State
+    let isResumable: Bool
+    let modeId: String
+    let date: String?
+    let version: Int
+    let enabled: Bool
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: state) { _, _ in persist() }
+            .onChange(of: scenePhase) { _, phase in if phase == .background { persist() } }
+    }
+
+    private func persist() {
+        guard enabled, let date else { return }
+        if isResumable {
+            GameProgressStore.save(state, modeId: modeId, date: date, version: version, context: modelContext)
+        } else {
+            GameProgressStore.clear(modeId: modeId, date: date, context: modelContext)
+        }
+    }
+}
+
+extension View {
+    /// See `GameProgressPersistence`. `enabled` should be `!allowReplay` so dev replays don't persist.
+    func persistsGameProgress<State: Codable & Equatable>(
+        _ state: State,
+        isResumable: Bool,
+        modeId: String,
+        date: String?,
+        version: Int,
+        enabled: Bool
+    ) -> some View {
+        modifier(GameProgressPersistence(
+            state: state, isResumable: isResumable, modeId: modeId, date: date, version: version, enabled: enabled
+        ))
     }
 }
 

@@ -26,7 +26,7 @@ final class FootballTowerViewModel {
         serverDate = serverPuzzle?.date
     }
 
-    private var todayDate: String {
+    var todayDate: String {
         serverDate ?? String(ISO8601DateFormatter().string(from: Date()).prefix(10))
     }
 
@@ -46,6 +46,23 @@ final class FootballTowerViewModel {
             questions = FootballTowerSeed.makeDailyTower(date: todayDate)
         }
         state = FootballTowerGameState(mode: .daily, date: todayDate, questions: questions)
+        resetSearch()
+    }
+
+    /// Mid-climb and worth saving: cleared at least one floor, not failed.
+    var isResumable: Bool {
+        guard let s = state else { return false }
+        return (s.phase == .playing || s.phase == .correctTransition) && s.correctCount > 0
+    }
+
+    func restoreDaily(_ saved: FootballTowerGameState) {
+        var s = saved
+        if s.phase == .correctTransition { s.phase = .playing }  // no in-flight climb after resume
+        state = s
+        towerOffset = 0
+        feedbackMessage = nil
+        showResult = false
+        resultSummary = nil
         resetSearch()
     }
 
@@ -189,6 +206,7 @@ final class FootballTowerViewModel {
 struct FootballTowerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: FootballTowerViewModel
     @FocusState private var isSearchFocused: Bool
     private let dailyOnly: Bool
@@ -225,7 +243,8 @@ struct FootballTowerView: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
-                            if viewModel.state == nil {
+                            // Leave with progress intact (it's already saved); daily always exits to home.
+                            if dailyOnly || viewModel.state == nil {
                                 dismiss()
                             } else {
                                 viewModel.returnToMenu()
@@ -292,10 +311,28 @@ struct FootballTowerView: View {
                 FootballTowerShareSheet(summary: summary, mode: run.mode)
             }
         }
+        .onChange(of: viewModel.state) { _, _ in persistTower() }
+        .onChange(of: scenePhase) { _, phase in if phase == .background { persistTower() } }
         .onAppear {
-            if dailyOnly, viewModel.state == nil {
+            guard dailyOnly, viewModel.state == nil else { return }
+            if !allowReplay,
+               let saved = GameProgressStore.load(
+                    FootballTowerGameState.self, modeId: GameModeID.footballTower.rawValue,
+                    date: viewModel.todayDate, version: FootballTowerGameState.progressVersion, context: modelContext) {
+                viewModel.restoreDaily(saved)
+            } else {
                 viewModel.startDaily()
             }
+        }
+    }
+
+    private func persistTower() {
+        guard !allowReplay, let state = viewModel.state else { return }
+        if viewModel.isResumable {
+            GameProgressStore.save(state, modeId: GameModeID.footballTower.rawValue,
+                                   date: state.date, version: FootballTowerGameState.progressVersion, context: modelContext)
+        } else {
+            GameProgressStore.clear(modeId: GameModeID.footballTower.rawValue, date: state.date, context: modelContext)
         }
     }
 }

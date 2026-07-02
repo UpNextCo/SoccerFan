@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-struct WorldCupXISlot: Identifiable, Equatable {
+struct WorldCupXISlot: Identifiable, Equatable, Codable {
     let id: String
     let label: String
     let pitchPoint: CGPoint
@@ -39,7 +39,7 @@ struct WorldCupXISlot: Identifiable, Equatable {
     var primaryClue: String { clues.first ?? "" }
 }
 
-struct WorldCupXIPuzzle: Equatable {
+struct WorldCupXIPuzzle: Equatable, Codable {
     let id: String
     let title: String
     let formation: String
@@ -48,25 +48,25 @@ struct WorldCupXIPuzzle: Equatable {
     static let slotCount = 11
 }
 
-enum WorldCupXIPhase: Equatable {
+enum WorldCupXIPhase: Equatable, Codable {
     case playing
     case complete
 }
 
 /// A player named for a slot, with whether it matched the clue's answer.
-struct WorldCupXIFill: Equatable {
+struct WorldCupXIFill: Equatable, Codable {
     let player: PlayerSearchResultDTO
     let isCorrect: Bool
 }
 
-struct WorldCupXISlotResult: Identifiable, Equatable {
+struct WorldCupXISlotResult: Identifiable, Equatable, Codable {
     let slot: WorldCupXISlot
     let guessedName: String?
     let isCorrect: Bool
     var id: String { slot.id }
 }
 
-struct WorldCupXIResultSummary: Equatable {
+struct WorldCupXIResultSummary: Equatable, Codable {
     let puzzle: WorldCupXIPuzzle
     let correctCount: Int
     let score: Int
@@ -74,7 +74,8 @@ struct WorldCupXIResultSummary: Equatable {
     let slotResults: [WorldCupXISlotResult]
 }
 
-struct WorldCupXIGameState: Equatable {
+struct WorldCupXIGameState: Equatable, Codable {
+    static let progressVersion = 1
     let puzzle: WorldCupXIPuzzle
     var phase: WorldCupXIPhase
     var fills: [String: WorldCupXIFill]

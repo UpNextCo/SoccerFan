@@ -1,6 +1,6 @@
 import Foundation
 
-enum FootballBingoStatus: Equatable {
+enum FootballBingoStatus: Equatable, Codable {
     case active
     case won
     case lost
@@ -31,7 +31,7 @@ enum FootballBingoIconType: String, Codable {
     case custom
 }
 
-struct FootballBingoCategory: Identifiable, Equatable {
+struct FootballBingoCategory: Identifiable, Equatable, Codable {
     let id: String
     let title: String
     let type: FootballBingoCategoryType
@@ -45,7 +45,7 @@ struct FootballBingoCategory: Identifiable, Equatable {
     var flag: String? = nil
 }
 
-struct FootballBingoPlayer: Identifiable, Equatable {
+struct FootballBingoPlayer: Identifiable, Equatable, Codable {
     let id: String
     let name: String
     let nationality: String
@@ -63,7 +63,7 @@ struct FootballBingoPlayer: Identifiable, Equatable {
     var stats: [String: Int] = [:]
 }
 
-struct FootballBingoGame: Equatable {
+struct FootballBingoGame: Equatable, Codable {
     let id: String
     let title: String
     var categories: [FootballBingoCategory]
@@ -96,6 +96,13 @@ struct FootballBingoGame: Equatable {
             status = .lost
         }
     }
+}
+
+/// Persisted snapshot for resume: the board plus the one-shot wildcard flag (which lives on the VM).
+struct FootballBingoProgress: Equatable, Codable {
+    static let progressVersion = 1
+    var game: FootballBingoGame
+    var wildcardUsed: Bool
 }
 
 enum FootballBingoTiming {

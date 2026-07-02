@@ -34,6 +34,19 @@ final class OneMoreViewModel {
         state.phase == .playing && state.streak > 0
     }
 
+    /// Mid-run and worth saving: at least one round attempted, not busted/cashed out.
+    var isResumable: Bool {
+        state.isActive && (state.roundIndex > 0 || !state.picks.isEmpty)
+    }
+
+    func restore(_ saved: OneMoreGameState) {
+        var s = saved
+        // A snapshot taken mid-reveal has no resolved outcome — re-pose that round.
+        if s.phase == .revealing { s.phase = .playing; s.chosenOptionId = nil }
+        state = s
+        resetTransient()
+    }
+
     /// Tap an option → reveal both values briefly → resolve.
     func choose(_ option: OneMoreOption) {
         guard state.phase == .playing, let round = state.currentRound else { return }
@@ -210,6 +223,21 @@ struct OneMoreView: View {
 
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
                 .zIndex(999)
+        }
+        .persistsGameProgress(
+            viewModel.state,
+            isResumable: viewModel.isResumable,
+            modeId: GameModeID.oneMore.rawValue,
+            date: dailyDate,
+            version: OneMoreGameState.progressVersion,
+            enabled: !allowReplay
+        )
+        .onAppear {
+            guard !allowReplay, let dailyDate,
+                  let saved = GameProgressStore.load(
+                    OneMoreGameState.self, modeId: GameModeID.oneMore.rawValue,
+                    date: dailyDate, version: OneMoreGameState.progressVersion, context: modelContext) else { return }
+            viewModel.restore(saved)
         }
         .fullScreenCover(isPresented: $viewModel.showResult) {
             OneMoreResultView(

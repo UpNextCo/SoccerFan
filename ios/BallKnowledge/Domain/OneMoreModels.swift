@@ -1,7 +1,7 @@
 import Foundation
 
 /// One pickable name in a round; `value` is its career total of the category in the league.
-struct OneMoreOption: Identifiable, Equatable {
+struct OneMoreOption: Identifiable, Equatable, Codable {
     let id: String
     let name: String
     let clubs: String
@@ -22,11 +22,11 @@ struct OneMoreOption: Identifiable, Equatable {
 }
 
 /// A binary round: exactly two options, one of which clears the day's threshold.
-struct OneMoreRound: Equatable {
+struct OneMoreRound: Equatable, Codable {
     let options: [OneMoreOption]
 }
 
-struct OneMorePrompt: Equatable {
+struct OneMorePrompt: Equatable, Codable {
     let id: String
     let metricTitle: String   // e.g. "Premier League goals", "career penalty goals"
     let valueNoun: String     // reveal unit, e.g. "goals", "pens", "caps"
@@ -55,21 +55,22 @@ struct OneMorePrompt: Equatable {
     func qualifies(_ option: OneMoreOption) -> Bool { option.value >= minimum }
 }
 
-struct OneMorePick: Identifiable, Equatable {
-    let id = UUID()
+struct OneMorePick: Identifiable, Equatable, Codable {
+    var id = UUID()
     let name: String
     let statValue: Int
     let pointsAfter: Int
 }
 
-enum OneMorePhase: Equatable {
+enum OneMorePhase: Equatable, Codable {
     case playing
     case revealing   // showing both stat values right after a pick
     case busted
     case cashedOut   // cashed out OR cleared every round
 }
 
-struct OneMoreGameState: Equatable {
+struct OneMoreGameState: Equatable, Codable {
+    static let progressVersion = 1
     let prompt: OneMorePrompt
     var phase: OneMorePhase
     var streak: Int

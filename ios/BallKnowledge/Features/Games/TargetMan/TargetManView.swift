@@ -33,6 +33,19 @@ final class TargetManViewModel {
         return TargetManScoring.xp(from: score)
     }
 
+    /// Mid-game and worth saving: picking players, at least one chosen.
+    var isResumable: Bool {
+        state.phase == .selecting && !state.selections.isEmpty
+    }
+
+    func restore(_ saved: TargetManGameState) {
+        state = saved
+        searchQuery = ""
+        searchResults = []
+        errorMessage = nil
+        showResult = false
+    }
+
     var selectedPlayerIds: Set<String> {
         Set(state.selections.map(\.player.id))
     }
@@ -238,6 +251,21 @@ struct TargetManView: View {
 
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
                 .zIndex(999)
+        }
+        .persistsGameProgress(
+            viewModel.state,
+            isResumable: viewModel.isResumable,
+            modeId: GameModeID.targetMan.rawValue,
+            date: dailyDate,
+            version: TargetManGameState.progressVersion,
+            enabled: !allowReplay
+        )
+        .onAppear {
+            guard !allowReplay, let dailyDate,
+                  let saved = GameProgressStore.load(
+                    TargetManGameState.self, modeId: GameModeID.targetMan.rawValue,
+                    date: dailyDate, version: TargetManGameState.progressVersion, context: modelContext) else { return }
+            viewModel.restore(saved)
         }
         .fullScreenCover(isPresented: $viewModel.showResult) {
             TargetManResultView(

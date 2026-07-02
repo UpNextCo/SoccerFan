@@ -42,7 +42,7 @@ enum FootballGolfRarity: String, Codable, Equatable, CaseIterable {
 
 // MARK: - Course model
 
-struct FootballGolfAnswer: Identifiable, Equatable {
+struct FootballGolfAnswer: Identifiable, Equatable, Codable {
     let id: String
     let name: String
     let aliases: [String]
@@ -73,7 +73,7 @@ struct FootballGolfCourse: Identifiable, Equatable {
 /// Max shots over par before the hole is force-ended (no unlimited guessing).
 let footballGolfShotCap = 4
 
-struct FootballGolfHoleResult: Identifiable, Equatable {
+struct FootballGolfHoleResult: Identifiable, Equatable, Codable {
     let id: String
     let holeNumber: Int
     let par: Int

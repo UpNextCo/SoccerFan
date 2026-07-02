@@ -1,6 +1,6 @@
 import Foundation
 
-struct BlindRankPlayer: Identifiable, Equatable {
+struct BlindRankPlayer: Identifiable, Equatable, Codable {
     let id: String
     let name: String
     let club: String
@@ -77,7 +77,7 @@ enum BlindRankCategory: String, CaseIterable, Codable {
     }
 }
 
-struct BlindRankChallenge: Equatable {
+struct BlindRankChallenge: Equatable, Codable {
     let id: String
     let themeTitle: String
     let categoryTitle: String
@@ -141,14 +141,14 @@ struct BlindRankChallenge: Equatable {
     }
 }
 
-enum BlindRankPhase: Equatable {
+enum BlindRankPhase: Equatable, Codable {
     case ranking
     case adjusting   // board full, reviewing/swapping before submit
     case revealing
     case complete
 }
 
-struct BlindRankRevealStep: Identifiable, Equatable {
+struct BlindRankRevealStep: Identifiable, Equatable, Codable {
     let id: Int
     let rank: Int
     let player: BlindRankPlayer
@@ -156,7 +156,8 @@ struct BlindRankRevealStep: Identifiable, Equatable {
     let isCorrect: Bool
 }
 
-struct BlindRankGameState: Equatable {
+struct BlindRankGameState: Equatable, Codable {
+    static let progressVersion = 1
     let challenge: BlindRankChallenge
     var phase: BlindRankPhase
     var currentPlayerIndex: Int

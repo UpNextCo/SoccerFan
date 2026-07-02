@@ -14,7 +14,7 @@ struct BallKnowledgeApp: App {
         .modelContainer(for: [
             CachedDailyBundle.self,
             PendingDailyCompletion.self,
-            GuessWhoSession.self,
+            GameProgress.self,
         ])
     }
 }

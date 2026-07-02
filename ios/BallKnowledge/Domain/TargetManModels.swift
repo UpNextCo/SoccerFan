@@ -107,7 +107,7 @@ enum TargetManStatCategory: String, CaseIterable, Codable {
     }
 }
 
-struct TargetManChallenge: Equatable {
+struct TargetManChallenge: Equatable, Codable {
     let id: String
     let leagueName: String
     let apiLeagueId: Int
@@ -142,13 +142,13 @@ struct TargetManChallenge: Equatable {
     }
 }
 
-enum TargetManPhase: Equatable {
+enum TargetManPhase: Equatable, Codable {
     case selecting
     case revealing
     case complete
 }
 
-struct TargetManSelection: Identifiable, Equatable {
+struct TargetManSelection: Identifiable, Equatable, Codable {
     let id: UUID
     var player: PlayerSearchResultDTO
     var statValue: Int?
@@ -160,7 +160,7 @@ struct TargetManSelection: Identifiable, Equatable {
     }
 }
 
-struct TargetManGameState: Equatable {
+struct TargetManGameState: Equatable, Codable {
     let challenge: TargetManChallenge
     var selections: [TargetManSelection]
     var phase: TargetManPhase
@@ -170,6 +170,7 @@ struct TargetManGameState: Equatable {
     var revealedCount: Int
 
     static let slotCount = 5
+    static let progressVersion = 1
 
     init(challenge: TargetManChallenge) {
         self.challenge = challenge

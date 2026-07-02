@@ -29,6 +29,19 @@ final class GuessWhoViewModel {
         min(state.guesses.count + 1, state.puzzle.maxGuesses)
     }
 
+    /// Mid-game and worth saving: guessed at least once, not finished.
+    var isResumable: Bool { !state.isComplete && !state.guesses.isEmpty }
+
+    func restore(_ saved: GuessWhoGameState) {
+        state = saved
+        searchQuery = ""
+        searchResults = []
+        errorMessage = nil
+        showShare = false
+        completionResult = nil
+        revealedAnswer = nil
+    }
+
     var searchPlaceholder: String {
         if state.isComplete {
             return "GAME OVER"
@@ -179,14 +192,17 @@ final class GuessWhoViewModel {
 struct GuessWhoView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: GuessWhoViewModel
     @FocusState private var isSearchFocused: Bool
     var allowReplay: Bool
+    private let date: String
     var onComplete: () -> Void
 
     init(puzzle: GuessWhoPuzzleDTO, date: String, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
         _viewModel = State(initialValue: GuessWhoViewModel(puzzle: puzzle, date: date))
         self.allowReplay = allowReplay
+        self.date = date
         self.onComplete = onComplete
     }
 
@@ -292,6 +308,21 @@ struct GuessWhoView: View {
                 .zIndex(999)
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: viewModel.state.guesses.count)
+        .persistsGameProgress(
+            viewModel.state,
+            isResumable: viewModel.isResumable,
+            modeId: GameModeID.guessWho.rawValue,
+            date: date,
+            version: GuessWhoGameState.progressVersion,
+            enabled: !allowReplay
+        )
+        .onAppear {
+            guard !allowReplay,
+                  let saved = GameProgressStore.load(
+                    GuessWhoGameState.self, modeId: GameModeID.guessWho.rawValue,
+                    date: date, version: GuessWhoGameState.progressVersion, context: modelContext) else { return }
+            viewModel.restore(saved)
+        }
         .sheet(isPresented: $viewModel.showShare) {
             ShareResultSheet(shareCard: viewModel.shareCard) {
                 viewModel.showShare = false

@@ -9,34 +9,34 @@ import CoreGraphics
 // your total is compared to the optimal lineup (computed server-side). Mirrors
 // backend/src/services/battleGenerator.ts.
 
-struct BattleCategory: Equatable {
+struct BattleCategory: Equatable, Codable {
     let id: String
     let title: String
     let noun: String
 }
 
-struct BattleClub: Identifiable, Equatable {
+struct BattleClub: Identifiable, Equatable, Codable {
     let name: String
     let teamId: Int?
     let logoUrl: String?
     var id: String { name }
 }
 
-struct BattleSlot: Identifiable, Equatable {
+struct BattleSlot: Identifiable, Equatable, Codable {
     let id: String
     let position: String // fine position, e.g. "Centre-Back"
     let label: String    // short label, e.g. "CB"
     let point: CGPoint   // pitch coordinate (x left→right, y attack-top→defence-bottom)
 }
 
-struct BattlePlayer: Identifiable, Equatable {
+struct BattlePlayer: Identifiable, Equatable, Codable {
     let id: String
     let name: String
     let statValue: Int
     let headshotUrl: String?
 }
 
-struct BattlePick: Equatable {
+struct BattlePick: Equatable, Codable {
     let club: BattleClub
     let player: BattlePlayer
     /// False when the chosen player never actually played for `club` — scores 0 and shows red.
@@ -47,7 +47,7 @@ struct BattlePick: Equatable {
 
 /// The mathematically optimal pick for a slot (best club→slot assignment + best player), revealed
 /// on the result screen.
-struct BattleOptimalPick: Identifiable, Equatable {
+struct BattleOptimalPick: Identifiable, Equatable, Codable {
     let slotId: String
     let position: String
     let club: String
@@ -56,7 +56,7 @@ struct BattleOptimalPick: Identifiable, Equatable {
     var id: String { slotId }
 }
 
-struct BattleChallenge: Equatable {
+struct BattleChallenge: Equatable, Codable {
     let id: String
     let date: String
     let category: BattleCategory
@@ -69,9 +69,10 @@ struct BattleChallenge: Equatable {
 
 // MARK: - Game state
 
-enum BattlePhase: Equatable { case intro, building, complete }
+enum BattlePhase: Equatable, Codable { case intro, building, complete }
 
-struct BattleGameState: Equatable {
+struct BattleGameState: Equatable, Codable {
+    static let progressVersion = 1
     let challenge: BattleChallenge
     var phase: BattlePhase
     var assignments: [String: BattleClub]   // slotId -> club dragged onto it
@@ -98,7 +99,7 @@ struct BattleGameState: Equatable {
     var isComplete: Bool { picks.count >= challenge.slots.count }
 }
 
-struct BattleResult: Equatable {
+struct BattleResult: Equatable, Codable {
     let yourTotal: Int
     let optimalScore: Int
 

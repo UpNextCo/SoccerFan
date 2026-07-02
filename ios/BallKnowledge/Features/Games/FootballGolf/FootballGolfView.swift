@@ -84,6 +84,16 @@ private func pluralizeLastWord(_ phrase: String) -> String {
 
 // MARK: - ViewModel
 
+/// Persisted mid-round progress for resume (the course is rebuilt from the daily puzzle on open).
+struct FootballGolfProgress: Equatable, Codable {
+    static let progressVersion = 1
+    var currentHoleIndex: Int
+    var results: [FootballGolfHoleResult]
+    var matched: [FootballGolfAnswer]
+    var wrongGuesses: Int
+    var phase: FootballGolfViewModel.FootballGolfPhase
+}
+
 @MainActor
 @Observable
 final class FootballGolfViewModel {
@@ -112,7 +122,7 @@ final class FootballGolfViewModel {
     var searchResults: [PlayerSearchResultDTO] = []
     var isSearching = false
 
-    enum FootballGolfPhase: Equatable { case playing, holeResult, finished }
+    enum FootballGolfPhase: Equatable, Codable { case playing, holeResult, finished }
 
     init(course: FootballGolfCourse) {
         self.course = course
@@ -124,6 +134,35 @@ final class FootballGolfViewModel {
 
     var totalScore: Int { results.map(\.relativeToPar).reduce(0, +) }
     var xpEarned: Int { FootballGolfScoring.xp(total: totalScore) }
+
+    /// Snapshot for save/restore (the course is rebuilt from the daily puzzle on resume).
+    var snapshot: FootballGolfProgress {
+        FootballGolfProgress(
+            currentHoleIndex: currentHoleIndex,
+            results: results,
+            matched: matched,
+            wrongGuesses: wrongGuesses,
+            phase: phase
+        )
+    }
+
+    /// Mid-round and worth saving: past the first shot of the first hole, not finished.
+    var isResumable: Bool {
+        phase != .finished && (currentHoleIndex > 0 || !results.isEmpty || !matched.isEmpty || wrongGuesses > 0)
+    }
+
+    func restore(_ p: FootballGolfProgress) {
+        currentHoleIndex = p.currentHoleIndex
+        results = p.results
+        matched = p.matched
+        wrongGuesses = p.wrongGuesses
+        phase = p.phase
+        guess = ""
+        searchResults = []
+        lastRevealed = nil
+        isResolving = false
+        showResult = false
+    }
 
     // Golf scoring: par is the POINTS target; every guess is a shot.
     var par: Int { currentHole?.par ?? 0 }
@@ -286,6 +325,21 @@ struct FootballGolfView: View {
             BKTheme.background.ignoresSafeArea()
             if let viewModel {
                 content(viewModel)
+                    .persistsGameProgress(
+                        viewModel.snapshot,
+                        isResumable: viewModel.isResumable,
+                        modeId: GameModeID.footballGolf.rawValue,
+                        date: dailyDate,
+                        version: FootballGolfProgress.progressVersion,
+                        enabled: !allowReplay
+                    )
+                    .onAppear {
+                        guard !allowReplay, let dailyDate,
+                              let saved = GameProgressStore.load(
+                                FootballGolfProgress.self, modeId: GameModeID.footballGolf.rawValue,
+                                date: dailyDate, version: FootballGolfProgress.progressVersion, context: modelContext) else { return }
+                        viewModel.restore(saved)
+                    }
             } else {
                 unavailableState
             }
@@ -440,7 +494,7 @@ struct FootballGolfView: View {
             if !vm.searchResults.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(vm.searchResults) { r in
-                        Button { withAnimation { vm.pick(r) }; inputFocused = true } label: {
+                        Button { vm.pick(r); inputFocused = true } label: {
                             HStack(spacing: 12) {
                                 PlayerAvatar(urlString: r.headshotUrl, size: 32)
                                 Text(r.name.uppercased())
@@ -458,6 +512,8 @@ struct FootballGolfView: View {
                 .background(BKTheme.cardElevated)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+                // Once a guess is being resolved, stop the (now-clearing) list from taking more taps.
+                .allowsHitTesting(!vm.isResolving)
             }
 
             if vm.searchResults.isEmpty {
@@ -481,7 +537,7 @@ struct FootballGolfView: View {
                 .textInputAutocapitalization(.words)
                 .focused($inputFocused)
                 .submitLabel(.go)
-                .onSubmit { withAnimation { vm.submitGuess() }; inputFocused = true }
+                .onSubmit { vm.submitGuess(); inputFocused = true }
                 .onChange(of: vm.guess) { _, _ in Task { await vm.search() } }
                 .padding(.horizontal, 16).padding(.vertical, 14)
                 .padding(.trailing, vm.isSearching ? 28 : 0)

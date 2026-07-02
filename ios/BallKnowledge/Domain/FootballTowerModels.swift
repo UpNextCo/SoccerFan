@@ -26,7 +26,7 @@ enum FootballTowerAnswerType: String, Codable {
     case country
 }
 
-enum FootballTowerRule: Equatable {
+enum FootballTowerRule: Equatable, Codable {
     case plClub
     case plPlayer
     case nationality(String)
@@ -49,7 +49,7 @@ enum FootballTowerRule: Equatable {
     case country
 }
 
-struct FootballTowerQuestion: Identifiable, Equatable {
+struct FootballTowerQuestion: Identifiable, Equatable, Codable {
     let id: String
     let floor: Int
     let difficulty: FootballTowerDifficulty
@@ -58,8 +58,8 @@ struct FootballTowerQuestion: Identifiable, Equatable {
     let rule: FootballTowerRule
 }
 
-struct FootballTowerAnswerRecord: Identifiable, Equatable {
-    let id = UUID()
+struct FootballTowerAnswerRecord: Identifiable, Equatable, Codable {
+    var id = UUID()
     let floor: Int
     let questionId: String
     let answerId: String
@@ -67,11 +67,11 @@ struct FootballTowerAnswerRecord: Identifiable, Equatable {
     let isCorrect: Bool
 }
 
-enum FootballTowerRunMode: Equatable {
+enum FootballTowerRunMode: Equatable, Codable {
     case daily
 }
 
-enum FootballTowerPhase: Equatable {
+enum FootballTowerPhase: Equatable, Codable {
     case menu
     case playing
     case correctTransition
@@ -79,7 +79,8 @@ enum FootballTowerPhase: Equatable {
     case complete
 }
 
-struct FootballTowerGameState: Equatable {
+struct FootballTowerGameState: Equatable, Codable {
+    static let progressVersion = 1
     let mode: FootballTowerRunMode
     let date: String
     let questions: [FootballTowerQuestion]
