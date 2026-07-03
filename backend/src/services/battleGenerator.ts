@@ -117,20 +117,32 @@ function membershipScope(cat: Category) {
   return cat.leagueId != null ? sql`m.league_id = ${cat.leagueId}` : sql`m.league_id <> 1`;
 }
 
-/** Pick the candidate clubs for a category (league clubs, or big-5 clubs for career). */
+/**
+ * Pick the candidate clubs for a category (league clubs, or big-5 clubs for career).
+ *
+ * Ranked by FAMOUS alumni (market_value_tier ≥ 4), not data volume: ranking by row count let
+ * Salernitana/Chievo/Spal-tier clubs into the pool ("name a left winger who played for Spal" is
+ * unanswerable even for elite ball knowledge). Every club in the pool must have a meaningful set
+ * of recognisable names; the coverage floor (≥ 20 positioned players) still guarantees every
+ * fine position can be filled.
+ */
+const CLUB_POOL = 16; // recognisable clubs per league the daily shuffle draws from
+
 async function candidateClubs(cat: Category): Promise<string[]> {
   const leagueFilter = cat.leagueId != null
     ? sql`s.league_id = ${cat.leagueId}`
     : sql`s.league_id IN (${sql.join(BIG5.map((l) => sql`${l}`), sql`, `)})`;
   const rows = (await db.execute(sql`
-    SELECT s.team_name AS club, COUNT(DISTINCT p.id)::int AS n
+    SELECT s.team_name AS club,
+           COUNT(DISTINCT p.id) FILTER (WHERE p.market_value_tier >= 4)::int AS famous,
+           COUNT(DISTINCT p.id)::int AS n
     FROM player_stats s JOIN players p ON p.id = s.player_id
     WHERE ${leagueFilter} AND p.sub_position IS NOT NULL AND s.appearances > 0 AND s.team_name IS NOT NULL
     GROUP BY s.team_name
-    HAVING COUNT(DISTINCT p.id) >= 20
-    ORDER BY n DESC
-    LIMIT 36
-  `)) as unknown as Array<{ club: string; n: number }>;
+    HAVING COUNT(DISTINCT p.id) >= 20 AND COUNT(DISTINCT p.id) FILTER (WHERE p.market_value_tier >= 4) >= 5
+    ORDER BY famous DESC, n DESC
+    LIMIT ${CLUB_POOL}
+  `)) as unknown as Array<{ club: string; famous: number; n: number }>;
   return rows.map((r) => r.club);
 }
 
