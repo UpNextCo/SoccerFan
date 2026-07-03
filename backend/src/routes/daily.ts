@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
-import { completeDaily, getDailyBundle, getDailyPuzzle, guessWhoHint, revealGuessWhoAnswer, validateGuess, validateOneMoreAnswer } from '../services/dailyService.js';
+import { completeDaily, getDailyBundle, getDailyPuzzle, guessWhoHint, revealGuessWhoAnswer, validateClubChainLink, validateGuess, validateOneMoreAnswer } from '../services/dailyService.js';
 
 export const dailyRouter = Router();
 
@@ -123,6 +123,28 @@ dailyRouter.post('/guesswho/hint', requireAuth, async (req, res) => {
 const oneMoreSchema = z.object({
   date: z.string(),
   playerId: z.string().uuid(),
+});
+
+// Club Chain: validate a teammate link between two players (shared club + overlapping seasons).
+// `targetId` optionally also returns whether the candidate connects to the puzzle's target, so a
+// winning move is detected in one round-trip.
+const clubChainLinkSchema = z.object({
+  fromId: z.string().uuid(),
+  toId: z.string().uuid(),
+  targetId: z.string().uuid().optional(),
+});
+dailyRouter.post('/clubchain/link', requireAuth, async (req, res) => {
+  const parsed = clubChainLinkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    const result = await validateClubChainLink(parsed.data.fromId, parsed.data.toId, parsed.data.targetId);
+    sendSuccess(res, result);
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Club Chain validation failed', 400);
+  }
 });
 
 dailyRouter.post('/onemore/validate', requireAuth, async (req, res) => {

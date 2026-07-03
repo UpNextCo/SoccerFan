@@ -162,6 +162,18 @@ actor APIClient {
         return (resp.valid, resp.statValue)
     }
 
+    /// Validate a Club Chain move. Returns the shared-club link between `fromId` and `toId` (nil if
+    /// they were never club teammates), plus — when `targetId` is supplied — whether `toId` also
+    /// links to the target (a winning move) in the same round-trip.
+    func clubChainLink(fromId: String, toId: String, targetId: String?) async throws -> ClubChainLinkResultDTO {
+        struct Body: Encodable { let fromId: String; let toId: String; let targetId: String? }
+        return try await request(
+            "daily/clubchain/link",
+            method: "POST",
+            body: Body(fromId: fromId, toId: toId, targetId: targetId)
+        )
+    }
+
     func battlePlayers(categoryId: String, club: String, position: String, query: String) async throws -> [BattlePlayerDTO] {
         struct Body: Encodable {
             let categoryId: String

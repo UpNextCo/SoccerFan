@@ -9,6 +9,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
     case blindRank = "blind_rank"
     case draftMaster = "draft_master"
     case worldCupXI = "world_cup_xi"
+    case clubChain = "club_chain"
     case footballTower = "football_tower"
 
     var title: String {
@@ -21,6 +22,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .blindRank: return "BLIND RANK"
         case .draftMaster: return "BATTLE MODE"
         case .oneMore: return "ONE MORE"
+        case .clubChain: return "CLUB CHAIN"
         case .footballTower: return "FOOTBALL TOWER"
         }
     }
@@ -35,6 +37,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .blindRank: return "list.number"
         case .draftMaster: return "person.3.fill"
         case .oneMore: return "flame.fill"
+        case .clubChain: return "link"
         case .footballTower: return "building.2.fill"
         }
     }
@@ -54,6 +57,7 @@ enum DailyPlayOrder {
         .draftMaster,
         .worldCupXI,
         .footballGolf,
+        .clubChain,
     ]
 
     static func completedCount(in bundle: DailyBundleDTO) -> Int {
@@ -281,6 +285,7 @@ enum DailyXP {
         "world_cup_xi": 900,
         "draft_master": 900,
         "football_tower": 900,
+        "club_chain": 850,
         "football_golf": 1000,
     ]
 
@@ -297,6 +302,7 @@ enum DailyXP {
         case "target_man": return s / 620        // ~win at 400
         case "one_more": return s / 1000         // banked total — more risked = more XP
         case "football_bingo": return s / 90     // 50 + remaining×3
+        case "club_chain": return s / 100        // medal points: gold 100 / silver 75 / bronze 50
         default: return 0.8
         }
     }

@@ -398,6 +398,55 @@ struct BattlePlayerDTO: Codable, Equatable, Identifiable {
     let headshotUrl: String?
 }
 
+struct ClubChainPlayerDTO: Codable, Equatable {
+    let id: String
+    let name: String
+    let club: String
+    let nationality: String
+    let position: String
+    let headshotUrl: String?
+
+    init(id: String, name: String, club: String = "", nationality: String = "", position: String = "", headshotUrl: String? = nil) {
+        self.id = id; self.name = name; self.club = club; self.nationality = nationality
+        self.position = position; self.headshotUrl = headshotUrl
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        club = try c.decodeIfPresent(String.self, forKey: .club) ?? ""
+        nationality = try c.decodeIfPresent(String.self, forKey: .nationality) ?? ""
+        position = try c.decodeIfPresent(String.self, forKey: .position) ?? ""
+        headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
+    }
+}
+
+struct ClubChainPuzzleDTO: Codable, Equatable {
+    let modeId: String
+    let puzzleId: String
+    let date: String
+    let difficulty: String
+    let start: ClubChainPlayerDTO
+    let target: ClubChainPlayerDTO
+    let shortestPathLength: Int
+    let maxMoves: Int
+    let mistakesAllowed: Int
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        modeId = try c.decode(String.self, forKey: .modeId)
+        puzzleId = try c.decode(String.self, forKey: .puzzleId)
+        date = try c.decode(String.self, forKey: .date)
+        difficulty = try c.decodeIfPresent(String.self, forKey: .difficulty) ?? "medium"
+        start = try c.decode(ClubChainPlayerDTO.self, forKey: .start)
+        target = try c.decode(ClubChainPlayerDTO.self, forKey: .target)
+        shortestPathLength = try c.decodeIfPresent(Int.self, forKey: .shortestPathLength) ?? 2
+        maxMoves = try c.decodeIfPresent(Int.self, forKey: .maxMoves) ?? (shortestPathLength + 4)
+        mistakesAllowed = try c.decodeIfPresent(Int.self, forKey: .mistakesAllowed) ?? 3
+    }
+}
+
 enum DailyPuzzleDTO: Codable, Equatable {
     case guessWho(GuessWhoPuzzleDTO)
     case targetMan(TargetManPuzzleDTO)
@@ -408,6 +457,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
     case oneMore(OneMorePuzzleDTO)
     case worldCupXI(WorldCupXIPuzzleDTO)
     case draftMaster(DraftMasterPuzzleDTO)
+    case clubChain(ClubChainPuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
         case modeId
@@ -436,6 +486,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .worldCupXI(try WorldCupXIPuzzleDTO(from: decoder))
         case GameModeID.draftMaster.rawValue:
             self = .draftMaster(try DraftMasterPuzzleDTO(from: decoder))
+        case GameModeID.clubChain.rawValue:
+            self = .clubChain(try ClubChainPuzzleDTO(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .modeId,
@@ -465,6 +517,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .draftMaster(let puzzle):
             try puzzle.encode(to: encoder)
+        case .clubChain(let puzzle):
+            try puzzle.encode(to: encoder)
         }
     }
 
@@ -479,6 +533,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .oneMore: return GameModeID.oneMore.rawValue
         case .worldCupXI: return GameModeID.worldCupXI.rawValue
         case .draftMaster: return GameModeID.draftMaster.rawValue
+        case .clubChain: return GameModeID.clubChain.rawValue
         }
     }
 }
@@ -571,6 +626,11 @@ extension DailyBundleDTO {
 
     var draftMasterPuzzle: DraftMasterPuzzleDTO? {
         guard case .draftMaster(let puzzle) = game(for: .draftMaster)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var clubChainPuzzle: ClubChainPuzzleDTO? {
+        guard case .clubChain(let puzzle) = game(for: .clubChain)?.puzzle else { return nil }
         return puzzle
     }
 }

@@ -3,9 +3,9 @@ import Foundation
 /// Local source of truth for game mode tiles. Merges API metadata (counts, availability)
 /// with on-device ids/titles so renames work before the backend is redeployed.
 enum GameModeCatalog {
-    private static let defaultPlayerCounts = [12400, 6400, 15200, 22100, 7600, 9800, 11300, 8900, 8700]
+    private static let defaultPlayerCounts = [12400, 6400, 15200, 22100, 7600, 9800, 11300, 8900, 9200, 8700]
 
-    private static let locallyAvailable: Set<GameModeID> = [.guessWho, .footballBingo, .targetMan, .footballGolf, .blindRank, .oneMore, .draftMaster, .worldCupXI]
+    private static let locallyAvailable: Set<GameModeID> = [.guessWho, .footballBingo, .targetMan, .footballGolf, .blindRank, .oneMore, .draftMaster, .worldCupXI, .clubChain]
 
     /// Maps retired API ids to their replacement mode.
     private static let legacyIdMap: [String: GameModeID] = [

@@ -8,6 +8,7 @@ import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzz
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
+import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js';
 import { generateWorldCupXiPuzzle, WCXI_VERSION } from './worldCupXiGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
@@ -22,6 +23,7 @@ const GAME_MODES = [
   { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
   { id: 'draft_master', title: 'BATTLE MODE', subtitle: 'Build the highest-scoring XI', playerCount: 11300, isAvailable: true },
   { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Name the mystery XI', playerCount: 8900, isAvailable: true },
+  { id: 'club_chain', title: 'CLUB CHAIN', subtitle: 'Link them by shared clubs', playerCount: 9200, isAvailable: true },
 ];
 
 const DAILY_PUZZLE_MODES = [
@@ -40,6 +42,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'one_more', title: 'ONE MORE' },
   { modeId: 'world_cup_xi', title: 'WORLD CUP XI' },
   { modeId: 'draft_master', title: 'BATTLE MODE' },
+  { modeId: 'club_chain', title: 'CLUB CHAIN' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -52,6 +55,7 @@ export const DAILY_PLAYABLE_MODES = [
   'draft_master',
   'world_cup_xi',
   'football_golf',
+  'club_chain',
 ] as const;
 
 function todayUTC(): string {
@@ -81,6 +85,7 @@ const MAX_XP: Record<string, number> = {
   world_cup_xi: 900,
   draft_master: 900,
   football_tower: 900,
+  club_chain: 850,
   football_golf: 1000,
 };
 
@@ -103,6 +108,7 @@ function modePerformance(modeId: string, score: number, guesses: number): number
     case 'target_man': return s / 620;      // ~win at 400
     case 'one_more': return s / 1000;       // banked total — more risked = more XP (5-in-a-row ≈ full)
     case 'football_bingo': return s / 90;   // 50 + remaining×3 — fewer players used = more XP
+    case 'club_chain': return s / 100;      // medal points: gold 100 / silver 75 / bronze 50
     default: return 0.8;
   }
 }
@@ -236,6 +242,32 @@ async function ensureDraftMasterPuzzle(date: string): Promise<void> {
     console.log(`Generated draft_master puzzle for ${date} (${puzzle.category.id}, optimal ${puzzle.optimalScore})`);
   } catch (error) {
     console.warn(`Skipped draft_master for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** Generate + store today's Club Chain puzzle if not present. Best-effort. The shortest-path answer
+ *  (the scoring "par" route) is stored in answerJson and never shipped to the client. */
+async function ensureClubChainPuzzle(date: string): Promise<void> {
+  const existing = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'club_chain')))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  try {
+    const generated = await generateClubChainPuzzle(date);
+    if (!generated) {
+      console.warn(`Skipped club_chain for ${date}: no viable puzzle`);
+      return;
+    }
+    await db
+      .insert(dailyPuzzles)
+      .values({ date, modeId: 'club_chain', puzzleJson: generated.puzzle, answerPlayerId: null, answerJson: generated.answer })
+      .onConflictDoNothing();
+    console.log(`Generated club_chain puzzle for ${date} (${generated.puzzle.difficulty}, par ${generated.puzzle.shortestPathLength})`);
+  } catch (error) {
+    console.warn(`Skipped club_chain for ${date}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -430,6 +462,9 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   if (!existing.has('draft_master')) {
     await ensureDraftMasterPuzzle(date);
   }
+  if (!existing.has('club_chain')) {
+    await ensureClubChainPuzzle(date);
+  }
 }
 
 /** Validate a One More answer: does the player meet the prompt's stat minimum? */
@@ -449,6 +484,27 @@ export async function validateOneMoreAnswer(
 
   const statValue = await oneMoreStatValue(playerId, puzzle.leagueId, puzzle.category);
   return { valid: statValue >= puzzle.minimum, statValue };
+}
+
+/**
+ * Validate a Club Chain move: are `fromId` and `toId` real club teammates (shared club, overlapping
+ * seasons)? Optionally also checks whether `toId` links to the puzzle's target, so the client can
+ * detect a win in one round-trip. National / same-nationality links never count.
+ */
+export async function validateClubChainLink(
+  fromId: string,
+  toId: string,
+  targetId?: string
+): Promise<{
+  link: import('./clubChainGenerator.js').TeammateLink | null;
+  targetLink: import('./clubChainGenerator.js').TeammateLink | null;
+}> {
+  const link = await clubChainLink(fromId, toId);
+  // Only bother checking the target link when the move itself is valid and a target was supplied
+  // (and the candidate isn't already the target).
+  const targetLink =
+    link && targetId && targetId !== toId ? await clubChainLink(toId, targetId) : null;
+  return { link, targetLink };
 }
 
 export async function getDailyPuzzle(date: string, modeId: string) {

@@ -663,6 +663,7 @@ struct DailyGameCard: View {
         case .draftMaster: return "Draft the best XI"
         case .worldCupXI: return "Build the World Cup XI"
         case .footballGolf: return "Fewest guesses wins"
+        case .clubChain: return "Link them by shared clubs"
         case .footballTower: return "Climb the tower"
         }
     }
@@ -788,6 +789,12 @@ struct DailyGameHost: View {
             case .worldCupXI:
                 if let bundle = dailyBundle, let puzzle = DailyChallengeResolver.worldCupXIPuzzle(from: bundle) {
                     WorldCupXIView(dailyDate: bundle.date, puzzle: puzzle, allowReplay: allowReplay, onComplete: onFinished)
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
+            case .clubChain:
+                if let bundle = dailyBundle, let puzzle = DailyChallengeResolver.clubChainPuzzle(from: bundle) {
+                    ClubChainView(dailyDate: bundle.date, puzzle: puzzle, allowReplay: allowReplay, onComplete: onFinished)
                 } else {
                     DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
                 }

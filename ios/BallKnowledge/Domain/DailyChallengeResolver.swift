@@ -26,6 +26,23 @@ enum DailyChallengeResolver {
         )
     }
 
+    /// Map the server Club Chain puzzle into the game model. nil when there's no usable server
+    /// puzzle — the daily is server-only (no local fallback), so the caller shows "unavailable".
+    static func clubChainPuzzle(from bundle: DailyBundleDTO?) -> ClubChainPuzzle? {
+        guard let bundle, let dto = bundle.clubChainPuzzle,
+              dto.start.id != dto.target.id, dto.shortestPathLength >= 1 else { return nil }
+        return ClubChainPuzzle(
+            id: dto.puzzleId,
+            date: bundle.date,
+            difficulty: ClubChainDifficulty(rawValue: dto.difficulty) ?? .medium,
+            start: ClubChainPlayer(dto: dto.start),
+            target: ClubChainPlayer(dto: dto.target),
+            shortestPathLength: dto.shortestPathLength,
+            maxMoves: dto.maxMoves,
+            mistakesAllowed: dto.mistakesAllowed
+        )
+    }
+
     /// Map the server Battle Mode challenge into the game model (nil → caller uses local seed).
     /// Goals categories ship an all-outfield XI (10 slots, no GK), appearances ship 11 — accept both.
     static func battleChallenge(from bundle: DailyBundleDTO?) -> BattleChallenge? {
