@@ -576,7 +576,11 @@ struct DailyBundleDTO: Codable, Equatable {
         date = try container.decode(String.self, forKey: .date)
         alreadyPlayed = try container.decode(Bool.self, forKey: .alreadyPlayed)
         completedModeIds = try container.decodeIfPresent([String].self, forKey: .completedModeIds) ?? []
-        games = try container.decode([DailyGameDTO].self, forKey: .games)
+        // Lenient: a single game whose puzzle we can't decode (e.g. a puzzle stored in an older shape
+        // after a schema change) must NOT nuke the whole bundle — that would leave every game tile
+        // dead. Skip the bad game; the rest still open, and the affected mode shows "unavailable".
+        games = (try container.decodeIfPresent([LossyDailyGame].self, forKey: .games) ?? [])
+            .compactMap(\.game)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -584,6 +588,15 @@ struct DailyBundleDTO: Codable, Equatable {
         case alreadyPlayed
         case completedModeIds
         case games
+    }
+}
+
+/// Decodes a `DailyGameDTO` without throwing: a malformed element becomes `nil` and is dropped,
+/// so one bad puzzle can't fail the entire daily-bundle decode.
+private struct LossyDailyGame: Decodable {
+    let game: DailyGameDTO?
+    init(from decoder: Decoder) throws {
+        game = try? DailyGameDTO(from: decoder)
     }
 }
 
