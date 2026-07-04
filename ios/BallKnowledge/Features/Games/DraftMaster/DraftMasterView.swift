@@ -200,7 +200,7 @@ struct DraftMasterView: View {
                         }
                     }
                     ToolbarItem(placement: .principal) {
-                        Text("BATTLE MODE")
+                        Text("DRAFT XI")
                             .font(BKFont.caption(13)).tracking(1).foregroundStyle(BKTheme.accent)
                     }
                 }

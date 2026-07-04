@@ -5,7 +5,7 @@ import Foundation
 enum BattleSeed {
     static func shareText(challenge: BattleChallenge, result: BattleResult) -> String {
         [
-            "Ball Knowledge — Battle Mode",
+            "Ball Knowledge — Draft XI",
             challenge.category.title,
             "\(result.verdict) · \(result.percentage)% of the perfect XI",
             "\(result.yourTotal) / \(result.optimalScore) \(challenge.category.noun)",

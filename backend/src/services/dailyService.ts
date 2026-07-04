@@ -21,7 +21,7 @@ const GAME_MODES = [
   { id: 'guess_who', title: 'GUESS WHO?', subtitle: 'Wordle-style player guess', playerCount: 22100, isAvailable: true },
   { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9 holes, name the answers', playerCount: 7600, isAvailable: true },
   { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
-  { id: 'draft_master', title: 'BATTLE MODE', subtitle: 'Build the highest-scoring XI', playerCount: 11300, isAvailable: true },
+  { id: 'draft_master', title: 'DRAFT XI', subtitle: 'Build the highest-scoring XI', playerCount: 11300, isAvailable: true },
   { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Name the mystery XI', playerCount: 8900, isAvailable: true },
   { id: 'club_chain', title: 'CLUB CHAIN', subtitle: 'Link them by shared clubs', playerCount: 9200, isAvailable: true },
 ];
@@ -41,7 +41,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'football_golf', title: 'FOOTBALL GOLF' },
   { modeId: 'one_more', title: 'ONE MORE' },
   { modeId: 'world_cup_xi', title: 'WORLD CUP XI' },
-  { modeId: 'draft_master', title: 'BATTLE MODE' },
+  { modeId: 'draft_master', title: 'DRAFT XI' },
   { modeId: 'club_chain', title: 'CLUB CHAIN' },
 ] as const;
 

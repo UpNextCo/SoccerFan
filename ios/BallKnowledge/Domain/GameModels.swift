@@ -20,7 +20,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .guessWho: return "GUESS WHO?"
         case .footballGolf: return "FOOTBALL GOLF"
         case .blindRank: return "BLIND RANK"
-        case .draftMaster: return "BATTLE MODE"
+        case .draftMaster: return "DRAFT XI"
         case .oneMore: return "ONE MORE"
         case .clubChain: return "CLUB CHAIN"
         case .footballTower: return "FOOTBALL TOWER"
@@ -49,15 +49,15 @@ extension GameModeID {
 
 enum DailyPlayOrder {
     static let playableModes: [GameModeID] = [
-        .guessWho,
-        .targetMan,
-        .blindRank,
         .footballBingo,
         .oneMore,
         .draftMaster,
-        .worldCupXI,
         .footballGolf,
         .clubChain,
+        .guessWho,
+        .targetMan,
+        .blindRank,
+        .worldCupXI,
     ]
 
     static func completedCount(in bundle: DailyBundleDTO) -> Int {
