@@ -3,23 +3,46 @@ import CoreGraphics
 
 // MARK: - Battle Mode models
 //
-// Battle Mode (mode id stays `draft_master`): a daily STAT category, 11 category-relevant clubs, and
-// a fine-position formation. You drag each club onto a slot and pick a player who played for that
-// club at that position; the pick scores the player's TOTAL career value of the category. On submit
-// your total is compared to the optimal lineup (computed server-side). Mirrors
-// backend/src/services/battleGenerator.ts.
+// Battle Mode (mode id stays `draft_master`): a daily STAT category, a pool of draggable CONSTRAINT
+// CHIPS (a specific club, a whole league, a nationality, a nationality×league combo, or a
+// nationality×club combo), and a fine-position formation. You drag each chip onto a slot and pick a
+// player who SATISFIES that chip and plays that position; the pick scores the player's TOTAL value of
+// the category. On submit your total is compared to the optimal lineup (computed server-side).
+// Mirrors backend/src/services/battleGenerator.ts.
 
 struct BattleCategory: Equatable, Codable {
     let id: String
     let title: String
     let noun: String
+    var unit: String?   // "eur_m" for value/fee categories, else nil
 }
 
-struct BattleClub: Identifiable, Equatable, Codable {
-    let name: String
+enum BattleConstraintType: String, Equatable, Codable {
+    case club, league, nationality, nat_league, nat_club
+}
+
+/// A draggable constraint chip. `club`/`nat_club` carry a crest; `league`/`nat_league` a league badge;
+/// `nationality`/`nat_league`/`nat_club` a nationality flag.
+struct BattleConstraint: Identifiable, Equatable, Codable {
+    let id: String
+    let type: BattleConstraintType
+    let label: String
+    let club: String?
     let teamId: Int?
     let logoUrl: String?
-    var id: String { name }
+    let leagueId: Int?
+    let leagueName: String?
+    let nationality: String?
+
+    /// Reason copy shown when a picked player doesn't satisfy this chip.
+    func rejectReason(player: String) -> String {
+        switch type {
+        case .club: return "\(player) never played for \(club ?? label)"
+        case .league: return "\(player) never played in \(leagueName ?? label)"
+        case .nationality: return "\(player) isn't \(nationality ?? label)"
+        case .nat_league, .nat_club: return "\(player) doesn't fit \(label)"
+        }
+    }
 }
 
 struct BattleSlot: Identifiable, Equatable, Codable {
@@ -37,20 +60,21 @@ struct BattlePlayer: Identifiable, Equatable, Codable {
 }
 
 struct BattlePick: Equatable, Codable {
-    let club: BattleClub
+    let constraint: BattleConstraint
     let player: BattlePlayer
-    /// False when the chosen player never actually played for `club` — scores 0 and shows red.
+    /// False when the chosen player doesn't satisfy the constraint — scores 0 and shows red.
     let correct: Bool
     /// What this pick contributes to the total (0 for a wrong pick).
     var score: Int { correct ? player.statValue : 0 }
 }
 
-/// The mathematically optimal pick for a slot (best club→slot assignment + best player), revealed
+/// The mathematically optimal pick for a slot (best chip→slot assignment + best player), revealed
 /// on the result screen.
 struct BattleOptimalPick: Identifiable, Equatable, Codable {
     let slotId: String
     let position: String
-    let club: String
+    let constraintId: String
+    let constraintLabel: String
     let playerName: String
     let statValue: Int
     var id: String { slotId }
@@ -62,7 +86,7 @@ struct BattleChallenge: Equatable, Codable {
     let category: BattleCategory
     let formationId: String
     let slots: [BattleSlot]
-    let clubs: [BattleClub]
+    let constraints: [BattleConstraint]
     let optimalScore: Int
     let optimalLineup: [BattleOptimalPick]
 }
@@ -72,11 +96,11 @@ struct BattleChallenge: Equatable, Codable {
 enum BattlePhase: Equatable, Codable { case intro, building, complete }
 
 struct BattleGameState: Equatable, Codable {
-    static let progressVersion = 1
+    static let progressVersion = 2
     let challenge: BattleChallenge
     var phase: BattlePhase
-    var assignments: [String: BattleClub]   // slotId -> club dragged onto it
-    var picks: [String: BattlePick]         // slotId -> chosen player (implies the club)
+    var assignments: [String: BattleConstraint]   // slotId -> constraint chip dragged onto it
+    var picks: [String: BattlePick]               // slotId -> chosen player (implies the chip)
     var result: BattleResult?
 
     init(challenge: BattleChallenge) {
@@ -87,12 +111,12 @@ struct BattleGameState: Equatable, Codable {
         result = nil
     }
 
-    var usedClubNames: Set<String> { Set(assignments.values.map(\.name)) }
+    var usedConstraintIds: Set<String> { Set(assignments.values.map(\.id)) }
     var usedPlayerIds: Set<String> { Set(picks.values.map(\.player.id)) }
-    func club(forSlot slotId: String) -> BattleClub? { assignments[slotId] }
+    func constraint(forSlot slotId: String) -> BattleConstraint? { assignments[slotId] }
     func pick(forSlot slotId: String) -> BattlePick? { picks[slotId] }
-    /// Once a player is selected (right or wrong) the slot is final and its club is burned. Merely
-    /// assigning a club (then backing out without picking) does NOT lock it.
+    /// Once a player is selected (right or wrong) the slot is final and its chip is burned. Merely
+    /// assigning a chip (then backing out without picking) does NOT lock it.
     func isLocked(_ slotId: String) -> Bool { picks[slotId] != nil }
     var yourTotal: Int { picks.values.reduce(0) { $0 + $1.score } }
     var filledCount: Int { picks.count }

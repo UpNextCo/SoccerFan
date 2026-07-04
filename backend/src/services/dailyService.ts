@@ -231,7 +231,7 @@ async function ensureDraftMasterPuzzle(date: string): Promise<void> {
 
   try {
     const puzzle = await generateBattlePuzzle(date);
-    if (!puzzle || puzzle.clubs.length < 10) {
+    if (!puzzle || puzzle.constraints.length < 10) {
       console.warn(`Skipped draft_master for ${date}: no viable battle puzzle`);
       return;
     }

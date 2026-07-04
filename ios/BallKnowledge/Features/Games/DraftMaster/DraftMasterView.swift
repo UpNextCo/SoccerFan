@@ -52,27 +52,27 @@ final class DraftMasterViewModel {
         showResult = false; showShare = false; confettiBurstToken = 0
     }
 
-    // MARK: Club assignment (one club per slot)
+    // MARK: Constraint assignment (one chip per slot)
 
-    var unusedClubs: [BattleClub] { challenge.clubs.filter { !state.usedClubNames.contains($0.name) } }
+    var unusedConstraints: [BattleConstraint] { challenge.constraints.filter { !state.usedConstraintIds.contains($0.id) } }
 
-    func assignClub(named name: String, toSlot slotId: String) {
-        guard let club = challenge.clubs.first(where: { $0.name == name }) else { return }
-        assignClub(club, toSlot: slotId)
+    func assignConstraint(id: String, toSlot slotId: String) {
+        guard let constraint = challenge.constraints.first(where: { $0.id == id }) else { return }
+        assignConstraint(constraint, toSlot: slotId)
     }
 
-    func assignClub(_ club: BattleClub, toSlot slotId: String) {
-        // Locked slots are final — can't drop onto them, and a club burned on a locked slot
+    func assignConstraint(_ constraint: BattleConstraint, toSlot slotId: String) {
+        // Locked slots are final — can't drop onto them, and a chip burned on a locked slot
         // can't be moved/reused elsewhere.
         if state.isLocked(slotId) { return }
-        if state.assignments.contains(where: { $0.value.name == club.name && state.isLocked($0.key) }) { return }
-        // A club can only sit on one slot: pull it off any other (unlocked) slot first.
-        for (sid, c) in state.assignments where c.name == club.name && sid != slotId {
+        if state.assignments.contains(where: { $0.value.id == constraint.id && state.isLocked($0.key) }) { return }
+        // A chip can only sit on one slot: pull it off any other (unlocked) slot first.
+        for (sid, c) in state.assignments where c.id == constraint.id && sid != slotId {
             state.assignments[sid] = nil
             state.picks[sid] = nil
         }
-        if state.assignments[slotId]?.name != club.name { state.picks[slotId] = nil }
-        state.assignments[slotId] = club
+        if state.assignments[slotId]?.id != constraint.id { state.picks[slotId] = nil }
+        state.assignments[slotId] = constraint
         HapticManager.light()
     }
 
@@ -88,9 +88,9 @@ final class DraftMasterViewModel {
 
     func closeSlot() { activeSlot = nil; searchQuery = ""; results = [] }
 
-    func setActiveSlotClub(_ club: BattleClub) {
+    func setActiveSlotConstraint(_ constraint: BattleConstraint) {
         guard let slot = activeSlot else { return }
-        assignClub(club, toSlot: slot.id)
+        assignConstraint(constraint, toSlot: slot.id)
         searchQuery = ""
         results = []
         selectionError = nil
@@ -105,14 +105,14 @@ final class DraftMasterViewModel {
     }
 
     func search() async {
-        guard let slot = activeSlot, let club = state.club(forSlot: slot.id) else { results = []; return }
+        guard let slot = activeSlot, let constraint = state.constraint(forSlot: slot.id) else { results = []; return }
         let q = searchQuery.trimmingCharacters(in: .whitespaces)
         guard q.count >= 2 else { results = []; return }
         isSearching = true
         defer { isSearching = false }
         do {
             let res = try await APIClient.shared.battlePlayers(
-                categoryId: category.id, club: club.name, position: slot.position, query: q
+                categoryId: category.id, constraint: constraint, position: slot.position, query: q
             )
             let used = state.usedPlayerIds
             let currentId = state.pick(forSlot: slot.id)?.player.id
@@ -123,24 +123,24 @@ final class DraftMasterViewModel {
     }
 
     func selectPlayer(_ dto: BattlePlayerDTO) {
-        guard let slot = activeSlot, let club = state.club(forSlot: slot.id) else { return }
+        guard let slot = activeSlot, let constraint = state.constraint(forSlot: slot.id) else { return }
         if state.usedPlayerIds.contains(dto.id), state.pick(forSlot: slot.id)?.player.id != dto.id {
             selectionError = "Already in your XI"
             HapticManager.error()
             return
         }
         let player = BattlePlayer(id: dto.id, name: dto.name, statValue: dto.statValue, headshotUrl: dto.headshotUrl)
-        let correct = dto.playedForClub ?? true
-        state.picks[slot.id] = BattlePick(club: club, player: player, correct: correct)
+        let correct = dto.satisfiesConstraint ?? true
+        state.picks[slot.id] = BattlePick(constraint: constraint, player: player, correct: correct)
         selectionError = nil
         closeSlot()
         if correct {
             HapticManager.success()
         } else {
-            // Wrong club: place it red/0, shake the pitch, and surface the reason.
+            // Doesn't fit the chip: place it red/0, shake the pitch, and surface the reason.
             HapticManager.error()
             shakeToken += 1
-            let msg = "\(dto.name) never played for \(club.name)"
+            let msg = constraint.rejectReason(player: dto.name)
             wrongMessage = msg
             Task {
                 try? await Task.sleep(for: .seconds(2.6))
@@ -266,18 +266,16 @@ struct DraftMasterView: View {
         VStack(spacing: 0) {
             BattleBuildHeader(category: viewModel.category, total: viewModel.state.yourTotal)
 
-            BattleClubsStrip(
-                clubs: viewModel.challenge.clubs,
-                league: viewModel.category.title,
-                usedNames: viewModel.state.usedClubNames
+            BattleConstraintsStrip(
+                constraints: viewModel.challenge.constraints,
+                usedIds: viewModel.state.usedConstraintIds
             )
 
             BattlePitchView(
                 slots: viewModel.challenge.slots,
                 state: viewModel.state,
-                league: viewModel.category.title,
                 onTapSlot: { viewModel.openSlot($0) },
-                onDropClub: { name, slot in viewModel.assignClub(named: name, toSlot: slot.id); viewModel.openSlot(slot) }
+                onDropConstraint: { id, slot in viewModel.assignConstraint(id: id, toSlot: slot.id); viewModel.openSlot(slot) }
             )
             .frame(maxHeight: .infinity)
             .padding(.horizontal, 16)
@@ -332,19 +330,19 @@ private struct BattleIntroView: View {
                 }
                 .padding(.top, 16)
 
-                Text("Drag each club onto a position, then name a player from that club who plays there. Every pick scores their career total \(challenge.category.title.lowercased()). Reach 70% of the perfect XI's total to win.")
+                Text("Drag each chip onto a position, then name a player who fits it and plays there — a club, a whole league, a nationality, or a combo. Every pick scores their \(challenge.category.title.lowercased()). Reach 70% of the perfect XI's total to win.")
                     .font(BKFont.body(14)).foregroundStyle(BKTheme.textSecondary)
                     .multilineTextAlignment(.center).padding(.horizontal, 8)
 
-                // Club crests preview
+                // Constraint chips preview
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 14) {
-                    ForEach(challenge.clubs) { club in
+                    ForEach(challenge.constraints) { constraint in
                         VStack(spacing: 5) {
-                            ClubCrest(club: club, league: challenge.category.title, size: 38)
-                            Text(club.name.uppercased())
+                            ConstraintIcon(constraint: constraint, size: 38)
+                            Text(constraint.label.uppercased())
                                 .font(.system(size: 8, weight: .bold, design: .rounded))
                                 .foregroundStyle(BKTheme.textMuted)
-                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .lineLimit(1).minimumScaleFactor(0.6)
                         }
                     }
                 }
@@ -407,25 +405,24 @@ private struct BattleBuildHeader: View {
     }
 }
 
-// MARK: - Clubs strip
+// MARK: - Constraints strip
 
-private struct BattleClubsStrip: View {
-    let clubs: [BattleClub]
-    let league: String
-    let usedNames: Set<String>
+private struct BattleConstraintsStrip: View {
+    let constraints: [BattleConstraint]
+    let usedIds: Set<String>
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("DRAG A CLUB ONTO A POSITION")
+            Text("DRAG A CHIP ONTO A POSITION")
                 .font(BKFont.caption(9)).tracking(0.8).foregroundStyle(BKTheme.textMuted)
                 .padding(.horizontal, 16)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(clubs) { club in
-                        let used = usedNames.contains(club.name)
-                        ClubChip(club: club, league: league, used: used)
-                            .draggable(club.name) {
-                                ClubCrest(club: club, league: league, size: 44)
+                    ForEach(constraints) { constraint in
+                        let used = usedIds.contains(constraint.id)
+                        ConstraintChip(constraint: constraint, used: used)
+                            .draggable(constraint.id) {
+                                ConstraintIcon(constraint: constraint, size: 44)
                             }
                     }
                 }
@@ -437,21 +434,21 @@ private struct BattleClubsStrip: View {
     }
 }
 
-private struct ClubChip: View {
-    let club: BattleClub
-    let league: String
+private struct ConstraintChip: View {
+    let constraint: BattleConstraint
     let used: Bool
 
     var body: some View {
         VStack(spacing: 4) {
-            ClubCrest(club: club, league: league, size: 40)
-            Text(club.name.uppercased())
+            ConstraintIcon(constraint: constraint, size: 40)
+            Text(constraint.label.uppercased())
                 .font(.system(size: 8, weight: .bold, design: .rounded))
                 .foregroundStyle(BKTheme.textMuted)
-                .lineLimit(1).frame(width: 56).minimumScaleFactor(0.7)
+                .lineLimit(2).frame(width: 60).minimumScaleFactor(0.6)
+                .multilineTextAlignment(.center)
         }
         .padding(.vertical, 8).padding(.horizontal, 4)
-        .frame(width: 64)
+        .frame(width: 68)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(alignment: .topTrailing) {
@@ -463,26 +460,68 @@ private struct ClubChip: View {
     }
 }
 
-private struct ClubCrest: View {
-    let club: BattleClub
-    let league: String
+/// Renders a constraint chip's icon by type: club/nat_club → crest, league/nat_league → league badge,
+/// nationality → flag. Combos overlay a small nationality flag on the crest/league badge.
+struct ConstraintIcon: View {
+    let constraint: BattleConstraint
     var size: CGFloat = 40
 
     var body: some View {
+        switch constraint.type {
+        case .club:
+            crest
+        case .league:
+            leagueBadge
+        case .nationality:
+            flagCircle
+        case .nat_league:
+            leagueBadge.overlay(alignment: .bottomTrailing) { flagBadge }
+        case .nat_club:
+            crest.overlay(alignment: .bottomTrailing) { flagBadge }
+        }
+    }
+
+    private var crest: some View {
         TeamBadgeImage(
-            club: club.name,
-            league: league,
-            teamId: club.teamId,
-            logoURL: club.logoUrl.flatMap(URL.init(string:)),
+            club: constraint.club ?? "",
+            league: constraint.leagueName ?? "",
+            teamId: constraint.teamId,
+            logoURL: constraint.logoUrl.flatMap(URL.init(string:)),
             size: size
         ) {
             Circle().fill(BKTheme.cardElevated).frame(width: size, height: size)
                 .overlay(
-                    Text(GuessWhoDisplay.clubAbbrev(club.name))
+                    Text(GuessWhoDisplay.clubAbbrev(constraint.club ?? ""))
                         .font(.system(size: size * 0.3, weight: .bold, design: .rounded))
                         .foregroundStyle(BKTheme.textMuted)
                 )
         }
+    }
+
+    private var leagueBadge: some View {
+        LeagueBadgeImage(league: constraint.leagueName ?? "", size: size) {
+            Circle().fill(BKTheme.cardElevated).frame(width: size, height: size)
+                .overlay(
+                    Text(GuessWhoDisplay.leagueAbbrev(constraint.leagueName ?? ""))
+                        .font(.system(size: size * 0.28, weight: .bold, design: .rounded))
+                        .foregroundStyle(BKTheme.textMuted)
+                )
+        }
+    }
+
+    private var flagCircle: some View {
+        Circle().fill(BKTheme.cardElevated).frame(width: size, height: size)
+            .overlay(
+                Text(GuessWhoDisplay.nationalityFlag(constraint.nationality ?? ""))
+                    .font(.system(size: size * 0.5))
+            )
+    }
+
+    private var flagBadge: some View {
+        Text(GuessWhoDisplay.nationalityFlag(constraint.nationality ?? ""))
+            .font(.system(size: size * 0.42))
+            .padding(1)
+            .background(Circle().fill(BKTheme.background))
     }
 }
 
@@ -491,9 +530,8 @@ private struct ClubCrest: View {
 private struct BattlePitchView: View {
     let slots: [BattleSlot]
     let state: BattleGameState
-    let league: String
     var onTapSlot: (BattleSlot) -> Void
-    var onDropClub: (String, BattleSlot) -> Void
+    var onDropConstraint: (String, BattleSlot) -> Void
 
     var body: some View {
         GeometryReader { geo in
@@ -502,11 +540,10 @@ private struct BattlePitchView: View {
                 ForEach(slots) { slot in
                     BattlePitchSlot(
                         slot: slot,
-                        club: state.club(forSlot: slot.id),
+                        constraint: state.constraint(forSlot: slot.id),
                         pick: state.pick(forSlot: slot.id),
-                        league: league,
                         onTap: { onTapSlot(slot) },
-                        onDrop: { name in onDropClub(name, slot) }
+                        onDrop: { id in onDropConstraint(id, slot) }
                     )
                     .position(x: slot.point.x * geo.size.width, y: slot.point.y * geo.size.height)
                 }
@@ -517,9 +554,8 @@ private struct BattlePitchView: View {
 
 private struct BattlePitchSlot: View {
     let slot: BattleSlot
-    let club: BattleClub?
+    let constraint: BattleConstraint?
     let pick: BattlePick?
-    let league: String
     var onTap: () -> Void
     var onDrop: (String) -> Void
 
@@ -548,8 +584,8 @@ private struct BattlePitchSlot: View {
                     PlayerAvatar(urlString: pick.player.headshotUrl, size: 42)
                         .grayscale(pick.correct ? 0 : 0.85)
                         .opacity(pick.correct ? 1 : 0.55)
-                } else if let club {
-                    ClubCrest(club: club, league: league, size: 34)
+                } else if let constraint {
+                    ConstraintIcon(constraint: constraint, size: 34)
                 } else {
                     Text("+").font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(Self.ringColor)
                 }
@@ -565,7 +601,7 @@ private struct BattlePitchSlot: View {
                 Text(pick.correct ? "\(pick.player.statValue)" : "0")
                     .font(.system(size: 9, weight: .heavy, design: .rounded))
                     .foregroundStyle(pick.correct ? .white : BKTheme.wrong)
-            } else if club != nil {
+            } else if constraint != nil {
                 Text("TAP TO PICK")
                     .font(.system(size: 7, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.white.opacity(0.7))
@@ -711,7 +747,7 @@ private struct BattleSearchSheet: View {
     @FocusState private var focused: Bool
     @Environment(\.dismiss) private var dismiss
 
-    private var assignedClub: BattleClub? { viewModel.state.club(forSlot: slot.id) }
+    private var assignedConstraint: BattleConstraint? { viewModel.state.constraint(forSlot: slot.id) }
 
     var body: some View {
         NavigationStack {
@@ -720,7 +756,7 @@ private struct BattleSearchSheet: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(slot.position.uppercased())")
                             .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
-                        Text(assignedClub?.name.uppercased() ?? "CHOOSE A CLUB")
+                        Text(assignedConstraint?.label.uppercased() ?? "CHOOSE A CHIP")
                             .font(BKFont.headline(16)).foregroundStyle(BKTheme.accent)
                     }
                     Spacer()
@@ -735,18 +771,18 @@ private struct BattleSearchSheet: View {
                 }
                 .padding(.horizontal, 16)
 
-                // Club chooser (unused clubs + the one already on this slot)
+                // Chip chooser (unused chips + the one already on this slot)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(clubChoices) { club in
-                            let selected = assignedClub?.name == club.name
+                        ForEach(constraintChoices) { constraint in
+                            let selected = assignedConstraint?.id == constraint.id
                             Button {
-                                viewModel.setActiveSlotClub(club)
+                                viewModel.setActiveSlotConstraint(constraint)
                                 focused = true
                             } label: {
                                 HStack(spacing: 6) {
-                                    ClubCrest(club: club, league: viewModel.category.title, size: 22)
-                                    Text(club.name.uppercased())
+                                    ConstraintIcon(constraint: constraint, size: 22)
+                                    Text(constraint.label.uppercased())
                                         .font(.system(size: 10, weight: .bold, design: .rounded))
                                         .foregroundStyle(selected ? BKTheme.background : BKTheme.textSecondary)
                                 }
@@ -759,7 +795,7 @@ private struct BattleSearchSheet: View {
                     .padding(.horizontal, 16)
                 }
 
-                if assignedClub != nil {
+                if assignedConstraint != nil {
                     HStack(spacing: 12) {
                         TextField("", text: $viewModel.searchQuery, prompt:
                             Text("SEARCH \(slot.position.uppercased())S").foregroundStyle(BKTheme.textMuted)
@@ -812,13 +848,13 @@ private struct BattleSearchSheet: View {
             }
         }
         .presentationDetents([.large])
-        .onAppear { if assignedClub != nil { focused = true } }
+        .onAppear { if assignedConstraint != nil { focused = true } }
     }
 
-    private var clubChoices: [BattleClub] {
-        var list = viewModel.unusedClubs
-        if let assignedClub, !list.contains(where: { $0.name == assignedClub.name }) {
-            list.insert(assignedClub, at: 0)
+    private var constraintChoices: [BattleConstraint] {
+        var list = viewModel.unusedConstraints
+        if let assignedConstraint, !list.contains(where: { $0.id == assignedConstraint.id }) {
+            list.insert(assignedConstraint, at: 0)
         }
         return list
     }
@@ -952,27 +988,33 @@ private struct BattleResultView: View {
         }
     }
 
-    // A row to render: position label, club crest, player name, stat.
+    // A row to render: position label, chip icon, player name, stat.
     private struct XIRow: Identifiable {
         let id: String
         let label: String
-        let club: BattleClub
+        let constraint: BattleConstraint
         let name: String
         let stat: Int
+    }
+
+    private func fallbackConstraint(id: String, label: String) -> BattleConstraint {
+        BattleConstraint(id: id, type: .league, label: label, club: nil, teamId: nil, logoUrl: nil,
+                         leagueId: nil, leagueName: label, nationality: nil)
     }
 
     private var yourRows: [XIRow] {
         challenge.slots.compactMap { slot in
             guard let pick = state.pick(forSlot: slot.id) else { return nil }
-            return XIRow(id: slot.id, label: slot.label, club: pick.club, name: pick.player.name, stat: pick.score)
+            return XIRow(id: slot.id, label: slot.label, constraint: pick.constraint, name: pick.player.name, stat: pick.score)
         }
     }
 
     private var optimalRows: [XIRow] {
         challenge.optimalLineup.map { o in
             let label = challenge.slots.first { $0.id == o.slotId }?.label ?? BattleFormations.shortLabel(o.position)
-            let club = challenge.clubs.first { $0.name == o.club } ?? BattleClub(name: o.club, teamId: nil, logoUrl: nil)
-            return XIRow(id: o.slotId, label: label, club: club, name: o.playerName, stat: o.statValue)
+            let constraint = challenge.constraints.first { $0.id == o.constraintId }
+                ?? fallbackConstraint(id: o.constraintId, label: o.constraintLabel)
+            return XIRow(id: o.slotId, label: label, constraint: constraint, name: o.playerName, stat: o.statValue)
         }
     }
 
@@ -989,7 +1031,7 @@ private struct BattleResultView: View {
                     Text(row.label)
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(BKTheme.textMuted).frame(width: 30, alignment: .leading)
-                    ClubCrest(club: row.club, league: challenge.category.title, size: 20)
+                    ConstraintIcon(constraint: row.constraint, size: 20)
                     Text(row.name)
                         .font(BKFont.body(13)).foregroundStyle(BKTheme.textPrimary).lineLimit(1)
                     Spacer(minLength: 0)

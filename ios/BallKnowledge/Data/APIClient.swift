@@ -174,17 +174,33 @@ actor APIClient {
         )
     }
 
-    func battlePlayers(categoryId: String, club: String, position: String, query: String) async throws -> [BattlePlayerDTO] {
+    func battlePlayers(categoryId: String, constraint: BattleConstraint, position: String, query: String) async throws -> [BattlePlayerDTO] {
+        struct ConstraintBody: Encodable {
+            let type: String
+            let club: String?
+            let leagueId: Int?
+            let nationality: String?
+        }
         struct Body: Encodable {
             let categoryId: String
-            let club: String
+            let constraint: ConstraintBody
             let position: String
             let q: String
         }
         return try await request(
             "daily/battle/players",
             method: "POST",
-            body: Body(categoryId: categoryId, club: club, position: position, q: query)
+            body: Body(
+                categoryId: categoryId,
+                constraint: ConstraintBody(
+                    type: constraint.type.rawValue,
+                    club: constraint.club,
+                    leagueId: constraint.leagueId,
+                    nationality: constraint.nationality
+                ),
+                position: position,
+                q: query
+            )
         )
     }
 

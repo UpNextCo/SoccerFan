@@ -24,10 +24,16 @@ dailyRouter.get('/puzzle/:modeId', requireAuth, async (req, res) => {
   }
 });
 
-// Battle Mode: players who played for `club` at `position`, with their category total.
+// Battle Mode: players at `position` with their category total, flagged by whether they satisfy the
+// slot's constraint chip (club / league / nationality / nat×league / nat×club).
 const battlePlayersSchema = z.object({
   categoryId: z.string(),
-  club: z.string(),
+  constraint: z.object({
+    type: z.enum(['club', 'league', 'nationality', 'nat_league', 'nat_club']),
+    club: z.string().nullable().optional(),
+    leagueId: z.number().int().nullable().optional(),
+    nationality: z.string().nullable().optional(),
+  }),
   position: z.string(),
   q: z.string().default(''),
 });
@@ -39,8 +45,8 @@ dailyRouter.post('/battle/players', requireAuth, async (req, res) => {
   }
   try {
     const { battlePlayers } = await import('../services/battleGenerator.js');
-    const { categoryId, club, position, q } = parsed.data;
-    sendSuccess(res, await battlePlayers(categoryId, club, position, q));
+    const { categoryId, constraint, position, q } = parsed.data;
+    sendSuccess(res, await battlePlayers(categoryId, constraint, position, q));
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load players', 400);
   }

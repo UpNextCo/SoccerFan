@@ -1,53 +1,146 @@
 /**
  * Battle Mode generator (mode id stays `draft_master`).
  *
- * Mechanic: a daily STAT category, 11 category-relevant CLUBS shown above the pitch, and a
- * fine-position formation. The player drags each club onto a slot and picks a player who played for
- * that club at that position; the pick scores the player's TOTAL career value of the category (the
- * club is only a selection constraint). On submit the total is compared to the mathematically
- * OPTIMAL lineup (best club->slot assignment + best player per cell), computed here via a
- * max-weight assignment.
+ * Mechanic: a daily STAT category + a pool of draggable CONSTRAINT CHIPS shown above a fine-position
+ * pitch. A chip is one of: a specific club, a whole league, a nationality, a nationality×league combo
+ * ("a Spaniard who played in the PL"), or a nationality×club combo ("a Brazilian at Barcelona"). The
+ * player drags each chip onto a slot and picks a player who SATISFIES that chip AND plays that slot's
+ * fine position; the pick scores the player's TOTAL value of the day's category (the chip is only a
+ * selection constraint). On submit the total is compared to the mathematically OPTIMAL lineup (best
+ * chip→slot assignment + best player per cell), computed here via a max-weight assignment.
+ *
+ * Categories are expressed as a `(player_id, value)` value subquery (same pattern as Target Man), so
+ * any per-player scalar works — league sums, career sums, peak value, transfer fee, trophies, caps…
  */
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { lookupTeamLogo } from './teamService.js';
 import { resolveHeadshot } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 
+// ---------------------------------------------------------------------------
+// Categories (13). Each yields a per-player scalar `(player_id, value)`.
+// scope 'pl' = league-scoped to the Premier League, so only PL-based chips are coherent that day.
+// ---------------------------------------------------------------------------
+
+type CategoryScope = 'global' | 'pl';
+
 interface Category {
   id: string;
   title: string;
   noun: string;
-  metric: 'appearances' | 'goals';
-  /** League the stat + club membership are scoped to. Null = career (all club football). */
-  leagueId: number | null;
+  unit: 'eur_m' | null;
+  scope: CategoryScope;
+  sub: SQL; // (player_id, value)
 }
+
+/** Club competitions counted as "career": big-5 leagues + Champions League + Europa League. */
+const CAREER_LEAGUES = [39, 140, 135, 78, 61, 2, 3];
+
+const sumMetric = (col: 'goals' | 'assists' | 'appearances' | 'yellow_cards', leagueIds: number[]): SQL =>
+  sql`(SELECT player_id, SUM(${sql.raw(col)})::int AS value FROM player_stats
+       WHERE league_id IN (${sql.join(leagueIds.map((l) => sql`${l}`), sql`, `)}) GROUP BY player_id)`;
+
+const peakValueSub: SQL = sql`(SELECT id AS player_id, ROUND(COALESCE(peak_market_value_eur, 0) / 1000000.0)::int AS value
+  FROM players WHERE peak_market_value_eur IS NOT NULL)`;
+
+// Record fee comes from the transfers table (10k+ players) not players.record_fee_eur (~4.7k).
+const recordFeeSub: SQL = sql`(SELECT player_id, ROUND(MAX(fee_eur_m))::int AS value FROM player_transfers
+  WHERE fee_eur_m IS NOT NULL GROUP BY player_id)`;
+
+// Real, fan-countable club trophies only — excludes Super Cups / Community Shield / friendlies.
+const TROPHY_COMPETITIONS = [
+  'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',
+  'UEFA Champions League', 'UEFA Europa League',
+  'FA Cup', 'League Cup', 'Copa del Rey', 'DFB Pokal', 'Coppa Italia', 'Coupe de France',
+];
+const trophiesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM player_honours
+  WHERE lower(placement) = 'winner' AND competition IN (${sql.join(TROPHY_COMPETITIONS.map((c) => sql`${c}`), sql`, `)})
+  GROUP BY player_id)`;
+
+const LEAGUE_TITLE_COMPETITIONS = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1'];
+const leagueTitlesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM player_honours
+  WHERE lower(placement) = 'winner' AND competition IN (${sql.join(LEAGUE_TITLE_COMPETITIONS.map((c) => sql`${c}`), sql`, `)})
+  GROUP BY player_id)`;
+
+const intlCapsSub: SQL = sql`(SELECT player_id, intl_caps::int AS value FROM player_extra_stats)`;
+
+const mostClubsSub: SQL = sql`(SELECT player_id, COUNT(DISTINCT team_id)::int AS value FROM player_career GROUP BY player_id)`;
 
 const CATEGORIES: Category[] = [
-  { id: 'career_apps', title: 'Career Appearances', noun: 'apps', metric: 'appearances', leagueId: null },
-  { id: 'career_goals', title: 'Career Goals', noun: 'goals', metric: 'goals', leagueId: null },
-  { id: 'pl_apps', title: 'Premier League Appearances', noun: 'apps', metric: 'appearances', leagueId: 39 },
-  { id: 'pl_goals', title: 'Premier League Goals', noun: 'goals', metric: 'goals', leagueId: 39 },
-  { id: 'laliga_apps', title: 'La Liga Appearances', noun: 'apps', metric: 'appearances', leagueId: 140 },
-  { id: 'laliga_goals', title: 'La Liga Goals', noun: 'goals', metric: 'goals', leagueId: 140 },
-  { id: 'seriea_apps', title: 'Serie A Appearances', noun: 'apps', metric: 'appearances', leagueId: 135 },
-  { id: 'seriea_goals', title: 'Serie A Goals', noun: 'goals', metric: 'goals', leagueId: 135 },
-  { id: 'bundesliga_goals', title: 'Bundesliga Goals', noun: 'goals', metric: 'goals', leagueId: 78 },
-  { id: 'ligue1_goals', title: 'Ligue 1 Goals', noun: 'goals', metric: 'goals', leagueId: 61 },
+  { id: 'career_goals', title: 'Career Goals', noun: 'goals', unit: null, scope: 'global', sub: sumMetric('goals', CAREER_LEAGUES) },
+  { id: 'career_assists', title: 'Career Assists', noun: 'assists', unit: null, scope: 'global', sub: sumMetric('assists', CAREER_LEAGUES) },
+  { id: 'career_apps', title: 'Career Appearances', noun: 'apps', unit: null, scope: 'global', sub: sumMetric('appearances', CAREER_LEAGUES) },
+  { id: 'career_yellows', title: 'Career Yellow Cards', noun: 'yellows', unit: null, scope: 'global', sub: sumMetric('yellow_cards', CAREER_LEAGUES) },
+  { id: 'pl_goals', title: 'Premier League Goals', noun: 'goals', unit: null, scope: 'pl', sub: sumMetric('goals', [39]) },
+  { id: 'pl_assists', title: 'Premier League Assists', noun: 'assists', unit: null, scope: 'pl', sub: sumMetric('assists', [39]) },
+  { id: 'cl_apps', title: 'Champions League Appearances', noun: 'apps', unit: null, scope: 'global', sub: sumMetric('appearances', [2]) },
+  { id: 'peak_value', title: 'Peak Market Value', noun: '€m', unit: 'eur_m', scope: 'global', sub: peakValueSub },
+  { id: 'record_fee', title: 'Highest Transfer Fee', noun: '€m', unit: 'eur_m', scope: 'global', sub: recordFeeSub },
+  { id: 'career_trophies', title: 'Total Career Trophies', noun: 'trophies', unit: null, scope: 'global', sub: trophiesSub },
+  { id: 'league_titles', title: 'League Titles', noun: 'titles', unit: null, scope: 'global', sub: leagueTitlesSub },
+  { id: 'intl_caps', title: 'International Caps', noun: 'caps', unit: null, scope: 'global', sub: intlCapsSub },
+  { id: 'most_clubs', title: 'Most Clubs Played For', noun: 'clubs', unit: null, scope: 'global', sub: mostClubsSub },
 ];
 
-const LEAGUE_NAME: Record<number, string> = {
-  39: 'Premier League', 140: 'La Liga', 135: 'Serie A', 78: 'Bundesliga', 61: 'Ligue 1',
-};
-const BIG5 = [39, 140, 135, 78, 61];
-
-// Goalkeepers contribute meaningfully to appearances, but ~0 to goals — so we only include the GK
-// slot for appearances categories and play an all-outfield XI for goals categories.
-function includeGk(cat: Category): boolean {
-  return cat.metric === 'appearances';
+function categoryById(id: string): Category | undefined {
+  return CATEGORIES.find((c) => c.id === id);
 }
 
-// Fine-position formations using only the well-covered positions (every big club fills these).
+// ---------------------------------------------------------------------------
+// Constraint chips
+// ---------------------------------------------------------------------------
+
+type ConstraintType = 'club' | 'league' | 'nationality' | 'nat_league' | 'nat_club';
+
+interface Constraint {
+  id: string;
+  type: ConstraintType;
+  label: string;
+  club?: string;
+  teamId?: number | null;
+  logoUrl?: string | null;
+  leagueId?: number | null;
+  leagueName?: string | null;
+  nationality?: string | null;
+}
+
+const BIG5: Array<{ id: number; name: string }> = [
+  { id: 39, name: 'Premier League' },
+  { id: 140, name: 'La Liga' },
+  { id: 135, name: 'Serie A' },
+  { id: 78, name: 'Bundesliga' },
+  { id: 61, name: 'Ligue 1' },
+];
+const LEAGUE_NAME: Record<number, string> = Object.fromEntries(BIG5.map((l) => [l.id, l.name]));
+
+/** Nationalities recognisable enough to stand alone as a chip (≈ famous ≥ 20). */
+const STANDALONE_NATIONS = [
+  'France', 'Spain', 'England', 'Germany', 'Brazil', 'Italy', 'Netherlands', 'Argentina', 'Portugal', 'Belgium',
+];
+
+/** SQL yielding the set of player_ids that SATISFY a constraint (career-wide membership). */
+function eligibilityIds(c: Constraint): SQL {
+  switch (c.type) {
+    case 'club':
+      return sql`SELECT DISTINCT player_id FROM player_stats WHERE team_name = ${c.club} AND appearances > 0`;
+    case 'league':
+      return sql`SELECT DISTINCT player_id FROM player_stats WHERE league_id = ${c.leagueId} AND appearances > 0`;
+    case 'nationality':
+      return sql`SELECT id AS player_id FROM players WHERE nationality = ${c.nationality}`;
+    case 'nat_league':
+      return sql`SELECT DISTINCT ps.player_id FROM player_stats ps JOIN players pl ON pl.id = ps.player_id
+                 WHERE ps.league_id = ${c.leagueId} AND ps.appearances > 0 AND pl.nationality = ${c.nationality}`;
+    case 'nat_club':
+      return sql`SELECT DISTINCT ps.player_id FROM player_stats ps JOIN players pl ON pl.id = ps.player_id
+                 WHERE ps.team_name = ${c.club} AND ps.appearances > 0 AND pl.nationality = ${c.nationality}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Formation (unchanged from the club-only version).
+// ---------------------------------------------------------------------------
+
 interface Slot { id: string; position: string }
 const GK_SLOT: Slot = { id: 'gk', position: 'Goalkeeper' };
 const OUTFIELD_SLOTS: Slot[] = [
@@ -63,31 +156,22 @@ const OUTFIELD_SLOTS: Slot[] = [
   { id: 'rw', position: 'Right Winger' },
 ];
 
+// Goalkeepers score ~0 for goals/assists, so those categories play an all-outfield XI.
+function includeGk(cat: Category): boolean {
+  return cat.id === 'career_apps' || cat.id === 'cl_apps' || cat.id === 'career_yellows' ||
+    cat.id === 'peak_value' || cat.id === 'record_fee' || cat.id === 'career_trophies' ||
+    cat.id === 'league_titles' || cat.id === 'intl_caps' || cat.id === 'most_clubs';
+}
+
 function formationFor(cat: Category): { id: string; slots: Slot[] } {
   return includeGk(cat)
     ? { id: '4-3-3', slots: [GK_SLOT, ...OUTFIELD_SLOTS] }
     : { id: '4-3-3-of', slots: [...OUTFIELD_SLOTS] };
 }
 
-export interface BattleOptimalPick {
-  slotId: string;
-  position: string;
-  club: string;
-  playerName: string;
-  statValue: number;
-}
-
-export interface BattlePuzzleJson {
-  modeId: 'draft_master';
-  puzzleId: string;
-  date: string;
-  category: { id: string; title: string; noun: string };
-  formationId: string;
-  slots: Array<{ id: string; position: string }>;
-  clubs: Array<{ name: string; teamId: number | null; logoUrl: string | null }>;
-  optimalScore: number;
-  optimalLineup: BattleOptimalPick[];
-}
+// ---------------------------------------------------------------------------
+// Deterministic per-day randomness.
+// ---------------------------------------------------------------------------
 
 function hashString(input: string): number {
   let h = 0;
@@ -109,84 +193,90 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
   return r;
 }
 
-/** SQL fragments scoping the stat + club membership to the category's league (or all club football). */
-function leagueScope(cat: Category) {
-  return cat.leagueId != null ? sql`s.league_id = ${cat.leagueId}` : sql`s.league_id <> 1`;
-}
-function membershipScope(cat: Category) {
-  return cat.leagueId != null ? sql`m.league_id = ${cat.leagueId}` : sql`m.league_id <> 1`;
-}
+// ---------------------------------------------------------------------------
+// Candidate chip pools (fame-gated, coverage-validated).
+// ---------------------------------------------------------------------------
 
-/**
- * Pick the candidate clubs for a category (league clubs, or big-5 clubs for career).
- *
- * Ranked by FAMOUS alumni (market_value_tier ≥ 4), not data volume: ranking by row count let
- * Salernitana/Chievo/Spal-tier clubs into the pool ("name a left winger who played for Spal" is
- * unanswerable even for elite ball knowledge). Every club in the pool must have a meaningful set
- * of recognisable names; the coverage floor (≥ 20 positioned players) still guarantees every
- * fine position can be filled.
- */
-const CLUB_POOL = 16; // recognisable clubs per league the daily shuffle draws from
+const ELITE_PL_MIN_FAMOUS = 8;   // all PL clubs qualify
+const ELITE_OTHER_MIN_FAMOUS = 40; // only the giants elsewhere
+const NAT_LEAGUE_MIN_FAMOUS = 3;
+const NAT_CLUB_MIN_FAMOUS = 2;
 
-async function candidateClubs(cat: Category): Promise<string[]> {
-  const leagueFilter = cat.leagueId != null
-    ? sql`s.league_id = ${cat.leagueId}`
-    : sql`s.league_id IN (${sql.join(BIG5.map((l) => sql`${l}`), sql`, `)})`;
+/** Elite clubs: every PL club with ≥8 famous alumni, plus non-PL clubs with ≥40. */
+async function eliteClubs(): Promise<Array<{ club: string; leagueId: number }>> {
   const rows = (await db.execute(sql`
-    SELECT s.team_name AS club,
-           COUNT(DISTINCT p.id) FILTER (WHERE p.market_value_tier >= 4)::int AS famous,
-           COUNT(DISTINCT p.id)::int AS n
-    FROM player_stats s JOIN players p ON p.id = s.player_id
-    WHERE ${leagueFilter} AND p.sub_position IS NOT NULL AND s.appearances > 0 AND s.team_name IS NOT NULL
-    GROUP BY s.team_name
-    HAVING COUNT(DISTINCT p.id) >= 20 AND COUNT(DISTINCT p.id) FILTER (WHERE p.market_value_tier >= 4) >= 5
-    ORDER BY famous DESC, n DESC
-    LIMIT ${CLUB_POOL}
-  `)) as unknown as Array<{ club: string; famous: number; n: number }>;
-  return rows.map((r) => r.club);
+    SELECT club, league_id FROM (
+      SELECT s.team_name AS club, s.league_id,
+             COUNT(DISTINCT p.id) FILTER (WHERE p.market_value_tier >= 4) AS famous
+      FROM player_stats s JOIN players p ON p.id = s.player_id
+      WHERE s.league_id IN (39, 140, 135, 78, 61) AND s.appearances > 0 AND s.team_name IS NOT NULL
+      GROUP BY s.team_name, s.league_id
+    ) t
+    WHERE (league_id = 39 AND famous >= ${ELITE_PL_MIN_FAMOUS})
+       OR (league_id <> 39 AND famous >= ${ELITE_OTHER_MIN_FAMOUS})
+  `)) as unknown as Array<{ club: string; league_id: number }>;
+  return rows.map((r) => ({ club: r.club, leagueId: r.league_id }));
 }
+
+/** Viable nationality×league combos (≥3 famous eligible). */
+async function viableNatLeague(leagueIds: number[]): Promise<Array<{ nationality: string; leagueId: number }>> {
+  const rows = (await db.execute(sql`
+    SELECT p.nationality, s.league_id
+    FROM players p JOIN player_stats s ON s.player_id = p.id
+    WHERE s.league_id IN (${sql.join(leagueIds.map((l) => sql`${l}`), sql`, `)}) AND s.appearances > 0
+    GROUP BY p.nationality, s.league_id
+    HAVING COUNT(DISTINCT p.id) FILTER (WHERE p.market_value_tier >= 4) >= ${NAT_LEAGUE_MIN_FAMOUS}
+  `)) as unknown as Array<{ nationality: string; league_id: number }>;
+  return rows.map((r) => ({ nationality: r.nationality, leagueId: r.league_id }));
+}
+
+/** Viable nationality×club combos (≥2 famous eligible), restricted to the elite club set. */
+async function viableNatClub(clubs: string[]): Promise<Array<{ nationality: string; club: string }>> {
+  if (clubs.length === 0) return [];
+  const rows = (await db.execute(sql`
+    SELECT p.nationality, s.team_name AS club
+    FROM players p JOIN player_stats s ON s.player_id = p.id
+    WHERE s.team_name IN (${sql.join(clubs.map((c) => sql`${c}`), sql`, `)}) AND s.appearances > 0
+    GROUP BY p.nationality, s.team_name
+    HAVING COUNT(DISTINCT p.id) FILTER (WHERE p.market_value_tier >= 4) >= ${NAT_CLUB_MIN_FAMOUS}
+  `)) as unknown as Array<{ nationality: string; club: string }>;
+  return rows.map((r) => ({ nationality: r.nationality, club: r.club }));
+}
+
+// ---------------------------------------------------------------------------
+// Best eligible player per (constraint, position) — the optimal cell values.
+// ---------------------------------------------------------------------------
 
 interface Cell { stat: number; name: string }
 
-/** Best player (name + category total) per (club, fine-position) — the optimal cell values. */
-async function bestCells(cat: Category, clubs: string[], slots: Slot[]): Promise<Map<string, Cell>> {
-  const positions = [...new Set(slots.map((s) => s.position))];
-  const clubList = sql.join(clubs.map((c) => sql`${c}`), sql`, `);
+/** For one constraint, the best (highest category value) eligible player at each needed position. */
+async function bestCellsForConstraint(cat: Category, c: Constraint, positions: string[]): Promise<Map<string, Cell>> {
   const posList = sql.join(positions.map((p) => sql`${p}`), sql`, `);
-  const metric = sql.raw(cat.metric);
   const rows = (await db.execute(sql`
-    WITH pstat AS (
-      SELECT p.id, p.name, p.sub_position AS pos,
-        COALESCE(SUM(s.${metric}) FILTER (WHERE ${leagueScope(cat)}), 0)::int AS stat
-      FROM players p JOIN player_stats s ON s.player_id = p.id
-      WHERE p.sub_position IN (${posList})
-      GROUP BY p.id, p.name, p.sub_position
-    ),
-    mem AS (
-      SELECT DISTINCT m.player_id, m.team_name
-      FROM player_stats m
-      WHERE m.team_name IN (${clubList}) AND m.appearances > 0 AND ${membershipScope(cat)}
-    ),
-    joined AS (
-      SELECT mem.team_name AS club, pstat.pos AS pos, pstat.name AS name, pstat.stat AS stat
-      FROM mem JOIN pstat ON pstat.id = mem.player_id
-    )
-    SELECT DISTINCT ON (club, pos) club, pos, name, stat
-    FROM joined
-    ORDER BY club, pos, stat DESC, name
-  `)) as unknown as Array<{ club: string; pos: string; name: string; stat: number }>;
+    WITH val AS ${cat.sub},
+    elig AS (${eligibilityIds(c)})
+    SELECT DISTINCT ON (p.sub_position) p.sub_position AS pos, p.name, COALESCE(val.value, 0)::int AS stat
+    FROM players p
+    JOIN elig ON elig.player_id = p.id
+    LEFT JOIN val ON val.player_id = p.id
+    WHERE p.sub_position IN (${posList})
+    ORDER BY p.sub_position, COALESCE(val.value, 0) DESC, p.name
+  `)) as unknown as Array<{ pos: string; name: string; stat: number }>;
   const m = new Map<string, Cell>();
-  for (const r of rows) m.set(`${r.club}|${r.pos}`, { stat: r.stat, name: r.name });
+  for (const r of rows) m.set(r.pos, { stat: r.stat, name: r.name });
   return m;
 }
 
-/** Max-weight assignment (Hungarian on negated weights). Square n x n. assign[club] = slot. */
+// ---------------------------------------------------------------------------
+// Max-weight assignment (Hungarian on negated weights). Square n x n. assign[chip] = slot.
+// ---------------------------------------------------------------------------
+
 function maxWeightAssignment(weight: number[][]): { total: number; assign: number[] } {
   const n = weight.length;
   if (n === 0) return { total: 0, assign: [] };
   let maxW = 0;
   for (const row of weight) for (const w of row) maxW = Math.max(maxW, w);
-  const cost = weight.map((row) => row.map((w) => maxW - w)); // minimise -> maximises weight
+  const cost = weight.map((row) => row.map((w) => maxW - w));
   const INF = Number.POSITIVE_INFINITY;
   const u = new Array(n + 1).fill(0);
   const v = new Array(n + 1).fill(0);
@@ -223,49 +313,198 @@ function maxWeightAssignment(weight: number[][]): { total: number; assign: numbe
   return { total, assign };
 }
 
+// ---------------------------------------------------------------------------
+// Puzzle assembly
+// ---------------------------------------------------------------------------
+
+export interface BattleOptimalPick {
+  slotId: string;
+  position: string;
+  constraintId: string;
+  constraintLabel: string;
+  playerName: string;
+  statValue: number;
+}
+
+export interface BattleConstraintJson {
+  id: string;
+  type: ConstraintType;
+  label: string;
+  club: string | null;
+  teamId: number | null;
+  logoUrl: string | null;
+  leagueId: number | null;
+  leagueName: string | null;
+  nationality: string | null;
+}
+
+export interface BattlePuzzleJson {
+  modeId: 'draft_master';
+  puzzleId: string;
+  date: string;
+  category: { id: string; title: string; noun: string; unit: 'eur_m' | null };
+  formationId: string;
+  slots: Array<{ id: string; position: string }>;
+  constraints: BattleConstraintJson[];
+  optimalScore: number;
+  optimalLineup: BattleOptimalPick[];
+}
+
+/** Board composition (chip-type counts) for an n-slot board, scaled and clamped to n. */
+function boardMix(n: number, scope: CategoryScope): { club: number; league: number; nationality: number; natLeague: number; natClub: number } {
+  if (scope === 'pl') {
+    // PL-coherent: mostly PL clubs + a couple "Nationality in the PL" combos.
+    const natLeague = Math.min(3, Math.max(2, n - 8));
+    return { club: n - natLeague, league: 0, nationality: 0, natLeague, natClub: 0 };
+  }
+  // Global default ≈ 4 clubs, 2 leagues, 2 nationalities, 3 combos (2 nat×league + 1 nat×club), scaled to n.
+  const league = 2;
+  const nationality = 2;
+  const natLeague = 2;
+  const natClub = Math.max(1, n - 4 - league - nationality - natLeague); // remainder → clubs baseline 4
+  const club = n - league - nationality - natLeague - natClub;
+  return { club, league, nationality, natLeague, natClub };
+}
+
+async function buildConstraintPool(
+  cat: Category,
+  clubs: Array<{ club: string; leagueId: number }>,
+  seed: number,
+): Promise<Constraint[]> {
+  const n = formationFor(cat).slots.length;
+  const mix = boardMix(n, cat.scope);
+  const isPl = cat.scope === 'pl';
+  const clubNames = clubs.map((c) => c.club);
+  const plClubNames = clubs.filter((c) => c.leagueId === 39).map((c) => c.club);
+
+  const chosen: Constraint[] = [];
+  let uid = 0;
+  const nextId = () => `c${uid++}`;
+
+  // Clubs
+  const clubPool = isPl ? plClubNames : clubNames;
+  for (const club of seededShuffle(clubPool, seed + 1).slice(0, mix.club)) {
+    chosen.push({ id: nextId(), type: 'club', label: club, club });
+  }
+
+  // Leagues
+  for (const lg of seededShuffle(BIG5, seed + 2).slice(0, mix.league)) {
+    chosen.push({ id: nextId(), type: 'league', label: lg.name, leagueId: lg.id, leagueName: lg.name });
+  }
+
+  // Nationalities (standalone)
+  for (const nat of seededShuffle(STANDALONE_NATIONS, seed + 3).slice(0, mix.nationality)) {
+    chosen.push({ id: nextId(), type: 'nationality', label: nat, nationality: nat });
+  }
+
+  // Nationality × League
+  if (mix.natLeague > 0) {
+    const leagueIds = isPl ? [39] : BIG5.map((l) => l.id);
+    const combos = await viableNatLeague(leagueIds);
+    for (const cmb of seededShuffle(combos, seed + 4).slice(0, mix.natLeague)) {
+      const name = LEAGUE_NAME[cmb.leagueId] ?? '';
+      chosen.push({ id: nextId(), type: 'nat_league', label: `${cmb.nationality} · ${name}`, nationality: cmb.nationality, leagueId: cmb.leagueId, leagueName: name });
+    }
+  }
+
+  // Nationality × Club
+  if (mix.natClub > 0) {
+    const combos = await viableNatClub(isPl ? plClubNames : clubNames);
+    for (const cmb of seededShuffle(combos, seed + 5).slice(0, mix.natClub)) {
+      chosen.push({ id: nextId(), type: 'nat_club', label: `${cmb.nationality} · ${cmb.club}`, nationality: cmb.nationality, club: cmb.club });
+    }
+  }
+
+  return chosen;
+}
+
 export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJson | null> {
-  const seed = hashString(`${date}:battle`);
+  const baseSeed = hashString(`${date}:battle`);
   const category = CATEGORIES[dayNumber(date) % CATEGORIES.length]!;
   const formation = formationFor(category);
   const slots = formation.slots;
-  const clubCount = slots.length;
+  const positions = [...new Set(slots.map((s) => s.position))];
 
-  const candidates = await candidateClubs(category);
-  if (candidates.length < clubCount) return null;
-  // Take a good pool then a seeded sample, so it varies day to day but stays recognisable.
-  const clubs = seededShuffle(candidates, seed).slice(0, clubCount);
+  const clubs = await eliteClubs();
+  if (clubs.length < slots.length) return null;
 
-  const cells = await bestCells(category, clubs, slots);
-  // weight[club][slot] = best player total for that club at that slot's fine position (0 if none).
-  const weight = clubs.map((club) => slots.map((slot) => cells.get(`${club}|${slot.position}`)?.stat ?? 0));
-  const { total: optimalScore, assign } = maxWeightAssignment(weight);
-  if (optimalScore <= 0) return null;
+  // Generate-and-validate: build a chip board, verify a solvable optimal XI (every assigned cell has a
+  // real eligible player with a positive value). Reshuffle with a new seed on failure.
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const seed = baseSeed + attempt * 101;
+    const constraints = await buildConstraintPool(category, clubs, seed);
+    if (constraints.length !== slots.length) continue;
 
-  // assign[clubIdx] = slotIdx -> invert so we can read the optimal pick per slot.
-  const clubForSlot = new Array<number>(slots.length).fill(-1);
-  assign.forEach((slotIdx, clubIdx) => { if (slotIdx >= 0) clubForSlot[slotIdx] = clubIdx; });
-  const optimalLineup: BattleOptimalPick[] = slots.map((slot, si) => {
-    const club = clubs[clubForSlot[si]] ?? clubs[0]!;
-    const cell = cells.get(`${club}|${slot.position}`);
-    return { slotId: slot.id, position: slot.position, club, playerName: cell?.name ?? '—', statValue: cell?.stat ?? 0 };
-  });
+    // cellStat[constraintIdx][slotIdx] + names, from per-position best eligible player.
+    const perConstraint = await Promise.all(constraints.map((c) => bestCellsForConstraint(category, c, positions)));
+    const weight = constraints.map((_, ci) => slots.map((slot) => perConstraint[ci]!.get(slot.position)?.stat ?? 0));
 
-  const clubsOut = await Promise.all(clubs.map(async (name) => {
-    const logo = await lookupTeamLogo(name, category.leagueId != null ? LEAGUE_NAME[category.leagueId]! : '');
-    return { name, teamId: logo?.teamId ?? null, logoUrl: logo?.logoUrl ?? null };
-  }));
+    const { total: optimalScore, assign } = maxWeightAssignment(weight);
+    if (optimalScore <= 0) continue;
 
-  return {
-    modeId: 'draft_master',
-    puzzleId: `${date}-draft_master`,
-    date,
-    category: { id: category.id, title: category.title, noun: category.noun },
-    formationId: formation.id,
-    slots: slots.map((s) => ({ id: s.id, position: s.position })),
-    clubs: clubsOut,
-    optimalScore,
-    optimalLineup,
-  };
+    // Every chip must land on a slot where it actually has an eligible, positive-value player.
+    const valid = assign.every((slotIdx, ci) => slotIdx >= 0 && (perConstraint[ci]!.get(slots[slotIdx]!.position)?.stat ?? 0) > 0);
+    if (!valid) continue;
+
+    // constraintForSlot[slotIdx] = constraintIdx
+    const constraintForSlot = new Array<number>(slots.length).fill(-1);
+    assign.forEach((slotIdx, ci) => { if (slotIdx >= 0) constraintForSlot[slotIdx] = ci; });
+
+    const optimalLineup: BattleOptimalPick[] = slots.map((slot, si) => {
+      const ci = constraintForSlot[si]!;
+      const c = constraints[ci]!;
+      const cell = perConstraint[ci]!.get(slot.position);
+      return {
+        slotId: slot.id, position: slot.position,
+        constraintId: c.id, constraintLabel: c.label,
+        playerName: cell?.name ?? '—', statValue: cell?.stat ?? 0,
+      };
+    });
+
+    // Decorate club/nat_club chips with crest logos.
+    const constraintsOut: BattleConstraintJson[] = await Promise.all(constraints.map(async (c) => {
+      let teamId: number | null = null;
+      let logoUrl: string | null = null;
+      if ((c.type === 'club' || c.type === 'nat_club') && c.club) {
+        const leagueName = clubs.find((k) => k.club === c.club)?.leagueId;
+        const logo = await lookupTeamLogo(c.club, leagueName != null ? (LEAGUE_NAME[leagueName] ?? '') : '');
+        teamId = logo?.teamId ?? null;
+        logoUrl = logo?.logoUrl ?? null;
+      }
+      return {
+        id: c.id, type: c.type, label: c.label,
+        club: c.club ?? null, teamId, logoUrl,
+        leagueId: c.leagueId ?? null, leagueName: c.leagueName ?? null,
+        nationality: c.nationality ?? null,
+      };
+    }));
+
+    return {
+      modeId: 'draft_master',
+      puzzleId: `${date}-draft_master`,
+      date,
+      category: { id: category.id, title: category.title, noun: category.noun, unit: category.unit },
+      formationId: formation.id,
+      slots: slots.map((s) => ({ id: s.id, position: s.position })),
+      constraints: constraintsOut,
+      optimalScore,
+      optimalLineup,
+    };
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Player search for a slot: players at `position` with their category value, flagged by whether they
+// satisfy the slot's constraint (a non-satisfying pick is allowed but scores 0 and shows red).
+// ---------------------------------------------------------------------------
+
+export interface BattleConstraintQuery {
+  type: ConstraintType;
+  club?: string | null;
+  leagueId?: number | null;
+  nationality?: string | null;
 }
 
 export interface BattlePlayerResult {
@@ -273,55 +512,58 @@ export interface BattlePlayerResult {
   name: string;
   statValue: number;
   nationality: string | null;
-  /** Did this player actually play for the slot's club (in the category's league)? */
-  playedForClub: boolean;
+  satisfiesConstraint: boolean;
   headshotUrl?: string;
 }
 
-/**
- * Players at the given fine `position` who played in the category's league (NOT just the slot's
- * club) — so the player has to actually know who turned out for that club. `playedForClub` lets the
- * client mark a wrong pick (didn't play for `club`) as a red, 0-scoring choice.
- */
+/** EXISTS/predicate SQL for whether a player row `p` satisfies the constraint. */
+function satisfiesSql(c: BattleConstraintQuery): SQL {
+  switch (c.type) {
+    case 'club':
+      return sql`EXISTS (SELECT 1 FROM player_stats m WHERE m.player_id = p.id AND m.team_name = ${c.club ?? ''} AND m.appearances > 0)`;
+    case 'league':
+      return sql`EXISTS (SELECT 1 FROM player_stats m WHERE m.player_id = p.id AND m.league_id = ${c.leagueId ?? -1} AND m.appearances > 0)`;
+    case 'nationality':
+      return sql`(p.nationality = ${c.nationality ?? ''})`;
+    case 'nat_league':
+      return sql`(p.nationality = ${c.nationality ?? ''} AND EXISTS (SELECT 1 FROM player_stats m WHERE m.player_id = p.id AND m.league_id = ${c.leagueId ?? -1} AND m.appearances > 0))`;
+    case 'nat_club':
+      return sql`(p.nationality = ${c.nationality ?? ''} AND EXISTS (SELECT 1 FROM player_stats m WHERE m.player_id = p.id AND m.team_name = ${c.club ?? ''} AND m.appearances > 0))`;
+  }
+}
+
 export async function battlePlayers(
   categoryId: string,
-  club: string,
+  constraint: BattleConstraintQuery,
   position: string,
   query: string
 ): Promise<BattlePlayerResult[]> {
-  const cat = CATEGORIES.find((c) => c.id === categoryId);
+  const cat = categoryById(categoryId);
   if (!cat) return [];
-  const metric = sql.raw(cat.metric);
   const q = query.trim().toLowerCase();
   const like = `%${q}%`;
   const nameFilter = q.length >= 2
     ? sql`AND (lower(p.name) LIKE ${like} OR lower(p.search_text) LIKE ${like})`
     : sql``;
   const rows = (await db.execute(sql`
+    WITH val AS ${cat.sub}
     SELECT p.id, p.name, p.api_football_id, p.nationality,
-      COALESCE(SUM(s.${metric}) FILTER (WHERE ${leagueScope(cat)}), 0)::int AS stat,
-      EXISTS (
-        SELECT 1 FROM player_stats m
-        WHERE m.player_id = p.id AND m.team_name = ${club} AND m.appearances > 0 AND ${membershipScope(cat)}
-      ) AS played_for_club
-    FROM players p JOIN player_stats s ON s.player_id = p.id
+      COALESCE(val.value, 0)::int AS stat,
+      ${satisfiesSql(constraint)} AS satisfies
+    FROM players p
+    LEFT JOIN val ON val.player_id = p.id
     WHERE p.sub_position = ${position}
-      AND EXISTS (
-        SELECT 1 FROM player_stats l
-        WHERE l.player_id = p.id AND l.appearances > 0 AND ${cat.leagueId != null ? sql`l.league_id = ${cat.leagueId}` : sql`l.league_id <> 1`}
-      )
       ${nameFilter}
-    GROUP BY p.id, p.name, p.api_football_id, p.nationality
-    ORDER BY stat DESC
+    ORDER BY (${satisfiesSql(constraint)}) DESC, COALESCE(val.value, 0) DESC, p.name
     LIMIT 25
-  `  )) as unknown as Array<{ id: string; name: string; api_football_id: number | null; nationality: string | null; stat: number; played_for_club: boolean }>;
+  `)) as unknown as Array<{ id: string; name: string; api_football_id: number | null; nationality: string | null; stat: number; satisfies: boolean }>;
   const overrides = await getPhotoOverrides();
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     statValue: r.stat,
     nationality: r.nationality,
-    playedForClub: r.played_for_club,
+    satisfiesConstraint: r.satisfies,
     headshotUrl: resolveHeadshot(overrides.get(r.id), r.api_football_id) ?? undefined,
   }));
 }

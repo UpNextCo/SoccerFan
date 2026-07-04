@@ -46,19 +46,25 @@ enum DailyChallengeResolver {
     /// Map the server Battle Mode challenge into the game model (nil → caller uses local seed).
     /// Goals categories ship an all-outfield XI (10 slots, no GK), appearances ship 11 — accept both.
     static func battleChallenge(from bundle: DailyBundleDTO?) -> BattleChallenge? {
-        guard let dto = bundle?.draftMasterPuzzle, dto.clubs.count >= 10, dto.slots.count >= 10 else { return nil }
+        guard let dto = bundle?.draftMasterPuzzle, dto.constraints.count >= 10, dto.slots.count >= 10 else { return nil }
         return BattleChallenge(
             id: dto.puzzleId,
             date: dto.date,
-            category: BattleCategory(id: dto.category.id, title: dto.category.title, noun: dto.category.noun),
+            category: BattleCategory(id: dto.category.id, title: dto.category.title, noun: dto.category.noun, unit: dto.category.unit),
             formationId: dto.formationId,
             slots: dto.slots.enumerated().map { index, s in
                 BattleFormations.slot(id: s.id, position: s.position, index: index, formationId: dto.formationId)
             },
-            clubs: dto.clubs.map { BattleClub(name: $0.name, teamId: $0.teamId, logoUrl: $0.logoUrl) },
+            constraints: dto.constraints.map {
+                BattleConstraint(
+                    id: $0.id, type: BattleConstraintType(rawValue: $0.type) ?? .club, label: $0.label,
+                    club: $0.club, teamId: $0.teamId, logoUrl: $0.logoUrl,
+                    leagueId: $0.leagueId, leagueName: $0.leagueName, nationality: $0.nationality
+                )
+            },
             optimalScore: dto.optimalScore,
             optimalLineup: (dto.optimalLineup ?? []).map {
-                BattleOptimalPick(slotId: $0.slotId, position: $0.position, club: $0.club, playerName: $0.playerName, statValue: $0.statValue)
+                BattleOptimalPick(slotId: $0.slotId, position: $0.position, constraintId: $0.constraintId, constraintLabel: $0.constraintLabel, playerName: $0.playerName, statValue: $0.statValue)
             }
         )
     }

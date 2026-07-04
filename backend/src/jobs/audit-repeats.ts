@@ -190,7 +190,7 @@ async function main() {
       if (!p) failures.push(`${date} draft_master: null`);
       else {
         record(battleCat, p.category.title, day);
-        record(battleSetup, `${p.category.title} :: ${p.clubs.map((c) => c.name).sort().join(', ')}`, day);
+        record(battleSetup, `${p.category.title} :: ${p.constraints.map((c) => c.label).sort().join(', ')}`, day);
       }
     } catch (err) {
       failures.push(`${date} draft_master: ${err instanceof Error ? err.message : err}`);

@@ -355,6 +355,7 @@ struct BattleCategoryDTO: Codable, Equatable {
     let id: String
     let title: String
     let noun: String
+    let unit: String?
 }
 
 struct BattleSlotDTO: Codable, Equatable {
@@ -362,16 +363,23 @@ struct BattleSlotDTO: Codable, Equatable {
     let position: String
 }
 
-struct BattleClubDTO: Codable, Equatable {
-    let name: String
+struct BattleConstraintDTO: Codable, Equatable {
+    let id: String
+    let type: String
+    let label: String
+    let club: String?
     let teamId: Int?
     let logoUrl: String?
+    let leagueId: Int?
+    let leagueName: String?
+    let nationality: String?
 }
 
 struct BattleOptimalSlotDTO: Codable, Equatable {
     let slotId: String
     let position: String
-    let club: String
+    let constraintId: String
+    let constraintLabel: String
     let playerName: String
     let statValue: Int
 }
@@ -383,7 +391,7 @@ struct DraftMasterPuzzleDTO: Codable, Equatable {
     let category: BattleCategoryDTO
     let formationId: String
     let slots: [BattleSlotDTO]
-    let clubs: [BattleClubDTO]
+    let constraints: [BattleConstraintDTO]
     let optimalScore: Int
     let optimalLineup: [BattleOptimalSlotDTO]?
 }
@@ -394,7 +402,7 @@ struct BattlePlayerDTO: Codable, Equatable, Identifiable {
     let name: String
     let statValue: Int
     let nationality: String?
-    let playedForClub: Bool?
+    let satisfiesConstraint: Bool?
     let headshotUrl: String?
 }
 
