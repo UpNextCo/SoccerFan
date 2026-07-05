@@ -7,6 +7,7 @@ enum BKTheme {
     /// Backdrop behind game tile art — lifts icons whose PNGs use #141414.
     static let tileIconBackdrop = Color(hex: "181818")
     static let tileIconBrightness: CGFloat = 0.02
+    static let tileIconScale: CGFloat = 1.1
     static let accent = Color(hex: "00FF66")
     static let accentMuted = Color(hex: "00CC52")
     static let textPrimary = Color.white

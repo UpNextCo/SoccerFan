@@ -632,6 +632,7 @@ struct DailyGameCard: View {
                 GameModeBundleImage(name: tileArtImageName)
                     .scaledToFill()
                     .frame(width: iconSize, height: iconSize, alignment: .top)
+                    .scaleEffect(BKTheme.tileIconScale)
                     .brightness(BKTheme.tileIconBrightness)
             }
         }
