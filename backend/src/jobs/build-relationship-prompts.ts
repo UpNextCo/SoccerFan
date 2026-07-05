@@ -14,7 +14,7 @@ import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
-import { normClub, playersUnderManager } from '../services/managerRules.js';
+import { normClub, playersUnderManager, rankManagersByProminence, topManagerNorms, TOP_MANAGER_PAIR_COUNT, TOP_MANAGER_SINGLE_COUNT } from '../services/managerRules.js';
 import { sampleFamousPlayers } from '../services/towerRules.js';
 
 const CLUB_LEAGUES = sql`(39,140,135,78,61,2,3,135)`; // exclude national teams (1,4)
@@ -149,9 +149,9 @@ async function defs(): Promise<PromptDef[]> {
   });
 
   // --- Managers: played under (single = easier, pairs = harder). Generated dynamically from the
-  // full manager_tenures bank: every seeded manager gets a single prompt, and every pair of
-  // managers whose player sets genuinely intersect gets a pair prompt. Thin/impossible pools are
-  // dropped by the recallable filter at store time, so we can propose broadly here.
+  // manager_tenures bank, but capped to the most prominent coaches (Ferguson, Mourinho, Guardiola…)
+  // so fringe pairings (Rose + Rangnick) never ship. Thin/impossible pools are still dropped by
+  // the recallable filter at store time.
   const managerRows = (await db.execute(sql`
     SELECT DISTINCT manager, manager_norm AS "managerNorm" FROM manager_tenures ORDER BY manager
   `)) as unknown as Array<{ manager: string; managerNorm: string }>;
@@ -163,22 +163,31 @@ async function defs(): Promise<PromptDef[]> {
     setByNorm.set(m.managerNorm, await playersUnderManager(m.managerNorm));
   }
 
+  const rankedManagers = await rankManagersByProminence(managerRows, setByNorm);
+  const topSingles = topManagerNorms(rankedManagers, TOP_MANAGER_SINGLE_COUNT);
+  const topPairs = topManagerNorms(rankedManagers, TOP_MANAGER_PAIR_COUNT);
+
   for (const m of managerRows) {
+    if (!topSingles.has(m.managerNorm)) continue;
     const ids = setByNorm.get(m.managerNorm)!;
     if (ids.size < 12) continue; // too thin to be a fair "name one" prompt
     out.push({ text: `Name a player who played under ${m.manager}.`, build: async () => [...ids] });
   }
 
   const MIN_PAIR_POOL = 3; // below this even elite knowledge can't fairly find the link
+  const MIN_PAIR_RECALLABLE = 8; // manager pairs need several gettable answers, not 3 obscure links
   for (let i = 0; i < managerRows.length; i += 1) {
     for (let j = i + 1; j < managerRows.length; j += 1) {
       const a = managerRows[i]!;
       const b = managerRows[j]!;
+      if (!topPairs.has(a.managerNorm) || !topPairs.has(b.managerNorm)) continue;
       const setA = setByNorm.get(a.managerNorm)!;
       const setB = setByNorm.get(b.managerNorm)!;
       if (setA.size === 0 || setB.size === 0) continue;
       const inter = [...setA].filter((id) => setB.has(id));
       if (inter.length < MIN_PAIR_POOL) continue;
+      const { recallable } = await statsForIds(inter);
+      if (recallable < MIN_PAIR_RECALLABLE) continue;
       out.push({ text: `Name a player who played under both ${a.manager} and ${b.manager}.`, build: async () => inter });
     }
   }
@@ -288,6 +297,7 @@ async function main() {
   let stored = 0;
   let skipped = 0;
   const summary: Array<{ tier: string; recallable: number; size: number; prompt: string }> = [];
+  const storedManagerNorms: string[] = [];
 
   for (const p of prompts) {
     let ids: string[] = [];
@@ -317,10 +327,21 @@ async function main() {
     `);
     stored += 1;
     summary.push({ tier, recallable, size, prompt: p.text });
+    if (/\bplayed under\b/i.test(p.text)) storedManagerNorms.push(normPrompt(p.text));
+  }
+
+  if (storedManagerNorms.length) {
+    await db.execute(sql`
+      UPDATE tower_prompts SET status = 'rejected'
+      WHERE status = 'active'
+        AND prompt ILIKE 'Name a player who played under%'
+        AND prompt_norm NOT IN (${sql.join(storedManagerNorms.map((n) => sql`${n}`), sql`, `)})
+    `);
   }
 
   summary.sort((a, b) => (a.tier === b.tier ? b.recallable - a.recallable : a.tier.localeCompare(b.tier)));
-  console.log(`\nStored ${stored} relationship prompts (${skipped} skipped).\n`);
+  console.log(`\nStored ${stored} relationship prompts (${skipped} skipped).`);
+  console.log(`Manager cap: top ${TOP_MANAGER_SINGLE_COUNT} singles · top ${TOP_MANAGER_PAIR_COUNT} pairs.\n`);
   for (const s of summary) {
     console.log(`  [${s.tier.padEnd(6)}] size ${String(s.size).padStart(4)} · recallable ${String(s.recallable).padStart(3)}  ${s.prompt}`);
   }

@@ -127,6 +127,68 @@ export async function playersUnderAll(managerNorms: string[]): Promise<Set<strin
   return out;
 }
 
+export interface ManagerTenureRow {
+  manager: string;
+  managerNorm: string;
+}
+
+/** Marquee managers for prompts — excludes fringe coaches (Rose, Rangnick, …). */
+export const TOP_MANAGER_SINGLE_COUNT = 45;
+/** Pairs require both managers in this tighter set (~top 20%). */
+export const TOP_MANAGER_PAIR_COUNT = 25;
+
+export interface ManagerProminence {
+  recallable: number;
+  stars: number;
+}
+
+/** How many gettable / megastar players played under a manager (same bar as tower prompts). */
+export async function managerProminence(ids: string[]): Promise<ManagerProminence> {
+  if (ids.length === 0) return { recallable: 0, stars: 0 };
+  const idList = sql.join(ids.map((i) => sql`${i}::uuid`), sql`, `);
+  const rows = (await db.execute(sql`
+    WITH agg AS (
+      SELECT p.id, p.market_value_tier AS mvt,
+        COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id IN (39,140,135,78,61)),0) AS big5,
+        COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2),0) AS ucl,
+        COALESCE(SUM(s.appearances),0) AS total
+      FROM players p LEFT JOIN player_stats s ON s.player_id = p.id
+      WHERE p.id IN (${idList}) GROUP BY p.id, p.market_value_tier
+    )
+    SELECT COUNT(*) FILTER (WHERE mvt >= 4 OR big5 >= 60 OR ucl >= 35 OR total >= 250)::int AS recallable,
+           COUNT(*) FILTER (WHERE mvt >= 5)::int AS stars
+    FROM agg
+  `)) as unknown as Array<{ recallable: number; stars: number }>;
+  const r = rows[0];
+  return { recallable: r?.recallable ?? 0, stars: r?.stars ?? 0 };
+}
+
+/** Rank managers by megastars under them, then recallable pool size. */
+export async function rankManagersByProminence(
+  rows: ManagerTenureRow[],
+  setByNorm: Map<string, Set<string>>
+): Promise<Array<{ row: ManagerTenureRow; prominence: ManagerProminence }>> {
+  const scored = await Promise.all(
+    rows.map(async (row) => ({
+      row,
+      prominence: await managerProminence([...(setByNorm.get(row.managerNorm) ?? [])]),
+    }))
+  );
+  scored.sort(
+    (a, b) =>
+      b.prominence.stars - a.prominence.stars ||
+      b.prominence.recallable - a.prominence.recallable
+  );
+  return scored;
+}
+
+export function topManagerNorms(
+  ranked: Array<{ row: ManagerTenureRow; prominence: ManagerProminence }>,
+  limit: number
+): Set<string> {
+  return new Set(ranked.slice(0, limit).map((r) => r.row.managerNorm));
+}
+
 /** Which curated tenure clubs failed to match any stored team_name (QA helper). */
 export async function unmatchedTenureClubs(): Promise<string[]> {
   const teamMap = await getTeamNameMap();

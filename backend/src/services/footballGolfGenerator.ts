@@ -241,7 +241,9 @@ async function scanCandidates(
     // A fair golf hole must be genuinely BROAD for THIS audience — ≥8 answers they could
     // name (megastars / PL / UCL), so any par (2–5) is reachable and there's depth for
     // birdies. Excludes niche foreign-league prompts. Bounded total so it ships.
-    if (famous < 8 || players.length > 200) continue;
+    // Manager pair links need a higher bar — knowing who played under both X and Y is harder.
+    const minFamous = cat === 'Managers' && /\bboth\b/i.test(prompt) ? 12 : 8;
+    if (famous < minFamous || players.length > 200) continue;
 
     const aliasMap = await aliasesByIds(players.map((p) => p.id));
     const answers: GolfAnswer[] = players.map((p) => ({
