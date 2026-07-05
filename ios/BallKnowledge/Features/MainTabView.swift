@@ -52,14 +52,14 @@ struct MainTabView: View {
     }
 
     private func tabBarBottomFade(safeBottom: CGFloat) -> some View {
-        let fadeHeight: CGFloat = 100 + safeBottom
+        let fadeHeight: CGFloat = 130 + safeBottom
 
         return LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
-                .init(color: BKTheme.background.opacity(0.10), location: 0.4),
-                .init(color: BKTheme.background.opacity(0.38), location: 0.72),
-                .init(color: BKTheme.background.opacity(0.72), location: 0.9),
+                .init(color: BKTheme.background.opacity(0.18), location: 0.28),
+                .init(color: BKTheme.background.opacity(0.52), location: 0.58),
+                .init(color: BKTheme.background.opacity(0.82), location: 0.8),
                 .init(color: BKTheme.background, location: 1),
             ],
             startPoint: .top,

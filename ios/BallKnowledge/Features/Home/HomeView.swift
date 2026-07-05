@@ -78,7 +78,7 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, BKTabBar.scrollClearance)
         }
-        .background(BKTheme.background)
+        .background(StadiumBackground())
         .refreshable {
             await viewModel.load(context: modelContext)
             await auth.refreshProfile()
@@ -397,8 +397,9 @@ struct DailySection: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 0) {
             hub
+                .padding(.bottom, 20)
 
             VStack(spacing: 0) {
                 ForEach(Array(orderedModes.enumerated()), id: \.element.id) { index, mode in
@@ -406,7 +407,7 @@ struct DailySection: View {
                         mode: mode,
                         state: state(for: mode),
                         showsDivider: index < orderedModes.count - 1,
-                        onPlay: { onSelect(mode) }
+                        onTap: { onSelect(mode) }
                     )
                 }
             }
@@ -514,7 +515,7 @@ struct DailyGameCard: View {
     let mode: GameModeMetaDTO
     let state: DailyTileState
     var showsDivider = true
-    var onPlay: () -> Void
+    var onTap: () -> Void
 
     private let iconSize: CGFloat = 64
     private let iconCornerRadius: CGFloat = 14
@@ -528,7 +529,7 @@ struct DailyGameCard: View {
     }
 
     private var displayTitle: String {
-        mode.title.localizedCapitalized
+        Self.displayTitle(for: mode)
     }
 
     var body: some View {
@@ -556,7 +557,7 @@ struct DailyGameCard: View {
 
             if showsDivider {
                 Divider()
-                    .overlay(Color.white.opacity(0.04))
+                    .overlay(Color.white.opacity(0.02))
                     .padding(.leading, iconSize + 12)
             }
         }
@@ -578,7 +579,7 @@ struct DailyGameCard: View {
 
     private var playAction: some View {
         VStack(spacing: 3) {
-            Button(action: onPlay) {
+            Button(action: onTap) {
                 Text(playLabel)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(playForeground)
@@ -617,6 +618,24 @@ struct DailyGameCard: View {
         switch state {
         case .inProgress: return "In Progress"
         case .completed, .available: return nil
+        }
+    }
+
+    static func displayTitle(for mode: GameModeMetaDTO) -> String {
+        guard let id = GameModeID(rawValue: GameModeCatalog.normalizedModeId(mode.id)) else {
+            return mode.title.localizedCapitalized
+        }
+        switch id {
+        case .footballBingo: return "Football Bingo"
+        case .oneMore: return "One More"
+        case .draftMaster: return "Draft XI"
+        case .footballGolf: return "Football Golf"
+        case .clubChain: return "Club Chain"
+        case .guessWho: return "Guess Who?"
+        case .targetMan: return "Target Man"
+        case .worldCupXI: return "World Cup XI"
+        case .blindRank: return "Blind Rank"
+        case .footballTower: return "Football Tower"
         }
     }
 
