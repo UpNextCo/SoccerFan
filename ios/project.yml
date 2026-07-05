@@ -15,18 +15,10 @@ settings:
     INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
     INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking: YES
 
-packages:
-  RiveRuntime:
-    url: https://github.com/rive-app/rive-ios
-    from: 6.0.0
-
 targets:
   BallKnowledge:
     type: application
     platform: iOS
-    dependencies:
-      - package: RiveRuntime
-        product: RiveRuntime
     sources:
       - path: BallKnowledge
         excludes:
@@ -35,10 +27,9 @@ targets:
           - Resources/bingo.PNG
           - Resources/tenaball.png
           - Resources/GameTiles
+          - Resources/Rive
       - path: BallKnowledge/Resources/GameTiles
         type: folder
-        buildPhase: resources
-      - path: BallKnowledge/Resources/Rive
         buildPhase: resources
     settings:
       base:

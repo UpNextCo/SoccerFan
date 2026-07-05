@@ -63,8 +63,23 @@ struct HomeAmbientBackground: View {
                 }
             }
         }
-        .overlay { HomeBackgroundFade() }
+        .overlay { contentFade }
         .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    private var contentFade: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .clear, location: 0.34),
+                .init(color: BKTheme.background.opacity(0.65), location: 0.52),
+                .init(color: BKTheme.background, location: 0.68),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
     }
 

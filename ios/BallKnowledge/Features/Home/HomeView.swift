@@ -78,7 +78,7 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, BKTabBar.scrollClearance)
         }
-        .background { HomeScreenBackground() }
+        .background { HomeAmbientBackground() }
         .refreshable {
             await viewModel.load(context: modelContext)
             await auth.refreshProfile()
