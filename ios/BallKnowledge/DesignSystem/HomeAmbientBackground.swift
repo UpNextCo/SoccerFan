@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Soft, drifting light atmosphere for the home hero — no fixed line pattern, just
-/// slow-moving glow that reads as native UI chrome rather than a wallpaper image.
+/// Soft, drifting light atmosphere for the home hero.
 struct HomeAmbientBackground: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in

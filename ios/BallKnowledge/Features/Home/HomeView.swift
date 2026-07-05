@@ -461,7 +461,13 @@ struct DailySection: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background { BKGlass.roundedRect(cornerRadius: 20) }
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(BKTheme.card.opacity(0.52))
+                BKGlass.roundedRect(cornerRadius: 20)
+            }
+        }
     }
 
     private var progressBar: some View {
