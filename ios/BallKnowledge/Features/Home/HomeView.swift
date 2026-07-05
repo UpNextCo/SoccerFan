@@ -78,7 +78,7 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, BKTabBar.scrollClearance)
         }
-        .background { HomeAmbientBackground() }
+        .background { HomeScreenBackground() }
         .refreshable {
             await viewModel.load(context: modelContext)
             await auth.refreshProfile()
@@ -578,8 +578,9 @@ struct DailyGameCard: View {
     var showsDivider = true
     var onTap: () -> Void
 
-    private let iconSize: CGFloat = 64
-    private let iconCornerRadius: CGFloat = 14
+    private let iconSize: CGFloat = 72
+    private let iconCornerRadius: CGFloat = 16
+    private let rowContentSpacing: CGFloat = 14
 
     private var normalizedModeId: String {
         GameModeCatalog.normalizedModeId(mode.id)
@@ -595,7 +596,7 @@ struct DailyGameCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .center, spacing: rowContentSpacing) {
                 thumbnail
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -613,13 +614,13 @@ struct DailyGameCard: View {
 
                 playAction
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
             .opacity(state == .completed ? 0.65 : 1)
 
             if showsDivider {
                 Divider()
                     .overlay(Color.white.opacity(0.02))
-                    .padding(.leading, iconSize + 12)
+                    .padding(.leading, iconSize + rowContentSpacing)
             }
         }
     }
