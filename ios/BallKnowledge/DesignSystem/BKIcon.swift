@@ -64,12 +64,35 @@ struct BKTabBar: View {
 
     @ViewBuilder
     private var tabBarGlassBackground: some View {
+        BKGlass.capsule(interactive: true)
+    }
+}
+
+// MARK: - Liquid Glass
+
+enum BKGlass {
+    @ViewBuilder
+    static func capsule(tint: Color? = nil, interactive: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
             Color.clear
-                .glassEffect(.regular.interactive(), in: .capsule)
+                .glassEffect(glassStyle(tint: tint, interactive: interactive), in: .capsule)
         } else {
             Capsule()
                 .fill(.ultraThinMaterial)
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private static func glassStyle(tint: Color?, interactive: Bool) -> Glass {
+        switch (tint, interactive) {
+        case (let color?, true):
+            return .regular.interactive().tint(color)
+        case (let color?, false):
+            return .regular.tint(color)
+        case (nil, true):
+            return .regular.interactive()
+        case (nil, false):
+            return .regular
         }
     }
 }
