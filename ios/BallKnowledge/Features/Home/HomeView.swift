@@ -546,6 +546,28 @@ struct DailyGameCard: View {
     private let cornerRadius: CGFloat = 18
     private let height: CGFloat = 128
 
+    /// Flat, UI-native tile style: per-game hue + a full-color emoji mark instead
+    /// of raster artwork. Games listed here render the flat style; everything else
+    /// falls back to bundle art.
+    struct FlatTileStyle {
+        let hue: Color
+        let emoji: String
+    }
+
+    private static let flatStyles: [String: FlatTileStyle] = [
+        GameModeID.draftMaster.rawValue: FlatTileStyle(hue: Color(hex: "45D6C0"), emoji: "📋"),
+        GameModeID.footballGolf.rawValue: FlatTileStyle(hue: Color(hex: "FF5E76"), emoji: "⛳"),
+        GameModeID.clubChain.rawValue: FlatTileStyle(hue: Color(hex: "FF9F45"), emoji: "🔗"),
+        GameModeID.guessWho.rawValue: FlatTileStyle(hue: Color(hex: "C77DFF"), emoji: "🕵️"),
+        GameModeID.targetMan.rawValue: FlatTileStyle(hue: Color(hex: "FF6363"), emoji: "🎯"),
+        GameModeID.blindRank.rawValue: FlatTileStyle(hue: Color(hex: "5B8CFF"), emoji: "🥇"),
+        GameModeID.worldCupXI.rawValue: FlatTileStyle(hue: Color(hex: "4DD0FF"), emoji: "🏆"),
+    ]
+
+    private var flatStyle: FlatTileStyle? {
+        Self.flatStyles[GameModeCatalog.normalizedModeId(mode.id)]
+    }
+
     private var tileArtImageName: String? {
         GameModeTileArt.bundleImageName(for: GameModeCatalog.normalizedModeId(mode.id))
     }
@@ -555,8 +577,12 @@ struct DailyGameCard: View {
             ZStack(alignment: .bottomLeading) {
                 // Dim only the artwork on completed tiles — keep the DONE badge's green vivid.
                 ZStack {
-                    artLayer
-                    gradientLayer
+                    if let flatStyle {
+                        flatLayer(flatStyle)
+                    } else {
+                        artLayer
+                        gradientLayer
+                    }
                 }
                 .saturation(state == .completed ? 0.25 : 1)
 
@@ -584,28 +610,51 @@ struct DailyGameCard: View {
             .frame(height: height)
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
         }
         .buttonStyle(TilePressStyle())
     }
 
+    /// Built from the same materials as the hub card: a hue-tinted card gradient
+    /// with one full-color emoji mark, NYT Games style but dark.
+    private func flatLayer(_ style: FlatTileStyle) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [BKTheme.cardElevated, BKTheme.card],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            // Give the card itself a clear color identity, not just a whisper.
+            style.hue.opacity(0.12)
+            GeometryReader { geo in
+                ZStack {
+                    RadialGradient(
+                        colors: [style.hue.opacity(0.30), .clear],
+                        center: .topTrailing,
+                        startRadius: 2,
+                        endRadius: geo.size.width * 1.1
+                    )
+                    Text(style.emoji)
+                        .font(.system(size: geo.size.height * 0.42))
+                        .rotationEffect(.degrees(-6))
+                        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                        .position(x: geo.size.width * 0.78, y: geo.size.height * 0.36)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
     private var artLayer: some View {
         GeometryReader { geo in
-            let overflow = max(0, geo.size.width - geo.size.height)
-            let shift = overflow * 0.18
             ZStack {
                 BKTheme.cardElevated
                 if let tileArtImageName {
                     GameModeBundleImage(name: tileArtImageName)
                         .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-                        .offset(y: -shift)
+                        .frame(width: geo.size.width, height: geo.size.height)
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
         }
         .allowsHitTesting(false)

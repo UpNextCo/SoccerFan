@@ -22,6 +22,12 @@ public enum Ph: String {
     case xCircle = "x-circle"
     case sealQuestion = "seal-question"
     case caretRight = "caret-right"
+    case target
+    case strategy
+    case link
+    case listNumbers = "list-numbers"
+    case squaresFour = "squares-four"
+    case flag
 }
 
 public extension Ph {
