@@ -11,16 +11,16 @@ enum GameModeTileArt {
     static func bundleImageName(for modeId: String) -> String? {
         let resolvedId = GameModeCatalog.normalizedModeId(modeId)
         let imageName = bundleImageNameOverrides[resolvedId] ?? resolvedId
-        return bundleImageURL(named: imageName) != nil ? resolvedId : nil
+        return imageURL(named: imageName) != nil ? resolvedId : nil
     }
 
     static func bundleImageURL(for modeId: String) -> URL? {
         let resolvedId = GameModeCatalog.normalizedModeId(modeId)
         let imageName = bundleImageNameOverrides[resolvedId] ?? resolvedId
-        return bundleImageURL(named: imageName)
+        return imageURL(named: imageName)
     }
 
-    private static func bundleImageURL(named name: String) -> URL? {
+    static func imageURL(named name: String) -> URL? {
         let extensions = ["png", "PNG", "jpg", "jpeg"]
 
         for ext in extensions {
@@ -110,7 +110,7 @@ struct GameModeBundleImage: View {
     }
 
     private func loadImage() -> UIImage? {
-        guard let url = GameModeTileArt.bundleImageURL(for: name),
+        guard let url = GameModeTileArt.imageURL(named: name),
               let image = UIImage(contentsOfFile: url.path) else {
             return nil
         }

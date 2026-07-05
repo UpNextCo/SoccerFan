@@ -461,11 +461,67 @@ struct DailySection: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
+        .background { hubBackground }
+    }
+
+    private var hubBackground: some View {
+        ZStack {
+            Color(hex: "141414")
+
+            hubHeroImage
+
+            hubTextScrim
+
+            BKGlass.roundedRect(cornerRadius: 20)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var hubHeroImage: some View {
+        GeometryReader { geo in
+            GameModeBundleImage(name: "hero")
+                .scaledToFill()
+                .frame(width: geo.size.width * 1.45, height: geo.size.height * 1.35)
+                .position(x: geo.size.width * 0.76, y: geo.size.height * 0.34)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .clear, location: 0.3),
+                            .init(color: .white.opacity(0.25), location: 0.42),
+                            .init(color: .white.opacity(0.65), location: 0.55),
+                            .init(color: .white, location: 0.7),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                }
+        }
+    }
+
+    private var hubTextScrim: some View {
+        GeometryReader { geo in
             ZStack {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(BKTheme.card.opacity(0.52))
-                BKGlass.roundedRect(cornerRadius: 20)
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(hex: "141414").opacity(0.55), location: 0),
+                        .init(color: Color(hex: "141414").opacity(0.18), location: 0.38),
+                        .init(color: .clear, location: 0.62),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    LinearGradient(
+                        colors: [.clear, Color(hex: "141414").opacity(0.3)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: geo.size.height * 0.35)
+                }
             }
         }
     }
@@ -570,11 +626,12 @@ struct DailyGameCard: View {
 
     private var thumbnail: some View {
         ZStack {
-            BKTheme.cardElevated
+            BKTheme.tileIconBackdrop
             if let tileArtImageName {
                 GameModeBundleImage(name: tileArtImageName)
                     .scaledToFill()
                     .frame(width: iconSize, height: iconSize, alignment: .top)
+                    .brightness(BKTheme.tileIconBrightness)
             }
         }
         .frame(width: iconSize, height: iconSize)
@@ -656,17 +713,17 @@ struct DailyGameCard: View {
         case .blindRank:
             return "Rank before stats drop"
         case .footballBingo:
-            return "Complete the category grid"
+            return "Complete the grid"
         case .oneMore:
             return "Streak or cash out"
         case .draftMaster:
-            return "Draft the best XI"
+            return "Draft the best squad"
         case .worldCupXI:
             return "Build the World Cup XI"
         case .footballGolf:
-            return "Fewer guesses wins"
+            return "Rarer answers win"
         case .clubChain:
-            return "Link players by club"
+            return "Find the missing links"
         case .footballTower:
             return "Climb the tower"
         }

@@ -4,6 +4,9 @@ enum BKTheme {
     static let background = Color(hex: "0A0A0A")
     static let card = Color(hex: "1A1A1A")
     static let cardElevated = Color(hex: "242424")
+    /// Backdrop behind game tile art — lifts icons whose PNGs use #141414.
+    static let tileIconBackdrop = Color(hex: "181818")
+    static let tileIconBrightness: CGFloat = 0.02
     static let accent = Color(hex: "00FF66")
     static let accentMuted = Color(hex: "00CC52")
     static let textPrimary = Color.white
