@@ -82,6 +82,17 @@ enum BKGlass {
         }
     }
 
+    @ViewBuilder
+    static func roundedRect(cornerRadius: CGFloat = 20, tint: Color? = nil, interactive: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(glassStyle(tint: tint, interactive: interactive), in: .rect(cornerRadius: cornerRadius))
+        } else {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.ultraThinMaterial)
+        }
+    }
+
     @available(iOS 26.0, *)
     private static func glassStyle(tint: Color?, interactive: Bool) -> Glass {
         switch (tint, interactive) {

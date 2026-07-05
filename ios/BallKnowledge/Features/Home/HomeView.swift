@@ -78,7 +78,7 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, BKTabBar.scrollClearance)
         }
-        .background(BKTheme.background)
+        .background { HomeAmbientBackground() }
         .refreshable {
             await viewModel.load(context: modelContext)
             await auth.refreshProfile()
@@ -461,8 +461,7 @@ struct DailySection: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .background { BKGlass.roundedRect(cornerRadius: 20) }
     }
 
     private var progressBar: some View {
