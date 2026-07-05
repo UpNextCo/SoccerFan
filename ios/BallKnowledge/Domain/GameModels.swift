@@ -56,7 +56,6 @@ enum DailyPlayOrder {
         .clubChain,
         .guessWho,
         .targetMan,
-        .blindRank,
         .worldCupXI,
     ]
 

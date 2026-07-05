@@ -23,6 +23,9 @@ enum BKIcon {
 struct BKTabBar: View {
     @Binding var selection: AppTab
 
+    /// Space to reserve at the bottom of scroll content so the last row can clear the floating bar.
+    static let scrollClearance: CGFloat = 88
+
     private struct Item {
         let tab: AppTab
         let title: String

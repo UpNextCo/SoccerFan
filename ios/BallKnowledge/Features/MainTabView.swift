@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import StoreKit
 import UserNotifications
+import UIKit
 
 enum AppTab: Hashable {
     case today, leagues, you
@@ -23,11 +24,57 @@ struct MainTabView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.bottom, 72)
+
+            bottomFadeLayer
 
             BKTabBar(selection: $selectedTab)
         }
-        .background(BKTheme.background)
+        .background(BKTheme.background.ignoresSafeArea())
+    }
+
+    private var bottomFadeLayer: some View {
+        GeometryReader { geo in
+            let safeBottom = resolvedBottomInset(from: geo)
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                tabBarBottomFade(safeBottom: safeBottom)
+            }
+        }
+        .ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
+    }
+
+    private func resolvedBottomInset(from geo: GeometryProxy) -> CGFloat {
+        let fromGeo = geo.safeAreaInsets.bottom
+        if fromGeo > 0 { return fromGeo }
+        return Self.uiKitBottomInset()
+    }
+
+    private func tabBarBottomFade(safeBottom: CGFloat) -> some View {
+        let fadeHeight: CGFloat = 100 + safeBottom
+
+        return LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: BKTheme.background.opacity(0.10), location: 0.4),
+                .init(color: BKTheme.background.opacity(0.38), location: 0.72),
+                .init(color: BKTheme.background.opacity(0.72), location: 0.9),
+                .init(color: BKTheme.background, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: fadeHeight)
+        .frame(maxWidth: .infinity)
+    }
+
+    private static func uiKitBottomInset() -> CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
     }
 }
 
@@ -123,7 +170,7 @@ struct LeaguesTabView: View {
                         ForEach(viewModel.teams) { TeamStandingRow(team: $0) }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, BKTabBar.scrollClearance)
                 }
             }
         } else {
@@ -145,7 +192,7 @@ struct LeaguesTabView: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, BKTabBar.scrollClearance)
                 }
             }
         }
@@ -410,7 +457,7 @@ struct ProfileTabView: View {
                 versionLabel
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.bottom, BKTabBar.scrollClearance)
         }
         .background(BKTheme.background)
         .onAppear { avatarImage = LocalProfile.loadAvatar() }

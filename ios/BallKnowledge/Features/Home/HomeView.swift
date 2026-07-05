@@ -76,7 +76,7 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.bottom, BKTabBar.scrollClearance)
         }
         .background(BKTheme.background)
         .refreshable {
@@ -378,8 +378,6 @@ struct DailySection: View {
     var inProgressModes: Set<String> = []
     var onSelect: (GameModeMetaDTO) -> Void
 
-    @State private var glow = false
-
     private var orderedModes: [GameModeMetaDTO] {
         DailyPlayOrder.playableModes.compactMap { id in
             modes.first { GameModeCatalog.normalizedModeId($0.id) == id.rawValue }
@@ -398,20 +396,17 @@ struct DailySection: View {
         return DailyPlayOrder.allComplete(in: bundle)
     }
 
-    private let gridColumns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10),
-    ]
-
     var body: some View {
         VStack(spacing: 12) {
             hub
-            LazyVGrid(columns: gridColumns, spacing: 10) {
-                ForEach(orderedModes) { mode in
+
+            VStack(spacing: 0) {
+                ForEach(Array(orderedModes.enumerated()), id: \.element.id) { index, mode in
                     DailyGameCard(
                         mode: mode,
                         state: state(for: mode),
-                        onTap: { onSelect(mode) }
+                        showsDivider: index < orderedModes.count - 1,
+                        onPlay: { onSelect(mode) }
                     )
                 }
             }
@@ -465,31 +460,8 @@ struct DailySection: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            ZStack {
-                LinearGradient(
-                    colors: [BKTheme.cardElevated, BKTheme.card],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                RadialGradient(
-                    colors: [BKTheme.accent.opacity(glow ? 0.12 : 0.04), .clear],
-                    center: .topTrailing,
-                    startRadius: 2,
-                    endRadius: 240
-                )
-            }
-        }
+        .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(BKTheme.accent.opacity(0.12), lineWidth: 1)
-        )
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) {
-                glow = true
-            }
-        }
     }
 
     private var progressBar: some View {
@@ -541,112 +513,110 @@ struct DailySection: View {
 struct DailyGameCard: View {
     let mode: GameModeMetaDTO
     let state: DailyTileState
-    var onTap: () -> Void
+    var showsDivider = true
+    var onPlay: () -> Void
 
-    private let cornerRadius: CGFloat = 18
-    private let height: CGFloat = 128
+    private let iconSize: CGFloat = 64
+    private let iconCornerRadius: CGFloat = 14
+
+    private var normalizedModeId: String {
+        GameModeCatalog.normalizedModeId(mode.id)
+    }
 
     private var tileArtImageName: String? {
-        GameModeTileArt.bundleImageName(for: GameModeCatalog.normalizedModeId(mode.id))
+        GameModeTileArt.bundleImageName(for: normalizedModeId)
+    }
+
+    private var displayTitle: String {
+        mode.title.localizedCapitalized
     }
 
     var body: some View {
-        Button(action: onTap) {
-            ZStack(alignment: .bottomLeading) {
-                // Dim only the artwork on completed tiles — keep the DONE badge's green vivid.
-                ZStack {
-                    artLayer
-                    gradientLayer
-                }
-                .saturation(state == .completed ? 0.25 : 1)
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                thumbnail
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(mode.title)
-                        .font(.system(size: 16, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
-                    Text(DailyGameCard.blurb(for: mode))
-                        .font(BKFont.body(11))
-                        .foregroundStyle(.white.opacity(0.85))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayTitle)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(BKTheme.textPrimary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+
+                    Text(Self.blurb(for: mode))
+                        .font(.system(size: 13))
+                        .foregroundStyle(BKTheme.textSecondary)
+                        .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
+
+                playAction
             }
-            .overlay(alignment: .topTrailing) {
-                trailingBadge
-                    .padding(10)
+            .padding(.vertical, 10)
+            .opacity(state == .completed ? 0.65 : 1)
+
+            if showsDivider {
+                Divider()
+                    .overlay(Color.white.opacity(0.04))
+                    .padding(.leading, iconSize + 12)
             }
-            .frame(height: height)
-            .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
         }
-        .buttonStyle(TilePressStyle())
     }
 
-    private var artLayer: some View {
-        GeometryReader { geo in
-            let overflow = max(0, geo.size.width - geo.size.height)
-            let shift = overflow * 0.18
-            ZStack {
-                BKTheme.cardElevated
-                if let tileArtImageName {
-                    GameModeBundleImage(name: tileArtImageName)
-                        .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-                        .offset(y: -shift)
-                }
+    private var thumbnail: some View {
+        ZStack {
+            BKTheme.cardElevated
+            if let tileArtImageName {
+                GameModeBundleImage(name: tileArtImageName)
+                    .scaledToFill()
+                    .frame(width: iconSize, height: iconSize, alignment: .top)
             }
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-            .clipped()
         }
-        .allowsHitTesting(false)
+        .frame(width: iconSize, height: iconSize)
+        .clipShape(RoundedRectangle(cornerRadius: iconCornerRadius, style: .continuous))
+        .saturation(state == .completed ? 0.45 : 1)
     }
 
-    private var gradientLayer: some View {
-        LinearGradient(
-            colors: [
-                .black.opacity(state == .completed ? 0.5 : 0.05),
-                .black.opacity(state == .completed ? 0.65 : 0.4),
-                .black.opacity(0.82),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .allowsHitTesting(false)
+    private var playAction: some View {
+        VStack(spacing: 3) {
+            Button(action: onPlay) {
+                Text(playLabel)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(playForeground)
+                    .frame(minWidth: 58)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(BKTheme.cardElevated)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+
+            if let sublabel = playSublabel {
+                Text(sublabel)
+                    .font(.system(size: 10))
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+        }
     }
 
-    @ViewBuilder
-    private var trailingBadge: some View {
+    private var playLabel: String {
         switch state {
-        case .completed:
-            HStack(spacing: 5) {
-                Ph.checkCircle.fill.color(BKTheme.accent).frame(width: 16, height: 16)
-                Text("DONE").font(BKFont.caption(10)).foregroundStyle(.white)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.black.opacity(0.45))
-            .clipShape(Capsule())
-        case .inProgress:
-            HStack(spacing: 5) {
-                Circle().fill(BKTheme.inProgress).frame(width: 7, height: 7)
-                Text("IN PROGRESS").font(BKFont.caption(10)).foregroundStyle(.white)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.black.opacity(0.45))
-            .clipShape(Capsule())
-        case .available:
-            EmptyView()
+        case .completed: return "Done"
+        case .inProgress: return "Resume"
+        case .available: return "Play"
+        }
+    }
+
+    private var playForeground: Color {
+        switch state {
+        case .completed: return BKTheme.textMuted
+        case .inProgress, .available: return BKTheme.accent
+        }
+    }
+
+    private var playSublabel: String? {
+        switch state {
+        case .inProgress: return "In Progress"
+        case .completed, .available: return nil
         }
     }
 
@@ -655,16 +625,26 @@ struct DailyGameCard: View {
             return mode.subtitle
         }
         switch id {
-        case .guessWho: return "Crack the mystery player"
-        case .targetMan: return "Hit the stat target"
-        case .blindRank: return "Rank them blind"
-        case .footballBingo: return "Fill the grid"
-        case .oneMore: return "Name one more"
-        case .draftMaster: return "Draft the best XI"
-        case .worldCupXI: return "Build the World Cup XI"
-        case .footballGolf: return "Fewest guesses wins"
-        case .clubChain: return "Link them by shared clubs"
-        case .footballTower: return "Climb the tower"
+        case .guessWho:
+            return "Guess the mystery player"
+        case .targetMan:
+            return "Hit the stat target"
+        case .blindRank:
+            return "Rank before stats drop"
+        case .footballBingo:
+            return "Complete the category grid"
+        case .oneMore:
+            return "Streak or cash out"
+        case .draftMaster:
+            return "Draft the best XI"
+        case .worldCupXI:
+            return "Build the World Cup XI"
+        case .footballGolf:
+            return "Fewer guesses wins"
+        case .clubChain:
+            return "Link players by club"
+        case .footballTower:
+            return "Climb the tower"
         }
     }
 }
@@ -698,14 +678,6 @@ enum DailyTileState {
     case completed
     case inProgress
     case available
-}
-
-private struct TilePressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.spring(response: 0.28, dampingFraction: 0.62), value: configuration.isPressed)
-    }
 }
 
 struct DailyGameHost: View {
