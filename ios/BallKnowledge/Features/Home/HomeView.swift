@@ -400,7 +400,6 @@ struct DailySection: View {
 
     private let gridColumns = [
         GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10),
     ]
 
     var body: some View {
@@ -574,34 +573,35 @@ struct DailyGameCard: View {
 
     var body: some View {
         Button(action: onTap) {
-            ZStack(alignment: .bottomLeading) {
+            ZStack(alignment: .topLeading) {
                 // Dim only the artwork on completed tiles — keep the DONE badge's green vivid.
                 ZStack {
                     if let flatStyle {
                         flatLayer(flatStyle)
                     } else {
                         artLayer
-                        gradientLayer
                     }
                 }
                 .saturation(state == .completed ? 0.25 : 1)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(mode.title)
-                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .font(.system(size: 22, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
-                        .lineLimit(2)
+                        .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
                     Text(DailyGameCard.blurb(for: mode))
-                        .font(BKFont.body(11))
+                        .font(BKFont.body(13))
                         .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .minimumScaleFactor(0.8)
                         .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                        // Wrap around the halfway point so the art on the right stays clear.
+                        .frame(maxWidth: 190, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
+                .padding(20)
             }
             .overlay(alignment: .topTrailing) {
                 trailingBadge
@@ -614,31 +614,17 @@ struct DailyGameCard: View {
         .buttonStyle(TilePressStyle())
     }
 
-    /// Built from the same materials as the hub card: a hue-tinted card gradient
-    /// with one full-color emoji mark, NYT Games style but dark.
+    /// Completely flat card: solid hue-tinted surface with one full-color emoji
+    /// mark on the right. No gradients.
     private func flatLayer(_ style: FlatTileStyle) -> some View {
         ZStack {
-            LinearGradient(
-                colors: [BKTheme.cardElevated, BKTheme.card],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            // Give the card itself a clear color identity, not just a whisper.
+            BKTheme.card
             style.hue.opacity(0.12)
             GeometryReader { geo in
-                ZStack {
-                    RadialGradient(
-                        colors: [style.hue.opacity(0.30), .clear],
-                        center: .topTrailing,
-                        startRadius: 2,
-                        endRadius: geo.size.width * 1.1
-                    )
-                    Text(style.emoji)
-                        .font(.system(size: geo.size.height * 0.42))
-                        .rotationEffect(.degrees(-6))
-                        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
-                        .position(x: geo.size.width * 0.78, y: geo.size.height * 0.36)
-                }
+                Text(style.emoji)
+                    .font(.system(size: geo.size.height * 0.45))
+                    .rotationEffect(.degrees(-6))
+                    .position(x: geo.size.width - geo.size.height * 0.55, y: geo.size.height * 0.5)
             }
         }
         .allowsHitTesting(false)
@@ -704,16 +690,16 @@ struct DailyGameCard: View {
             return mode.subtitle
         }
         switch id {
-        case .guessWho: return "Crack the mystery player"
-        case .targetMan: return "Hit the stat target"
-        case .blindRank: return "Rank them blind"
-        case .footballBingo: return "Fill the grid"
-        case .oneMore: return "Name one more"
-        case .draftMaster: return "Draft the best XI"
-        case .worldCupXI: return "Build the World Cup XI"
-        case .footballGolf: return "Fewest guesses wins"
-        case .clubChain: return "Link them by shared clubs"
-        case .footballTower: return "Climb the tower"
+        case .guessWho: return "Use the clues to crack the mystery player"
+        case .targetMan: return "Name players until you hit the stat target"
+        case .blindRank: return "Rank all five before the answers are revealed"
+        case .footballBingo: return "Fill the grid with players that fit every category"
+        case .oneMore: return "Keep naming players — there's always one more"
+        case .draftMaster: return "Draft the best XI and outscore the field"
+        case .worldCupXI: return "Rebuild the starting XI from a classic World Cup"
+        case .footballGolf: return "Reach the answer in as few guesses as possible"
+        case .clubChain: return "Connect the players through clubs they shared"
+        case .footballTower: return "Stack correct answers and climb the tower"
         }
     }
 }
