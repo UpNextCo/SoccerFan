@@ -29,7 +29,18 @@ export async function lookupTeamLogo(
   league: string
 ): Promise<TeamLogoMatch | null> {
   const batch = await lookupTeamLogos([{ club, league }]);
-  return batch.get(pairKey(club, league)) ?? null;
+  const hit = batch.get(pairKey(club, league));
+  if (hit) return hit;
+
+  // Canonical tile labels ("Roma") often miss the teams-table prefix ("AS Roma") and may carry a
+  // wrong default league — retry without league, then fuzzy-resolve from tokens.
+  if (league) {
+    const loose = await lookupTeamLogos([{ club, league: '' }]);
+    const hit2 = loose.get(pairKey(club, ''));
+    if (hit2) return hit2;
+  }
+
+  return resolveClubLogo(club);
 }
 
 export async function lookupTeamLogos(
@@ -45,10 +56,11 @@ export async function lookupTeamLogos(
   for (const pair of pairs) {
     const key = pairKey(pair.club, pair.league);
     if (uniquePairs.has(key)) continue;
+    const rawNorm = normalizeTeamName(pair.club);
     uniquePairs.set(key, {
       club: pair.club,
       league: pair.league,
-      nameNorm: normalizeTeamName(pair.club),
+      nameNorm: CLUB_ALIAS[rawNorm] ?? rawNorm,
       leagueId: resolveLeagueBadgeId(pair.league),
     });
   }
@@ -107,6 +119,7 @@ const CLUB_ALIAS: Record<string, string> = {
   'bayern munich': 'bayern munchen',
   'athletic bilbao': 'athletic club',
   'inter milan': 'inter', internazionale: 'inter',
+  roma: 'as roma',
   'sporting lisbon': 'sporting cp', 'spartak moscow': 'spartak moskva',
 };
 function clubTokens(s: string): string[] {

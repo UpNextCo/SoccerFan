@@ -559,12 +559,12 @@ private struct FootballBingoCategoryIcon: View {
             case .clubBadge:
                 let parts = category.iconValue.split(separator: "|").map(String.init)
                 let club = parts.first ?? category.iconValue
-                let league = parts.count > 1 ? parts[1] : "Premier League"
+                let league = parts.count > 1 ? parts[1] : ""
                 clubBadge(club: club, league: league, logo: category.logoUrl, teamId: category.teamId, size: size)
             case .nationClub:
                 let parts = category.iconValue.split(separator: "|").map(String.init)
                 let club = parts.first ?? category.iconValue
-                let league = parts.count > 1 ? parts[1] : "Premier League"
+                let league = parts.count > 1 ? parts[1] : ""
                 clubBadge(club: club, league: league, logo: category.logoUrl, teamId: category.teamId, size: size)
                     .overlay(alignment: .bottomTrailing) {
                         Text(GuessWhoDisplay.nationalityFlag(category.flag ?? ""))

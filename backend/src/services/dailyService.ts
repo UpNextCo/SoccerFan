@@ -376,9 +376,16 @@ async function migrateStaleBingo(date: string): Promise<void> {
   // New catalog ships a per-player `stats` map (caps, CL apps, transfer fee, …).
   const hasStatsMap = puzzle.players.some((p) => p && Object.prototype.hasOwnProperty.call(p, 'stats'));
   // Club tiles must carry a server-resolved logoUrl (added after the headshot pass).
-  const clubTilesResolved = (puzzle.categories ?? [])
-    .filter((c) => c && c.iconType === 'clubBadge')
-    .every((c) => Object.prototype.hasOwnProperty.call(c, 'logoUrl'));
+  const clubTiles = (puzzle.categories ?? []).filter(
+    (c) => c && (c.iconType === 'clubBadge' || c.iconType === 'nationClub' || c.iconType === 'clubCombo')
+  );
+  const clubTilesResolved =
+    clubTiles.length === 0 ||
+    clubTiles.every(
+      (c) =>
+        Object.prototype.hasOwnProperty.call(c, 'logoUrl') &&
+        (c.iconType !== 'clubBadge' && c.iconType !== 'nationClub' ? true : c.logoUrl != null)
+    );
   if (!hasHeadshotKey || !hasStatsMap || !clubTilesResolved) {
     await db
       .delete(dailyPuzzles)

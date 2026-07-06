@@ -208,19 +208,13 @@ struct GuessWhoView: View {
                 VStack(spacing: 0) {
                     GuessWhoProgressBar(
                         guessesUsed: viewModel.state.guesses.count,
-                        maxGuesses: viewModel.state.puzzle.maxGuesses
+                        maxGuesses: viewModel.state.puzzle.maxGuesses,
+                        isComplete: viewModel.state.isComplete,
+                        won: viewModel.state.won
                     )
                     .onTapGesture {
                         isSearchFocused = false
                     }
-
-                    GameXPBar(
-                        current: viewModel.state.isComplete
-                            ? DailyXP.guessWho(guesses: viewModel.state.guesses.count, solved: viewModel.state.won)
-                            : DailyXP.guessWho(guesses: viewModel.state.guesses.count + 1, solved: true),
-                        max: DailyXP.maxXP(.guessWho),
-                        label: viewModel.state.isComplete ? "XP" : "SOLVE NOW"
-                    )
 
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 20) {
@@ -388,17 +382,58 @@ struct GuessWhoView: View {
 struct GuessWhoProgressBar: View {
     let guessesUsed: Int
     let maxGuesses: Int
+    var isComplete = false
+    var won = false
+
+    /// XP if the player solves on guess number N (1-based): 800, 700, 600 … down to 100.
+    private func solveNowXP(guessNumber: Int) -> Int {
+        DailyXP.guessWho(guesses: guessNumber, solved: true)
+    }
+
+    /// Which segment (0-based) shows the green solve-now label.
+    private var activeLabelIndex: Int? {
+        if isComplete {
+            return won ? guessesUsed - 1 : nil
+        }
+        guard guessesUsed < maxGuesses else { return nil }
+        return guessesUsed
+    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(0..<maxGuesses, id: \.self) { i in
-                Capsule()
-                    .fill(i < guessesUsed ? BKTheme.accent : BKTheme.cardElevated)
-                    .frame(height: 4)
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                ForEach(0..<maxGuesses, id: \.self) { i in
+                    Capsule()
+                        .fill(i < guessesUsed ? BKTheme.accent : BKTheme.cardElevated)
+                        .frame(height: 4)
+                }
             }
+
+            HStack(spacing: 8) {
+                ForEach(0..<maxGuesses, id: \.self) { i in
+                    if activeLabelIndex == i {
+                        Text("\(solveNowXP(guessNumber: i + 1)) XP")
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .tracking(0.3)
+                            .foregroundStyle(BKTheme.accent)
+                            .frame(maxWidth: .infinity)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .top)),
+                                removal: .opacity
+                            ))
+                    } else {
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 14)
+                    }
+                }
+            }
+            .frame(height: 14)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: activeLabelIndex)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 10)
     }
 }
 

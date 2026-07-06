@@ -21,7 +21,7 @@ import { resolveHeadshot } from '../constants/footballMedia.js';
 import { lookupTeamLogo } from './teamService.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { recentBingoTileIds } from './puzzleHistory.js';
-import { buildClubDisplayMap, canonicalClubListWith, clubKey } from '../utils/clubCanonical.js';
+import { buildClubDisplayMap, canonicalClubListWith, canonicalClubName, clubKey } from '../utils/clubCanonical.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
 const GRID = 16;
@@ -199,7 +199,8 @@ async function rows<T extends Record<string, unknown>>(query: ReturnType<typeof 
   return (await db.execute(query)) as unknown as T[];
 }
 
-/** Most common BIG5 league per club name, for crest lookup. */
+/** Most common BIG5 league per club name, for crest lookup. Keys both raw DB names and the
+ * canonical display label ("AS Roma" → "Roma") so tile iconValue league isn't wrong. */
 async function loadClubLeagues(): Promise<Map<string, string>> {
   const rows2 = await rows<{ team_name: string; league_name: string }>(sql`
     SELECT team_name, league_name FROM (
@@ -210,7 +211,12 @@ async function loadClubLeagues(): Promise<Map<string, string>> {
       GROUP BY team_name, league_name
     ) t WHERE rn = 1
   `);
-  return new Map(rows2.map((r) => [r.team_name, r.league_name]));
+  const map = new Map<string, string>();
+  for (const r of rows2) {
+    map.set(r.team_name, r.league_name);
+    map.set(canonicalClubName(r.team_name), r.league_name);
+  }
+  return map;
 }
 
 async function loadPool(): Promise<BingoPlayer[]> {

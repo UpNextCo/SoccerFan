@@ -44,6 +44,8 @@ enum TeamBadgeResolver {
         "inter|serie a": Entry(leagueFolder: "Italy - Serie A", fileName: "Inter Milan.png"),
         "inter milan|serie a": Entry(leagueFolder: "Italy - Serie A", fileName: "Inter Milan.png"),
         "juventus|serie a": Entry(leagueFolder: "Italy - Serie A", fileName: "Juventus FC.png"),
+        "roma|serie a": Entry(leagueFolder: "Italy - Serie A", fileName: "AS Roma.png"),
+        "as roma|serie a": Entry(leagueFolder: "Italy - Serie A", fileName: "AS Roma.png"),
         "paris saint germain|ligue 1": Entry(leagueFolder: "France - Ligue 1", fileName: "Paris Saint-Germain.png"),
         "paris saint-germain|ligue 1": Entry(leagueFolder: "France - Ligue 1", fileName: "Paris Saint-Germain.png"),
         "galatasaray|super lig": Entry(leagueFolder: "Türkiye - Süper Lig", fileName: "Galatasaray.png"),

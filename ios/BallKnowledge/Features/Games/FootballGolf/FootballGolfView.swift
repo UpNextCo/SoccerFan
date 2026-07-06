@@ -370,8 +370,6 @@ struct FootballGolfView: View {
             VStack(spacing: 0) {
                 FootballGolfScorecardStrip(holes: vm.course.holes, results: vm.results, currentIndex: vm.currentHoleIndex)
 
-                GameXPBar(current: vm.xpEarned, max: DailyXP.maxXP(.footballGolf))
-
                 ScrollView(showsIndicators: false) {
                     if let hole = vm.currentHole, vm.phase != .finished {
                         VStack(spacing: 18) {
