@@ -104,18 +104,29 @@ enum WorldCupXIMatcher {
         let g = normalize(guess)
         let e = normalize(expected)
         if g == e { return true }
-        if g.contains(e) || e.contains(g) { return true }
 
+        // Whole-name containment, but only when the contained name has at least 2 words — so a bare
+        // surname ("Silva") or first name ("Thiago") can't match a different player's full name,
+        // while compound names ("Cristiano Ronaldo" vs "Cristiano Ronaldo dos Santos Aveiro") still do.
+        if wordCount(g) >= 2 && e.contains(g) { return true }
+        if wordCount(e) >= 2 && g.contains(e) { return true }
+
+        // Abbreviated first name ("L. Messi" vs "Lionel Messi"): same surname + first initial, and
+        // one side is an actual initial (single letter), so two distinct "M. Silva"s don't match.
         let gLast = lastToken(guess)
         let eLast = lastToken(expected)
         if !gLast.isEmpty, gLast == eLast {
             let gFirst = firstToken(guess)
             let eFirst = firstToken(expected)
-            if gFirst.isEmpty || eFirst.isEmpty || gFirst.prefix(1) == eFirst.prefix(1) {
+            if gFirst.prefix(1) == eFirst.prefix(1) && (gFirst.count == 1 || eFirst.count == 1) {
                 return true
             }
         }
         return false
+    }
+
+    private static func wordCount(_ normalized: String) -> Int {
+        normalized.split(separator: " ").count
     }
 
     private static func normalize(_ value: String) -> String {

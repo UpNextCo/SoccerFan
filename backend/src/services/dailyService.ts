@@ -12,6 +12,7 @@ import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js'
 import { generateWorldCupXiPuzzle, WCXI_VERSION } from './worldCupXiGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
+import { computeServerScore, clampClientScore } from './dailyScoring.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
 const GAME_MODES = [
@@ -362,11 +363,11 @@ async function migrateStaleDraftMaster(date: string): Promise<void> {
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')))
     .limit(1);
-  const puzzle = rows[0]?.puzzleJson as { clubs?: unknown; optimalScore?: unknown; optimalLineup?: unknown } | undefined;
+  const puzzle = rows[0]?.puzzleJson as { constraints?: unknown; optimalScore?: unknown; optimalLineup?: unknown } | undefined;
   if (!puzzle) return;
-  // New Battle format has `clubs` + `optimalScore` + `optimalLineup`; drop anything older so it
-  // regenerates (scenario/budget puzzles, or pre-lineup/pre-GK-aware puzzles).
-  if (!Array.isArray(puzzle.clubs) || typeof puzzle.optimalScore !== 'number' || !Array.isArray(puzzle.optimalLineup)) {
+  // Current Battle format has `constraints` + `optimalScore` + `optimalLineup`; drop anything older
+  // so it regenerates (scenario/budget puzzles, or pre-lineup/pre-GK-aware puzzles).
+  if (!Array.isArray(puzzle.constraints) || typeof puzzle.optimalScore !== 'number' || !Array.isArray(puzzle.optimalLineup)) {
     await db
       .delete(dailyPuzzles)
       .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')));
@@ -553,7 +554,12 @@ export async function getDailyBundle(userId: string): Promise<DailyBundle> {
     .where(and(eq(dailyCompletions.userId, userId), eq(dailyCompletions.date, date)));
 
   const completedModeIds = completions.map((row) => row.modeId);
-  const allComplete = DAILY_PLAYABLE_MODES.every((modeId) => completedModeIds.includes(modeId));
+  // "All done" is measured against the modes that ACTUALLY generated for the day — puzzle
+  // generation is best-effort and can skip a mode, so requiring every theoretical mode would leave
+  // the daily permanently incomplete when one is missing.
+  const availableModes = DAILY_PLAYABLE_MODES.filter((modeId) => puzzles.some((p) => p.modeId === modeId));
+  const allComplete =
+    availableModes.length > 0 && availableModes.every((modeId) => completedModeIds.includes(modeId));
 
   return {
     date,
@@ -572,6 +578,9 @@ export async function completeDaily(
     guesses: number;
     won: boolean;
     shareGrid: string;
+    // The user's actual answer inputs (order/picks/etc.), used to recompute the score server-side.
+    // Optional so older clients that only send an aggregate score still work.
+    answer?: unknown;
   }
 ): Promise<DailyCompleteResponse> {
   // Only today's daily can be completed. The one legitimate stale case is the offline queue
@@ -592,7 +601,14 @@ export async function completeDaily(
     throw new Error('Daily puzzle not found');
   }
 
-  const xpEarned = computeXp(input.modeId, input.score, input.guesses, input.won);
+  // Server-authoritative scoring: when the client sends its answer inputs, recompute the score/won
+  // from the stored puzzle so XP can't be fabricated. Otherwise clamp the client's reported score
+  // to a plausible bound. XP, the stored completion and the league ledger all use these values.
+  const server = await computeServerScore(input.modeId, puzzle[0], input.answer);
+  const effectiveScore = server ? server.score : clampClientScore(input.modeId, input.score);
+  const effectiveWon = server ? server.won : input.won;
+
+  const xpEarned = computeXp(input.modeId, effectiveScore, input.guesses, effectiveWon);
 
   // The unique index on (user_id, date, mode_id) makes this the single source of truth for
   // "already completed" — concurrent requests race here and exactly one row wins.
@@ -602,9 +618,9 @@ export async function completeDaily(
       userId,
       date: input.date,
       modeId: input.modeId,
-      score: input.score,
+      score: effectiveScore,
       guesses: input.guesses,
-      won: input.won,
+      won: effectiveWon,
       shareGrid: input.shareGrid,
     })
     .onConflictDoNothing({

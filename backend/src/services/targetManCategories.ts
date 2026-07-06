@@ -1,6 +1,7 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import type { FactPackPlayer } from './dailyPuzzleTypes.js';
+import { careerGoalsSub, peakValueSub, careerTrophiesSub } from './statMetrics.js';
 
 /**
  * Target Man categories. Each one is a self-describing, fan-friendly stat with a SQL
@@ -27,22 +28,10 @@ const leagueMetric = (col: 'goals' | 'assists' | 'appearances', leagueId: number
 const extraStat = (col: string): SQL =>
   sql`(SELECT player_id, ${sql.raw(col)}::int AS value FROM player_extra_stats)`;
 
-const peakValueSub: SQL = sql`(SELECT id AS player_id, ROUND(COALESCE(peak_market_value_eur, 0) / 1000000.0)::int AS value FROM players WHERE external_id IS NOT NULL)`;
-
-const careerGoalsSub: SQL = sql`(SELECT player_id, SUM(goals)::int AS value FROM player_stats WHERE league_id IN (39, 140, 135, 78, 61, 2, 3) GROUP BY player_id)`;
+// peakValueSub, careerGoalsSub, careerTrophiesSub are the shared canonical definitions (statMetrics.ts)
+// so "Career Goals" / "Peak Value" mean the same thing here as in Draft XI and Blind Rank.
 
 const wcGoalsSub: SQL = sql`(SELECT player_id, SUM(goals)::int AS value FROM player_stats WHERE league_id = 1 GROUP BY player_id)`;
-
-// Real, fan-countable club trophies only — excludes Super Cups / Community Shield / friendlies
-// that otherwise rank squad players above Messi on raw winner counts.
-const TROPHY_COMPETITIONS = [
-  'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',
-  'UEFA Champions League', 'UEFA Europa League',
-  'FA Cup', 'League Cup', 'Copa del Rey', 'DFB Pokal', 'Coppa Italia', 'Coupe de France',
-];
-const careerTrophiesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM player_honours
-  WHERE lower(placement) = 'winner' AND competition IN (${sql.join(TROPHY_COMPETITIONS.map((c) => sql`${c}`), sql`, `)})
-  GROUP BY player_id)`;
 
 export const TARGET_CATEGORIES: TargetCategoryDef[] = [
   { id: 'peak_value', label: 'Peak Market Value', valueNoun: 'value', offNoun: '€m off', unit: 'eur_m', round: 5, min: 20, sub: peakValueSub },

@@ -43,7 +43,13 @@ async function main() {
       )) as ApiPlayerResponse;
       const dob = data.response?.[0]?.player?.birth?.date ?? null;
       if (dob) {
-        await db.execute(sql`UPDATE players SET birth_date = ${dob} WHERE id = ${t.id}`);
+        // Derive age from the DOB we just learned so the stored age can't drift stale
+        // (the API's `age` is only a scrape-time snapshot).
+        await db.execute(sql`
+          UPDATE players
+          SET birth_date = ${dob}, age = date_part('year', age(${dob}::date))::int
+          WHERE id = ${t.id}
+        `);
         updated += 1;
       } else {
         missing += 1;

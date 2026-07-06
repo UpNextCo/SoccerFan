@@ -21,6 +21,7 @@ import { resolveHeadshot } from '../constants/footballMedia.js';
 import { lookupTeamLogo } from './teamService.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { recentBingoTileIds } from './puzzleHistory.js';
+import { buildClubDisplayMap, canonicalClubListWith, clubKey } from '../utils/clubCanonical.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
 const GRID = 16;
@@ -156,14 +157,14 @@ function matches(p: BingoPlayer, c: BingoCategory): boolean {
     case 'nationality':
       return norm(p.nationality) === norm(c.matchingRule);
     case 'playedForClub':
-      return p.clubs.some((x) => norm(x) === norm(c.matchingRule));
+      return p.clubs.some((x) => clubKey(x) === clubKey(c.matchingRule));
     case 'nationClub': {
       const [nation, club] = c.matchingRule.split('|');
-      return norm(p.nationality) === norm(nation ?? '') && p.clubs.some((x) => norm(x) === norm(club ?? ''));
+      return norm(p.nationality) === norm(nation ?? '') && p.clubs.some((x) => clubKey(x) === clubKey(club ?? ''));
     }
     case 'clubCombo': {
       const [a, b] = c.matchingRule.split('|');
-      return p.clubs.some((x) => norm(x) === norm(a ?? '')) && p.clubs.some((x) => norm(x) === norm(b ?? ''));
+      return p.clubs.some((x) => clubKey(x) === clubKey(a ?? '')) && p.clubs.some((x) => clubKey(x) === clubKey(b ?? ''));
     }
     case 'wonCompetition':
       return p.trophies.some((x) => norm(x) === norm(c.matchingRule));
@@ -296,6 +297,9 @@ async function loadPool(): Promise<BingoPlayer[]> {
     GROUP BY player_id
   `);
 
+  // One display string per clubKey across the whole pool, so player.clubs and the tile
+  // matchingRules always use identical spellings (the iOS matcher compares literal strings).
+  const clubDisplay = buildClubDisplayMap(clubRows.flatMap((r) => r.clubs ?? []));
   const clubsById = new Map(clubRows.map((r) => [r.player_id, r.clubs]));
   const leaguesById = new Map(leagueRows.map((r) => [r.player_id, r.leagues]));
   const trophiesById = new Map(trophyRows.map((r) => [r.player_id, r.trophies]));
@@ -305,7 +309,7 @@ async function loadPool(): Promise<BingoPlayer[]> {
 
   return base.map((b) => {
     const s = statsById.get(b.id);
-    const clubs = clubsById.get(b.id) ?? [];
+    const clubs = canonicalClubListWith(clubsById.get(b.id) ?? [], clubDisplay);
     const trophies = [
       ...new Set((trophiesById.get(b.id) ?? []).map((t) => canonicalTrophy(t)).filter((t): t is string => t !== null)),
     ];
@@ -347,8 +351,9 @@ function countMatchers(pool: BingoPlayer[], cat: BingoCategory): number {
 function topClubs(pool: BingoPlayer[]): Array<{ display: string; key: string }> {
   const counts = new Map<string, { display: string; n: number }>();
   for (const p of pool) {
-    for (const c of new Set(p.clubs)) {
-      const k = norm(c);
+    for (const c of p.clubs) {
+      const k = clubKey(c);
+      if (!k) continue;
       const e = counts.get(k);
       if (e) e.n += 1;
       else counts.set(k, { display: c, n: 1 });
@@ -385,9 +390,10 @@ function buildCandidates(pool: BingoPlayer[], clubLeagues: Map<string, string>, 
   const nationClubCounts = new Map<string, number>();
   for (const p of pool) {
     if (!p.nationality || p.nationality === 'Unknown') continue;
-    for (const club of new Set(p.clubs)) {
-      if (!marqueeKeys.has(norm(club))) continue;
-      nationClubCounts.set(`${p.nationality}|${club}`, (nationClubCounts.get(`${p.nationality}|${club}`) ?? 0) + 1);
+    for (const club of p.clubs) {
+      if (!marqueeKeys.has(clubKey(club))) continue;
+      const rule = `${p.nationality}|${club}`;
+      nationClubCounts.set(rule, (nationClubCounts.get(rule) ?? 0) + 1);
     }
   }
   const nationClub = [...nationClubCounts.entries()]
@@ -404,10 +410,11 @@ function buildCandidates(pool: BingoPlayer[], clubLeagues: Map<string, string>, 
   // Club × club combos (played for both).
   const comboCounts = new Map<string, number>();
   for (const p of pool) {
-    const cs = [...new Set(p.clubs)].filter((c) => marqueeKeys.has(norm(c))).sort();
+    const cs = p.clubs.filter((c) => marqueeKeys.has(clubKey(c))).sort((a, b) => clubKey(a).localeCompare(clubKey(b)));
     for (let i = 0; i < cs.length; i += 1) {
       for (let j = i + 1; j < cs.length; j += 1) {
-        comboCounts.set(`${cs[i]}|${cs[j]}`, (comboCounts.get(`${cs[i]}|${cs[j]}`) ?? 0) + 1);
+        const rule = `${cs[i]}|${cs[j]}`;
+        comboCounts.set(rule, (comboCounts.get(rule) ?? 0) + 1);
       }
     }
   }
@@ -559,13 +566,25 @@ export async function generateFootballBingoPuzzle(
   return { modeId: 'football_bingo', puzzleId: `${date}-football_bingo`, date, title: 'Daily Football Bingo', categories, players };
 }
 
-/** True only if every category has at least one matcher in the queue. */
-export function isBingoSolvable(puzzle: FootballBingoPuzzle): { ok: boolean; perCategory: Array<{ title: string; matchers: number }> } {
+/**
+ * Solvable = a full 16-tile grid where every tile has at least one matcher in the shipped queue.
+ * Matching uses the server clubKey() logic, which — now that player.clubs and the club
+ * matchingRules ship one unified label per key — matches the iOS literal-string matcher, so this
+ * gate accurately reflects on-device solvability. `fair` additionally flags whether every tile
+ * clears the MIN_QUEUE_MATCHERS bar (or has exhausted the pool), for logging/QA.
+ */
+export function isBingoSolvable(puzzle: FootballBingoPuzzle): {
+  ok: boolean;
+  fair: boolean;
+  perCategory: Array<{ title: string; matchers: number }>;
+} {
   const perCategory = puzzle.categories.map((c) => ({
     title: c.title,
     matchers: puzzle.players.filter((p) => matches(p, c)).length,
   }));
-  return { ok: perCategory.every((c) => c.matchers >= 1), perCategory };
+  const ok = puzzle.categories.length === GRID && perCategory.every((c) => c.matchers >= 1);
+  const fair = perCategory.every((c) => c.matchers >= MIN_QUEUE_MATCHERS);
+  return { ok, fair, perCategory };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

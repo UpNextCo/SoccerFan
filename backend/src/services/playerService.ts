@@ -6,6 +6,7 @@ import { normalizeSearchText } from '../utils/playerSearch.js';
 import { resolveSearchLimit } from '../utils/playerSearchRank.js';
 import { lookupTeamLogos } from './teamService.js';
 import { normalizeTeamName } from '../utils/teamName.js';
+import { clubKey } from '../utils/clubCanonical.js';
 import { resolveHeadshot } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 
@@ -37,24 +38,32 @@ function playerPriceEur(peak: number | null, tier: number | null): number {
 
 export type FeedbackStatus = 'correct' | 'partial' | 'wrong';
 
+/** Diacritic-insensitive, case-insensitive, whitespace-collapsed compare key for text fields. */
+function normStr(v: string): string {
+  return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
 export function compareField(
   guess: string | number | null,
   answer: string | number | null,
   field: string
 ): FeedbackStatus {
-  if (guess === answer) return 'correct';
-
-  if (field === 'age' && typeof guess === 'number' && typeof answer === 'number') {
-    const diff = Math.abs(guess - answer);
-    if (diff <= 2) return 'partial';
+  // Numeric fields (age, shirt number): exact hit, else a within-range "partial".
+  if (typeof guess === 'number' && typeof answer === 'number') {
+    if (guess === answer) return 'correct';
+    if (field === 'age' && Math.abs(guess - answer) <= 2) return 'partial';
+    if (field === 'shirtNumber' && Math.abs(guess - answer) <= 3) return 'partial';
+    return 'wrong';
   }
 
-  if (field === 'shirtNumber' && typeof guess === 'number' && typeof answer === 'number') {
-    const diff = Math.abs(guess - answer);
-    if (diff <= 3) return 'partial';
+  // Text fields: normalize so alternate club spellings ("Man United" / "Manchester United"),
+  // diacritics and spacing don't wrongly read as a miss. Clubs use the canonical clubKey.
+  if (typeof guess === 'string' && typeof answer === 'string') {
+    const match = field === 'club' ? clubKey(guess) === clubKey(answer) : normStr(guess) === normStr(answer);
+    return match ? 'correct' : 'wrong';
   }
 
-  return 'wrong';
+  return guess === answer ? 'correct' : 'wrong';
 }
 
 export function buildGuessFeedback(

@@ -243,6 +243,14 @@ export async function generateWorldCupXiPuzzle(
 
   const used = new Set<string>();
   const usedSig = new Set<string>();
+  const usedClues = new Set<string>();
+  // Best usable fact for a player: prefer an unused signature AND unused clue text; otherwise any
+  // fact whose clue TEXT hasn't been used. Guarantees no two slots ever ship an identical clue
+  // (the old code fell back to facts[0], which could duplicate another slot's clue).
+  const availableFact = (x: Scored): Fact | null =>
+    x.facts.find((f) => !usedSig.has(f.sig) && !usedClues.has(f.clue)) ??
+    x.facts.find((f) => !usedClues.has(f.clue)) ??
+    null;
   // Each slot targets a tournament year (a date-seeded rotation of the World Cups) so the daily XI
   // spreads across years instead of clumping on the most recent — different spread every day.
   const wcYears = [2006, 2010, 2014, 2018, 2022, 2026];
@@ -264,15 +272,18 @@ export async function generateWorldCupXiPuzzle(
       const coarse = pools.coarse[pos.bucket]!;
       const wy = targetYear(idx);
       // Prefer the slot's target year (fine → coarse), then fall back to any year (fine → coarse).
+      // Only consider a candidate that still has a non-duplicate clue available.
+      const usable = (c: Scored) => availableFact(c) !== null;
       const x =
-        firstUnused(fine, (c) => c.c.year === wy && fresh(c)) ??
-        firstUnused(coarse, (c) => c.c.year === wy && fresh(c)) ??
-        firstUnused(fine, fresh) ??
-        firstUnused(coarse, fresh);
+        firstUnused(fine, (c) => c.c.year === wy && fresh(c) && usable(c)) ??
+        firstUnused(coarse, (c) => c.c.year === wy && fresh(c) && usable(c)) ??
+        firstUnused(fine, (c) => fresh(c) && usable(c)) ??
+        firstUnused(coarse, (c) => fresh(c) && usable(c));
       if (!x) return;
-      const fact = x.facts.find((f) => !usedSig.has(f.sig)) ?? x.facts[0]!;
+      const fact = availableFact(x)!;
       used.add(x.c.playerId);
       usedSig.add(fact.sig);
+      usedClues.add(fact.clue);
       result[idx] = {
         id: `${pos.label}-${idx}`, label: pos.label, x: pos.x, y: pos.y,
         expectedName: x.c.name, clues: [fact.clue],
@@ -324,4 +335,19 @@ export async function generateWorldCupXiPuzzle(
     title: 'Name the World Cup XI',
     slots,
   };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const date = process.argv[2] ?? new Date().toISOString().slice(0, 10);
+  generateWorldCupXiPuzzle(date)
+    .then((puzzle) => {
+      if (!puzzle) { console.log(`No viable World Cup XI for ${date}`); process.exit(1); }
+      console.log(`\n=== WORLD CUP XI ${date} — ${puzzle.slots.length} slots ===\n`);
+      for (const s of puzzle.slots) console.log(`  ${s.label.padEnd(4)} ${s.expectedName.padEnd(26)} ${s.clues[0]}`);
+      const clues = puzzle.slots.map((s) => s.clues[0]);
+      const uniqueClues = new Set(clues).size;
+      console.log(`\nUnique clues: ${uniqueClues}/${clues.length} ${uniqueClues === clues.length ? 'OK' : 'DUPLICATE!'}`);
+      process.exit(uniqueClues === clues.length ? 0 : 1);
+    })
+    .catch((err) => { console.error(err); process.exit(1); });
 }

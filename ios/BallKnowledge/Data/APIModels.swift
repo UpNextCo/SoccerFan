@@ -215,6 +215,43 @@ struct GuessWhoHintDTO: Codable, Equatable {
     let value: StringOrNumber?
 }
 
+/// A Codable, arbitrary JSON value — used to carry each game's per-mode answer inputs (ranking
+/// order, picks, slot fills…) to the server so it can recompute the authoritative score.
+indirect enum JSONValue: Codable, Equatable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case object([String: JSONValue])
+    case array([JSONValue])
+    case null
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .string(let v): try c.encode(v)
+        case .int(let v): try c.encode(v)
+        case .double(let v): try c.encode(v)
+        case .bool(let v): try c.encode(v)
+        case .object(let v): try c.encode(v)
+        case .array(let v): try c.encode(v)
+        case .null: try c.encodeNil()
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null; return }
+        if let v = try? c.decode(Bool.self) { self = .bool(v); return }
+        if let v = try? c.decode(Int.self) { self = .int(v); return }
+        if let v = try? c.decode(Double.self) { self = .double(v); return }
+        if let v = try? c.decode(String.self) { self = .string(v); return }
+        if let v = try? c.decode([JSONValue].self) { self = .array(v); return }
+        if let v = try? c.decode([String: JSONValue].self) { self = .object(v); return }
+        throw DecodingError.dataCorruptedError(in: c, debugDescription: "Unsupported JSON value")
+    }
+}
+
 struct DailyCompleteRequestDTO: Encodable {
     let modeId: String
     let date: String
@@ -222,6 +259,9 @@ struct DailyCompleteRequestDTO: Encodable {
     let guesses: Int
     let won: Bool
     let shareGrid: String
+    /// Per-mode answer inputs so the server can recompute the score (nil for modes we don't yet
+    /// send; the key is then omitted and the server clamps the reported score instead).
+    var answer: JSONValue? = nil
 }
 
 struct DailyCompleteResponseDTO: Codable {

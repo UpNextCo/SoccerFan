@@ -139,7 +139,9 @@ const AGG = sql`
     SELECT p.id, p.name, p.nationality, p.position, p.market_value_tier AS mvt, p.api_football_id,
       EXTRACT(YEAR FROM p.birth_date)::int AS birth_year,
       ROUND(COALESCE(p.peak_market_value_eur, 0) / 1000000.0)::int AS peak_m,
-      ROUND(COALESCE(p.record_fee_eur, 0) / 1000000.0)::int AS fee_m,
+      -- Transfer fee from the transfers table (shared canonical source; K/M-safe after parse-fix),
+      -- so "Biggest Transfer Fee" matches Draft XI rather than reading a different column.
+      COALESCE(tf.fee_m, 0)::int AS fee_m,
       COALESCE(fa.finals, 0)::int AS finals,
       COALESCE(aw.awards, 0)::int AS awards,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39), 0)::int AS pl_goals,
@@ -147,8 +149,10 @@ const AGG = sql`
       COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 39), 0)::int AS pl_apps,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 2), 0)::int AS cl_goals,
       COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2), 0)::int AS cl_apps,
-      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id <> 1), 0)::int AS career_goals,
-      COALESCE(SUM(s.assists)     FILTER (WHERE s.league_id <> 1), 0)::int AS career_assists,
+      -- Career goals/assists over the canonical career competitions (big-5 + CL + EL), matching
+      -- Draft XI and Target Man so the same label ranks the same number across modes.
+      COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id IN (39, 140, 135, 78, 61, 2, 3)), 0)::int AS career_goals,
+      COALESCE(SUM(s.assists)     FILTER (WHERE s.league_id IN (39, 140, 135, 78, 61, 2, 3)), 0)::int AS career_assists,
       COALESCE(SUM(s.appearances), 0)::int AS total_apps,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 39 AND s.team_name NOT IN (${big6Sql})), 0)::int AS pl_nonbig6_goals,
       COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id <> 1 AND s.team_name IN (${londonSql})), 0)::int AS london_goals,
@@ -172,7 +176,8 @@ const AGG = sql`
       LEFT JOIN player_extra_stats e ON e.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS finals FROM final_appearances GROUP BY player_id) fa ON fa.player_id = p.id
       LEFT JOIN (SELECT player_id, COUNT(*) AS awards FROM player_awards GROUP BY player_id) aw ON aw.player_id = p.id
-    GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier, p.api_football_id, p.birth_date, p.peak_market_value_eur, p.record_fee_eur, fa.finals, aw.awards
+      LEFT JOIN (SELECT player_id, ROUND(MAX(fee_eur_m))::int AS fee_m FROM player_transfers WHERE fee_eur_m IS NOT NULL GROUP BY player_id) tf ON tf.player_id = p.id
+    GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier, p.api_football_id, p.birth_date, p.peak_market_value_eur, tf.fee_m, fa.finals, aw.awards
   )`;
 
 interface PoolRow { id: string; name: string; nationality: string; position: string; stat: number; api_football_id?: number | null; }

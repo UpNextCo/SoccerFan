@@ -17,6 +17,15 @@ import { db } from '../db/index.js';
 import { lookupTeamLogo } from './teamService.js';
 import { resolveHeadshot } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
+import {
+  careerGoalsSub,
+  careerAssistsSub,
+  careerAppsSub,
+  careerYellowsSub,
+  peakValueSub,
+  recordFeeSub,
+  careerTrophiesSub,
+} from './statMetrics.js';
 
 // ---------------------------------------------------------------------------
 // Categories (13). Each yields a per-player scalar `(player_id, value)`.
@@ -34,29 +43,9 @@ interface Category {
   sub: SQL; // (player_id, value)
 }
 
-/** Club competitions counted as "career": big-5 leagues + Champions League + Europa League. */
-const CAREER_LEAGUES = [39, 140, 135, 78, 61, 2, 3];
-
 const sumMetric = (col: 'goals' | 'assists' | 'appearances' | 'yellow_cards', leagueIds: number[]): SQL =>
   sql`(SELECT player_id, SUM(${sql.raw(col)})::int AS value FROM player_stats
        WHERE league_id IN (${sql.join(leagueIds.map((l) => sql`${l}`), sql`, `)}) GROUP BY player_id)`;
-
-const peakValueSub: SQL = sql`(SELECT id AS player_id, ROUND(COALESCE(peak_market_value_eur, 0) / 1000000.0)::int AS value
-  FROM players WHERE peak_market_value_eur IS NOT NULL)`;
-
-// Record fee comes from the transfers table (10k+ players) not players.record_fee_eur (~4.7k).
-const recordFeeSub: SQL = sql`(SELECT player_id, ROUND(MAX(fee_eur_m))::int AS value FROM player_transfers
-  WHERE fee_eur_m IS NOT NULL GROUP BY player_id)`;
-
-// Real, fan-countable club trophies only — excludes Super Cups / Community Shield / friendlies.
-const TROPHY_COMPETITIONS = [
-  'Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1',
-  'UEFA Champions League', 'UEFA Europa League',
-  'FA Cup', 'League Cup', 'Copa del Rey', 'DFB Pokal', 'Coppa Italia', 'Coupe de France',
-];
-const trophiesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM player_honours
-  WHERE lower(placement) = 'winner' AND competition IN (${sql.join(TROPHY_COMPETITIONS.map((c) => sql`${c}`), sql`, `)})
-  GROUP BY player_id)`;
 
 const LEAGUE_TITLE_COMPETITIONS = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1'];
 const leagueTitlesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM player_honours
@@ -68,16 +57,16 @@ const intlCapsSub: SQL = sql`(SELECT player_id, intl_caps::int AS value FROM pla
 const mostClubsSub: SQL = sql`(SELECT player_id, COUNT(DISTINCT team_id)::int AS value FROM player_career GROUP BY player_id)`;
 
 const CATEGORIES: Category[] = [
-  { id: 'career_goals', title: 'Career Goals', noun: 'goals', unit: null, scope: 'global', sub: sumMetric('goals', CAREER_LEAGUES) },
-  { id: 'career_assists', title: 'Career Assists', noun: 'assists', unit: null, scope: 'global', sub: sumMetric('assists', CAREER_LEAGUES) },
-  { id: 'career_apps', title: 'Career Appearances', noun: 'apps', unit: null, scope: 'global', sub: sumMetric('appearances', CAREER_LEAGUES) },
-  { id: 'career_yellows', title: 'Career Yellow Cards', noun: 'yellows', unit: null, scope: 'global', sub: sumMetric('yellow_cards', CAREER_LEAGUES) },
+  { id: 'career_goals', title: 'Career Goals', noun: 'goals', unit: null, scope: 'global', sub: careerGoalsSub },
+  { id: 'career_assists', title: 'Career Assists', noun: 'assists', unit: null, scope: 'global', sub: careerAssistsSub },
+  { id: 'career_apps', title: 'Career Appearances', noun: 'apps', unit: null, scope: 'global', sub: careerAppsSub },
+  { id: 'career_yellows', title: 'Career Yellow Cards', noun: 'yellows', unit: null, scope: 'global', sub: careerYellowsSub },
   { id: 'pl_goals', title: 'Premier League Goals', noun: 'goals', unit: null, scope: 'pl', sub: sumMetric('goals', [39]) },
   { id: 'pl_assists', title: 'Premier League Assists', noun: 'assists', unit: null, scope: 'pl', sub: sumMetric('assists', [39]) },
   { id: 'cl_apps', title: 'Champions League Appearances', noun: 'apps', unit: null, scope: 'global', sub: sumMetric('appearances', [2]) },
   { id: 'peak_value', title: 'Peak Market Value', noun: '€m', unit: 'eur_m', scope: 'global', sub: peakValueSub },
   { id: 'record_fee', title: 'Highest Transfer Fee', noun: '€m', unit: 'eur_m', scope: 'global', sub: recordFeeSub },
-  { id: 'career_trophies', title: 'Total Career Trophies', noun: 'trophies', unit: null, scope: 'global', sub: trophiesSub },
+  { id: 'career_trophies', title: 'Total Career Trophies', noun: 'trophies', unit: null, scope: 'global', sub: careerTrophiesSub },
   { id: 'league_titles', title: 'League Titles', noun: 'titles', unit: null, scope: 'global', sub: leagueTitlesSub },
   { id: 'intl_caps', title: 'International Caps', noun: 'caps', unit: null, scope: 'global', sub: intlCapsSub },
   { id: 'most_clubs', title: 'Most Clubs Played For', noun: 'clubs', unit: null, scope: 'global', sub: mostClubsSub },
@@ -247,23 +236,39 @@ async function viableNatClub(clubs: string[]): Promise<Array<{ nationality: stri
 // Best eligible player per (constraint, position) — the optimal cell values.
 // ---------------------------------------------------------------------------
 
-interface Cell { stat: number; name: string }
+interface Cell { id: string; stat: number; name: string }
 
-/** For one constraint, the best (highest category value) eligible player at each needed position. */
-async function bestCellsForConstraint(cat: Category, c: Constraint, positions: string[]): Promise<Map<string, Cell>> {
+// How many ranked players to keep per (constraint, position). Only Centre-Back appears in two
+// slots, so a depth of 3 is always enough to give the second CB slot a distinct fallback player.
+const CELL_DEPTH = 3;
+
+/**
+ * For one constraint, the top-N eligible players (ranked by category value) at each needed
+ * position. Returning a ranked list — not just the single best — lets the optimal lineup use 11
+ * DISTINCT players (two Centre-Back slots can no longer be filled by the same person, and one
+ * star can't be double-counted across two constraints), so the "optimal" score is achievable.
+ */
+async function bestCellsForConstraint(cat: Category, c: Constraint, positions: string[]): Promise<Map<string, Cell[]>> {
   const posList = sql.join(positions.map((p) => sql`${p}`), sql`, `);
   const rows = (await db.execute(sql`
     WITH val AS ${cat.sub},
-    elig AS (${eligibilityIds(c)})
-    SELECT DISTINCT ON (p.sub_position) p.sub_position AS pos, p.name, COALESCE(val.value, 0)::int AS stat
-    FROM players p
-    JOIN elig ON elig.player_id = p.id
-    LEFT JOIN val ON val.player_id = p.id
-    WHERE p.sub_position IN (${posList})
-    ORDER BY p.sub_position, COALESCE(val.value, 0) DESC, p.name
-  `)) as unknown as Array<{ pos: string; name: string; stat: number }>;
-  const m = new Map<string, Cell>();
-  for (const r of rows) m.set(r.pos, { stat: r.stat, name: r.name });
+    elig AS (${eligibilityIds(c)}),
+    ranked AS (
+      SELECT p.sub_position AS pos, p.id, p.name, COALESCE(val.value, 0)::int AS stat,
+             ROW_NUMBER() OVER (PARTITION BY p.sub_position ORDER BY COALESCE(val.value, 0) DESC, p.name) AS rn
+      FROM players p
+      JOIN elig ON elig.player_id = p.id
+      LEFT JOIN val ON val.player_id = p.id
+      WHERE p.sub_position IN (${posList})
+    )
+    SELECT pos, id, name, stat FROM ranked WHERE rn <= ${CELL_DEPTH} ORDER BY pos, rn
+  `)) as unknown as Array<{ pos: string; id: string; name: string; stat: number }>;
+  const m = new Map<string, Cell[]>();
+  for (const r of rows) {
+    const list = m.get(r.pos) ?? [];
+    list.push({ id: r.id, name: r.name, stat: r.stat });
+    m.set(r.pos, list);
+  }
   return m;
 }
 
@@ -435,31 +440,53 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
     const constraints = await buildConstraintPool(category, clubs, seed);
     if (constraints.length !== slots.length) continue;
 
-    // cellStat[constraintIdx][slotIdx] + names, from per-position best eligible player.
+    // Ranked eligible players per (constraint, position). The Hungarian assignment below uses the
+    // TOP cell value as an upper bound to pick the best constraint→slot pairing; the lineup is then
+    // materialised with DISTINCT players (see below).
     const perConstraint = await Promise.all(constraints.map((c) => bestCellsForConstraint(category, c, positions)));
-    const weight = constraints.map((_, ci) => slots.map((slot) => perConstraint[ci]!.get(slot.position)?.stat ?? 0));
+    const topStat = (ci: number, position: string) => perConstraint[ci]!.get(position)?.[0]?.stat ?? 0;
+    const weight = constraints.map((_, ci) => slots.map((slot) => topStat(ci, slot.position)));
 
-    const { total: optimalScore, assign } = maxWeightAssignment(weight);
-    if (optimalScore <= 0) continue;
+    const { total: upperBound, assign } = maxWeightAssignment(weight);
+    if (upperBound <= 0) continue;
 
     // Every chip must land on a slot where it actually has an eligible, positive-value player.
-    const valid = assign.every((slotIdx, ci) => slotIdx >= 0 && (perConstraint[ci]!.get(slots[slotIdx]!.position)?.stat ?? 0) > 0);
+    const valid = assign.every((slotIdx, ci) => slotIdx >= 0 && topStat(ci, slots[slotIdx]!.position) > 0);
     if (!valid) continue;
 
     // constraintForSlot[slotIdx] = constraintIdx
     const constraintForSlot = new Array<number>(slots.length).fill(-1);
     assign.forEach((slotIdx, ci) => { if (slotIdx >= 0) constraintForSlot[slotIdx] = ci; });
 
-    const optimalLineup: BattleOptimalPick[] = slots.map((slot, si) => {
+    // Materialise the optimal XI with 11 DISTINCT players. Fill the most-constrained slots first
+    // (fewest eligible options) so a shared star / the two Centre-Back slots resolve to different
+    // players. optimalScore is the sum of the actually-chosen distinct players — guaranteed
+    // achievable, so an honest perfect XI really does reach 100%.
+    const usedPlayerIds = new Set<string>();
+    const pickBySlot = new Array<BattleOptimalPick | null>(slots.length).fill(null);
+    const order = slots
+      .map((slot, si) => ({ si, options: (perConstraint[constraintForSlot[si]!]!.get(slot.position) ?? []).filter((c) => c.stat > 0).length }))
+      .sort((a, b) => a.options - b.options)
+      .map((o) => o.si);
+
+    let feasible = true;
+    let optimalScore = 0;
+    for (const si of order) {
+      const slot = slots[si]!;
       const ci = constraintForSlot[si]!;
       const c = constraints[ci]!;
-      const cell = perConstraint[ci]!.get(slot.position);
-      return {
+      const pick = (perConstraint[ci]!.get(slot.position) ?? []).find((cell) => cell.stat > 0 && !usedPlayerIds.has(cell.id));
+      if (!pick) { feasible = false; break; }
+      usedPlayerIds.add(pick.id);
+      optimalScore += pick.stat;
+      pickBySlot[si] = {
         slotId: slot.id, position: slot.position,
         constraintId: c.id, constraintLabel: c.label,
-        playerName: cell?.name ?? '—', statValue: cell?.stat ?? 0,
+        playerName: pick.name, statValue: pick.stat,
       };
-    });
+    }
+    if (!feasible) continue;
+    const optimalLineup: BattleOptimalPick[] = pickBySlot.map((p) => p!);
 
     // Decorate club/nat_club chips with crest logos.
     const constraintsOut: BattleConstraintJson[] = await Promise.all(constraints.map(async (c) => {
@@ -532,6 +559,45 @@ function satisfiesSql(c: BattleConstraintQuery): SQL {
   }
 }
 
+/**
+ * Server-authoritative Draft XI score from the user's actual picks. Recomputes each pick's category
+ * value + whether the player satisfies the placed constraint AND plays the slot's position, then
+ * returns the percentage-of-optimal (the value the client shows) and won flag — so XP can't be
+ * fabricated by the client.
+ */
+export async function recomputeBattleScore(
+  puzzle: BattlePuzzleJson,
+  picks: Array<{ slotId: string; constraintId: string; playerId: string }>
+): Promise<{ score: number; won: boolean }> {
+  const cat = categoryById(puzzle.category.id);
+  if (!cat || puzzle.optimalScore <= 0) return { score: 0, won: false };
+  const slotPosition = new Map(puzzle.slots.map((s) => [s.id, s.position]));
+  const constraintById = new Map(puzzle.constraints.map((c) => [c.id, c]));
+
+  const usedPlayers = new Set<string>();
+  let total = 0;
+  for (const pick of picks) {
+    const constraint = constraintById.get(pick.constraintId);
+    const position = slotPosition.get(pick.slotId);
+    if (!constraint || !position || usedPlayers.has(pick.playerId)) continue;
+    usedPlayers.add(pick.playerId);
+    const query: BattleConstraintQuery = {
+      type: constraint.type, club: constraint.club, leagueId: constraint.leagueId, nationality: constraint.nationality,
+    };
+    const rows = (await db.execute(sql`
+      WITH val AS ${cat.sub}
+      SELECT COALESCE(val.value, 0)::int AS stat, (p.sub_position = ${position}) AS pos_ok, ${satisfiesSql(query)} AS satisfies
+      FROM players p LEFT JOIN val ON val.player_id = p.id
+      WHERE p.id = ${pick.playerId}::uuid
+    `)) as unknown as Array<{ stat: number; pos_ok: boolean; satisfies: boolean }>;
+    const r = rows[0];
+    if (r && r.pos_ok && r.satisfies) total += r.stat;
+  }
+
+  const score = Math.min(100, Math.round((total / puzzle.optimalScore) * 100));
+  return { score, won: score >= 70 };
+}
+
 export async function battlePlayers(
   categoryId: string,
   constraint: BattleConstraintQuery,
@@ -566,4 +632,21 @@ export async function battlePlayers(
     satisfiesConstraint: r.satisfies,
     headshotUrl: resolveHeadshot(overrides.get(r.id), r.api_football_id) ?? undefined,
   }));
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const date = process.argv[2] ?? new Date().toISOString().slice(0, 10);
+  generateBattlePuzzle(date)
+    .then((puzzle) => {
+      if (!puzzle) { console.log(`No viable draft puzzle for ${date}`); process.exit(1); }
+      console.log(`\n=== DRAFT XI ${date} — ${puzzle.category.title} (optimal ${puzzle.optimalScore}) ===\n`);
+      for (const pick of puzzle.optimalLineup) {
+        console.log(`  ${pick.position.padEnd(20)} ${pick.constraintLabel.padEnd(28)} ${pick.playerName} (${pick.statValue})`);
+      }
+      const names = puzzle.optimalLineup.map((p) => p.playerName);
+      const distinct = new Set(names).size;
+      console.log(`\nDistinct players in optimal XI: ${distinct}/${names.length} ${distinct === names.length ? 'OK' : 'DUPLICATE!'}`);
+      process.exit(distinct === names.length ? 0 : 1);
+    })
+    .catch((err) => { console.error(err); process.exit(1); });
 }

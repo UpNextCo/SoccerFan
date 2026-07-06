@@ -59,6 +59,9 @@ const completeSchema = z.object({
   guesses: z.number(),
   won: z.boolean(),
   shareGrid: z.string(),
+  // Optional per-mode answer inputs (ranking order, picks, slot fills…) so the server can recompute
+  // the authoritative score. Shape is validated per-mode in dailyScoring; unknown here on purpose.
+  answer: z.unknown().optional(),
 });
 
 dailyRouter.post('/complete', requireAuth, async (req, res) => {

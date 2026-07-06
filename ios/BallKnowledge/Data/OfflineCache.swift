@@ -22,15 +22,19 @@ final class PendingDailyCompletion {
     var guesses: Int
     var won: Bool
     var shareGrid: String
+    /// The mode's answer inputs, JSON-encoded, so a queued completion is still server-verifiable on
+    /// sync. Optional (nil for modes that don't send answers, and for rows queued by older builds).
+    var answerData: Data?
     var createdAt: Date
 
-    init(modeId: String, date: String, score: Int, guesses: Int, won: Bool, shareGrid: String) {
+    init(modeId: String, date: String, score: Int, guesses: Int, won: Bool, shareGrid: String, answerData: Data? = nil) {
         self.modeId = modeId
         self.date = date
         self.score = score
         self.guesses = guesses
         self.won = won
         self.shareGrid = shareGrid
+        self.answerData = answerData
         self.createdAt = .now
     }
 }
@@ -176,13 +180,15 @@ enum OfflineCache {
     }
 
     static func queueCompletion(_ request: DailyCompleteRequestDTO, context: ModelContext) throws {
+        let answerData = request.answer.flatMap { try? JSONEncoder().encode($0) }
         context.insert(PendingDailyCompletion(
             modeId: request.modeId,
             date: request.date,
             score: request.score,
             guesses: request.guesses,
             won: request.won,
-            shareGrid: request.shareGrid
+            shareGrid: request.shareGrid,
+            answerData: answerData
         ))
         try context.save()
     }
@@ -196,6 +202,7 @@ enum OfflineCache {
                 context.delete(item)
                 continue
             }
+            let answer = item.answerData.flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0) }
             do {
                 _ = try await APIClient.shared.dailyComplete(DailyCompleteRequestDTO(
                     modeId: item.modeId,
@@ -203,11 +210,13 @@ enum OfflineCache {
                     score: item.score,
                     guesses: item.guesses,
                     won: item.won,
-                    shareGrid: item.shareGrid
+                    shareGrid: item.shareGrid,
+                    answer: answer
                 ))
                 context.delete(item)
             } catch {
-                break
+                // Keep draining the rest of the queue — one failing item shouldn't wedge the others.
+                continue
             }
         }
         try? context.save()
@@ -269,6 +278,7 @@ enum DailyCompletionService {
         guesses: Int = 1,
         won: Bool,
         shareGrid: String = "",
+        answer: JSONValue? = nil,
         context: ModelContext
     ) async -> DailyCompleteResponseDTO? {
         let normalized = GameModeCatalog.normalizedModeId(modeId)
@@ -282,7 +292,8 @@ enum DailyCompletionService {
             score: score,
             guesses: guesses,
             won: won,
-            shareGrid: shareGrid
+            shareGrid: shareGrid,
+            answer: answer
         )
 
         do {
