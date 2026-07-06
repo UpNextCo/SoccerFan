@@ -110,7 +110,6 @@ function modePerformance(modeId: string, score: number, guesses: number, won: bo
     case 'football_tower': return s / 15;   // floors climbed
     case 'blind_rank': return s / 30;        // 10 slots × 3 — a perfect ranking is the max
     case 'target_man': return s / 1000;      // exact-hit tier = the max, so precision pays
-    case 'one_more': return s / 1000;        // banked total — more risked = more XP (5-in-a-row ≈ full)
     case 'football_bingo': return s / 90;    // 50 + remaining×3 — fewer players used = more XP
     case 'club_chain': return s / 100;       // medal points: gold 100 / silver 75 / bronze 50
     default: return 0.8;
@@ -130,6 +129,9 @@ function golfXp(total: number): number {
 
 function computeXp(modeId: string, score: number, guesses: number, won: boolean): number {
   if (modeId === 'football_golf') return golfXp(score);
+  // One More is the push-your-luck game: its banked score IS the XP (clean escalating +100/+150/…),
+  // uncapped so more correct always banks more — no ceiling clamp, no "+0" picks.
+  if (modeId === 'one_more') return Math.max(PARTICIPATION_XP, Math.max(0, score));
   const ceiling = XP_CEILING[modeId] ?? DEFAULT_CEILING;
   const perf = clamp01(modePerformance(modeId, score, guesses, won));
   return Math.round(PARTICIPATION_XP + perf * (ceiling - PARTICIPATION_XP));

@@ -300,7 +300,6 @@ enum DailyXP {
         case "football_tower": return s / 15     // floors climbed
         case "blind_rank": return s / 30         // 10 slots × 3 — a perfect ranking is the max
         case "target_man": return s / 1000       // exact-hit tier is the max, so precision pays
-        case "one_more": return s / 1000         // banked total — more risked = more XP
         case "football_bingo": return s / 90     // 50 + remaining×3
         case "club_chain": return s / 100        // medal points: gold 100 / silver 75 / bronze 50
         default: return 0.8
@@ -318,8 +317,11 @@ enum DailyXP {
     }
 
     /// The XP banked for this result: participation base + performance up to the mode's ceiling.
+    /// Golf and One More carry their own escalating scores directly (One More is the push-your-luck
+    /// game, so more correct always banks more — no ceiling and no "+0" picks).
     static func xp(mode: String, score: Int, guesses: Int = 1, won: Bool) -> Int {
         if mode == "football_golf" { return golfXp(total: score) }
+        if mode == "one_more" { return max(participation, score) }
         let cap = ceiling[mode] ?? defaultCeiling
         let perf = min(1.0, max(0.0, performance(mode: mode, score: score, guesses: guesses, won: won)))
         return Int((Double(participation) + perf * Double(cap - participation)).rounded())
@@ -332,6 +334,7 @@ enum DailyXP {
     /// Live "so far / at risk" XP during play — the performance portion above the participation base,
     /// so it reads 0 and climbs (used by One More's running meter — the XP you'd bank / lose).
     static func projected(_ mode: GameModeID, score: Int, guesses: Int = 1) -> Int {
+        if mode == .oneMore { return max(0, score) } // banked value IS the XP at risk
         let cap = ceiling[mode.rawValue] ?? defaultCeiling
         let perf = min(1.0, max(0.0, performance(mode: mode.rawValue, score: score, guesses: guesses)))
         return Int((perf * Double(cap - participation)).rounded())
