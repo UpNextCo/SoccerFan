@@ -618,8 +618,9 @@ struct DailyGameCard: View {
             .opacity(state == .completed ? 0.65 : 1)
 
             if showsDivider {
-                Divider()
-                    .overlay(Color.white.opacity(0.02))
+                Rectangle()
+                    .fill(Color(hex: "141414"))
+                    .frame(height: 1)
                     .padding(.leading, iconSize + rowContentSpacing)
             }
         }

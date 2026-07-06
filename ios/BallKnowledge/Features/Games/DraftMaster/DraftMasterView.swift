@@ -244,6 +244,7 @@ struct DraftMasterView: View {
                                     date: dailyDate,
                                     score: result.percentage,
                                     won: result.percentage >= 70,
+                                    answer: viewModel.state.answerPayload(),
                                     context: modelContext
                                 )
                             }

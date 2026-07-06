@@ -191,6 +191,12 @@ struct BlindRankGameState: Equatable, Codable {
               challenge.presentationOrder.indices.contains(currentPlayerIndex) else { return nil }
         return challenge.presentationOrder[currentPlayerIndex]
     }
+
+    /// The user's arrangement (top → bottom) as player ids, for server-side score recompute. Empty
+    /// slots become "" so positions stay aligned with the server's index-based scoring.
+    func answerPayload() -> JSONValue {
+        .object(["order": .array(slots.map { .string($0?.id ?? "") })])
+    }
 }
 
 enum BlindRankScoring {

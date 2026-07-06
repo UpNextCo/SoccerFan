@@ -7,7 +7,7 @@ import { ensureWeeklyMembership, recordXp, weekStartFor } from './leagueService.
 import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
-import { generateOneMorePuzzle, oneMoreStatValue } from './oneMoreGenerator.js';
+import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js';
 import { generateWorldCupXiPuzzle, WCXI_VERSION } from './worldCupXiGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
@@ -466,25 +466,6 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   if (!existing.has('club_chain')) {
     await ensureClubChainPuzzle(date);
   }
-}
-
-/** Validate a One More answer: does the player meet the prompt's stat minimum? */
-export async function validateOneMoreAnswer(
-  date: string,
-  playerId: string
-): Promise<{ valid: boolean; statValue: number }> {
-  const rows = await db
-    .select()
-    .from(dailyPuzzles)
-    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'one_more')))
-    .limit(1);
-  const puzzle = rows[0]?.puzzleJson as
-    | { leagueId: number; category: 'goals' | 'assists' | 'appearances'; minimum: number }
-    | undefined;
-  if (!puzzle) throw new Error('One More puzzle not found');
-
-  const statValue = await oneMoreStatValue(playerId, puzzle.leagueId, puzzle.category);
-  return { valid: statValue >= puzzle.minimum, statValue };
 }
 
 /**

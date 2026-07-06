@@ -194,6 +194,7 @@ struct WorldCupXIView: View {
                                     date: dailyDate,
                                     score: result.score,
                                     won: result.won,
+                                    answer: viewModel.state.answerPayload(),
                                     context: modelContext
                                 )
                             }

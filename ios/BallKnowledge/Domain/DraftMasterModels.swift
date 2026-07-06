@@ -121,6 +121,18 @@ struct BattleGameState: Equatable, Codable {
     var yourTotal: Int { picks.values.reduce(0) { $0 + $1.score } }
     var filledCount: Int { picks.count }
     var isComplete: Bool { picks.count >= challenge.slots.count }
+
+    /// The user's picks, for server-side score recompute: slot → placed constraint + chosen player.
+    func answerPayload() -> JSONValue {
+        let picksJson: [JSONValue] = picks.map { slotId, pick in
+            .object([
+                "slotId": .string(slotId),
+                "constraintId": .string(pick.constraint.id),
+                "playerId": .string(pick.player.id),
+            ])
+        }
+        return .object(["picks": .array(picksJson)])
+    }
 }
 
 struct BattleResult: Equatable, Codable {

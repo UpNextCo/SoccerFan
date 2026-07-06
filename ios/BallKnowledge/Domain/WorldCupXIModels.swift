@@ -93,6 +93,15 @@ struct WorldCupXIGameState: Equatable, Codable {
     var correctCount: Int { fills.values.filter(\.isCorrect).count }
     var answeredCount: Int { fills.count }
     var allAnswered: Bool { fills.count >= puzzle.slots.count }
+
+    /// The player named in each slot, for server-side score recompute (matched against the slot's
+    /// hidden expected name on the server).
+    func answerPayload() -> JSONValue {
+        let picks: [JSONValue] = fills.map { slotId, fill in
+            .object(["slotId": .string(slotId), "name": .string(fill.player.name)])
+        }
+        return .object(["picks": .array(picks)])
+    }
 }
 
 enum WorldCupXIMatcher {

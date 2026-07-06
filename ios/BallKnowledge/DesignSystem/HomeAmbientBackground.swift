@@ -14,8 +14,8 @@ struct HomeAmbientBackground: View {
 
                     RadialGradient(
                         colors: [
-                            Color(hex: "0C2218").opacity(0.72),
-                            BKTheme.background.opacity(0.35),
+                            Color(hex: "0C2218").opacity(0.58),
+                            BKTheme.background.opacity(0.26),
                             BKTheme.background,
                         ],
                         center: UnitPoint(
@@ -35,7 +35,7 @@ struct HomeAmbientBackground: View {
                         base: CGPoint(x: size.width * 0.12, y: size.height * 0.02),
                         drift: CGSize(width: 72, height: 44),
                         diameter: 300,
-                        core: BKTheme.accent.opacity(0.16),
+                        core: BKTheme.accent.opacity(0.11),
                         blur: 58
                     )
 
@@ -46,7 +46,7 @@ struct HomeAmbientBackground: View {
                         base: CGPoint(x: size.width * 0.88, y: size.height * 0.08),
                         drift: CGSize(width: 56, height: 52),
                         diameter: 240,
-                        core: Color(hex: "00AA55").opacity(0.11),
+                        core: Color(hex: "00AA55").opacity(0.075),
                         blur: 50
                     )
 
@@ -57,7 +57,7 @@ struct HomeAmbientBackground: View {
                         base: CGPoint(x: size.width * 0.52, y: -size.height * 0.04),
                         drift: CGSize(width: 38, height: 28),
                         diameter: 180 + 28 * CGFloat(sin(t * 0.32 + 1.2)),
-                        core: BKTheme.accent.opacity(0.05 + 0.03 * CGFloat(sin(t * 0.45))),
+                        core: BKTheme.accent.opacity(0.035 + 0.025 * CGFloat(sin(t * 0.45))),
                         blur: 42
                     )
                 }
@@ -87,9 +87,9 @@ struct HomeAmbientBackground: View {
         AngularGradient(
             stops: [
                 .init(color: .clear, location: 0),
-                .init(color: BKTheme.accent.opacity(0.04), location: 0.22),
+                .init(color: BKTheme.accent.opacity(0.028), location: 0.22),
                 .init(color: .clear, location: 0.45),
-                .init(color: Color(hex: "006633").opacity(0.03), location: 0.68),
+                .init(color: Color(hex: "006633").opacity(0.02), location: 0.68),
                 .init(color: .clear, location: 1),
             ],
             center: .center,
@@ -97,7 +97,7 @@ struct HomeAmbientBackground: View {
         )
         .frame(width: size.width * 1.6, height: size.height * 0.9)
         .blur(radius: 72)
-        .opacity(0.62)
+        .opacity(0.48)
         .offset(y: -size.height * 0.08)
         .blendMode(.plusLighter)
     }

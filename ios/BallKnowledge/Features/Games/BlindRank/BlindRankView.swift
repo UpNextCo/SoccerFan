@@ -270,6 +270,7 @@ struct BlindRankView: View {
                                 score: viewModel.state.score ?? 0,
                                 guesses: viewModel.state.moveCount,
                                 won: (viewModel.state.score ?? 0) >= 17,
+                                answer: viewModel.state.answerPayload(),
                                 context: modelContext
                             )
                         }

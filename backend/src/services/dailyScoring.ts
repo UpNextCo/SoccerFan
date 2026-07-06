@@ -141,7 +141,10 @@ const SCORE_MAX: Record<string, number> = {
   draft_master: 100,
   football_bingo: 200,
   club_chain: 100,
-  one_more: 100_000,
+  // One More banks 50 + 50·n per pick; ~20 rounds caps a legit run near ~11.5k. 15k leaves honest
+  // scores untouched while bounding a fabricated total. (We can't cheaply recompute it server-side
+  // because the client state doesn't retain per-round option ids.)
+  one_more: 15_000,
 };
 
 /** Clamp a client-reported score to a plausible bound (golf is signed vs-par, so left untouched). */
