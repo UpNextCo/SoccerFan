@@ -137,7 +137,10 @@ actor TeamLogoCache {
         inFlight[key] = task
         let result = await task.value
         inFlight[key] = nil
-        cache[key] = result
+        // Only cache successful lookups — transient network failures on resume shouldn't stick.
+        if result.teamId != nil || result.logoURL != nil {
+            cache[key] = result
+        }
         return result
     }
 }
@@ -150,9 +153,17 @@ struct TeamBadgeImage<Fallback: View>: View {
     var size: CGFloat = 32
     @ViewBuilder var fallback: () -> Fallback
 
-    @State private var loadFailed = false
+    @State private var blockedURLKey: String?
     @State private var fetchedTeamId: Int?
     @State private var fetchedLogoURL: URL?
+
+    /// Stable identity for the crest we're trying to show — resets fetch/load state when it changes
+    /// (e.g. game resume swaps round options before badges finish their first load).
+    private var loadIdentity: String {
+        let urlPart = logoURL?.absoluteString ?? ""
+        let teamPart = teamId.map(String.init) ?? ""
+        return "\(TeamBadgeResolver.cacheKey(club: club, league: league))|\(teamPart)|\(urlPart)"
+    }
 
     private var resolvedTeamId: Int? {
         teamId ?? fetchedTeamId
@@ -173,7 +184,7 @@ struct TeamBadgeImage<Fallback: View>: View {
 
     var body: some View {
         Group {
-            if !loadFailed, let url = resolvedURL {
+            if let url = resolvedURL, blockedURLKey != url.absoluteString {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -184,7 +195,7 @@ struct TeamBadgeImage<Fallback: View>: View {
                             .frame(width: size, height: size)
                     case .failure:
                         fallback()
-                            .onAppear { loadFailed = true }
+                            .onAppear { blockedURLKey = url.absoluteString }
                     case .empty:
                         ProgressView()
                             .scaleEffect(0.55)
@@ -193,16 +204,22 @@ struct TeamBadgeImage<Fallback: View>: View {
                         fallback()
                     }
                 }
+                .id(url.absoluteString)
             } else {
                 fallback()
             }
         }
-        .task(id: TeamBadgeResolver.cacheKey(club: club, league: league)) {
+        .task(id: loadIdentity) {
+            blockedURLKey = nil
+            fetchedTeamId = nil
+            fetchedLogoURL = nil
             guard shouldFetchFromAPI else { return }
             let match = await TeamLogoCache.shared.lookup(club: club, league: league)
             fetchedTeamId = match.teamId
             fetchedLogoURL = match.logoURL
         }
+        .onChange(of: fetchedLogoURL) { _, _ in blockedURLKey = nil }
+        .onChange(of: fetchedTeamId) { _, _ in blockedURLKey = nil }
     }
 }
 

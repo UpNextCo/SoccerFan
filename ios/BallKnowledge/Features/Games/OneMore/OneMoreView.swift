@@ -400,6 +400,7 @@ private struct OneMoreChoiceCard: View {
                         PlayerTeamBadge(player: option.badgeDTO, size: 36) {
                             Circle().fill(BKTheme.card).frame(width: 36, height: 36)
                         }
+                        .id(option.id)
                         Text(option.primaryClub)
                             .font(BKFont.caption(10))
                             .foregroundStyle(BKTheme.textSecondary)

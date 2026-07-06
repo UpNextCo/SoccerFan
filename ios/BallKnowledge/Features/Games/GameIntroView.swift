@@ -61,26 +61,27 @@ struct GameIntroContent {
             return GameIntroContent(
                 tagline: "Fill the grid before the clock runs out.",
                 steps: [
-                    "Every square is a clue - a nationality, a club, a trophy or a stat.",
-                    "Name a player who fits each square. Careful: a player can only be used once.",
-                    "The more of your line-up you have left when the grid's full, the more XP.",
+                   "Every square shows a category - a nationality, club, trophy or stat.",
+"Tap a square that applies to the player. Skip if none fit.",
+"Use Wildcard once per game to autoselect every square for that player.",
+"The more players you have left when you complete the grid, the more XP.",
                 ]
             )
         case .oneMore:
             return GameIntroContent(
                 tagline: "Risk it for the streak.",
                 steps: [
-                    "Two players - one clears the day's threshold. Pick the one who qualifies.",
-                    "Every correct pick banks XP and builds your streak; one wrong pick loses it all.",
-                    "Cash out whenever you like - push your luck for more XP.",
+                    "Two players are shown. Pick the one who meets today's target.",
+                    "Each correct answer earns more XP, but one wrong answer ends your run.",
+                    "Cash out whenever you like, or push your luck for more XP.",
                 ]
             )
         case .draftMaster:
             return GameIntroContent(
                 tagline: "Build the highest-scoring XI.",
                 steps: [
-                    "Drag each constraint chip onto a position on the pitch.",
-                    "Pick a player who fits the chip and plays that role - they score their total for the day's stat.",
+                    "Drag the tiles onto the positions on the pitch.",
+                    "Pick a player for each position who matches the tile and scores highly in today's category.",
                     "The closer you get to the perfect XI, the more XP.",
                 ]
             )
@@ -89,7 +90,7 @@ struct GameIntroContent {
                 tagline: "Name the mystery World Cup XI.",
                 steps: [
                     "Each position has a clue pointing to one specific World Cup player.",
-                    "Name as many as you can - get 6 of 11 to win.",
+                    "Answer as many questions as you can.",
                     "Every correct pick adds XP.",
                 ]
             )
