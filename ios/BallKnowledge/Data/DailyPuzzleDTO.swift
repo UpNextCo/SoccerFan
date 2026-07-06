@@ -284,10 +284,14 @@ struct FootballGolfHoleDTO: Codable, Equatable {
     let id: String
     let holeNumber: Int
     let par: Int
+    let target: Int?
     let prompt: String
     let category: String
     let answers: [FootballGolfAnswerDTO]
     let hints: [String]
+
+    /// Older puzzles omit `target`; derive from stroke par.
+    var resolvedTarget: Int { target ?? par * 2 }
 }
 
 struct FootballGolfPuzzleDTO: Codable, Equatable {

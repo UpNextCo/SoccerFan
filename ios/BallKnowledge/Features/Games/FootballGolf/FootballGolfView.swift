@@ -86,7 +86,7 @@ private func pluralizeLastWord(_ phrase: String) -> String {
 
 /// Persisted mid-round progress for resume (the course is rebuilt from the daily puzzle on open).
 struct FootballGolfProgress: Equatable, Codable {
-    static let progressVersion = 1
+    static let progressVersion = 2
     var currentHoleIndex: Int
     var results: [FootballGolfHoleResult]
     var matched: [FootballGolfAnswer]
@@ -164,28 +164,35 @@ final class FootballGolfViewModel {
         showResult = false
     }
 
-    // Par is both the stroke benchmark and the points needed to clear (rarity-weighted).
+    // Par = expected shots; target = points to clear (typically par × 2).
     var par: Int { currentHole?.par ?? 0 }
+    var target: Int { currentHole?.target ?? par * 2 }
     var points: Int { matched.reduce(0) { $0 + $1.rarity.points } }
     var shots: Int { matched.count + wrongGuesses }
-    var shotAllowance: Int { par + footballGolfShotCap }
+    var shotAllowance: Int { target + footballGolfShotCap }
     var shotsRemaining: Int { max(0, shotAllowance - shots) }
 
-    /// Whether the player is on track to finish at/below par if remaining answers score +1 each.
+    /// Live read on whether the run is tracking under/at/over stroke par.
     var paceHint: String {
-        let remaining = max(0, par - points)
+        let remaining = max(0, target - points)
         guard remaining > 0 else { return "" }
-        let projected = shots + remaining - par
-        if projected <= -1 { return "Birdie pace — keep it up" }
-        if projected == 0 { return "Par pace — one clean pick per shot" }
-        return "Over par pace — rare names pull you back"
+        let worstCaseShots = shots + remaining
+        let vsPar = worstCaseShots - par
+        let pace: String
+        if vsPar <= -1 { pace = "Birdie pace — keep finding value" }
+        else if vsPar == 0 { pace = "Par pace — one solid pick per shot" }
+        else { pace = "Over par — rarer names save strokes" }
+        if shotsRemaining <= 3 {
+            return "\(shotsRemaining) shots left · \(pace)"
+        }
+        return pace
     }
 
     private var matchedIds: Set<String> { Set(matched.map(\.id)) }
 
-    /// End the hole if par points are reached; the shot cap force-settles the rest.
+    /// End the hole when the point target is reached; force-settle after the shot cap.
     private func checkComplete() {
-        if points >= par {
+        if points >= target {
             completeHole(skipped: false, effectiveShots: shots)
         } else if shots >= shotAllowance {
             settle()
@@ -194,7 +201,7 @@ final class FootballGolfViewModel {
 
     /// Stop the hole and "fill" the remaining points at +2 shots each (the skip penalty).
     private func settle() {
-        let remaining = max(0, par - points)
+        let remaining = max(0, target - points)
         completeHole(skipped: true, effectiveShots: shots + 2 * remaining)
     }
 
@@ -273,6 +280,7 @@ final class FootballGolfViewModel {
             id: hole.id,
             holeNumber: hole.holeNumber,
             par: hole.par,
+            target: hole.target,
             matched: matched,
             shots: effectiveShots,
             skipped: skipped
@@ -437,10 +445,10 @@ struct FootballGolfView: View {
         }
     }
 
-    // MARK: prompt card — par · shots · clear progress, then the prompt
+    // MARK: prompt card — target · par · shots, then the prompt
 
     private func promptCard(_ vm: FootballGolfViewModel, _ hole: FootballGolfHole) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(hole.category.uppercased())
                     .font(BKFont.caption(11)).tracking(1.4)
@@ -450,10 +458,10 @@ struct FootballGolfView: View {
                     .foregroundStyle(BKTheme.textMuted)
             }
             FootballGolfHoleStatus(
-                par: hole.par,
+                target: hole.target,
                 points: vm.points,
+                par: hole.par,
                 shots: vm.shots,
-                shotAllowance: vm.shotAllowance,
                 paceHint: vm.paceHint
             )
             Text(displayPrompt(hole.prompt))
@@ -483,29 +491,6 @@ struct FootballGolfView: View {
             }
         }
         .animation(GolfMotion.layout, value: vm.matched.count)
-    }
-
-    // Shots used vs allowance — lives above the keyboard.
-    private func shotsCounter(_ vm: FootballGolfViewModel) -> some View {
-        HStack(spacing: 6) {
-            Text("SHOTS")
-                .font(BKFont.caption(9)).tracking(0.5)
-                .foregroundStyle(BKTheme.textMuted)
-            Text("\(vm.shots)/\(vm.shotAllowance)")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(vm.shotsRemaining <= 1 ? BKTheme.wrong : BKTheme.textPrimary)
-                .contentTransition(.numericText())
-            HStack(spacing: 4) {
-                ForEach(0..<vm.shotAllowance, id: \.self) { i in
-                    Circle()
-                        .fill(i < vm.shotsRemaining
-                              ? (vm.shotsRemaining <= 1 ? BKTheme.wrong : BKTheme.textPrimary)
-                              : BKTheme.cardElevated)
-                        .frame(width: 6, height: 6)
-                }
-            }
-        }
-        .animation(GolfMotion.quick, value: vm.shots)
     }
 
     // MARK: input bar (dark field with focus border)
@@ -538,16 +523,8 @@ struct FootballGolfView: View {
             }
 
             if vm.searchResults.isEmpty {
-                HStack(alignment: .center, spacing: 12) {
-                    Text("PAR \(vm.par)")
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
-                        .foregroundStyle(golfGreen)
-                    Text("\(vm.points)/\(vm.par) clear")
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.textSecondary)
-                    Spacer(minLength: 8)
-                    shotsCounter(vm)
-                    Spacer(minLength: 8)
+                HStack {
+                    Spacer(minLength: 0)
                     Button { showGiveUp = true } label: {
                         Text("Give up hole")
                             .font(BKFont.caption(12))
@@ -690,76 +667,82 @@ private struct GolfGlowPulse: ViewModifier {
     }
 }
 
-// MARK: - Hole status — par (stroke target), shots, and clear progress
+// MARK: - Hole status — target (points), par (expected shots), shots taken
 
 private struct FootballGolfHoleStatus: View {
-    let par: Int
+    let target: Int
     let points: Int
+    let par: Int
     let shots: Int
-    let shotAllowance: Int
     let paceHint: String
 
-    private var clearProgress: Double {
-        guard par > 0 else { return 0 }
-        return min(1, Double(points) / Double(par))
+    private var progress: Double {
+        guard target > 0 else { return 0 }
+        return min(1, Double(points) / Double(target))
     }
 
-    private var isCleared: Bool { points >= par }
+    private var isComplete: Bool { points >= target }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 0) {
-                statColumn(label: "PAR", value: "\(par)", valueColor: golfGreen)
-                Spacer(minLength: 8)
-                statColumn(
-                    label: "SHOTS",
-                    value: "\(shots)/\(shotAllowance)",
-                    valueColor: shots >= shotAllowance - 1 ? BKTheme.wrong : BKTheme.textPrimary
-                )
-                Spacer(minLength: 8)
-                statColumn(
-                    label: "TO CLEAR",
-                    value: "\(points)/\(par)",
-                    valueColor: isCleared ? golfGreen : BKTheme.textPrimary,
-                    showProgress: true
-                )
+                targetColumn
+                Spacer(minLength: 12)
+                statColumn(label: "PAR", value: "\(par)", color: golfGreen)
+                Spacer(minLength: 12)
+                statColumn(label: "SHOTS", value: "\(shots)", color: BKTheme.textPrimary)
             }
             if !paceHint.isEmpty {
                 Text(paceHint)
                     .font(BKFont.caption(9))
                     .foregroundStyle(BKTheme.textMuted)
+            } else {
+                Text("Reach the target in as few shots as possible — par is the expected number of shots.")
+                    .font(BKFont.caption(9))
+                    .foregroundStyle(BKTheme.textMuted.opacity(0.85))
             }
         }
     }
 
-    private func statColumn(
-        label: String,
-        value: String,
-        valueColor: Color,
-        showProgress: Bool = false
-    ) -> some View {
+    private var targetColumn: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("TARGET")
+                .font(BKFont.caption(9)).tracking(0.6)
+                .foregroundStyle(BKTheme.textMuted)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("\(points)/\(target)")
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .foregroundStyle(isComplete ? golfGreen : BKTheme.textPrimary)
+                    .contentTransition(.numericText())
+                Text("pts")
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(BKTheme.cardElevated)
+                    Capsule()
+                        .fill(isComplete ? golfGreen : golfGreen.opacity(0.85))
+                        .frame(width: max(4, geo.size.width * progress))
+                }
+            }
+            .frame(height: 4)
+            .animation(GolfMotion.quick, value: points)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func statColumn(label: String, value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(BKFont.caption(9)).tracking(0.6)
                 .foregroundStyle(BKTheme.textMuted)
             Text(value)
-                .font(.system(size: 20, weight: .heavy, design: .rounded))
-                .foregroundStyle(valueColor)
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .foregroundStyle(color)
                 .contentTransition(.numericText())
-            if showProgress {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(BKTheme.cardElevated)
-                        Capsule()
-                            .fill(isCleared ? golfGreen : golfGreen.opacity(0.85))
-                            .frame(width: max(4, geo.size.width * clearProgress))
-                    }
-                }
-                .frame(height: 4)
-                .animation(GolfMotion.quick, value: points)
-            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(width: 56, alignment: .leading)
     }
 }
 
@@ -829,7 +812,7 @@ private struct FootballGolfHoleResultOverlay: View {
                     .font(BKFont.title(38)).foregroundStyle(outcomeColor)
                     .scaleEffect(labelIn ? 1 : 0.7)
                     .opacity(labelIn ? 1 : 0)
-                Text("\(result.shots) shots on a par \(result.par) hole")
+                Text("\(result.pointsReached)/\(result.target) pts · \(result.shots) shots · par \(result.par)")
                     .font(BKFont.headline(15)).foregroundStyle(BKTheme.textPrimary)
                 Text("\(FootballGolfScoring.scoreLabel(result.relativeToPar)) · Hole \(result.holeNumber)")
                     .font(BKFont.caption(12)).foregroundStyle(BKTheme.textMuted)
@@ -842,7 +825,7 @@ private struct FootballGolfHoleResultOverlay: View {
                     .opacity(labelIn ? 1 : 0)
 
                 if result.skipped {
-                    Text("Gave up — cleared \(result.pointsReached)/\(result.par)")
+                    Text("Gave up — \(result.pointsReached)/\(result.target) pts")
                         .font(BKFont.caption(12)).foregroundStyle(BKTheme.textMuted)
                 }
                 if !result.matched.isEmpty {

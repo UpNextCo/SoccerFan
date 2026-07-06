@@ -1,6 +1,8 @@
 /**
- * Football Golf generator. A 9-hole course where each hole's PAR is how many valid
- * answers the player must name (2–5), not how hard the prompt is. Prompts are broad
+ * Football Golf generator. Each hole has:
+ *   - PAR = expected number of shots (guesses) to clear the hole (2–5)
+ *   - TARGET = points needed to finish (= par × 2; average solid answer ≈ 2 pts)
+ * Rarity on each answer sets point value (common 1 … ultraRare 4). Prompts are broad
  * ("Played for both Arsenal and Chelsea", "Brazilian players in the Premier League"),
  * drawn from the same prompt bank that fed Tower (tower_prompts) — closed-set and
  * rule-based alike — with EVERY valid answer enumerated and tagged by rarity so the
@@ -29,6 +31,8 @@ export interface GolfHole {
   id: string;
   holeNumber: number;
   par: 2 | 3 | 4 | 5;
+  /** Points to clear the hole — always par × 2 so a decent run averages ~2 pts per shot. */
+  target: number;
   prompt: string;
   category: string;
   answers: GolfAnswer[];
@@ -44,8 +48,7 @@ export interface FootballGolfPuzzle {
 }
 
 const HOLES = 9;
-// Par per hole = how many answers required. A varied spread; assigned so broader prompts
-// (more findable answers) get the higher pars.
+// Stroke par per hole (expected shots). A varied spread; broader prompts get higher pars.
 const PAR_SEQUENCE: Array<2 | 3 | 4 | 5> = [2, 3, 3, 3, 4, 4, 4, 5, 5];
 
 /** Inverse of fame: a household name is "common", a deep cut is "ultraRare". This is
@@ -188,6 +191,7 @@ export async function generateFootballGolfCourse(
     id: `${date}-h${i + 1}`,
     holeNumber: i + 1,
     par: c.par,
+    target: c.par * 2,
     prompt: c.prompt,
     category: categoryFor(c.rule, c.prompt),
     answers: c.answers,

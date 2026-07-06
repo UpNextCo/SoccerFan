@@ -27,7 +27,7 @@ enum FootballGolfRarity: String, Codable, Equatable, CaseIterable {
         }
     }
 
-    /// Points this answer scores toward clearing the hole's par.
+    /// Points this answer scores toward clearing the hole's target.
     var points: Int {
         switch self {
         case .common: return 1
@@ -52,7 +52,10 @@ struct FootballGolfAnswer: Identifiable, Equatable, Codable {
 struct FootballGolfHole: Identifiable, Equatable {
     let id: String
     let holeNumber: Int
+    /// Expected number of shots (guesses) to clear — golf stroke par.
     let par: Int
+    /// Points needed to finish the hole (typically par × 2).
+    let target: Int
     let prompt: String
     let category: String
     let answers: [FootballGolfAnswer]
@@ -70,21 +73,58 @@ struct FootballGolfCourse: Identifiable, Equatable {
 
 // MARK: - Per-hole result
 
-/// Extra guesses allowed beyond par before the hole force-settles (par 3 → 5 shots total).
+/// Extra guesses allowed beyond the point target before the hole force-settles.
 let footballGolfShotCap = 2
 
 struct FootballGolfHoleResult: Identifiable, Equatable, Codable {
     let id: String
     let holeNumber: Int
     let par: Int
+    let target: Int
     let matched: [FootballGolfAnswer]   // correct answers the player named (in order)
     let shots: Int                      // EFFECTIVE shots: real guesses + skip penalty
     let skipped: Bool
 
     var pointsReached: Int { matched.reduce(0) { $0 + $1.rarity.points } }
 
-    /// Golf score: effective shots minus par (negative is good).
+    /// Golf score: effective shots minus stroke par (negative is good).
     var relativeToPar: Int { shots - par }
+
+    init(id: String, holeNumber: Int, par: Int, target: Int, matched: [FootballGolfAnswer], shots: Int, skipped: Bool) {
+        self.id = id
+        self.holeNumber = holeNumber
+        self.par = par
+        self.target = target
+        self.matched = matched
+        self.shots = shots
+        self.skipped = skipped
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        holeNumber = try c.decode(Int.self, forKey: .holeNumber)
+        par = try c.decode(Int.self, forKey: .par)
+        target = try c.decodeIfPresent(Int.self, forKey: .target) ?? par * 2
+        matched = try c.decode([FootballGolfAnswer].self, forKey: .matched)
+        shots = try c.decode(Int.self, forKey: .shots)
+        skipped = try c.decode(Bool.self, forKey: .skipped)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(holeNumber, forKey: .holeNumber)
+        try c.encode(par, forKey: .par)
+        try c.encode(target, forKey: .target)
+        try c.encode(matched, forKey: .matched)
+        try c.encode(shots, forKey: .shots)
+        try c.encode(skipped, forKey: .skipped)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, holeNumber, par, target, matched, shots, skipped
+    }
 
     var label: String {
         if !skipped && shots == 1 { return "HOLE IN ONE" }
@@ -183,6 +223,7 @@ extension FootballGolfCourse {
                     id: h.id,
                     holeNumber: h.holeNumber,
                     par: h.par,
+                    target: h.resolvedTarget,
                     prompt: h.prompt,
                     category: h.category,
                     answers: h.answers.map {

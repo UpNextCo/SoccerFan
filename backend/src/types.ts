@@ -109,6 +109,7 @@ export interface FootballGolfPuzzlePublic {
     id: string;
     holeNumber: number;
     par: number;
+    target: number;
     prompt: string;
     category: string;
     answers: Array<{ id: string; name: string; aliases: string[]; rarity: string }>;
