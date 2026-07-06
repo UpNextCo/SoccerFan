@@ -21,10 +21,15 @@ final class FootballBingoViewModel {
         self.game = FootballBingoSeed.makeGame(from: serverPuzzle)
     }
 
-    /// XP submitted to the server — a share of the grid filled (each tile is worth an equal slice of
-    /// the max). This IS the XP; a partial grid keeps the XP for the tiles filled, an empty grid = 0.
+    /// XP submitted to the server — 0 unless the grid is completed, then an efficiency slide (fewer
+    /// players used = more XP). This IS the XP.
     var rawScore: Int {
-        DailyXP.bingo(tilesFilled: game.completedCount, totalTiles: game.categories.count)
+        DailyXP.bingo(
+            completed: game.status == .won,
+            remaining: game.remainingPlayers,
+            queueSize: game.playerQueue.count,
+            tiles: game.categories.count
+        )
     }
 
     var xpEarned: Int { rawScore }
@@ -170,8 +175,6 @@ struct FootballBingoView: View {
                         isActive: viewModel.game.isActive && !viewModel.showResult,
                         onExpired: { viewModel.turnExpired() }
                     )
-
-                    GameXPBar(current: viewModel.rawScore, max: DailyXP.maxXP(.footballBingo))
 
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 20) {
@@ -709,9 +712,7 @@ private struct FootballBingoResultView: View {
                     Text("\(remainingPlayers) players remaining")
                         .font(BKFont.body())
                         .foregroundStyle(BKTheme.textSecondary)
-                    Text("+\(xpEarned) XP")
-                        .font(BKFont.headline(20))
-                        .foregroundStyle(BKTheme.accent)
+                    XPResultSummary(earned: xpEarned, max: DailyXP.maxXP(.footballBingo))
                 } else {
                     Ph.xCircle.fill
                         .color(BKTheme.wrong)
@@ -722,9 +723,7 @@ private struct FootballBingoResultView: View {
                     Text("\(completedCount)/\(totalCategories) squares completed")
                         .font(BKFont.body())
                         .foregroundStyle(BKTheme.textSecondary)
-                    Text("+\(xpEarned) XP")
-                        .font(BKFont.headline(20))
-                        .foregroundStyle(xpEarned > 0 ? BKTheme.accent : BKTheme.textMuted)
+                    XPResultSummary(earned: 0, max: DailyXP.maxXP(.footballBingo))
                 }
 
                 Spacer()

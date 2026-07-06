@@ -794,7 +794,7 @@ private struct FootballGolfFinalView: View {
                             .font(BKFont.title(40)).foregroundStyle(totalScore <= 0 ? golfGreen : BKTheme.textPrimary)
                         Text(FootballGolfScoring.finishMessage(totalScore))
                             .font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
-                        Text("+\(xpEarned) XP").font(BKFont.headline(15)).foregroundStyle(golfGreen)
+                        XPResultSummary(earned: xpEarned, max: DailyXP.maxXP(.footballGolf))
                     }
                     .padding(.top, 28)
 

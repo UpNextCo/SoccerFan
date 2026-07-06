@@ -160,7 +160,6 @@ struct ClubChainView: View {
             NavigationStack {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 14) {
-                        GameXPBar(current: viewModel.state.score, max: DailyXP.maxXP(.clubChain))
                         headerStrip
                         instruction
                         chainColumn
@@ -517,9 +516,10 @@ private struct ClubChainResultView: View {
                             .foregroundStyle(BKTheme.textSecondary)
                     }
 
-                    Text("+\(DailyXP.xp(mode: GameModeID.clubChain.rawValue, score: state.score, guesses: state.moves, won: won)) XP")
-                        .font(BKFont.headline(20))
-                        .foregroundStyle(BKTheme.accent)
+                    XPResultSummary(
+                        earned: DailyXP.clubChain(reached: won, moves: state.moves, par: state.optimalMoves),
+                        max: DailyXP.maxXP(.clubChain)
+                    )
 
                     HStack(spacing: 24) {
                         statBlock(value: "\(state.moves)", label: won ? "YOUR MOVES" : "MOVES USED")

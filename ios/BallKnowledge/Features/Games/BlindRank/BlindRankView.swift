@@ -30,6 +30,16 @@ final class BlindRankViewModel {
         BlindRankScoring.xp(fromScore: state.score ?? 0, moves: state.moveCount)
     }
 
+    /// Running XP while the correct order is revealed slot-by-slot.
+    var revealRunningXP: Int {
+        BlindRankScoring.runningXP(steps: state.revealSteps, revealedCount: state.revealedStepCount)
+    }
+
+    /// XP the most recently revealed slot contributed (for the +XP pop).
+    var lastRevealSlotXP: Int {
+        BlindRankScoring.slotXP(forStepRank: state.revealedStepCount, steps: state.revealSteps)
+    }
+
     /// Mid-game and worth saving: started placing players, or reviewing before submit.
     var isResumable: Bool {
         switch state.phase {
@@ -138,7 +148,7 @@ final class BlindRankViewModel {
             state.score = roundScore
             state.phase = .complete
 
-            if roundScore >= 24 {
+            if roundScore >= BlindRankScoring.winThreshold {
                 HapticManager.success()
                 confettiBurstToken += 1
             }
@@ -196,7 +206,15 @@ struct BlindRankView: View {
         ZStack {
             NavigationStack {
                 VStack(spacing: 0) {
-                    GameXPBar(current: viewModel.state.score ?? 0, max: DailyXP.maxXP(.blindRank))
+                    if viewModel.state.phase == .revealing || viewModel.state.phase == .complete {
+                        GameXPBar(
+                            current: viewModel.state.phase == .complete
+                                ? (viewModel.state.score ?? viewModel.revealRunningXP)
+                                : viewModel.revealRunningXP,
+                            max: DailyXP.maxXP(.blindRank)
+                        )
+                        .xpPop(amount: viewModel.lastRevealSlotXP, trigger: viewModel.state.revealedStepCount)
+                    }
                     BlindRankCategoryBanner(challenge: viewModel.state.challenge)
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
@@ -949,15 +967,10 @@ private struct BlindRankResultView: View {
                     }
                     .padding(.top, 24)
 
-                    VStack(spacing: 2) {
-                        Text("\(xpEarned)")
-                            .font(BKFont.title(48))
-                            .foregroundStyle(score >= BlindRankScoring.winThreshold ? blindGreen : BKTheme.textPrimary)
-                        Text("XP EARNED")
-                            .font(BKFont.caption(11))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.textMuted)
-                    }
+                    XPResultSummary(
+                        earned: xpEarned,
+                        max: DailyXP.maxXP(.blindRank)
+                    )
 
                     Text(BlindRankScoring.verdict(forScore: score))
                         .font(BKFont.headline(15))

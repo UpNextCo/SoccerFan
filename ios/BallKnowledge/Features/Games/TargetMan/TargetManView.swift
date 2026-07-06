@@ -162,7 +162,11 @@ struct TargetManView: View {
         ZStack {
             NavigationStack {
                 VStack(spacing: 0) {
-                    GameXPBar(current: viewModel.state.score ?? 0, max: DailyXP.maxXP(.targetMan))
+                    if let score = viewModel.state.score {
+                        GameXPBar(current: score, max: DailyXP.maxXP(.targetMan))
+                    } else {
+                        GameXPBar(current: viewModel.state.selections.count, max: TargetManGameState.slotCount, label: "PICKS")
+                    }
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 20) {
                             TargetManChallengeCard(challenge: viewModel.state.challenge)
@@ -599,18 +603,18 @@ private struct TargetManResultView: View {
 
     private var verdict: String {
         switch score {
-        case 1000: return "BULLSEYE"
-        case 900...: return "SHARPSHOOTER"
-        case 600...: return "ON TARGET"
-        case 250...: return "OFF THE MARK"
+        case 900: return "BULLSEYE"
+        case 800...: return "SHARPSHOOTER"
+        case 350...: return "ON TARGET"
+        case 175...: return "OFF THE MARK"
         default: return "WIDE"
         }
     }
 
     private var verdictColor: Color {
         switch score {
-        case 600...: return BKTheme.accent
-        case 250...: return .orange
+        case 350...: return BKTheme.accent
+        case 175...: return .orange
         default: return BKTheme.wrong
         }
     }
@@ -674,8 +678,8 @@ private struct TargetManResultView: View {
                                     subtitle: offBySubtitle,
                                     // Color by the percentage-based score, not raw deltas, so
                                     // the accent/warning matches the points across all magnitudes.
-                                    accent: score >= 600,
-                                    warning: score <= 50
+                                    accent: score >= TargetManScoring.winThreshold,
+                                    warning: score <= 0
                                 )
                                 .transition(resultTransition)
                             }
@@ -740,7 +744,7 @@ private struct TargetManResultView: View {
                         }
 
                         if step >= TargetManResultStep.xp.rawValue {
-                            Text(score >= 600 ? "Sharp shooting!" : score >= 250 ? "Solid effort" : "Room to improve")
+                            Text(score >= TargetManScoring.winThreshold ? "Sharp shooting!" : score >= 175 ? "Solid effort" : "Room to improve")
                                 .font(BKFont.headline(16))
                                 .foregroundStyle(BKTheme.textSecondary)
                                 .transition(.scale.combined(with: .opacity))
@@ -865,7 +869,7 @@ private struct TargetManResultView: View {
                 case .offBy:
                     HapticManager.light()
                 case .points:
-                    if score >= 900 {
+                    if score >= 800 {
                         HapticManager.success()
                     } else {
                         HapticManager.light()
@@ -891,8 +895,8 @@ private struct TargetBullseye: View {
     let score: Int
     let landed: Bool
 
-    /// 0 = dead centre, 1 = outer edge.
-    private var miss: CGFloat { CGFloat(max(0, 1000 - score)) / 1000 }
+    /// 0 = dead centre, 1 = outer edge (scaled to the 900 XP max).
+    private var miss: CGFloat { CGFloat(max(0, 900 - score)) / 900 }
     /// Seeded angle so the marker lands somewhere different each time but is stable per score.
     private var angle: CGFloat { CGFloat((score * 137 + 40) % 360) * .pi / 180 }
 

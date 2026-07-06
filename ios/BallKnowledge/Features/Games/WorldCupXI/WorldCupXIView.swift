@@ -12,6 +12,8 @@ final class WorldCupXIViewModel {
     var showSlotSheet = false
     var showResult = false
     var confettiBurstToken = 0
+    /// Fires +100 XP pop on the pitch when a slot is answered correctly.
+    var wcXpPopTrigger = 0
     /// Slots whose "played for [club]" hint the player has chosen to reveal.
     var revealedClubs: Set<String> = []
 
@@ -64,7 +66,10 @@ final class WorldCupXIViewModel {
         state.fills[slot.id] = WorldCupXIFill(player: player, isCorrect: correct)
         searchQuery = ""
         searchResults = []
-        if correct { HapticManager.success() } else { HapticManager.light() }
+        if correct {
+            wcXpPopTrigger += 1
+            HapticManager.success()
+        } else { HapticManager.light() }
         showSlotSheet = false
         state.activeSlotId = nil
         if state.allAnswered { finish() }
@@ -89,6 +94,7 @@ final class WorldCupXIViewModel {
         showSlotSheet = false
         showResult = false
         confettiBurstToken = 0
+        wcXpPopTrigger = 0
         revealedClubs = []
     }
 
@@ -133,6 +139,11 @@ struct WorldCupXIView: View {
                         GameXPBar(current: viewModel.state.correctCount * DailyXP.worldCupPerSlot, max: DailyXP.maxXP(.worldCupXI))
                         headerStrip
                         WorldCupXIPitchView(state: viewModel.state, onTapSlot: viewModel.openSlot)
+                            .xpPop(
+                                amount: DailyXP.worldCupPerSlot,
+                                trigger: viewModel.wcXpPopTrigger,
+                                alignment: .top
+                            )
                         answerSection
                     }
                     .padding(.horizontal, 16)
@@ -498,9 +509,10 @@ private struct WorldCupXIResultView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 8)
 
-                    Text("+\(WorldCupXIScoring.xp(from: result.score)) XP")
-                        .font(BKFont.headline(22))
-                        .foregroundStyle(BKTheme.accent)
+                    XPResultSummary(
+                        earned: WorldCupXIScoring.xp(from: result.score),
+                        max: DailyXP.maxXP(.worldCupXI)
+                    )
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("YOUR XI")

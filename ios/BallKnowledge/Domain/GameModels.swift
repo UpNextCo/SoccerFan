@@ -366,10 +366,15 @@ enum DailyXP {
         return min(1100, Int((1100.0 * Double(total) / Double(optimal)).rounded()))
     }
 
-    /// Football Bingo: share of the tiles filled (0...1000).
-    static func bingo(tilesFilled: Int, totalTiles: Int) -> Int {
-        guard totalTiles > 0 else { return 0 }
-        return min(1000, Int((1000.0 * Double(tilesFilled) / Double(totalTiles)).rounded()))
+    /// Football Bingo: 0 unless the whole grid is completed, then an efficiency slide — completing
+    /// with the fewest players (one per tile) banks the full 1000, sliding down to a floor as more
+    /// players are used. Not shown live (would tick down); revealed on the result screen.
+    static let bingoFloor = 400
+    static func bingo(completed: Bool, remaining: Int, queueSize: Int, tiles: Int) -> Int {
+        guard completed, queueSize > tiles else { return completed ? 1000 : 0 }
+        let maxRemaining = Double(queueSize - tiles)           // remaining if you used exactly `tiles`
+        let efficiency = Swift.min(1, Swift.max(0, Double(remaining) / maxRemaining))
+        return bingoFloor + Int((Double(1000 - bingoFloor) * efficiency).rounded())
     }
 
     /// Club Chain: medal by moves vs par (gold 1000 / silver 750 / bronze 500 / fail 0).

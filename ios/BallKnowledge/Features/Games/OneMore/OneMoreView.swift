@@ -727,15 +727,7 @@ private struct OneMoreResultView: View {
                     }
                     .padding(.top, 24)
 
-                    VStack(spacing: 2) {
-                        Text("\(xpEarned)")
-                            .font(BKFont.title(52))
-                            .foregroundStyle(isBusted ? BKTheme.textMuted : BKTheme.accent)
-                        Text("XP EARNED")
-                            .font(BKFont.caption(11))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.textMuted)
-                    }
+                    XPResultSummary(earned: xpEarned, max: DailyXP.maxXP(.oneMore))
 
                     Text(isBusted ? "Run ended on a wrong pick" : "\(streak) correct in a row")
                         .font(BKFont.caption(11))

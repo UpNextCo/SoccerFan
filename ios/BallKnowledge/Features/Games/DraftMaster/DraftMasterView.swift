@@ -16,6 +16,9 @@ final class DraftMasterViewModel {
     var confettiBurstToken = 0
     var shakeToken = 0
     var wrongMessage: String?
+    /// Fires a +XP pop on the pitch when a correct pick bumps running XP.
+    var draftXpPopTrigger = 0
+    var lastDraftXpPop = 0
 
     init(challenge: BattleChallenge) {
         state = BattleGameState(challenge: challenge)
@@ -131,11 +134,15 @@ final class DraftMasterViewModel {
         }
         let player = BattlePlayer(id: dto.id, name: dto.name, statValue: dto.statValue, headshotUrl: dto.headshotUrl)
         let correct = dto.satisfiesConstraint ?? true
+        let priorXP = DailyXP.draft(total: state.yourTotal, optimal: challenge.optimalScore)
         state.picks[slot.id] = BattlePick(constraint: constraint, player: player, correct: correct)
         selectionError = nil
         closeSlot()
         if correct {
             HapticManager.success()
+            let newXP = DailyXP.draft(total: state.yourTotal, optimal: challenge.optimalScore)
+            lastDraftXpPop = max(0, newXP - priorXP)
+            if lastDraftXpPop > 0 { draftXpPopTrigger += 1 }
         } else {
             // Doesn't fit the chip: place it red/0, shake the pitch, and surface the reason.
             HapticManager.error()
@@ -278,6 +285,11 @@ struct DraftMasterView: View {
                 state: viewModel.state,
                 onTapSlot: { viewModel.openSlot($0) },
                 onDropConstraint: { id, slot in viewModel.assignConstraint(id: id, toSlot: slot.id); viewModel.openSlot(slot) }
+            )
+            .xpPop(
+                amount: viewModel.lastDraftXpPop,
+                trigger: viewModel.draftXpPopTrigger,
+                alignment: .center
             )
             .frame(maxHeight: .infinity)
             .padding(.horizontal, 16)
@@ -924,9 +936,7 @@ private struct BattleResultView: View {
                                 Text("OF THE PERFECT XI")
                                     .font(BKFont.caption(10)).tracking(1).foregroundStyle(BKTheme.textMuted)
                             }
-                            Text("+\(result.xp) XP")
-                                .font(BKFont.headline(18))
-                                .foregroundStyle(BKTheme.accent)
+                            XPResultSummary(earned: result.xp, max: DailyXP.maxXP(.draftMaster))
                         }
                         .transition(.scale.combined(with: .opacity))
                     }

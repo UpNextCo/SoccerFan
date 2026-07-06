@@ -218,7 +218,8 @@ struct GuessWhoView: View {
                         current: viewModel.state.isComplete
                             ? DailyXP.guessWho(guesses: viewModel.state.guesses.count, solved: viewModel.state.won)
                             : DailyXP.guessWho(guesses: viewModel.state.guesses.count + 1, solved: true),
-                        max: DailyXP.maxXP(.guessWho)
+                        max: DailyXP.maxXP(.guessWho),
+                        label: viewModel.state.isComplete ? "XP" : "SOLVE NOW"
                     )
 
                     ScrollView(showsIndicators: false) {
@@ -362,11 +363,11 @@ struct GuessWhoView: View {
                 }
             }
 
-            if let result = viewModel.completionResult {
-                Text("+\(result.xpEarned) XP")
-                    .font(BKFont.headline())
-                    .foregroundStyle(BKTheme.accent)
-            }
+            XPResultSummary(
+                earned: viewModel.completionResult?.xpEarned
+                    ?? DailyXP.guessWho(guesses: viewModel.state.guesses.count, solved: viewModel.state.won),
+                max: DailyXP.maxXP(.guessWho)
+            )
 
             Button("Share Result") {
                 viewModel.showShare = true

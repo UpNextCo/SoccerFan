@@ -5,6 +5,8 @@ import SwiftUI
 struct GameXPBar: View {
     let current: Int
     let max: Int
+    /// Left-hand caption — defaults to "XP" but games can label it (e.g. "SOLVE NOW", "PICKS").
+    var label: String = "XP"
 
     private var fraction: Double {
         guard max > 0 else { return 0 }
@@ -14,7 +16,7 @@ struct GameXPBar: View {
     var body: some View {
         VStack(spacing: 5) {
             HStack(spacing: 4) {
-                Text("XP")
+                Text(label)
                     .font(BKFont.caption(10))
                     .tracking(1.2)
                     .foregroundStyle(BKTheme.textMuted)

@@ -248,12 +248,29 @@ enum BlindRankScoring {
         DailyXP.xp(.blindRank, score: score, guesses: moves, won: score >= winThreshold)
     }
 
+    /// XP for one slot from its reveal step (distance between true rank and where the user placed it).
+    static func slotXP(for step: BlindRankRevealStep) -> Int {
+        guard let userRank = step.userRank else { return 0 }
+        return DailyXP.blindRankSlot(distance: abs(step.rank - userRank))
+    }
+
+    /// XP contributed by the step just revealed at `stepRank` (1-based).
+    static func slotXP(forStepRank stepRank: Int, steps: [BlindRankRevealStep]) -> Int {
+        guard let step = steps.first(where: { $0.rank == stepRank }) else { return 0 }
+        return slotXP(for: step)
+    }
+
+    /// Cumulative XP for all slots revealed so far during the reveal animation.
+    static func runningXP(steps: [BlindRankRevealStep], revealedCount: Int) -> Int {
+        steps.filter { $0.rank <= revealedCount }.reduce(0) { $0 + slotXP(for: $1) }
+    }
+
     static func verdict(forScore score: Int) -> String {
         switch score {
-        case 28...: return "Ball Knowledge verified."
-        case 23...: return "Serious ball knowledge."
-        case 17...: return "Decent, but the stinkers got you."
-        case 9...: return "You know names, not numbers."
+        case 900...: return "Ball Knowledge verified."
+        case 600...: return "Serious ball knowledge."
+        case 350...: return "Decent, but the stinkers got you."
+        case 100...: return "You know names, not numbers."
         default: return "Football Twitter is going to cook you."
         }
     }
