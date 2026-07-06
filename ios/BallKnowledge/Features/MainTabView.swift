@@ -434,6 +434,7 @@ struct ProfileTabView: View {
     @State private var remindersOn = LocalProfile.remindersOn
     @State private var showSignOutConfirm = false
     @State private var showDeleteConfirm = false
+    @State private var showIntrosResetAlert = false
 
     private var displayName: String {
         LocalProfile.nameOverride ?? auth.user?.displayName ?? "Player"
@@ -491,6 +492,11 @@ struct ProfileTabView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This name shows on your profile and leagues.")
+        }
+        .alert("How-to-play screens restored", isPresented: $showIntrosResetAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The intro will show again the next time you open each game.")
         }
         .confirmationDialog("Sign out of Ball Knowledge?", isPresented: $showSignOutConfirm, titleVisibility: .visible) {
             Button("Sign Out", role: .destructive) { Task { await auth.signOut() } }
@@ -634,6 +640,11 @@ struct ProfileTabView: View {
                         LocalProfile.remindersOn = false
                     }
                 }
+            }
+            rowDivider
+            SettingsRow(icon: "questionmark.circle.fill", title: "Show game intros again") {
+                GameIntroPreferences.reset()
+                showIntrosResetAlert = true
             }
         }
     }

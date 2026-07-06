@@ -782,19 +782,32 @@ struct DailyGameHost: View {
     }
 
     var body: some View {
-        if showIntro {
-            GameIntroView(
-                mode: mode,
-                onPlay: { withAnimation(.easeInOut(duration: 0.2)) { showIntro = false } },
-                onPlayAndHide: {
-                    GameIntroPreferences.hide(mode)
-                    withAnimation(.easeInOut(duration: 0.2)) { showIntro = false }
-                },
-                onClose: onFinished
-            )
-        } else {
-            gameContent
+        ZStack {
+            if showIntro {
+                GameIntroView(
+                    mode: mode,
+                    onPlay: { dismissIntro() },
+                    onPlayAndHide: {
+                        GameIntroPreferences.hide(mode)
+                        dismissIntro()
+                    },
+                    onClose: onFinished
+                )
+                // Intro eases up and out of the way; the game fades in beneath it.
+                .transition(.asymmetric(
+                    insertion: .opacity,
+                    removal: .move(edge: .top).combined(with: .opacity)
+                ))
+                .zIndex(1)
+            } else {
+                gameContent
+                    .transition(.opacity)
+            }
         }
+    }
+
+    private func dismissIntro() {
+        withAnimation(.easeInOut(duration: 0.28)) { showIntro = false }
     }
 
     // Every game is server-puzzle-only: if today's puzzle isn't in the bundle we show the
