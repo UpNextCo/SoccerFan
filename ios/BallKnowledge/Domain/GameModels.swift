@@ -324,23 +324,27 @@ enum DailyXP {
         }
     }
 
-    /// Football Golf: per hole vs par (under 134 / par 90 / bogey 45 / worse 0). Summed, capped 1200.
+    /// Football Golf: per hole vs par — going under par matters a lot more than reaching par (par is
+    /// easy with common answers). Eagle+ 134 / birdie 110 / par 50 / bogey 20 / worse 0. Summed,
+    /// capped at 1200 (an all-birdie round ~990, all-eagle round hits the cap).
     static func golfHole(relativeToPar: Int) -> Int {
-        if relativeToPar <= -1 { return 134 }
-        if relativeToPar == 0 { return 90 }
-        if relativeToPar == 1 { return 45 }
+        if relativeToPar <= -2 { return 134 }
+        if relativeToPar == -1 { return 110 }
+        if relativeToPar == 0 { return 50 }
+        if relativeToPar == 1 { return 20 }
         return 0
     }
 
-    /// One More: pick k of N earns an escalating share summing to 900 when all N rounds are cleared.
+    /// One More: each correct answer is worth a flat, clean share of the 900 max (10 rounds -> 90
+    /// each, 90/180/270...). Clearing every round banks the full 900.
     static func oneMorePick(_ k: Int, rounds: Int) -> Int {
         guard rounds > 0, k > 0 else { return 0 }
-        return Int((900.0 * 2.0 * Double(k) / Double(rounds * (rounds + 1))).rounded())
+        return Int((900.0 / Double(rounds)).rounded())
     }
 
     static func oneMoreTotal(streak: Int, rounds: Int) -> Int {
-        guard streak > 0 else { return 0 }
-        return (1...streak).reduce(0) { $0 + oneMorePick($1, rounds: rounds) }
+        guard streak > 0, rounds > 0 else { return 0 }
+        return min(900, streak * oneMorePick(1, rounds: rounds))
     }
 
     /// Target Man: closeness bands (exact 900 ... within 25% 175, else 0).

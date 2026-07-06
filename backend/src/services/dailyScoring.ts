@@ -95,10 +95,9 @@ function scoreOneMore(row: PuzzleRow, answer: unknown): ServerScore | null {
     streak += 1;
   }
   if (busted) return { score: 0, won: false };
-  // Escalating share of the 900 max, summing to 900 when all rounds are cleared (pick k of N).
-  const pickXp = (k: number): number => (rounds > 0 && k > 0 ? Math.round((900 * 2 * k) / (rounds * (rounds + 1))) : 0);
-  let score = 0;
-  for (let k = 1; k <= streak; k += 1) score += pickXp(k);
+  // Each correct answer is a flat, clean share of the 900 max (clearing all rounds banks 900).
+  const perPick = rounds > 0 ? Math.round(900 / rounds) : 0;
+  const score = Math.min(900, streak * perPick);
   return { score, won: cashedOut || streak >= rounds };
 }
 

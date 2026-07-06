@@ -728,6 +728,13 @@ private struct FootballGolfHoleResultOverlay: View {
                 Text("\(FootballGolfScoring.scoreLabel(result.relativeToPar)) on Hole \(result.holeNumber) · \(result.shots) shots")
                     .font(BKFont.headline(15)).foregroundStyle(BKTheme.textPrimary)
 
+                let holeXP = FootballGolfScoring.holeXP(result)
+                Text("+\(holeXP) XP")
+                    .font(BKFont.title(28))
+                    .foregroundStyle(holeXP > 0 ? golfGreen : BKTheme.textMuted)
+                    .scaleEffect(labelIn ? 1 : 0.7)
+                    .opacity(labelIn ? 1 : 0)
+
                 if result.skipped {
                     Text("Gave up — \(result.pointsReached)/\(result.par) pts")
                         .font(BKFont.caption(12)).foregroundStyle(BKTheme.textMuted)

@@ -1,7 +1,7 @@
 /**
  * One More generator (binary pick). Picks a daily METRIC (e.g. "career penalty goals",
  * "Champions League knockout goals", "Premier League goals") and a threshold that yields a
- * healthy pool, then pre-builds ~20 ramped binary rounds: each pairs a genuine qualifier
+ * healthy pool, then pre-builds 10 ramped binary rounds: each pairs a genuine qualifier
  * (>= threshold) with a tempting distractor (< threshold but believable). The deliberate move
  * away from "Champions League appearances"-style prompts toward richer, match-level categories.
  *
@@ -16,7 +16,8 @@ import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
 import { oneMorePairKey, recentOneMorePairs } from './puzzleHistory.js';
 
-const ROUND_TARGET = 20;
+// Always exactly 10 rounds, so each correct answer is a clean +90 XP toward the 900 max.
+const ROUND_TARGET = 10;
 const MIN_ROUNDS = 10;
 /** An exact (metric, pair) round can't recur inside this window. */
 const ONE_MORE_REPEAT_WINDOW_DAYS = 180;

@@ -145,7 +145,6 @@ struct OneMoreView: View {
                             // The whole run — streak, XP at risk, the pick track and the cash-out —
                             // in one panel so the button reads as "bank this run", not a floating chip.
                             VStack(spacing: 18) {
-                                GameXPBar(current: viewModel.state.currentScore, max: DailyXP.maxXP(.oneMore))
                                 OneMoreScoreHero(
                                     streak: viewModel.state.streak,
                                     currentScore: viewModel.state.currentScore,
