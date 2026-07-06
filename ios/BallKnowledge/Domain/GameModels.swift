@@ -267,76 +267,112 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    /// Every finished game banks at least this; XP then scales continuously with performance up to the
-    /// mode's ceiling — no win/loss gate, no arbitrary "you lost" score. Mirror of the server model.
-    static let participation = 30
-    static let defaultCeiling = 800
+    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1200). Daily total 9000. A full loss
+    /// earns 0 (no participation floor). Every game's on-screen score IS this XP.
+    static let maxByMode: [String: Int] = [
+        "guess_who": 800,
+        "one_more": 900,
+        "target_man": 900,
+        "blind_rank": 1000,
+        "football_bingo": 1000,
+        "club_chain": 1000,
+        "world_cup_xi": 1100,
+        "draft_master": 1100,
+        "football_tower": 900,
+        "football_golf": 1200,
+    ]
+    static let defaultMax = 1000
 
     /// Retained for source compatibility — the review phase no longer costs XP.
     static let blindRankMoveCost = 0
 
-    /// Per-mode XP ceiling on a perfect game, scaled to each game's effort/length (quick ~700 → longest 1000).
-    static let ceiling: [String: Int] = [
-        "guess_who": 700,
-        "one_more": 700,
-        "target_man": 750,
-        "blind_rank": 800,
-        "football_bingo": 850,
-        "club_chain": 850,
-        "world_cup_xi": 950,
-        "draft_master": 950,
-        "football_tower": 900,
-        "football_golf": 1000,
-    ]
+    static func maxXP(mode: String) -> Int { maxByMode[mode] ?? defaultMax }
+    static func maxXP(_ mode: GameModeID) -> Int { maxXP(mode: mode.rawValue) }
 
-    /// Normalise a game's result to 0–1 on its true score scale. Continuous — no win/loss gate. Guess
-    /// Who can't be read from a single score (8-guess win vs 8-guess loss), so it uses `won`.
-    static func performance(mode: String, score: Int, guesses: Int = 1, won: Bool = true) -> Double {
-        let s = Double(max(0, score))
-        switch mode {
-        case "guess_who": return won ? Double(9 - min(8, max(1, guesses))) / 8.0 : 0
-        case "world_cup_xi": return s / 1100     // correct × 100, out of 11
-        case "draft_master": return s / 100      // % of the perfect XI
-        case "football_tower": return s / 15     // floors climbed
-        case "blind_rank": return s / 30         // 10 slots × 3 — a perfect ranking is the max
-        case "target_man": return s / 1000       // exact-hit tier is the max, so precision pays
-        case "football_bingo": return s / 90     // 50 + remaining×3
-        case "club_chain": return s / 100        // medal points: gold 100 / silver 75 / bronze 50
-        default: return 0.8
-        }
+    /// A game's `score` IS its XP. Clamp to the mode's ceiling; a full loss is 0. Mirror of the
+    /// server `computeXp`. `guesses`/`won` are kept for call-site compatibility only.
+    static func xp(mode: String, score: Int, guesses: Int = 1, won: Bool = true) -> Int {
+        max(0, min(maxXP(mode: mode), score))
     }
 
-    /// Football Golf is scored straight off strokes-vs-par (negative = under par). Mirror of the
-    /// server `golfXp`: ≤ −15 → 1000, −10 → 900 (+20/stroke to −15), par → 400 (+50/stroke to −10),
-    /// over par → −50/stroke down to the participation floor.
-    static func golfXp(total: Int) -> Int {
-        if total <= -15 { return 1000 }
-        if total <= -10 { return 900 + (-total - 10) * 20 }
-        if total <= 0 { return 400 + -total * 50 }
-        return max(participation, 400 - total * 50)
-    }
-
-    /// The XP banked for this result: participation base + performance up to the mode's ceiling.
-    /// Golf and One More carry their own escalating scores directly (One More is the push-your-luck
-    /// game, so more correct always banks more — no ceiling and no "+0" picks).
-    static func xp(mode: String, score: Int, guesses: Int = 1, won: Bool) -> Int {
-        if mode == "football_golf" { return golfXp(total: score) }
-        if mode == "one_more" { return max(participation, score) }
-        let cap = ceiling[mode] ?? defaultCeiling
-        let perf = min(1.0, max(0.0, performance(mode: mode, score: score, guesses: guesses, won: won)))
-        return Int((Double(participation) + perf * Double(cap - participation)).rounded())
-    }
-
-    static func xp(_ mode: GameModeID, score: Int, guesses: Int = 1, won: Bool) -> Int {
+    static func xp(_ mode: GameModeID, score: Int, guesses: Int = 1, won: Bool = true) -> Int {
         xp(mode: mode.rawValue, score: score, guesses: guesses, won: won)
     }
 
-    /// Live "so far / at risk" XP during play — the performance portion above the participation base,
-    /// so it reads 0 and climbs (used by One More's running meter — the XP you'd bank / lose).
+    /// Live running XP for the HUD — the running score is already XP, so this just clamps.
     static func projected(_ mode: GameModeID, score: Int, guesses: Int = 1) -> Int {
-        if mode == .oneMore { return max(0, score) } // banked value IS the XP at risk
-        let cap = ceiling[mode.rawValue] ?? defaultCeiling
-        let perf = min(1.0, max(0.0, performance(mode: mode.rawValue, score: score, guesses: guesses)))
-        return Int((perf * Double(cap - participation)).rounded())
+        xp(mode, score: score)
+    }
+
+    // MARK: - Per-game XP builders (each returns XP; games use these to build their score + HUD)
+
+    /// Guess Who: solve in 1 = 800, then -100 per extra guess (min 100 at 8); unsolved = 0.
+    static func guessWho(guesses: Int, solved: Bool) -> Int {
+        solved ? max(100, 900 - 100 * min(8, max(1, guesses))) : 0
+    }
+
+    /// World Cup XI: 100 XP per correct slot (11 -> 1100).
+    static let worldCupPerSlot = 100
+
+    /// Blind Rank: per slot by distance from its true spot (exact 100 / off-1 60 / off-2 30 / else 0).
+    static func blindRankSlot(distance: Int) -> Int {
+        switch distance {
+        case 0: return 100
+        case 1: return 60
+        case 2: return 30
+        default: return 0
+        }
+    }
+
+    /// Football Golf: per hole vs par (under 134 / par 90 / bogey 45 / worse 0). Summed, capped 1200.
+    static func golfHole(relativeToPar: Int) -> Int {
+        if relativeToPar <= -1 { return 134 }
+        if relativeToPar == 0 { return 90 }
+        if relativeToPar == 1 { return 45 }
+        return 0
+    }
+
+    /// One More: pick k of N earns an escalating share summing to 900 when all N rounds are cleared.
+    static func oneMorePick(_ k: Int, rounds: Int) -> Int {
+        guard rounds > 0, k > 0 else { return 0 }
+        return Int((900.0 * 2.0 * Double(k) / Double(rounds * (rounds + 1))).rounded())
+    }
+
+    static func oneMoreTotal(streak: Int, rounds: Int) -> Int {
+        guard streak > 0 else { return 0 }
+        return (1...streak).reduce(0) { $0 + oneMorePick($1, rounds: rounds) }
+    }
+
+    /// Target Man: closeness bands (exact 900 ... within 25% 175, else 0).
+    static func targetMan(pctOff: Double) -> Int {
+        switch pctOff {
+        case ..<0.0001: return 900
+        case ..<0.02: return 800
+        case ..<0.05: return 650
+        case ..<0.10: return 500
+        case ..<0.15: return 350
+        case ..<0.25: return 175
+        default: return 0
+        }
+    }
+
+    /// Draft XI: share of the optimal XI (0...1100).
+    static func draft(total: Int, optimal: Int) -> Int {
+        guard optimal > 0 else { return 0 }
+        return min(1100, Int((1100.0 * Double(total) / Double(optimal)).rounded()))
+    }
+
+    /// Football Bingo: share of the tiles filled (0...1000).
+    static func bingo(tilesFilled: Int, totalTiles: Int) -> Int {
+        guard totalTiles > 0 else { return 0 }
+        return min(1000, Int((1000.0 * Double(tilesFilled) / Double(totalTiles)).rounded()))
+    }
+
+    /// Club Chain: medal by moves vs par (gold 1000 / silver 750 / bronze 500 / fail 0).
+    static func clubChain(reached: Bool, moves: Int, par: Int) -> Int {
+        guard reached else { return 0 }
+        if moves <= par { return 1000 }
+        if moves <= par + 2 { return 750 }
+        return 500
     }
 }

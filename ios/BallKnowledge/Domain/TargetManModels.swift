@@ -187,24 +187,17 @@ struct TargetManGameState: Equatable, Codable {
 }
 
 enum TargetManScoring {
-    /// Percentage-of-target accuracy, so categories of any magnitude (a ~300
-    /// assists target and a ~200,000 minutes target) score on the same fair curve.
+    /// Win threshold (XP): landing within 15% of the target.
+    static let winThreshold = 350
+
+    /// XP by percentage-of-target accuracy, so categories of any magnitude score on the same fair
+    /// curve. This value IS the XP (exact 900 ... within 25% 175, further off = 0).
     static func points(forDifference difference: Int, target: Int) -> Int {
-        let distance = abs(difference)
-        if distance == 0 { return 1000 }
-        let pct = Double(distance) / Double(max(target, 1))
-        switch pct {
-        case ..<0.02: return 900
-        case ..<0.05: return 750
-        case ..<0.10: return 600
-        case ..<0.15: return 450
-        case ..<0.25: return 250
-        default: return 50
-        }
+        DailyXP.targetMan(pctOff: Double(abs(difference)) / Double(max(target, 1)))
     }
 
     static func xp(from score: Int) -> Int {
-        DailyXP.xp(.targetMan, score: score, won: score >= 400)
+        DailyXP.xp(.targetMan, score: score, won: score >= winThreshold)
     }
 
     static func tierExplanation(forDifference difference: Int, target: Int) -> String {

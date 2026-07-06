@@ -160,6 +160,7 @@ struct ClubChainView: View {
             NavigationStack {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 14) {
+                        GameXPBar(current: viewModel.state.score, max: DailyXP.maxXP(.clubChain))
                         headerStrip
                         instruction
                         chainColumn

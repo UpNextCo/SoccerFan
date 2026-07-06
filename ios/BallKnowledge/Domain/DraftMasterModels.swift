@@ -144,6 +144,9 @@ struct BattleResult: Equatable, Codable {
         return min(100, Int((Double(yourTotal) / Double(optimalScore) * 100).rounded()))
     }
 
+    /// XP banked — share of the optimal XI out of the Draft XI max. This IS the XP.
+    var xp: Int { DailyXP.draft(total: yourTotal, optimal: optimalScore) }
+
     var verdict: String {
         switch percentage {
         case 95...: return "PERFECT XI"

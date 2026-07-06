@@ -139,7 +139,7 @@ final class GuessWhoViewModel {
         if !state.won, revealedAnswer == nil {
             revealedAnswer = try? await APIClient.shared.revealGuessWhoAnswer(date: date)
         }
-        let score = state.won ? max(10, 100 - (state.guesses.count - 1) * 10) : 0
+        let score = DailyXP.guessWho(guesses: state.guesses.count, solved: state.won)
 
         // Shared completion path (same as every other game): locks the daily locally first so it
         // can't be replayed even when the POST fails, then queues offline for a later sync.
@@ -213,6 +213,13 @@ struct GuessWhoView: View {
                     .onTapGesture {
                         isSearchFocused = false
                     }
+
+                    GameXPBar(
+                        current: viewModel.state.isComplete
+                            ? DailyXP.guessWho(guesses: viewModel.state.guesses.count, solved: viewModel.state.won)
+                            : DailyXP.guessWho(guesses: viewModel.state.guesses.count + 1, solved: true),
+                        max: DailyXP.maxXP(.guessWho)
+                    )
 
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 20) {

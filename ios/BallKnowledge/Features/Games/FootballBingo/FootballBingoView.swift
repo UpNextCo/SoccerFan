@@ -21,16 +21,13 @@ final class FootballBingoViewModel {
         self.game = FootballBingoSeed.makeGame(from: serverPuzzle)
     }
 
-    /// Raw skill score submitted to the server (fewer players used → higher). The server converts
-    /// this to XP via the shared model; `xpEarned` mirrors that so the number shown == the XP banked.
+    /// XP submitted to the server — a share of the grid filled (each tile is worth an equal slice of
+    /// the max). This IS the XP; a partial grid keeps the XP for the tiles filled, an empty grid = 0.
     var rawScore: Int {
-        guard game.status == .won else { return 0 }
-        return 50 + game.remainingPlayers * 3
+        DailyXP.bingo(tilesFilled: game.completedCount, totalTiles: game.categories.count)
     }
 
-    var xpEarned: Int {
-        DailyXP.xp(.footballBingo, score: rawScore, won: game.status == .won)
-    }
+    var xpEarned: Int { rawScore }
 
     /// Snapshot for save/restore (board + the one-shot wildcard flag).
     var snapshot: FootballBingoProgress {
@@ -173,6 +170,8 @@ struct FootballBingoView: View {
                         isActive: viewModel.game.isActive && !viewModel.showResult,
                         onExpired: { viewModel.turnExpired() }
                     )
+
+                    GameXPBar(current: viewModel.rawScore, max: DailyXP.maxXP(.footballBingo))
 
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 20) {
@@ -723,6 +722,9 @@ private struct FootballBingoResultView: View {
                     Text("\(completedCount)/\(totalCategories) squares completed")
                         .font(BKFont.body())
                         .foregroundStyle(BKTheme.textSecondary)
+                    Text("+\(xpEarned) XP")
+                        .font(BKFont.headline(20))
+                        .foregroundStyle(xpEarned > 0 ? BKTheme.accent : BKTheme.textMuted)
                 }
 
                 Spacer()

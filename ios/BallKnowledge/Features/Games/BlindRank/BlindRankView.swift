@@ -196,6 +196,7 @@ struct BlindRankView: View {
         ZStack {
             NavigationStack {
                 VStack(spacing: 0) {
+                    GameXPBar(current: viewModel.state.score ?? 0, max: DailyXP.maxXP(.blindRank))
                     BlindRankCategoryBanner(challenge: viewModel.state.challenge)
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
@@ -269,7 +270,7 @@ struct BlindRankView: View {
                                 date: dailyDate,
                                 score: viewModel.state.score ?? 0,
                                 guesses: viewModel.state.moveCount,
-                                won: (viewModel.state.score ?? 0) >= 17,
+                                won: (viewModel.state.score ?? 0) >= BlindRankScoring.winThreshold,
                                 answer: viewModel.state.answerPayload(),
                                 context: modelContext
                             )
@@ -362,7 +363,7 @@ private struct BlindRankCategoryBanner: View {
                 .font(BKFont.caption(10))
                 .tracking(0.5)
                 .foregroundStyle(BKTheme.textMuted)
-            Text("3 PTS PER EXACT SPOT · SCORE 17+ / 30 TO WIN")
+            Text("100 XP PER EXACT SPOT · 600+ XP TO WIN")
                 .font(BKFont.caption(9))
                 .tracking(0.5)
                 .foregroundStyle(BKTheme.textMuted)
@@ -951,7 +952,7 @@ private struct BlindRankResultView: View {
                     VStack(spacing: 2) {
                         Text("\(xpEarned)")
                             .font(BKFont.title(48))
-                            .foregroundStyle(score >= 17 ? blindGreen : BKTheme.textPrimary)
+                            .foregroundStyle(score >= BlindRankScoring.winThreshold ? blindGreen : BKTheme.textPrimary)
                         Text("XP EARNED")
                             .font(BKFont.caption(11))
                             .tracking(1)
@@ -1002,7 +1003,7 @@ private struct BlindRankResultView: View {
                     }
 
                     HStack(spacing: 10) {
-                        Label("\(score) / \(maxScore) ranking accuracy", systemImage: "target")
+                        Label("\(score) / \(maxScore) XP", systemImage: "target")
                             .font(BKFont.caption(11))
                             .foregroundStyle(BKTheme.textSecondary)
                     }

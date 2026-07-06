@@ -101,24 +101,27 @@ struct OneMoreGameState: Equatable, Codable {
         prompt.rounds.indices.contains(roundIndex) ? prompt.rounds[roundIndex] : nil
     }
 
+    /// Total rounds in today's run — the streak needed to reach the full XP max.
+    var totalRounds: Int { prompt.rounds.count }
+
     var currentScore: Int {
-        OneMoreScoring.score(forStreak: streak)
+        OneMoreScoring.score(forStreak: streak, rounds: totalRounds)
     }
 
     var nextPickPoints: Int {
-        OneMoreScoring.points(forPick: streak + 1)
+        OneMoreScoring.points(forPick: streak + 1, rounds: totalRounds)
     }
 }
 
 enum OneMoreScoring {
-    static func points(forPick pickNumber: Int) -> Int {
-        guard pickNumber > 0 else { return 0 }
-        return 50 + pickNumber * 50
+    /// XP the k-th correct pick adds — an escalating share summing to the 900 max when all N rounds
+    /// are cleared (later picks worth more). This IS the XP.
+    static func points(forPick pickNumber: Int, rounds: Int) -> Int {
+        DailyXP.oneMorePick(pickNumber, rounds: rounds)
     }
 
-    static func score(forStreak streak: Int) -> Int {
-        guard streak > 0 else { return 0 }
-        return (1...streak).reduce(0) { $0 + points(forPick: $1) }
+    static func score(forStreak streak: Int, rounds: Int) -> Int {
+        DailyXP.oneMoreTotal(streak: streak, rounds: rounds)
     }
 
     static func xp(from score: Int, streak: Int) -> Int {

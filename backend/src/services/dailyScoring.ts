@@ -6,6 +6,7 @@
  * Recompute is best-effort: any shape mismatch returns null and the caller falls back to the (clamped)
  * client-reported score, so older clients that don't send answers keep working.
  */
+import { maxXpForMode } from './dailyService.js';
 
 export interface ServerScore {
   score: number;
@@ -29,14 +30,15 @@ function scoreBlindRank(row: PuzzleRow, answer: unknown): ServerScore | null {
   }
   const idx = new Map((correct as string[]).map((id, i) => [id, i]));
 
+  // Per-slot XP by distance from the true spot (exact 100 / off-1 60 / off-2 30 / else 0).
+  const slotXp = (d: number): number => (d === 0 ? 100 : d === 1 ? 60 : d === 2 ? 30 : 0);
   let score = 0;
   (order as string[]).forEach((id, i) => {
     const c = idx.get(id);
     if (c === undefined) return;
-    const d = Math.abs(i - c);
-    score += d === 0 ? 3 : d === 1 ? 2 : d === 2 ? 1 : 0;
+    score += slotXp(Math.abs(i - c));
   });
-  return { score, won: score >= 17 };
+  return { score, won: score >= 600 };
 }
 
 // ---- World Cup XI ---------------------------------------------------------------------------
@@ -84,16 +86,20 @@ function scoreOneMore(row: PuzzleRow, answer: unknown): ServerScore | null {
   if (!Array.isArray(picks) || !Array.isArray(puzzle?.rounds) || typeof puzzle.minimum !== 'number') return null;
 
   const minimum = puzzle.minimum;
-  let banked = 0;
+  const rounds = puzzle.rounds.length;
+  let streak = 0;
   let busted = false;
   for (let i = 0; i < picks.length; i += 1) {
-    const pickId = picks[i];
-    const opt = puzzle.rounds[i]?.options?.find((o) => o.id === pickId);
+    const opt = puzzle.rounds[i]?.options?.find((o) => o.id === picks[i]);
     if (!opt || opt.value < minimum) { busted = true; break; }
-    banked += 50 + (i + 1) * 50; // cumulative OneMore scoring (pick n = 50 + n*50)
+    streak += 1;
   }
   if (busted) return { score: 0, won: false };
-  return { score: banked, won: cashedOut || picks.length >= puzzle.rounds.length };
+  // Escalating share of the 900 max, summing to 900 when all rounds are cleared (pick k of N).
+  const pickXp = (k: number): number => (rounds > 0 && k > 0 ? Math.round((900 * 2 * k) / (rounds * (rounds + 1))) : 0);
+  let score = 0;
+  for (let k = 1; k <= streak; k += 1) score += pickXp(k);
+  return { score, won: cashedOut || streak >= rounds };
 }
 
 // ---- Draft XI (async — needs the DB) --------------------------------------------------------
@@ -132,25 +138,10 @@ export async function computeServerScore(
   }
 }
 
-/** Per-mode sane maximum, used to clamp a client-reported score when we can't fully recompute. */
-const SCORE_MAX: Record<string, number> = {
-  guess_who: 100,
-  target_man: 1000,
-  blind_rank: 30,
-  world_cup_xi: 1100,
-  draft_master: 100,
-  football_bingo: 200,
-  club_chain: 100,
-  // One More banks 50 + 50·n per pick; ~20 rounds caps a legit run near ~11.5k. 15k leaves honest
-  // scores untouched while bounding a fabricated total. (We can't cheaply recompute it server-side
-  // because the client state doesn't retain per-round option ids.)
-  one_more: 15_000,
-};
-
-/** Clamp a client-reported score to a plausible bound (golf is signed vs-par, so left untouched). */
+/**
+ * Clamp a client-reported score (which is now the XP itself) to the mode's XP ceiling, never below 0.
+ * Used when we can't fully recompute server-side from the answer.
+ */
 export function clampClientScore(modeId: string, score: number): number {
-  if (modeId === 'football_golf') return score;
-  const max = SCORE_MAX[modeId];
-  const lo = Math.max(0, score);
-  return max != null ? Math.min(lo, max) : lo;
+  return Math.max(0, Math.min(maxXpForMode(modeId), Math.round(score)));
 }

@@ -206,8 +206,11 @@ enum BlindRankScoring {
         }
     }
 
-    /// Max points for a perfect 10-player round (3 each).
-    static func maxScore(slotCount: Int) -> Int { slotCount * 3 }
+    /// Max XP for a perfect round (100 per exact slot).
+    static func maxScore(slotCount: Int) -> Int { slotCount * 100 }
+
+    /// Win threshold (XP) — a solid majority of the max.
+    static let winThreshold = 600
 
     struct Breakdown: Equatable {
         let exact: Int    // perfect placements (distance 0)
@@ -215,14 +218,13 @@ enum BlindRankScoring {
         let disaster: Int // 3+ places off
     }
 
-    /// Forgiving score: exact = 3, one off = 2, two off = 1, three+ off = 0.
+    /// XP score: per slot by distance from its true spot (exact 100 / off-1 60 / off-2 30 / else 0).
     static func score(slots: [BlindRankPlayer?], correctRanking: [String]) -> Int {
         let correctIndex = Dictionary(uniqueKeysWithValues: correctRanking.enumerated().map { ($0.element, $0.offset) })
         var total = 0
         for (i, slot) in slots.enumerated() {
             guard let id = slot?.id, let correct = correctIndex[id] else { continue }
-            let d = abs(i - correct)
-            total += d == 0 ? 3 : d == 1 ? 2 : d == 2 ? 1 : 0
+            total += DailyXP.blindRankSlot(distance: abs(i - correct))
         }
         return total
     }
@@ -241,10 +243,9 @@ enum BlindRankScoring {
     /// XP cost per swap made in the review/adjust phase (mirrors DailyXP.blindRankMoveCost / server).
     static let moveCost = DailyXP.blindRankMoveCost
 
-    /// XP scaled from the ranking-accuracy score (win threshold 17), minus a toll per review-phase
-    /// swap. Mirrors the server model — the number shown is exactly what gets banked.
+    /// The XP banked — the ranking score IS the XP (clamped to the mode max).
     static func xp(fromScore score: Int, moves: Int = 0) -> Int {
-        DailyXP.xp(.blindRank, score: score, guesses: moves, won: score >= 17)
+        DailyXP.xp(.blindRank, score: score, guesses: moves, won: score >= winThreshold)
     }
 
     static func verdict(forScore score: Int) -> String {

@@ -106,12 +106,12 @@ enum ClubChainMedal: String, Codable {
         }
     }
 
-    /// Medal points → XP performance (mirrors the server's club_chain performance = score / 100).
+    /// Medal XP (this IS the XP banked): gold 1000 / silver 750 / bronze 500 / none 0.
     var points: Int {
         switch self {
-        case .gold: return 100
-        case .silver: return 75
-        case .bronze: return 50
+        case .gold: return 1000
+        case .silver: return 750
+        case .bronze: return 500
         case .none: return 0
         }
     }

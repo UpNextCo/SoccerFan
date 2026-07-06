@@ -125,9 +125,14 @@ enum FootballGolfScoring {
         }
     }
 
-    static func xp(total: Int) -> Int {
-        // Golf is scored straight off strokes-vs-par (this `total`); the server does the same.
-        DailyXP.golfXp(total: total)
+    /// XP for a single hole based on its result vs par (under 134 / par 90 / bogey 45 / worse 0).
+    static func holeXP(_ result: FootballGolfHoleResult) -> Int {
+        DailyXP.golfHole(relativeToPar: result.relativeToPar)
+    }
+
+    /// Total XP for the round: sum of per-hole XP, capped at the mode max. This IS the XP banked.
+    static func xp(results: [FootballGolfHoleResult]) -> Int {
+        DailyXP.xp(.footballGolf, score: results.reduce(0) { $0 + holeXP($1) })
     }
 }
 

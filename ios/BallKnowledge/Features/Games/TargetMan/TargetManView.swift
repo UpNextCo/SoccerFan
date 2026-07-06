@@ -127,7 +127,7 @@ final class TargetManViewModel {
             if score >= 900 {
                 HapticManager.success()
                 confettiBurstToken += 1
-            } else if score >= 400 {
+            } else if score >= TargetManScoring.winThreshold {
                 HapticManager.light()
             }
 
@@ -162,6 +162,7 @@ struct TargetManView: View {
         ZStack {
             NavigationStack {
                 VStack(spacing: 0) {
+                    GameXPBar(current: viewModel.state.score ?? 0, max: DailyXP.maxXP(.targetMan))
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 20) {
                             TargetManChallengeCard(challenge: viewModel.state.challenge)
@@ -272,7 +273,7 @@ struct TargetManView: View {
                                 modeId: GameModeID.targetMan.rawValue,
                                 date: dailyDate,
                                 score: viewModel.state.score ?? 0,
-                                won: (viewModel.state.score ?? 0) >= 400,
+                                won: (viewModel.state.score ?? 0) >= TargetManScoring.winThreshold,
                                 context: modelContext
                             )
                         }
@@ -323,7 +324,7 @@ private struct TargetManChallengeCard: View {
                     .foregroundStyle(BKTheme.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.top, 2)
-                Text("CLOSER = MORE POINTS · 400+ PTS TO WIN")
+                Text("CLOSER = MORE XP · 350+ XP TO WIN")
                     .font(BKFont.caption(9))
                     .tracking(0.5)
                     .foregroundStyle(BKTheme.textMuted)

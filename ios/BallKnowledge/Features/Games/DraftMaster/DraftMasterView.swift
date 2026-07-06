@@ -242,7 +242,7 @@ struct DraftMasterView: View {
                                 await DailyCompletionService.recordCompletion(
                                     modeId: GameModeID.draftMaster.rawValue,
                                     date: dailyDate,
-                                    score: result.percentage,
+                                    score: result.xp,
                                     won: result.percentage >= 70,
                                     answer: viewModel.state.answerPayload(),
                                     context: modelContext
@@ -265,6 +265,7 @@ struct DraftMasterView: View {
 
     private var buildScreen: some View {
         VStack(spacing: 0) {
+            GameXPBar(current: DailyXP.draft(total: viewModel.state.yourTotal, optimal: viewModel.challenge.optimalScore), max: DailyXP.maxXP(.draftMaster))
             BattleBuildHeader(category: viewModel.category, total: viewModel.state.yourTotal)
 
             BattleConstraintsStrip(
@@ -923,7 +924,7 @@ private struct BattleResultView: View {
                                 Text("OF THE PERFECT XI")
                                     .font(BKFont.caption(10)).tracking(1).foregroundStyle(BKTheme.textMuted)
                             }
-                            Text("+\(DailyXP.xp(.draftMaster, score: result.percentage, won: result.percentage >= 70)) XP")
+                            Text("+\(result.xp) XP")
                                 .font(BKFont.headline(18))
                                 .foregroundStyle(BKTheme.accent)
                         }

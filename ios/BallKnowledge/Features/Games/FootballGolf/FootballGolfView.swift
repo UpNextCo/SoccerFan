@@ -133,7 +133,7 @@ final class FootballGolfViewModel {
     }
 
     var totalScore: Int { results.map(\.relativeToPar).reduce(0, +) }
-    var xpEarned: Int { FootballGolfScoring.xp(total: totalScore) }
+    var xpEarned: Int { FootballGolfScoring.xp(results: results) }
 
     /// Snapshot for save/restore (the course is rebuilt from the daily puzzle on resume).
     var snapshot: FootballGolfProgress {
@@ -370,6 +370,8 @@ struct FootballGolfView: View {
             VStack(spacing: 0) {
                 FootballGolfScorecardStrip(holes: vm.course.holes, results: vm.results, currentIndex: vm.currentHoleIndex)
 
+                GameXPBar(current: vm.xpEarned, max: DailyXP.maxXP(.footballGolf))
+
                 ScrollView(showsIndicators: false) {
                     if let hole = vm.currentHole, vm.phase != .finished {
                         VStack(spacing: 18) {
@@ -564,8 +566,8 @@ struct FootballGolfView: View {
                 await DailyCompletionService.recordCompletion(
                     modeId: GameModeID.footballGolf.rawValue,
                     date: dailyDate,
-                    score: total,   // strokes vs par (negative = under); server maps via golfXp
-                    won: total <= 0,
+                    score: vm.xpEarned,   // per-hole XP summed (this IS the XP)
+                    won: total <= 0,      // under/at par counts as a win for messaging
                     context: modelContext
                 )
             }

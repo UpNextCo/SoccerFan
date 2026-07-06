@@ -71,7 +71,7 @@ struct GameIntroContent {
                 tagline: "Risk it for the streak.",
                 steps: [
                     "Two players - one clears the day's threshold. Pick the one who qualifies.",
-                    "Every correct pick banks points and builds your streak; one wrong pick ends the round.",
+                    "Every correct pick banks XP and builds your streak; one wrong pick loses it all.",
                     "Cash out whenever you like - push your luck for more XP.",
                 ]
             )

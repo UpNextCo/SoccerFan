@@ -130,6 +130,7 @@ struct WorldCupXIView: View {
             NavigationStack {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
+                        GameXPBar(current: viewModel.state.correctCount * DailyXP.worldCupPerSlot, max: DailyXP.maxXP(.worldCupXI))
                         headerStrip
                         WorldCupXIPitchView(state: viewModel.state, onTapSlot: viewModel.openSlot)
                         answerSection

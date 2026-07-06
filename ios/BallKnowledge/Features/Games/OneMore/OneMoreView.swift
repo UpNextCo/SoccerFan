@@ -56,7 +56,7 @@ final class OneMoreViewModel {
         if state.prompt.qualifies(option) {
             state.streak += 1
             state.picks.append(OneMorePick(name: option.name, statValue: option.value, pointsAfter: state.currentScore))
-            lastFeedback = "+\(OneMoreScoring.points(forPick: state.streak)) pts"
+            lastFeedback = "+\(OneMoreScoring.points(forPick: state.streak, rounds: state.totalRounds)) XP"
             HapticManager.success()
             scorePulseToken += 1
             state.chosenOptionId = nil
@@ -145,6 +145,7 @@ struct OneMoreView: View {
                             // The whole run — streak, XP at risk, the pick track and the cash-out —
                             // in one panel so the button reads as "bank this run", not a floating chip.
                             VStack(spacing: 18) {
+                                GameXPBar(current: viewModel.state.currentScore, max: DailyXP.maxXP(.oneMore))
                                 OneMoreScoreHero(
                                     streak: viewModel.state.streak,
                                     currentScore: viewModel.state.currentScore,
@@ -159,7 +160,8 @@ struct OneMoreView: View {
                                         picks: viewModel.state.picks,
                                         statLabel: viewModel.state.prompt.statNoun,
                                         nextPoints: viewModel.state.nextPickPoints,
-                                        showNext: viewModel.state.isActive
+                                        showNext: viewModel.state.isActive,
+                                        rounds: viewModel.state.totalRounds
                                     )
                                 }
 
@@ -513,6 +515,7 @@ private struct OneMorePickHistory: View {
     var statLabel: String = "goals"
     var nextPoints: Int = 0
     var showNext: Bool = false
+    var rounds: Int = 1
 
     private enum Item: Identifiable {
         case pick(number: Int, pick: OneMorePick)
@@ -596,17 +599,14 @@ private struct OneMorePickHistory: View {
         }
     }
 
-    /// XP that the nth correct pick added to the at-risk pot (delta of the running projected XP).
+    /// XP the nth correct pick added (its escalating share of the max).
     private func pickXP(_ number: Int) -> Int {
-        DailyXP.projected(.oneMore, score: OneMoreScoring.score(forStreak: number))
-            - DailyXP.projected(.oneMore, score: OneMoreScoring.score(forStreak: number - 1))
+        DailyXP.oneMorePick(number, rounds: rounds)
     }
 
     /// XP the upcoming pick would add on top of the current pot.
     private func nextXP(_ points: Int) -> Int {
-        let current = OneMoreScoring.score(forStreak: picks.count)
-        return DailyXP.projected(.oneMore, score: current + points)
-            - DailyXP.projected(.oneMore, score: current)
+        DailyXP.oneMorePick(picks.count + 1, rounds: rounds)
     }
 
     private func shortName(_ name: String) -> String {

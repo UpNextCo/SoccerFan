@@ -594,8 +594,10 @@ export async function recomputeBattleScore(
     if (r && r.pos_ok && r.satisfies) total += r.stat;
   }
 
-  const score = Math.min(100, Math.round((total / puzzle.optimalScore) * 100));
-  return { score, won: score >= 70 };
+  // Score IS the XP: share of the optimal XI out of the Draft XI max (1100). won at >= 70%.
+  const pct = total / puzzle.optimalScore;
+  const score = Math.min(1100, Math.round(1100 * pct));
+  return { score, won: pct >= 0.7 };
 }
 
 export async function battlePlayers(
