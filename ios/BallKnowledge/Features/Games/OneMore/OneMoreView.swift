@@ -142,30 +142,51 @@ struct OneMoreView: View {
                         VStack(spacing: 16) {
                             OneMorePromptCard(prompt: viewModel.state.prompt)
 
-                            OneMoreScoreHero(
-                                streak: viewModel.state.streak,
-                                currentScore: viewModel.state.currentScore,
-                                nextPoints: viewModel.state.nextPickPoints,
-                                riskLabel: OneMoreScoring.riskLabel(forStreak: viewModel.state.streak),
-                                pulseToken: viewModel.scorePulseToken,
-                                isActive: viewModel.state.isActive
-                            )
+                            // The whole run — streak, XP at risk, the pick track and the cash-out —
+                            // in one panel so the button reads as "bank this run", not a floating chip.
+                            VStack(spacing: 18) {
+                                OneMoreScoreHero(
+                                    streak: viewModel.state.streak,
+                                    currentScore: viewModel.state.currentScore,
+                                    nextPoints: viewModel.state.nextPickPoints,
+                                    riskLabel: OneMoreScoring.riskLabel(forStreak: viewModel.state.streak),
+                                    pulseToken: viewModel.scorePulseToken,
+                                    isActive: viewModel.state.isActive
+                                )
 
-                            if !viewModel.state.picks.isEmpty {
-                                VStack(spacing: 20) {
+                                if !viewModel.state.picks.isEmpty {
                                     OneMorePickHistory(
                                         picks: viewModel.state.picks,
                                         statLabel: viewModel.state.prompt.statNoun,
                                         nextPoints: viewModel.state.nextPickPoints,
                                         showNext: viewModel.state.isActive
                                     )
-                                    if viewModel.canCashOut {
-                                        OneMoreCashOutButton(score: viewModel.state.currentScore) { viewModel.cashOut() }
-                                            .transition(.opacity)
-                                    }
                                 }
-                                .padding(.top, 0)
+
+                                if viewModel.canCashOut {
+                                    OneMoreCashOutButton(score: viewModel.state.currentScore) { viewModel.cashOut() }
+                                        .transition(.opacity)
+                                }
                             }
+                            .padding(.vertical, 16)
+                            .padding(.horizontal, 16)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                // Very subtle green glow behind the run that slowly breathes, like
+                                // the home hero's orbs.
+                                TimelineView(.animation(minimumInterval: 1 / 30)) { tl in
+                                    let t = tl.date.timeIntervalSinceReferenceDate
+                                    let pulse = 0.035 + 0.018 * (0.5 + 0.5 * sin(t * 0.5))
+                                    RadialGradient(
+                                        colors: [BKTheme.accent.opacity(pulse), BKTheme.accent.opacity(pulse * 0.3), .clear],
+                                        center: .center,
+                                        startRadius: 0,
+                                        endRadius: 260
+                                    )
+                                    .blur(radius: 28)
+                                }
+                                .allowsHitTesting(false)
+                            )
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 12)
@@ -317,7 +338,6 @@ private struct OneMoreChoiceSection: View {
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .padding(.bottom, 16)
-        .background(BKTheme.background)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: phase)
     }
 
