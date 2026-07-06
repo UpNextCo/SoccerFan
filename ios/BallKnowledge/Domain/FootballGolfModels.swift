@@ -70,8 +70,8 @@ struct FootballGolfCourse: Identifiable, Equatable {
 
 // MARK: - Per-hole result
 
-/// Max shots over par before the hole is force-ended (no unlimited guessing).
-let footballGolfShotCap = 4
+/// Extra guesses allowed beyond par before the hole force-settles (par 3 → 5 shots total).
+let footballGolfShotCap = 2
 
 struct FootballGolfHoleResult: Identifiable, Equatable, Codable {
     let id: String

@@ -98,9 +98,9 @@ struct GameIntroContent {
             return GameIntroContent(
                 tagline: "Nine holes. Beat par.",
                 steps: [
-                    "Each hole is a prompt - name valid answers to reach the hole's points target.",
-                    "Rarer answers are worth more; common ones get you to par the easy way.",
-                    "Go under par for big XP - every stroke over par chips it away.",
+                    "Each hole has a par — name players until you've cleared it.",
+                    "Every guess is a shot. Finish in fewer shots than par for birdies and big XP.",
+                    "Rarer names are worth more and help you clear faster.",
                 ]
             )
         case .clubChain:
