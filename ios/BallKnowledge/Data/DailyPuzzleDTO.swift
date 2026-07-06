@@ -291,7 +291,7 @@ struct FootballGolfHoleDTO: Codable, Equatable {
     let hints: [String]
 
     /// Older puzzles omit `target`; derive from stroke par.
-    var resolvedTarget: Int { target ?? par * 2 }
+    var resolvedTarget: Int { target ?? FootballGolfRules.targetPoints(forPar: par) }
 }
 
 struct FootballGolfPuzzleDTO: Codable, Equatable {

@@ -1,7 +1,7 @@
 /**
  * Football Golf generator. Each hole has:
- *   - PAR = expected number of shots (guesses) to clear the hole (2–5)
- *   - TARGET = points needed to finish (= par × 2; average solid answer ≈ 2 pts)
+ *   - PAR = expected shots to clear at a typical mix (2–5)
+ *   - TARGET = points to finish (= par + 1; one ~2-pt pick + rest common)
  * Rarity on each answer sets point value (common 1 … ultraRare 4). Prompts are broad
  * ("Played for both Arsenal and Chelsea", "Brazilian players in the Premier League"),
  * drawn from the same prompt bank that fed Tower (tower_prompts) — closed-set and
@@ -31,7 +31,7 @@ export interface GolfHole {
   id: string;
   holeNumber: number;
   par: 2 | 3 | 4 | 5;
-  /** Points to clear the hole — always par × 2 so a decent run averages ~2 pts per shot. */
+  /** Points to clear — one ~2-pt answer plus the rest common (+1 each): par 4 → 5 pts. */
   target: number;
   prompt: string;
   category: string;
@@ -191,7 +191,7 @@ export async function generateFootballGolfCourse(
     id: `${date}-h${i + 1}`,
     holeNumber: i + 1,
     par: c.par,
-    target: c.par * 2,
+    target: c.par + 1,
     prompt: c.prompt,
     category: categoryFor(c.rule, c.prompt),
     answers: c.answers,

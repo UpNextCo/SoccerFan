@@ -86,7 +86,7 @@ private func pluralizeLastWord(_ phrase: String) -> String {
 
 /// Persisted mid-round progress for resume (the course is rebuilt from the daily puzzle on open).
 struct FootballGolfProgress: Equatable, Codable {
-    static let progressVersion = 2
+    static let progressVersion = 3
     var currentHoleIndex: Int
     var results: [FootballGolfHoleResult]
     var matched: [FootballGolfAnswer]
@@ -164,9 +164,9 @@ final class FootballGolfViewModel {
         showResult = false
     }
 
-    // Par = expected shots; target = points to clear (typically par × 2).
+    // Par = expected shots at one solid pick + rest common; target = par + 1 points.
     var par: Int { currentHole?.par ?? 0 }
-    var target: Int { currentHole?.target ?? par * 2 }
+    var target: Int { currentHole?.target ?? FootballGolfRules.targetPoints(forPar: par) }
     var points: Int { matched.reduce(0) { $0 + $1.rarity.points } }
     var shots: Int { matched.count + wrongGuesses }
     var shotAllowance: Int { target + footballGolfShotCap }
@@ -697,7 +697,7 @@ private struct FootballGolfHoleStatus: View {
                     .font(BKFont.caption(9))
                     .foregroundStyle(BKTheme.textMuted)
             } else {
-                Text("Reach the target in as few shots as possible — par is the expected number of shots.")
+                Text("Reach the target in as few shots as possible — par assumes one solid pick, the rest common.")
                     .font(BKFont.caption(9))
                     .foregroundStyle(BKTheme.textMuted.opacity(0.85))
             }

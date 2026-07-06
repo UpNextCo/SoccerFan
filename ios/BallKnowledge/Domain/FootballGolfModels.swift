@@ -42,6 +42,12 @@ enum FootballGolfRarity: String, Codable, Equatable, CaseIterable {
 
 // MARK: - Course model
 
+/// Shared rules for target vs stroke par.
+enum FootballGolfRules {
+    /// Points to clear: one solid (~2 pt) answer and the rest common. Par 4 → 5 pts.
+    static func targetPoints(forPar par: Int) -> Int { par + 1 }
+}
+
 struct FootballGolfAnswer: Identifiable, Equatable, Codable {
     let id: String
     let name: String
@@ -54,7 +60,7 @@ struct FootballGolfHole: Identifiable, Equatable {
     let holeNumber: Int
     /// Expected number of shots (guesses) to clear — golf stroke par.
     let par: Int
-    /// Points needed to finish the hole (typically par × 2).
+    /// Points needed to finish the hole (par + 1 — one solid pick, rest common).
     let target: Int
     let prompt: String
     let category: String
@@ -105,7 +111,7 @@ struct FootballGolfHoleResult: Identifiable, Equatable, Codable {
         id = try c.decode(String.self, forKey: .id)
         holeNumber = try c.decode(Int.self, forKey: .holeNumber)
         par = try c.decode(Int.self, forKey: .par)
-        target = try c.decodeIfPresent(Int.self, forKey: .target) ?? par * 2
+        target = try c.decodeIfPresent(Int.self, forKey: .target) ?? FootballGolfRules.targetPoints(forPar: par)
         matched = try c.decode([FootballGolfAnswer].self, forKey: .matched)
         shots = try c.decode(Int.self, forKey: .shots)
         skipped = try c.decode(Bool.self, forKey: .skipped)
