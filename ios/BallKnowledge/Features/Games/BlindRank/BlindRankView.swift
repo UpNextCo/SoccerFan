@@ -744,8 +744,6 @@ private struct BlindRankAdjustBar: View {
     let selecting: Bool
     var onSubmit: () -> Void
 
-    private var xpSpent: Int { moveCount * BlindRankScoring.moveCost }
-
     var body: some View {
         VStack(spacing: 10) {
             HStack(alignment: .top) {
@@ -759,18 +757,9 @@ private struct BlindRankAdjustBar: View {
                         .foregroundStyle(BKTheme.textPrimary)
                 }
                 Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("XP COST")
-                        .font(BKFont.caption(9))
-                        .tracking(0.6)
-                        .foregroundStyle(BKTheme.textMuted)
-                    Text(xpSpent > 0 ? "−\(xpSpent)" : "0")
-                        .font(BKFont.headline(16))
-                        .foregroundStyle(xpSpent > 0 ? BKTheme.wrong : BKTheme.textPrimary)
-                }
             }
 
-            Text("Each swap costs \(BlindRankScoring.moveCost) XP — only move it if you're sure.")
+            Text("Rearrange as much as you like — only your final order counts.")
                 .font(BKFont.caption(10))
                 .foregroundStyle(BKTheme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)

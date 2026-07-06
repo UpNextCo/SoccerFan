@@ -267,38 +267,39 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    static let floor = 100
-    static let defaultMax = 700
+    /// Every finished game banks at least this; XP then scales continuously with performance up to the
+    /// mode's ceiling — no win/loss gate, no arbitrary "you lost" score. Mirror of the server model.
+    static let participation = 30
+    static let defaultCeiling = 800
 
-    /// XP subtracted per swap a player makes in Blind Rank's review phase (passed via `guesses`).
-    static let blindRankMoveCost = 50
+    /// Retained for source compatibility — the review phase no longer costs XP.
+    static let blindRankMoveCost = 0
 
-    /// Per-mode XP ceiling on a perfect win. A modest spread reflecting length/effort so no single
-    /// game dominates the day (biggest is only ~1.7× the smallest).
-    static let maxXP: [String: Int] = [
-        "guess_who": 600,
-        "target_man": 600,
-        "blind_rank": 700,
+    /// Per-mode XP ceiling on a perfect game, scaled to each game's effort/length (quick ~700 → longest 1000).
+    static let ceiling: [String: Int] = [
+        "guess_who": 700,
         "one_more": 700,
-        "football_bingo": 800,
-        "world_cup_xi": 900,
-        "draft_master": 900,
-        "football_tower": 900,
+        "target_man": 750,
+        "blind_rank": 800,
+        "football_bingo": 850,
         "club_chain": 850,
+        "world_cup_xi": 950,
+        "draft_master": 950,
+        "football_tower": 900,
         "football_golf": 1000,
     ]
 
-    /// Normalise a game's result to 0–1 on its own score scale. Mirror of the server switch.
-    static func performance(mode: String, score: Int, guesses: Int) -> Double {
+    /// Normalise a game's result to 0–1 on its true score scale. Continuous — no win/loss gate. Guess
+    /// Who can't be read from a single score (8-guess win vs 8-guess loss), so it uses `won`.
+    static func performance(mode: String, score: Int, guesses: Int = 1, won: Bool = true) -> Double {
         let s = Double(max(0, score))
         switch mode {
-        case "guess_who": return Double(9 - min(8, max(1, guesses))) / 8.0
+        case "guess_who": return won ? Double(9 - min(8, max(1, guesses))) / 8.0 : 0
         case "world_cup_xi": return s / 1100     // correct × 100, out of 11
         case "draft_master": return s / 100      // % of the perfect XI
         case "football_tower": return s / 15     // floors climbed
-        case "football_golf": return s / 80      // max(0, 40 − strokesVsPar×4)
-        case "blind_rank": return s / 26         // ~win at 17
-        case "target_man": return s / 620        // ~win at 400
+        case "blind_rank": return s / 30         // 10 slots × 3 — a perfect ranking is the max
+        case "target_man": return s / 1000       // exact-hit tier is the max, so precision pays
         case "one_more": return s / 1000         // banked total — more risked = more XP
         case "football_bingo": return s / 90     // 50 + remaining×3
         case "club_chain": return s / 100        // medal points: gold 100 / silver 75 / bronze 50
@@ -308,37 +309,31 @@ enum DailyXP {
 
     /// Football Golf is scored straight off strokes-vs-par (negative = under par). Mirror of the
     /// server `golfXp`: ≤ −15 → 1000, −10 → 900 (+20/stroke to −15), par → 400 (+50/stroke to −10),
-    /// over par → −50/stroke down to the 100 floor.
+    /// over par → −50/stroke down to the participation floor.
     static func golfXp(total: Int) -> Int {
         if total <= -15 { return 1000 }
         if total <= -10 { return 900 + (-total - 10) * 20 }
         if total <= 0 { return 400 + -total * 50 }
-        return max(floor, 400 - total * 50)
+        return max(participation, 400 - total * 50)
     }
 
-    /// The XP banked for this result (win applies the participation floor; a loss is the floor).
-    /// For Blind Rank, `guesses` carries the number of review-phase swaps and each one costs XP.
+    /// The XP banked for this result: participation base + performance up to the mode's ceiling.
     static func xp(mode: String, score: Int, guesses: Int = 1, won: Bool) -> Int {
         if mode == "football_golf" { return golfXp(total: score) }
-        guard won else { return floor }
-        let cap = maxXP[mode] ?? defaultMax
-        let perf = min(1.0, max(0.0, performance(mode: mode, score: score, guesses: guesses)))
-        var value = max(floor, Int((perf * Double(cap)).rounded()))
-        if mode == "blind_rank" {
-            value = max(floor, value - guesses * blindRankMoveCost)
-        }
-        return value
+        let cap = ceiling[mode] ?? defaultCeiling
+        let perf = min(1.0, max(0.0, performance(mode: mode, score: score, guesses: guesses, won: won)))
+        return Int((Double(participation) + perf * Double(cap - participation)).rounded())
     }
 
     static func xp(_ mode: GameModeID, score: Int, guesses: Int = 1, won: Bool) -> Int {
         xp(mode: mode.rawValue, score: score, guesses: guesses, won: won)
     }
 
-    /// Live "so far / at risk" XP during play. Same curve as `xp`, but WITHOUT the participation floor
-    /// so it can read 0 and climb (used by One More's running meter — the XP you'd bank / lose).
+    /// Live "so far / at risk" XP during play — the performance portion above the participation base,
+    /// so it reads 0 and climbs (used by One More's running meter — the XP you'd bank / lose).
     static func projected(_ mode: GameModeID, score: Int, guesses: Int = 1) -> Int {
-        let cap = maxXP[mode.rawValue] ?? defaultMax
+        let cap = ceiling[mode.rawValue] ?? defaultCeiling
         let perf = min(1.0, max(0.0, performance(mode: mode.rawValue, score: score, guesses: guesses)))
-        return Int((perf * Double(cap)).rounded())
+        return Int((perf * Double(cap - participation)).rounded())
     }
 }

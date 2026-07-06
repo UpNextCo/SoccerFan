@@ -70,74 +70,69 @@ function yesterdayUTC(): string {
 }
 
 // ---- XP model ------------------------------------------------------------------------------------
-// Every game contributes a BOUNDED, comparable amount of XP so no single game can dominate the day:
-//   xp = won ? max(FLOOR, round(performance × MAX_XP[mode])) : FLOOR
-// `performance` is each game's result normalised to 0–1 (so "score" meaning different things per game
-// stops mattering), and MAX_XP is a modest spread reflecting length/effort — the biggest game is only
-// ~1.7× the smallest, never 10×. A loss still earns the small participation FLOOR.
-const XP_FLOOR = 100;
-const DEFAULT_MAX_XP = 700;
-const MAX_XP: Record<string, number> = {
-  guess_who: 600,
-  target_man: 600,
-  blind_rank: 700,
-  one_more: 700,
-  football_bingo: 800,
-  world_cup_xi: 900,
-  draft_master: 900,
+// XP scales CONTINUOUSLY with how well you played — there is no win/loss gate and no arbitrary flat
+// "you lost" score. A finished game always banks at least PARTICIPATION_XP; a great game reaches the
+// mode's ceiling; everything in between slides smoothly (the way Football Golf already worked). This
+// kills the old cliffs (e.g. 69% Draft → 100 vs 70% → 630).
+//   xp = round(PARTICIPATION_XP + performance × (ceiling − PARTICIPATION_XP))
+// `performance` is each game's result on its TRUE 0–1 scale (denominators are the real maxima, so
+// precision is rewarded). Ceilings scale with each game's effort/length: quick games ~700, the
+// longest ~1000. MIRRORED CLIENT-SIDE in ios/BallKnowledge/Domain/GameModels.swift (DailyXP) — keep
+// the two in lockstep.
+const PARTICIPATION_XP = 30;
+const DEFAULT_CEILING = 800;
+const XP_CEILING: Record<string, number> = {
+  guess_who: 700,       // quick — one player, ≤8 guesses
+  one_more: 700,        // quick — binary rounds
+  target_man: 750,      // medium — estimate a 5-player total
+  blind_rank: 800,      // medium — order 10 by a stat
+  football_bingo: 850,  // medium — fill 16 tiles under a timer
+  club_chain: 850,      // medium — build a shared-club chain
+  world_cup_xi: 950,    // long — name 11 from clues
+  draft_master: 950,    // long — build 11 under constraints
   football_tower: 900,
-  club_chain: 850,
-  football_golf: 1000,
+  football_golf: 1000,  // longest — 9 holes
 };
 
 const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
 
 /**
- * Normalise a game's win result to 0–1 using each game's real score scale, so the number a game shows
- * on-screen IS the XP it banks. Only called for wins — a loss is a flat participation FLOOR.
- * MIRRORED CLIENT-SIDE in ios/BallKnowledge/Domain/DailyXP.swift — keep the two in lockstep.
+ * Normalise a game's result to 0–1 on its real score scale (the number a game shows IS the XP it
+ * banks). Continuous — no win/loss gate. Guess Who is the one game whose result can't be read off a
+ * single score (an 8-guess win vs an 8-guess loss), so it uses the `won` flag to separate them.
  */
-function modePerformance(modeId: string, score: number, guesses: number): number {
+function modePerformance(modeId: string, score: number, guesses: number, won: boolean): number {
   const s = Math.max(0, score);
   switch (modeId) {
-    case 'guess_who': return (9 - Math.max(1, Math.min(8, guesses))) / 8; // fewer guesses → higher
+    case 'guess_who': return won ? (9 - Math.max(1, Math.min(8, guesses))) / 8 : 0; // fewer guesses → higher
     case 'world_cup_xi': return s / 1100;   // correct × 100, out of 11
     case 'draft_master': return s / 100;    // % of the perfect XI
     case 'football_tower': return s / 15;   // floors climbed
-    case 'football_golf': return s / 80;    // client sends max(0, 40 − strokesVsPar×4); par≈0.5
-    case 'blind_rank': return s / 26;       // ~win at 17
-    case 'target_man': return s / 620;      // ~win at 400
-    case 'one_more': return s / 1000;       // banked total — more risked = more XP (5-in-a-row ≈ full)
-    case 'football_bingo': return s / 90;   // 50 + remaining×3 — fewer players used = more XP
-    case 'club_chain': return s / 100;      // medal points: gold 100 / silver 75 / bronze 50
+    case 'blind_rank': return s / 30;        // 10 slots × 3 — a perfect ranking is the max
+    case 'target_man': return s / 1000;      // exact-hit tier = the max, so precision pays
+    case 'one_more': return s / 1000;        // banked total — more risked = more XP (5-in-a-row ≈ full)
+    case 'football_bingo': return s / 90;    // 50 + remaining×3 — fewer players used = more XP
+    case 'club_chain': return s / 100;       // medal points: gold 100 / silver 75 / bronze 50
     default: return 0.8;
   }
 }
 
-// Blind Rank lets players swap placements in a review step before submitting; each swap costs XP
-// (mirrored client-side in DailyXP.blindRankMoveCost). The swap count arrives in `guesses`.
-const BLIND_RANK_MOVE_COST = 50;
-
 // Football Golf is scored directly off strokes-vs-par (negative = under). It's the longest game and
-// par/under-par is fairly attainable, so the curve is deliberately demanding at the top and gives
-// graduated (not flat) XP when over par. `score` carries the strokes-relative-to-par total.
-//   ≤ −15 → 1000 · −10 → 900 (+20/stroke to −15) · par → 400 (+50/stroke to −10) · over → −50/stroke, floor 100
+// par/under-par is fairly attainable, so the curve is demanding at the top and gives graduated XP as
+// you go over par (never a flat "loss"). `score` carries the strokes-relative-to-par total.
+//   ≤ −15 → 1000 · −10 → 900 (+20/stroke to −15) · par → 400 (+50/stroke to −10) · over → −50/stroke
 function golfXp(total: number): number {
   if (total <= -15) return 1000;
   if (total <= -10) return 900 + (-total - 10) * 20;
   if (total <= 0) return 400 + -total * 50;
-  return Math.max(XP_FLOOR, 400 - total * 50);
+  return Math.max(PARTICIPATION_XP, 400 - total * 50);
 }
 
 function computeXp(modeId: string, score: number, guesses: number, won: boolean): number {
   if (modeId === 'football_golf') return golfXp(score);
-  if (!won) return XP_FLOOR;
-  const max = MAX_XP[modeId] ?? DEFAULT_MAX_XP;
-  let xp = Math.max(XP_FLOOR, Math.round(clamp01(modePerformance(modeId, score, guesses)) * max));
-  if (modeId === 'blind_rank') {
-    xp = Math.max(XP_FLOOR, xp - guesses * BLIND_RANK_MOVE_COST);
-  }
-  return xp;
+  const ceiling = XP_CEILING[modeId] ?? DEFAULT_CEILING;
+  const perf = clamp01(modePerformance(modeId, score, guesses, won));
+  return Math.round(PARTICIPATION_XP + perf * (ceiling - PARTICIPATION_XP));
 }
 
 export function getGameModes() {
