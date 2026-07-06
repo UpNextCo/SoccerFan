@@ -8,10 +8,11 @@ enum GameModeTileArt {
         "world_cup_xi": "worldcup11",
     ]
 
+    /// The bundle filename to load (after overrides), or nil if no tile art exists.
     static func bundleImageName(for modeId: String) -> String? {
         let resolvedId = GameModeCatalog.normalizedModeId(modeId)
         let imageName = bundleImageNameOverrides[resolvedId] ?? resolvedId
-        return imageURL(named: imageName) != nil ? resolvedId : nil
+        return imageURL(named: imageName) != nil ? imageName : nil
     }
 
     static func bundleImageURL(for modeId: String) -> URL? {

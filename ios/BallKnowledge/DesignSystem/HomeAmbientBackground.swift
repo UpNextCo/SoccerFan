@@ -145,3 +145,47 @@ private func ambientGlowOrb(
         .position(x: x, y: y)
         .blendMode(.plusLighter)
 }
+
+// MARK: - Game stadium backdrop
+
+/// Shared in-game atmosphere: faint floodlit stadium photo fading to page-black, plus the same
+/// subtle drifting green orbs used on One More / the home hero.
+struct StadiumBackground: View {
+    /// Orb/wash strength relative to the home hero (keep subtle so cards stay readable).
+    var glowIntensity: Double = 0.45
+
+    var body: some View {
+        ZStack {
+            stadiumPhotoLayer
+            AmbientGlowOverlay(intensity: glowIntensity)
+        }
+        .ignoresSafeArea()
+    }
+
+    private var stadiumPhotoLayer: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                BKTheme.background
+                GameModeBundleImage(name: "stadium")
+                    .scaledToFill()
+                    .frame(width: geo.size.width, height: geo.size.height * 0.88, alignment: .top)
+                    .clipped()
+                    .grayscale(0.5)
+                    .blur(radius: 4)
+                    .opacity(0.03)
+                    .overlay(
+                        LinearGradient(
+                            stops: [
+                                .init(color: BKTheme.background.opacity(0.0), location: 0.0),
+                                .init(color: BKTheme.background.opacity(0.0), location: 0.30),
+                                .init(color: BKTheme.background.opacity(0.75), location: 0.60),
+                                .init(color: BKTheme.background, location: 0.78),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+        }
+    }
+}

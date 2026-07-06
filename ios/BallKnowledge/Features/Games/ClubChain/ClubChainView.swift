@@ -167,7 +167,7 @@ struct ClubChainView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 32)
                 }
-                .background(BKTheme.background)
+                .background(StadiumBackground())
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {

@@ -390,46 +390,71 @@ struct GuessWhoProgressBar: View {
         DailyXP.guessWho(guesses: guessNumber, solved: true)
     }
 
-    /// Which segment (0-based) shows the green solve-now label.
-    private var activeLabelIndex: Int? {
-        if isComplete {
-            return won ? guessesUsed - 1 : nil
-        }
+    /// The segment (0-based) for the guess you're on now — or the one you solved on.
+    private var currentSegment: Int? {
+        if isComplete { return won ? guessesUsed - 1 : nil }
         guard guessesUsed < maxGuesses else { return nil }
         return guessesUsed
     }
 
-    var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 8) {
-                ForEach(0..<maxGuesses, id: \.self) { i in
-                    Capsule()
-                        .fill(i < guessesUsed ? BKTheme.accent : BKTheme.cardElevated)
-                        .frame(height: 4)
-                }
-            }
+    private var xpLabel: String? {
+        guard let seg = currentSegment else { return isComplete && !won ? "0XP" : nil }
+        let xp = solveNowXP(guessNumber: seg + 1)
+        return "\(xp)XP"
+    }
 
-            HStack(spacing: 8) {
-                ForEach(0..<maxGuesses, id: \.self) { i in
-                    if activeLabelIndex == i {
-                        Text("\(solveNowXP(guessNumber: i + 1)) XP")
+    var body: some View {
+        VStack(spacing: 8) {
+            GeometryReader { geo in
+                let spacing: CGFloat = 8
+                let segmentW = (geo.size.width - spacing * CGFloat(max(0, maxGuesses - 1))) / CGFloat(maxGuesses)
+
+                ZStack(alignment: .topLeading) {
+                    HStack(spacing: spacing) {
+                        ForEach(0..<maxGuesses, id: \.self) { i in
+                            let spent = i < guessesUsed
+                            let isCurrent = !isComplete && i == guessesUsed
+
+                            Capsule()
+                                .fill(spent ? BKTheme.accent : BKTheme.cardElevated)
+                                .overlay {
+                                    if isCurrent {
+                                        Capsule()
+                                            .stroke(BKTheme.accent, lineWidth: 1)
+                                    }
+                                }
+                                .frame(height: isCurrent ? 5 : 4)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .frame(height: 5)
+
+                    if let seg = currentSegment, let label = xpLabel {
+                        Text(label)
                             .font(.system(size: 10, weight: .heavy, design: .rounded))
-                            .tracking(0.3)
                             .foregroundStyle(BKTheme.accent)
-                            .frame(maxWidth: .infinity)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .frame(width: segmentW)
+                            .position(
+                                x: segmentW * 0.5 + CGFloat(seg) * (segmentW + spacing),
+                                y: 20
+                            )
                             .transition(.asymmetric(
                                 insertion: .opacity.combined(with: .move(edge: .top)),
                                 removal: .opacity
                             ))
-                    } else {
-                        Color.clear
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 14)
+                    } else if isComplete && !won {
+                        Text("0XP")
+                            .font(.system(size: 10, weight: .heavy, design: .rounded))
+                            .foregroundStyle(BKTheme.textMuted)
+                            .position(x: geo.size.width * 0.5, y: 20)
                     }
                 }
             }
-            .frame(height: 14)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: activeLabelIndex)
+            .frame(height: 28)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: guessesUsed)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isComplete)
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)

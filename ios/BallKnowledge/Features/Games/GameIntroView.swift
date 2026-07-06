@@ -250,6 +250,6 @@ struct GameIntroView: View {
             .padding(.bottom, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(BKTheme.background)
+        .background(StadiumBackground())
     }
 }
