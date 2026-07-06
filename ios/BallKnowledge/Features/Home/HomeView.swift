@@ -770,10 +770,37 @@ struct DailyGameHost: View {
     let allowReplay: Bool
     let onFinished: () -> Void
 
+    // Consistent "how to play" screen shown before every game (unless the player chose to skip it).
+    @State private var showIntro: Bool
+
+    init(mode: GameModeID, dailyBundle: DailyBundleDTO?, allowReplay: Bool, onFinished: @escaping () -> Void) {
+        self.mode = mode
+        self.dailyBundle = dailyBundle
+        self.allowReplay = allowReplay
+        self.onFinished = onFinished
+        _showIntro = State(initialValue: !GameIntroPreferences.isHidden(mode))
+    }
+
+    var body: some View {
+        if showIntro {
+            GameIntroView(
+                mode: mode,
+                onPlay: { withAnimation(.easeInOut(duration: 0.2)) { showIntro = false } },
+                onPlayAndHide: {
+                    GameIntroPreferences.hide(mode)
+                    withAnimation(.easeInOut(duration: 0.2)) { showIntro = false }
+                },
+                onClose: onFinished
+            )
+        } else {
+            gameContent
+        }
+    }
+
     // Every game is server-puzzle-only: if today's puzzle isn't in the bundle we show the
     // "unavailable" placeholder rather than silently swapping in a local practice puzzle that
     // wouldn't match what everyone else is playing.
-    var body: some View {
+    @ViewBuilder private var gameContent: some View {
         Group {
             switch mode {
             case .guessWho:
