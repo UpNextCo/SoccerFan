@@ -24,7 +24,7 @@ enum GameIntroPreferences {
     }
 }
 
-/// The "how to play" copy for each game — a one-line tagline plus a few concise steps.
+/// The "how to play" copy for each game - a one-line tagline plus a few concise steps.
 struct GameIntroContent {
     let tagline: String
     let steps: [String]
@@ -37,7 +37,7 @@ struct GameIntroContent {
                 steps: [
                     "Each guess reveals how you compare on nationality, league, club, position, age and foot.",
                     "Green = exact match, yellow = close, arrows point higher or lower on age.",
-                    "Crack it in as few guesses as you can — fewer guesses, more XP.",
+                    "Crack it in as few guesses as you can - fewer guesses, more XP.",
                 ]
             )
         case .targetMan:
@@ -45,7 +45,7 @@ struct GameIntroContent {
                 tagline: "Hit the stat target.",
                 steps: [
                     "Pick 5 players whose combined total for the day's stat lands as close to the target as possible.",
-                    "You don't need to be exact — the closer you get, the more XP you bank.",
+                    "You don't need to be exact - the closer you get, the more XP you bank.",
                 ]
             )
         case .blindRank:
@@ -53,7 +53,7 @@ struct GameIntroContent {
                 tagline: "Rank them by the hidden stat.",
                 steps: [
                     "Place 10 players in order, highest to lowest, for the day's stat.",
-                    "Rearrange as much as you like — only your final order counts.",
+                    "Rearrange as much as you like - only your final order counts.",
                     "The closer each player is to their true spot, the more XP.",
                 ]
             )
@@ -61,7 +61,7 @@ struct GameIntroContent {
             return GameIntroContent(
                 tagline: "Fill the grid before the clock runs out.",
                 steps: [
-                    "Every square is a clue — a nationality, a club, a trophy or a stat.",
+                    "Every square is a clue - a nationality, a club, a trophy or a stat.",
                     "Name a player who fits each square. Careful: a player can only be used once.",
                     "The more of your line-up you have left when the grid's full, the more XP.",
                 ]
@@ -70,9 +70,9 @@ struct GameIntroContent {
             return GameIntroContent(
                 tagline: "Risk it for the streak.",
                 steps: [
-                    "Two players — one clears the day's threshold. Pick the one who qualifies.",
+                    "Two players - one clears the day's threshold. Pick the one who qualifies.",
                     "Every correct pick banks points and builds your streak; one wrong pick ends the round.",
-                    "Cash out whenever you like — push your luck for more XP.",
+                    "Cash out whenever you like - push your luck for more XP.",
                 ]
             )
         case .draftMaster:
@@ -80,7 +80,7 @@ struct GameIntroContent {
                 tagline: "Build the highest-scoring XI.",
                 steps: [
                     "Drag each constraint chip onto a position on the pitch.",
-                    "Pick a player who fits the chip and plays that role — they score their total for the day's stat.",
+                    "Pick a player who fits the chip and plays that role - they score their total for the day's stat.",
                     "The closer you get to the perfect XI, the more XP.",
                 ]
             )
@@ -89,7 +89,7 @@ struct GameIntroContent {
                 tagline: "Name the mystery World Cup XI.",
                 steps: [
                     "Each position has a clue pointing to one specific World Cup player.",
-                    "Name as many as you can — get 6 of 11 to win.",
+                    "Name as many as you can - get 6 of 11 to win.",
                     "Every correct pick adds XP.",
                 ]
             )
@@ -97,9 +97,9 @@ struct GameIntroContent {
             return GameIntroContent(
                 tagline: "Nine holes. Beat par.",
                 steps: [
-                    "Each hole is a prompt — name valid answers to reach the hole's points target.",
+                    "Each hole is a prompt - name valid answers to reach the hole's points target.",
                     "Rarer answers are worth more; common ones get you to par the easy way.",
-                    "Go under par for big XP — every stroke over par chips it away.",
+                    "Go under par for big XP - every stroke over par chips it away.",
                 ]
             )
         case .clubChain:
@@ -108,7 +108,7 @@ struct GameIntroContent {
                 steps: [
                     "Connect the two players through a chain of real teammates.",
                     "Each step must be two players who shared a club at the same time.",
-                    "Fewer steps earns a better medal — and more XP.",
+                    "Fewer steps earns a better medal - and more XP.",
                 ]
             )
         case .footballTower:
@@ -175,6 +175,9 @@ struct GameIntroView: View {
                         BKTheme.tileIconBackdrop
                         GameModeArtImage(modeId: mode.rawValue)
                             .scaledToFill()
+                            // The tile PNGs sit high in their canvas; nudge the art down so it's
+                            // centred nicely within the banner rather than crowding the top.
+                            .offset(y: 30)
                     }
                     .frame(height: 200)
                     .frame(maxWidth: .infinity)
@@ -218,7 +221,7 @@ struct GameIntroView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 8)
+                .padding(.top, 28)
                 .padding(.bottom, 24)
             }
 

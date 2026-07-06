@@ -359,6 +359,9 @@ private struct OneMoreChoiceCard: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .frame(minHeight: 26, alignment: .top)
+                    .offset(y: 6) // nudge the name down closer to the position line
+
+
 
                 HStack(spacing: 6) {
                     Text(GuessWhoDisplay.nationalityFlag(option.nationality))
@@ -599,32 +602,26 @@ private struct OneMoreCashOutButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
+            HStack(spacing: 8) {
                 Text("💰")
-                    .font(.system(size: 30))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("CASH OUT")
-                        .font(BKFont.headline(15))
-                        .foregroundStyle(BKTheme.textPrimary)
-                    HStack(alignment: .firstTextBaseline, spacing: 3) {
-                        Text("\(DailyXP.projected(.oneMore, score: score))")
-                            .font(BKFont.headline(20))
-                            .foregroundStyle(BKTheme.accent)
-                            .contentTransition(.numericText())
-                        Text("XP")
-                            .font(BKFont.caption(10))
-                            .foregroundStyle(BKTheme.accent)
-                    }
+                    .font(.system(size: 18))
+                Text("CASH OUT")
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("\(DailyXP.projected(.oneMore, score: score))")
+                        .font(BKFont.headline(16))
+                        .foregroundStyle(BKTheme.accent)
+                        .contentTransition(.numericText())
+                    Text("XP")
+                        .font(BKFont.caption(10))
+                        .foregroundStyle(BKTheme.accent)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(BKTheme.background)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(BKTheme.accent.opacity(0.45), lineWidth: 1)
-            )
+            .padding(.vertical, 12)
+            .padding(.horizontal, 22)
+            .background(BKTheme.cardElevated)
+            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -821,9 +818,9 @@ struct StadiumBackground: View {
                     .scaledToFill()
                     .frame(width: geo.size.width, height: geo.size.height * 0.88, alignment: .top)
                     .clipped()
-                    .grayscale(0.7)
-                    .blur(radius: 3)
-                    .opacity(0.15)
+                    .grayscale(0.5)
+                    .blur(radius: 4)
+                    .opacity(0.03)
                     .overlay(
                         LinearGradient(
                             stops: [

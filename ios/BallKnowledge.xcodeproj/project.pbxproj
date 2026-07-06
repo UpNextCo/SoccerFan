@@ -42,6 +42,7 @@
 		88EB84ACFC9E37B94496D15C /* FootballConfettiView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0CE8481DD02104E19C347D4 /* FootballConfettiView.swift */; };
 		8DFB5F6E7D036B5D0DB29D94 /* BallKnowledgeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439678CCB8A1C520BF7740D4 /* BallKnowledgeApp.swift */; };
 		8ED7355BB202C63602F03672 /* OnboardingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5237449777A4A7CE0FE9EDE /* OnboardingViews.swift */; };
+		9589745ED7B8042439D22F23 /* GameIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39C02E1E442AD09EF1F2D15 /* GameIntroView.swift */; };
 		97B7A592988DD02E168C095B /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A36DF66C77EDAE47F240AEB4 /* AuthManager.swift */; };
 		988F464045F91747F79679EB /* GameModeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF087E8BC4A2736630E7F1C /* GameModeCatalog.swift */; };
 		9FB86F0EEA7D92139B5A4E28 /* TargetManView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68FA75A0F34C332CA2C9D571 /* TargetManView.swift */; };
@@ -123,6 +124,7 @@
 		B9497FB431AA5C1D5BBB301C /* DraftMasterModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftMasterModels.swift; sourceTree = "<group>"; };
 		BCD20AA2885C8CDFA96F2DB6 /* DailyChallengeResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyChallengeResolver.swift; sourceTree = "<group>"; };
 		C0CE8481DD02104E19C347D4 /* FootballConfettiView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballConfettiView.swift; sourceTree = "<group>"; };
+		D39C02E1E442AD09EF1F2D15 /* GameIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameIntroView.swift; sourceTree = "<group>"; };
 		D61D50E84ABC773CA41236A2 /* TargetManStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetManStats.swift; sourceTree = "<group>"; };
 		DE9A8C982B1DE1F9F4938104 /* LeagueBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeagueBadge.swift; sourceTree = "<group>"; };
 		E36181E830587EC21B5EC0E7 /* OneMoreSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneMoreSeed.swift; sourceTree = "<group>"; };
@@ -151,6 +153,7 @@
 		11FB6F86D341AF8C639D122C /* Games */ = {
 			isa = PBXGroup;
 			children = (
+				D39C02E1E442AD09EF1F2D15 /* GameIntroView.swift */,
 				EFFB69CC923F7C592BB79AD8 /* BlindRank */,
 				FEBB8F19CAC1A772B0F84A5E /* ClubChain */,
 				E4129D0FF790D09F713B2014 /* DraftMaster */,
@@ -479,6 +482,7 @@
 				0B5B987AADC8C8AA3EA9A987 /* FootballTowerSeed.swift in Sources */,
 				460647B5081D7FA601FE9917 /* FootballTowerView.swift in Sources */,
 				C72E8932256B8B2315ADDBA4 /* GameEngine.swift in Sources */,
+				9589745ED7B8042439D22F23 /* GameIntroView.swift in Sources */,
 				988F464045F91747F79679EB /* GameModeCatalog.swift in Sources */,
 				A49D0D55AE15A06620BDC53F /* GameModeTileArt.swift in Sources */,
 				5BEE19F85576BD840CBA34BD /* GameModels.swift in Sources */,
