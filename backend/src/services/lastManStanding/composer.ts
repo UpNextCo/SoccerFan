@@ -38,7 +38,7 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
     const builder = BUILDERS[slotDef.type];
     let built: LMSBuilderResult | null = null;
 
-    for (let attempt = 0; attempt < 8 && !built; attempt += 1) {
+    for (let attempt = 0; attempt < 16 && !built; attempt += 1) {
       const ctx: LMSBuildContext = {
         date,
         slot: slotDef.slot,
@@ -56,7 +56,10 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
       usedKeys.add(candidate.repeatKey);
     }
 
-    if (!built) return null;
+    if (!built) {
+      console.warn(`LMS compose failed at slot ${slotDef.slot} (${slotDef.type}) after 16 attempts`);
+      return null;
+    }
     questions.push(built.question);
     answers.push(built.answer);
   }

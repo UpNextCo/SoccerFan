@@ -54,11 +54,11 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
       if (names.length !== 3) return false;
       const maxAssoc = maxClueAssociation(ctx.difficulty.tier);
       for (const name of names) {
-        const player = ctx.famousPool?.find((f) => f.name === name);
-        if (!player) return false;
-        const assoc = index.associationByPlayer.get(player.id)?.get(answerClub) ?? 0;
+        const playerId = index.playerIdByName.get(name);
+        if (!playerId) return false;
+        const assoc = index.associationByPlayer.get(playerId)?.get(answerClub) ?? 0;
         if (assoc > maxAssoc) return false;
-        if (index.primaryClubByPlayer.get(player.id) === answerClub) return false;
+        if (index.primaryClubByPlayer.get(playerId) === answerClub) return false;
       }
       return true;
     }

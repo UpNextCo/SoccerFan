@@ -14,6 +14,7 @@ export interface PlayerClubIndex {
   leagueIdsByPlayer: Map<string, Set<number>>;
   leagueByClub: Map<string, number>;
   prestigeByPlayer: Map<string, number>;
+  playerIdByName: Map<string, string>;
 }
 
 let cachedIndex: PlayerClubIndex | null = null;
@@ -27,6 +28,16 @@ export async function buildPlayerClubIndex(pool: FamousPlayer[]): Promise<Player
 
   const nations = await nationSet();
   const prestigeByPlayer = new Map(pool.map((p) => [p.id, p.prestige]));
+
+  const nameRows = (await db.execute(sql`
+    SELECT id, name, (market_value_tier * 10)::int AS prestige
+    FROM players WHERE market_value_tier >= 4
+  `)) as unknown as Array<{ id: string; name: string; prestige: number }>;
+  const playerIdByName = new Map<string, string>();
+  for (const r of nameRows) {
+    playerIdByName.set(r.name, r.id);
+    if (!prestigeByPlayer.has(r.id)) prestigeByPlayer.set(r.id, r.prestige);
+  }
 
   const statRows = (await db.execute(sql`
     WITH per_club AS (
@@ -125,6 +136,7 @@ export async function buildPlayerClubIndex(pool: FamousPlayer[]): Promise<Player
     leagueIdsByPlayer,
     leagueByClub,
     prestigeByPlayer,
+    playerIdByName,
   };
   return cachedIndex;
 }
@@ -144,19 +156,21 @@ export function prestigeSpread(index: PlayerClubIndex, ids: string[]): number {
   return Math.max(...values) - Math.min(...values);
 }
 
-export function minCareerOverlapClubs(tier: LMSTier): number {
-  if (tier === 'easy') return 1;
-  if (tier === 'medium') return 1;
-  if (tier === 'signature') return 2;
-  return 2;
+export function minCareerOverlapClubs(_tier: LMSTier): number {
+  return 1;
+}
+
+/** Prefer tighter overlap when enough candidates exist. */
+export function preferredCareerOverlap(tier: LMSTier): number {
+  return tier === 'signature' ? 2 : 1;
 }
 
 /** Max association for which-club clue players (lower = harder to guess from names). */
 export function maxClueAssociation(tier: LMSTier): number {
-  if (tier === 'easy') return 0.42;
-  if (tier === 'medium') return 0.32;
-  if (tier === 'signature') return 0.24;
-  return 0.28;
+  if (tier === 'easy') return 0.45;
+  if (tier === 'medium') return 0.36;
+  if (tier === 'signature') return 0.28;
+  return 0.32;
 }
 
 export function maxOddPrestigeSpread(tier: LMSTier): number {

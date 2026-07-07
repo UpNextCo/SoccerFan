@@ -54,9 +54,9 @@ async function buildSharedClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
     grouped AS (
       SELECT team_name, array_agg(player_id ORDER BY assoc DESC) AS ids, count(*)::int AS n
       FROM scored
-      WHERE assoc BETWEEN 0.12 AND 0.55
+      WHERE assoc BETWEEN 0.08 AND 0.65
       GROUP BY team_name
-      HAVING count(*) >= 6
+      HAVING count(*) >= 5
     )
     SELECT team_name, ids FROM grouped ORDER BY n DESC LIMIT 80
   `)) as unknown as Array<{ team_name: string; ids: string[] }>;
@@ -79,11 +79,11 @@ async function buildSharedClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
     const outsiders = pool.filter((p) => {
       if (memberIds.has(p.id)) return false;
       if (index.clubsByPlayer.get(p.id)?.has(row.team_name)) return false;
-      if (!playerPlayedInLeague(index, p.id, leagueId)) return false;
-      if (Math.abs(p.prestige - avgPrestige) > maxSpread) return false;
+      if (leagueId != null && !playerPlayedInLeague(index, p.id, leagueId)) return false;
+      if (Math.abs(p.prestige - avgPrestige) > maxSpread + 4) return false;
       return true;
     });
-    if (outsiders.length < 3) continue;
+    if (outsiders.length < 1) continue;
 
     const odd = outsiders[seededIndex(`${ctx.seed}:oddp`, outsiders.length)]!;
     const fourIds = [...three.map((p) => p.id), odd.id];

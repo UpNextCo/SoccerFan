@@ -4,8 +4,8 @@ import { isNationalTeam, isYouthOrReserveSide, nationSet } from '../../../utils/
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
 import {
   careerPrestigeBand,
-  minCareerOverlapClubs,
   pickPlausibleCareerDistractors,
+  preferredCareerOverlap,
 } from '../plausibility.js';
 import { famousPlayers, makeOptionId, seededIndex } from '../shared.js';
 
@@ -24,7 +24,8 @@ export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderR
   if (!index || !pool) return null;
 
   const nations = await nationSet();
-  const minOverlap = minCareerOverlapClubs(ctx.difficulty.tier);
+  const minOverlap = 1;
+  const preferredOverlap = preferredCareerOverlap(ctx.difficulty.tier);
   const band = careerPrestigeBand(ctx.difficulty.tier);
 
   const rows = (await db.execute(sql`
@@ -69,17 +70,30 @@ export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderR
     if (path.length < 3 || new Set(path).size < path.length) continue;
 
     const targetPrestige = index.prestigeByPlayer.get(row.player_id) ?? row.prestige;
-    const distractors = pickPlausibleCareerDistractors(
+    let distractors = pickPlausibleCareerDistractors(
       pool,
       index,
       row.player_id,
       targetPrestige,
       row.nationality,
       path,
-      minOverlap,
+      preferredOverlap,
       band,
       `${ctx.seed}:d`
     );
+    if (distractors.length < 3) {
+      distractors = pickPlausibleCareerDistractors(
+        pool,
+        index,
+        row.player_id,
+        targetPrestige,
+        row.nationality,
+        path,
+        minOverlap,
+        band,
+        `${ctx.seed}:d2`
+      );
+    }
     if (distractors.length < 3) continue;
 
     const repeatKey = `cp:${row.player_id}:${path.join('>')}`;
