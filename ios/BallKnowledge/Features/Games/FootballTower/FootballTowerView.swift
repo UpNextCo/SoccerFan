@@ -591,7 +591,7 @@ private struct FootballTowerQuestionCard: View {
                 .font(BKFont.caption(10))
                 .tracking(0.8)
                 .foregroundStyle(BKTheme.textMuted)
-            Text(question.prompt)
+            Text(PromptDisplay.tower(question.prompt))
                 .font(BKFont.headline(17))
                 .foregroundStyle(BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
