@@ -107,18 +107,17 @@ function scoreLastManStanding(row: PuzzleRow, answer: unknown): ServerScore | nu
   const picks = (answer as { picks?: unknown })?.picks;
   if (!Array.isArray(picks) || picks.some((x) => typeof x !== 'string')) return null;
 
-  const stored = row.answerJson as { correctOptionIds?: unknown };
-  let correctIds = stored?.correctOptionIds;
-  if (!Array.isArray(correctIds)) {
-    const questions = (row.puzzleJson as { questions?: Array<{ id: string; options: Array<{ id: string }> }> })?.questions;
-    const date = (row.puzzleJson as { date?: string })?.date ?? '';
-    if (!Array.isArray(questions)) return null;
-    correctIds = questions.map((q) => {
-      const h = hashStr(`${date}-lms-${q.id}`);
-      return q.options[h % q.options.length]?.id;
-    });
+  const stored = row.answerJson as {
+    questions?: Array<{ questionId: string; correctOptionId: string }>;
+    correctOptionIds?: string[];
+  };
+
+  let expected: string[] = [];
+  if (Array.isArray(stored?.questions) && stored.questions.length > 0) {
+    expected = stored.questions.map((q) => q.correctOptionId);
+  } else if (Array.isArray(stored?.correctOptionIds)) {
+    expected = stored.correctOptionIds as string[];
   }
-  const expected = correctIds as string[];
   if (expected.length === 0) return null;
 
   let streak = 0;
@@ -129,15 +128,6 @@ function scoreLastManStanding(row: PuzzleRow, answer: unknown): ServerScore | nu
   const perQuestion = expected.length > 0 ? Math.round(900 / expected.length) : 0;
   const score = Math.min(900, streak * perQuestion);
   return { score, won: streak >= expected.length };
-}
-
-function hashStr(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i += 1) {
-    h = (h << 5) - h + s.charCodeAt(i);
-    h |= 0;
-  }
-  return Math.abs(h);
 }
 
 // ---- Draft XI (async — needs the DB) --------------------------------------------------------

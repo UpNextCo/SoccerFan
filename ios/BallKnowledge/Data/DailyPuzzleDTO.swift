@@ -276,12 +276,51 @@ struct OneMorePuzzleDTO: Codable, Equatable {
 struct LastManStandingOptionDTO: Codable, Equatable {
     let id: String
     let label: String
+    var headshotUrl: String?
+    var teamLogoUrl: String?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        label = try c.decode(String.self, forKey: .label)
+        headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
+        teamLogoUrl = try c.decodeIfPresent(String.self, forKey: .teamLogoUrl)
+    }
+}
+
+struct LastManStandingCareerClubDTO: Codable, Equatable {
+    let name: String
+    let logoUrl: String?
+}
+
+struct LastManStandingPresentationDTO: Codable, Equatable {
+    let layout: String?
+    let imageUrl: String?
+    let imageBlur: Double?
+    let careerClubs: [LastManStandingCareerClubDTO]?
 }
 
 struct LastManStandingQuestionDTO: Codable, Equatable {
     let id: String
+    let type: String
+    let slot: Int
+    let signature: Bool?
     let prompt: String
+    let subPrompt: String?
     let options: [LastManStandingOptionDTO]
+    let presentation: LastManStandingPresentationDTO?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        type = try c.decodeIfPresent(String.self, forKey: .type) ?? "which_club"
+        slot = try c.decodeIfPresent(Int.self, forKey: .slot) ?? 1
+        signature = try c.decodeIfPresent(Bool.self, forKey: .signature)
+        prompt = try c.decode(String.self, forKey: .prompt)
+        subPrompt = try c.decodeIfPresent(String.self, forKey: .subPrompt)
+        options = try c.decodeIfPresent([LastManStandingOptionDTO].self, forKey: .options) ?? []
+        presentation = try c.decodeIfPresent(LastManStandingPresentationDTO.self, forKey: .presentation)
+    }
 }
 
 struct LastManStandingPuzzleDTO: Codable, Equatable {

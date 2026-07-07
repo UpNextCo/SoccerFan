@@ -10,10 +10,16 @@ final class LastManStandingViewModel {
     var confettiBurstToken = 0
     var showCorrectFlash = false
     var activeCommentary: String?
+    var eliminationSummary: String?
+    var lastReveal: String?
+    var isChecking = false
     var eliminationWaveToken = 0
 
-    init(prompt: LMSPrompt) {
-        let seed = LMSAnswerKey.hash(prompt.date ?? prompt.id)
+    private let dailyDate: String?
+
+    init(prompt: LMSPrompt, dailyDate: String?) {
+        self.dailyDate = dailyDate
+        let seed = LMSPromptSeed.entrantSeed(for: prompt)
         self.state = LMSGameState.make(prompt: prompt, seed: seed)
     }
 
@@ -30,36 +36,46 @@ final class LastManStandingViewModel {
         state.status = .question
     }
 
-    func submit(optionId: String) {
-        guard state.status == .question, let question = state.currentQuestion else { return }
-        state.pickHistory.append(optionId)
+    func submit(optionId: String) async {
+        guard state.status == .question, let question = state.currentQuestion, !isChecking else { return }
+        guard let dailyDate else { return }
 
-        let correctId = state.prompt.correctOptionId(for: question)
-        if optionId == correctId {
-            handleCorrect()
-        } else {
-            handleWrong()
+        isChecking = true
+        defer { isChecking = false }
+
+        do {
+            let result = try await APIClient.shared.lastManStandingCheck(
+                date: dailyDate,
+                questionId: question.id,
+                optionId: optionId
+            )
+            state.pickHistory.append(optionId)
+            lastReveal = result.reveal
+            if result.correct {
+                await handleCorrect()
+            } else {
+                handleWrong()
+            }
+        } catch {
+            // Offline / server error — don't advance on unknown result.
         }
     }
 
-    private func handleCorrect() {
+    private func handleCorrect() async {
         state.status = .correctReveal
         showCorrectFlash = true
+        eliminationSummary = nil
         HapticManager.success()
-        // TODO: SFX hook — correct answer sting
 
-        Task {
-            try? await Task.sleep(for: .milliseconds(350))
-            showCorrectFlash = false
-            await runElimination()
-        }
+        try? await Task.sleep(for: .milliseconds(350))
+        showCorrectFlash = false
+        await runElimination()
     }
 
     private func handleWrong() {
         state.eliminateUser()
         state.status = .lost
         HapticManager.error()
-        // TODO: SFX hook — elimination fail
         Task {
             try? await Task.sleep(for: .milliseconds(1200))
             showResult = true
@@ -84,6 +100,9 @@ final class LastManStandingViewModel {
         activeCommentary = state.currentStep.commentary
 
         let ids = state.pendingEliminationIds
+        let targetRemaining = state.nextStepAfterCorrect?.remaining ?? state.displayedRemaining
+        let startRemaining = state.displayedRemaining
+
         guard !ids.isEmpty else {
             advanceToNextQuestion()
             return
@@ -91,19 +110,15 @@ final class LastManStandingViewModel {
 
         let waveCount = ids.count >= 20 ? 4 : 3
         let waves = splitIntoWaves(ids, waveCount: waveCount)
-        let targetRemaining = state.nextStepAfterCorrect?.remaining ?? state.displayedRemaining
-        let startRemaining = state.displayedRemaining
         var eliminatedSoFar = 0
 
         for (waveIndex, wave) in waves.enumerated() {
             for id in wave {
                 eliminationWaveToken += 1
-                let token = eliminationWaveToken
-                state.markEliminated(id, token: token)
+                state.markEliminated(id, token: eliminationWaveToken)
                 eliminatedSoFar += 1
                 try? await Task.sleep(for: .milliseconds(35))
             }
-            // One haptic per wave — not per icon (avoids 32hz rate-limit spam).
             HapticManager.light()
             let interim = max(targetRemaining, startRemaining - eliminatedSoFar)
             withAnimation(.easeOut(duration: 0.18)) {
@@ -117,14 +132,20 @@ final class LastManStandingViewModel {
         withAnimation(.easeOut(duration: 0.25)) {
             state.displayedRemaining = targetRemaining
         }
-        try? await Task.sleep(for: .milliseconds(220))
+
+        let eliminated = startRemaining - targetRemaining
+        eliminationSummary = "\(eliminated) eliminated · \(targetRemaining) remain"
+        try? await Task.sleep(for: .milliseconds(900))
+
         state.finalizeEliminations()
+        eliminationSummary = nil
         advanceToNextQuestion()
     }
 
     private func advanceToNextQuestion() {
         state.currentQuestionIndex += 1
         state.status = .question
+        lastReveal = nil
     }
 
     private func splitIntoWaves(_ ids: [UUID], waveCount: Int) -> [[UUID]] {
@@ -136,12 +157,14 @@ final class LastManStandingViewModel {
 
     func restart() {
         let prompt = state.prompt
-        let seed = LMSAnswerKey.hash(prompt.date ?? prompt.id)
+        let seed = LMSPromptSeed.entrantSeed(for: prompt)
         state = LMSGameState.make(prompt: prompt, seed: seed)
         state.status = .question
         showResult = false
         showCorrectFlash = false
         activeCommentary = nil
+        eliminationSummary = nil
+        lastReveal = nil
         confettiBurstToken = 0
     }
 }
@@ -157,7 +180,7 @@ struct LastManStandingView: View {
     var onComplete: () -> Void
 
     init(dailyDate: String? = nil, prompt: LMSPrompt, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
-        _viewModel = State(initialValue: LastManStandingViewModel(prompt: prompt))
+        _viewModel = State(initialValue: LastManStandingViewModel(prompt: prompt, dailyDate: dailyDate))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete
@@ -250,43 +273,16 @@ struct LastManStandingView: View {
     @ViewBuilder
     private var questionSection: some View {
         if let question = state.currentQuestion, state.status != .lost {
-            VStack(spacing: 12) {
-                VStack(spacing: 8) {
-                    Text("QUESTION")
-                        .font(BKFont.caption(10))
-                        .tracking(0.8)
-                        .foregroundStyle(BKTheme.textMuted)
-                    Text(question.prompt)
-                        .font(BKFont.headline(18))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(18)
-                .frame(maxWidth: .infinity)
-                .background(BKTheme.cardElevated.opacity(0.95))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+            LastManStandingQuestionCard(
+                question: question,
+                isInteractive: state.isInteractive && !viewModel.isChecking
+            ) { optionId in
+                Task { await viewModel.submit(optionId: optionId) }
+            }
 
-                VStack(spacing: 8) {
-                    ForEach(question.options) { option in
-                        Button {
-                            viewModel.submit(optionId: option.id)
-                        } label: {
-                            Text(option.label)
-                                .font(BKFont.body(15))
-                                .foregroundStyle(BKTheme.textPrimary)
-                                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-                                .padding(.horizontal, 14)
-                                .background(BKTheme.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-                                )
-                        }
-                        .disabled(!state.isInteractive)
-                        .opacity(state.isInteractive ? 1 : 0.55)
-                    }
-                }
+            if viewModel.isChecking {
+                ProgressView()
+                    .tint(BKTheme.accent)
             }
         }
     }
@@ -306,6 +302,13 @@ struct LastManStandingView: View {
                 .foregroundStyle(BKTheme.textPrimary)
                 .contentTransition(.numericText())
                 .animation(.easeOut(duration: 0.25), value: state.displayedRemaining)
+
+            if let summary = viewModel.eliminationSummary {
+                Text(summary)
+                    .font(BKFont.caption(12))
+                    .foregroundStyle(BKTheme.accent)
+                    .transition(.opacity)
+            }
 
             if let commentary = viewModel.activeCommentary {
                 Text(commentary)
@@ -345,6 +348,12 @@ struct LastManStandingView: View {
                 Text("Questions survived: \(state.questionsSurvived) / \(LMSGameState.totalQuestions)")
                     .font(BKFont.caption(12))
                     .foregroundStyle(BKTheme.textMuted)
+                if let reveal = viewModel.lastReveal {
+                    Text(reveal)
+                        .font(BKFont.caption(11))
+                        .foregroundStyle(BKTheme.textMuted)
+                        .multilineTextAlignment(.center)
+                }
             }
             .padding(24)
         }

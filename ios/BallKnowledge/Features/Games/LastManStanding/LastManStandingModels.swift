@@ -29,44 +29,55 @@ enum LMSGameStatus: String, Codable {
 
 // MARK: - Questions
 
+enum LMSQuestionType: String, Codable {
+    case higherLower = "higher_lower"
+    case careerPath = "career_path"
+    case oddOneOut = "odd_one_out"
+    case whichClub = "which_club"
+    case imageBadge = "image_badge"
+}
+
+struct LMSCareerClub: Equatable, Codable {
+    let name: String
+    var logoUrl: String?
+}
+
+enum LMSPresentationLayout: String, Codable {
+    case twoUp = "two_up"
+    case grid
+    case stack
+    case imageHeader = "image_header"
+}
+
+struct LMSPresentation: Equatable, Codable {
+    var layout: LMSPresentationLayout?
+    var imageUrl: String?
+    var imageBlur: Double?
+    var careerClubs: [LMSCareerClub]?
+}
+
 struct LMSOption: Identifiable, Equatable, Codable {
     let id: String
     let label: String
+    var headshotUrl: String?
+    var teamLogoUrl: String?
 }
 
 struct LMSQuestion: Identifiable, Equatable, Codable {
     let id: String
+    let type: LMSQuestionType
+    let slot: Int
+    var signature: Bool = false
     let prompt: String
+    var subPrompt: String?
     let options: [LMSOption]
+    var presentation: LMSPresentation?
 }
 
 struct LMSPrompt: Equatable, Codable {
     let id: String
     let date: String?
     let questions: [LMSQuestion]
-
-    func correctOptionId(for question: LMSQuestion) -> String? {
-        guard let date else { return nil }
-        return LMSAnswerKey.correctOptionId(date: date, questionId: question.id, options: question.options)
-    }
-}
-
-/// Shared deterministic answer key — mirrors the server stub generator.
-enum LMSAnswerKey {
-    static func correctOptionId(date: String, questionId: String, options: [LMSOption]) -> String? {
-        guard !options.isEmpty else { return nil }
-        let h = hash("\(date)-lms-\(questionId)")
-        return options[h % options.count].id
-    }
-
-    static func hash(_ s: String) -> Int {
-        var h = 0
-        for char in s.unicodeScalars {
-            h = (h &<< 5) &- h &+ Int(char.value)
-            h |= 0
-        }
-        return abs(h)
-    }
 }
 
 // MARK: - Entrants
@@ -126,25 +137,15 @@ struct LMSGameState: Equatable, Codable {
         return Self.roundSteps[nextIndex]
     }
 
-    var finishRank: Int {
-        currentStep.remaining
-    }
+    var finishRank: Int { currentStep.remaining }
 
-    var finishRankOrdinal: String {
-        Self.ordinal(finishRank)
-    }
-
-    var aliveEntrants: [LMSEntrant] {
-        entrantModels.filter { !isEntrantHidden($0) }
-    }
+    var finishRankOrdinal: String { Self.ordinal(finishRank) }
 
     var visibleEntrants: [LMSEntrant] {
         entrantModels.filter { !$0.isEliminated || $0.eliminationToken > 0 }
     }
 
-    var isInteractive: Bool {
-        status == .question
-    }
+    var isInteractive: Bool { status == .question }
 
     static func make(prompt: LMSPrompt, seed: Int) -> LMSGameState {
         let userId = UUID()
@@ -178,14 +179,10 @@ struct LMSGameState: Equatable, Codable {
     }
 
     mutating func prepareEliminations() {
-        guard pendingEliminationIds.isEmpty,
-              let next = nextStepAfterCorrect else { return }
+        guard pendingEliminationIds.isEmpty, let next = nextStepAfterCorrect else { return }
         let toRemove = displayedRemaining - next.remaining
         guard toRemove > 0 else { return }
-
-        let candidates = entrantModels
-            .filter { !$0.isEliminated && !$0.isUser }
-            .map(\.id)
+        let candidates = entrantModels.filter { !$0.isEliminated && !$0.isUser }.map(\.id)
         pendingEliminationIds = Array(candidates.shuffled().prefix(toRemove))
     }
 
@@ -224,17 +221,12 @@ struct LMSGameState: Equatable, Codable {
         }
     }
 
-    private func isEntrantHidden(_ entrant: LMSEntrant) -> Bool {
-        entrant.isEliminated && entrant.eliminationToken == 0
-    }
-
     static func ordinal(_ n: Int) -> String {
         let suffix: String
         let ones = n % 10
         let tens = (n / 10) % 10
-        if tens == 1 {
-            suffix = "th"
-        } else {
+        if tens == 1 { suffix = "th" }
+        else {
             switch ones {
             case 1: suffix = "st"
             case 2: suffix = "nd"
@@ -248,11 +240,7 @@ struct LMSGameState: Equatable, Codable {
 
 struct SeededRandomNumberGenerator: RandomNumberGenerator {
     private var state: UInt64
-
-    init(seed: UInt64) {
-        state = seed == 0 ? 0xDEADBEEF : seed
-    }
-
+    init(seed: UInt64) { state = seed == 0 ? 0xDEADBEEF : seed }
     mutating func next() -> UInt64 {
         state &+= 0x9E3779B97F4A7C15
         var z = state
@@ -265,5 +253,16 @@ struct SeededRandomNumberGenerator: RandomNumberGenerator {
 enum LastManStandingScoring {
     static func xp(survived: Int, won: Bool) -> Int {
         DailyXP.lastManStanding(survived: won ? LMSGameState.totalQuestions : survived)
+    }
+}
+
+enum LMSPromptSeed {
+    static func entrantSeed(for prompt: LMSPrompt) -> Int {
+        var h = 0
+        for char in (prompt.date ?? prompt.id).unicodeScalars {
+            h = (h &<< 5) &- h &+ Int(char.value)
+            h |= 0
+        }
+        return abs(h)
     }
 }

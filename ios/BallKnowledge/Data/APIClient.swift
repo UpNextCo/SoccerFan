@@ -174,6 +174,19 @@ actor APIClient {
         )
     }
 
+    func lastManStandingCheck(date: String, questionId: String, optionId: String) async throws -> LMSCheckResultDTO {
+        struct Body: Encodable {
+            let date: String
+            let questionId: String
+            let optionId: String
+        }
+        return try await request(
+            "daily/lms/check",
+            method: "POST",
+            body: Body(date: date, questionId: questionId, optionId: optionId)
+        )
+    }
+
     func battlePlayers(categoryId: String, constraint: BattleConstraint, position: String, query: String) async throws -> [BattlePlayerDTO] {
         struct ConstraintBody: Encodable {
             let type: String

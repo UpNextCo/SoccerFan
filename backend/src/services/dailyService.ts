@@ -10,6 +10,7 @@ import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js';
 import { generateLastManStandingPuzzle } from './lastManStandingGenerator.js';
+import { checkLastManStandingAnswer } from './lastManStandingCheck.js';
 import { generateWorldCupXiPuzzle, WCXI_VERSION } from './worldCupXiGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
@@ -244,7 +245,7 @@ async function ensureLastManStandingPuzzle(date: string): Promise<void> {
   if (existing.length > 0) return;
 
   try {
-    const { puzzle, answer } = generateLastManStandingPuzzle(date);
+    const { puzzle, answer } = await generateLastManStandingPuzzle(date);
     if (puzzle.questions.length < 10) {
       console.warn(`Skipped last_man_standing for ${date}: only ${puzzle.questions.length} questions`);
       return;
@@ -484,6 +485,14 @@ export async function validateClubChainLink(
   const targetLink =
     link && targetId && targetId !== toId ? await clubChainLink(toId, targetId) : null;
   return { link, targetLink };
+}
+
+export async function validateLastManStandingCheck(
+  date: string,
+  questionId: string,
+  optionId: string
+) {
+  return checkLastManStandingAnswer(date, questionId, optionId);
 }
 
 export async function getDailyPuzzle(date: string, modeId: string) {

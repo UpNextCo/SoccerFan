@@ -1,17 +1,35 @@
 import Foundation
 
 enum LastManStandingSeed {
-    /// Build the daily prompt from the server-generated puzzle. nil when malformed.
     static func makeServerPrompt(from dto: LastManStandingPuzzleDTO) -> LMSPrompt? {
-        let questions = dto.questions.compactMap { q -> LMSQuestion? in
-            guard q.options.count >= 2 else { return nil }
-            return LMSQuestion(
-                id: q.id,
-                prompt: q.prompt,
-                options: q.options.map { LMSOption(id: $0.id, label: $0.label) }
-            )
-        }
+        let questions = dto.questions.compactMap { mapQuestion($0) }
         guard questions.count == LMSGameState.totalQuestions else { return nil }
         return LMSPrompt(id: dto.puzzleId, date: dto.date, questions: questions)
+    }
+
+    private static func mapQuestion(_ dto: LastManStandingQuestionDTO) -> LMSQuestion? {
+        guard !dto.options.isEmpty else { return nil }
+        let type = LMSQuestionType(rawValue: dto.type) ?? .whichClub
+        let layout = dto.presentation?.layout.flatMap { LMSPresentationLayout(rawValue: $0) }
+        let presentation = dto.presentation.map { pres in
+            LMSPresentation(
+                layout: layout,
+                imageUrl: pres.imageUrl,
+                imageBlur: pres.imageBlur,
+                careerClubs: pres.careerClubs?.map { LMSCareerClub(name: $0.name, logoUrl: $0.logoUrl) }
+            )
+        }
+        return LMSQuestion(
+            id: dto.id,
+            type: type,
+            slot: dto.slot,
+            signature: dto.signature ?? false,
+            prompt: dto.prompt,
+            subPrompt: dto.subPrompt,
+            options: dto.options.map {
+                LMSOption(id: $0.id, label: $0.label, headshotUrl: $0.headshotUrl, teamLogoUrl: $0.teamLogoUrl)
+            },
+            presentation: presentation
+        )
     }
 }

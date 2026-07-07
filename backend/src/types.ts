@@ -142,12 +142,31 @@ export interface OneMorePuzzlePublic {
 export interface LastManStandingOptionPublic {
   id: string;
   label: string;
+  headshotUrl?: string;
+  teamLogoUrl?: string;
+}
+
+export interface LastManStandingCareerClubPublic {
+  name: string;
+  logoUrl?: string;
+}
+
+export interface LastManStandingPresentationPublic {
+  layout?: 'two_up' | 'grid' | 'stack' | 'image_header';
+  imageUrl?: string;
+  imageBlur?: number;
+  careerClubs?: LastManStandingCareerClubPublic[];
 }
 
 export interface LastManStandingQuestionPublic {
   id: string;
+  type: 'higher_lower' | 'career_path' | 'odd_one_out' | 'which_club' | 'image_badge';
+  slot: number;
+  signature?: boolean;
   prompt: string;
+  subPrompt?: string;
   options: LastManStandingOptionPublic[];
+  presentation?: LastManStandingPresentationPublic;
 }
 
 export interface LastManStandingPuzzlePublic {

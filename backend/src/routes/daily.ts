@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
-import { completeDaily, getDailyBundle, getDailyPuzzle, guessWhoHint, revealGuessWhoAnswer, validateClubChainLink, validateGuess } from '../services/dailyService.js';
+import { completeDaily, getDailyBundle, getDailyPuzzle, guessWhoHint, revealGuessWhoAnswer, validateClubChainLink, validateGuess, validateLastManStandingCheck } from '../services/dailyService.js';
 
 export const dailyRouter = Router();
 
@@ -148,6 +148,29 @@ dailyRouter.post('/clubchain/link', requireAuth, async (req, res) => {
     sendSuccess(res, result);
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Club Chain validation failed', 400);
+  }
+});
+
+const lmsCheckSchema = z.object({
+  date: z.string(),
+  questionId: z.string(),
+  optionId: z.string(),
+});
+dailyRouter.post('/lms/check', requireAuth, async (req, res) => {
+  const parsed = lmsCheckSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    const result = await validateLastManStandingCheck(
+      parsed.data.date,
+      parsed.data.questionId,
+      parsed.data.optionId
+    );
+    sendSuccess(res, result);
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Check failed', 400);
   }
 });
 
