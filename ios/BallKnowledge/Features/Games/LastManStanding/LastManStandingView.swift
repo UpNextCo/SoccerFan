@@ -32,7 +32,6 @@ final class LastManStandingViewModel {
 
     func submit(optionId: String) {
         guard state.status == .question, let question = state.currentQuestion else { return }
-        HapticManager.light()
         state.pickHistory.append(optionId)
 
         let correctId = state.prompt.correctOptionId(for: question)
@@ -102,9 +101,10 @@ final class LastManStandingViewModel {
                 let token = eliminationWaveToken
                 state.markEliminated(id, token: token)
                 eliminatedSoFar += 1
-                HapticManager.light()
-                try? await Task.sleep(for: .milliseconds(40))
+                try? await Task.sleep(for: .milliseconds(35))
             }
+            // One haptic per wave — not per icon (avoids 32hz rate-limit spam).
+            HapticManager.light()
             let interim = max(targetRemaining, startRemaining - eliminatedSoFar)
             withAnimation(.easeOut(duration: 0.18)) {
                 state.displayedRemaining = interim
@@ -173,6 +173,7 @@ struct LastManStandingView: View {
                         headerStrip
                         questionSection
                         survivorSection
+                            .padding(.top, 8)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 28)
