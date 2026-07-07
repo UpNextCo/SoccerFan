@@ -50,6 +50,13 @@
       "when": 1782847000000,
       "tag": "0012_intl_goals",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782850000000,
+      "tag": "0013_player_sub_positions",
+      "breakpoints": true
     }
   ]
 }

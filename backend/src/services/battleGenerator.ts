@@ -17,6 +17,7 @@ import { db } from '../db/index.js';
 import { lookupTeamLogo } from './teamService.js';
 import { resolveHeadshot } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
+import { playerMatchesSubPositionSql, UNNEST_EFFECTIVE_SUB_POSITIONS_SQL } from './playerPositionService.js';
 import {
   careerGoalsSub,
   careerAssistsSub,
@@ -254,12 +255,13 @@ async function bestCellsForConstraint(cat: Category, c: Constraint, positions: s
     WITH val AS ${cat.sub},
     elig AS (${eligibilityIds(c)}),
     ranked AS (
-      SELECT p.sub_position AS pos, p.id, p.name, COALESCE(val.value, 0)::int AS stat,
-             ROW_NUMBER() OVER (PARTITION BY p.sub_position ORDER BY COALESCE(val.value, 0) DESC, p.name) AS rn
+      SELECT pos, p.id, p.name, COALESCE(val.value, 0)::int AS stat,
+             ROW_NUMBER() OVER (PARTITION BY pos ORDER BY COALESCE(val.value, 0) DESC, p.name) AS rn
       FROM players p
       JOIN elig ON elig.player_id = p.id
       LEFT JOIN val ON val.player_id = p.id
-      WHERE p.sub_position IN (${posList})
+      CROSS JOIN LATERAL ${UNNEST_EFFECTIVE_SUB_POSITIONS_SQL}
+      WHERE pos IN (${posList})
     )
     SELECT pos, id, name, stat FROM ranked WHERE rn <= ${CELL_DEPTH} ORDER BY pos, rn
   `)) as unknown as Array<{ pos: string; id: string; name: string; stat: number }>;
@@ -586,7 +588,7 @@ export async function recomputeBattleScore(
     };
     const rows = (await db.execute(sql`
       WITH val AS ${cat.sub}
-      SELECT COALESCE(val.value, 0)::int AS stat, (p.sub_position = ${position}) AS pos_ok, ${satisfiesSql(query)} AS satisfies
+      SELECT COALESCE(val.value, 0)::int AS stat, ${playerMatchesSubPositionSql(position)} AS pos_ok, ${satisfiesSql(query)} AS satisfies
       FROM players p LEFT JOIN val ON val.player_id = p.id
       WHERE p.id = ${pick.playerId}::uuid
     `)) as unknown as Array<{ stat: number; pos_ok: boolean; satisfies: boolean }>;
@@ -620,7 +622,7 @@ export async function battlePlayers(
       ${satisfiesSql(constraint)} AS satisfies
     FROM players p
     LEFT JOIN val ON val.player_id = p.id
-    WHERE p.sub_position = ${position}
+    WHERE ${playerMatchesSubPositionSql(position)}
       ${nameFilter}
     ORDER BY (${satisfiesSql(constraint)}) DESC, COALESCE(val.value, 0) DESC, p.name
     LIMIT 25

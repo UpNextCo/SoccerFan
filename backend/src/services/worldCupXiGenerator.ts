@@ -9,6 +9,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { resolveClubLogo } from './teamService.js';
 import { recentWcxiPlayerYears, wcxiPlayerYearKey } from './puzzleHistory.js';
+import { mergeSubPositions } from './playerPositionService.js';
 
 /** Bump when the puzzle JSON shape/source changes so stored puzzles regenerate. */
 export const WCXI_VERSION = 4;
@@ -76,7 +77,7 @@ function hashString(input: string): number {
   for (let i = 0; i < input.length; i += 1) { h = (h << 5) - h + input.charCodeAt(i); h |= 0; }
   return Math.abs(h);
 }
-interface Cand { playerId: string; name: string; country: string; position: string; subPosition: string | null; year: number; mvt: number; isCaptain: boolean; club: string | null; }
+interface Cand { playerId: string; name: string; country: string; position: string; subPosition: string | null; subPositions: string[]; year: number; mvt: number; isCaptain: boolean; club: string | null; }
 interface Ev { type: string; stage: string; opponent: string; detail: string | null; }
 interface Fact { sig: string; score: number; clue: string; }
 interface Scored { c: Cand; facts: Fact[]; }
@@ -105,16 +106,17 @@ export interface WorldCupXiPuzzleJson {
  */
 async function gatherMemorable(): Promise<Scored[]> {
   const rows = (await db.execute(sql`
-    SELECT m.player_id AS "playerId", p.name, m.position, p.sub_position AS "subPosition", m.year,
-           COALESCE(p.market_value_tier, 0) AS mvt, m.clue, s.club AS club, s.country AS country
+    SELECT m.player_id AS "playerId", p.name, m.position, p.sub_position AS "subPosition",
+           COALESCE(p.sub_positions, ARRAY[]::text[]) AS "subPositions",
+           m.year, COALESCE(p.market_value_tier, 0) AS mvt, m.clue, s.club AS club, s.country AS country
     FROM wc_memorable m
     JOIN players p ON p.id = m.player_id
     LEFT JOIN wc_squads s ON s.player_id = m.player_id AND s.year = m.year
     WHERE m.status = 'active' AND m.player_id IS NOT NULL
-  `)) as unknown as Array<{ playerId: string; name: string; position: string; subPosition: string | null; year: number; mvt: number; clue: string; club: string | null; country: string | null }>;
+  `)) as unknown as Array<{ playerId: string; name: string; position: string; subPosition: string | null; subPositions: string[]; year: number; mvt: number; clue: string; club: string | null; country: string | null }>;
 
   return rows.map((r) => ({
-    c: { playerId: r.playerId, name: r.name, country: r.country ?? '', position: r.position, subPosition: r.subPosition, year: r.year, mvt: r.mvt ?? 0, isCaptain: false, club: r.club },
+    c: { playerId: r.playerId, name: r.name, country: r.country ?? '', position: r.position, subPosition: r.subPosition, subPositions: r.subPositions ?? [], year: r.year, mvt: r.mvt ?? 0, isCaptain: false, club: r.club },
     facts: [{ sig: `mem:${r.playerId}:${r.year}`, score: 200, clue: r.clue }],
   }));
 }
@@ -125,7 +127,9 @@ async function gatherMemorable(): Promise<Scored[]> {
  */
 async function gatherDataFallback(): Promise<Scored[]> {
   const cands = (await db.execute(sql`
-    SELECT s.player_id AS "playerId", p.name, s.country, s.position, p.sub_position AS "subPosition", s.year, COALESCE(p.market_value_tier, 0) AS mvt, s.is_captain AS "isCaptain", s.club AS club
+    SELECT s.player_id AS "playerId", p.name, s.country, s.position, p.sub_position AS "subPosition",
+           COALESCE(p.sub_positions, ARRAY[]::text[]) AS "subPositions",
+           s.year, COALESCE(p.market_value_tier, 0) AS mvt, s.is_captain AS "isCaptain", s.club AS club
     FROM wc_squads s JOIN players p ON p.id = s.player_id
     WHERE s.position IN ('GK','DF','MF','FW')
   `)) as unknown as Cand[];
@@ -225,7 +229,9 @@ export async function generateWorldCupXiPuzzle(
   // Wide deterministic daily jitter so the day's XI rotates through the pool — different almost
   // every day — while the curated clues' high base score keeps the picks recognisable.
   const jitter = (x: Scored, i: number) => value(x) + ((hashString(`${seed}:${x.c.playerId}:${x.c.year}:${i}`) % 1000) / 1000) * 70;
-  const fineSlot = (x: Scored): string | null => (x.c.subPosition ? SUBPOS_SLOT[x.c.subPosition] ?? null : null);
+  const finePositions = (x: Scored): string[] => mergeSubPositions(x.c.subPosition, x.c.subPositions);
+  const fineSlotMatches = (x: Scored, label: string): boolean =>
+    finePositions(x).some((pos) => SUBPOS_SLOT[pos] === label);
 
   // FINE pools (RB only holds right-backs, etc.) tried first; COARSE pools (any DF/MF/FW) are the
   // fallback so a thin pool never leaves a hole.
@@ -233,7 +239,7 @@ export async function generateWorldCupXiPuzzle(
     const sortPool = (filter: (x: Scored) => boolean): Sorted =>
       items.filter(filter).map((x, i) => ({ x, j: jitter(x, i) })).sort((a, b) => b.j - a.j);
     const fine: Record<string, Sorted> = {};
-    for (const label of ['GK', 'RB', 'CB', 'LB', 'CM', 'RW', 'LW', 'ST']) fine[label] = sortPool((x) => fineSlot(x) === label);
+    for (const label of ['GK', 'RB', 'CB', 'LB', 'CM', 'RW', 'LW', 'ST']) fine[label] = sortPool((x) => fineSlotMatches(x, label));
     const coarse: Record<string, Sorted> = {
       GK: sortPool((x) => x.c.position === 'GK'), DF: sortPool((x) => x.c.position === 'DF'),
       MF: sortPool((x) => x.c.position === 'MF'), FW: sortPool((x) => x.c.position === 'FW'),
