@@ -278,6 +278,7 @@ struct LastManStandingOptionDTO: Codable, Equatable {
     let label: String
     var headshotUrl: String?
     var teamLogoUrl: String?
+    var nationality: String?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -285,6 +286,7 @@ struct LastManStandingOptionDTO: Codable, Equatable {
         label = try c.decode(String.self, forKey: .label)
         headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
         teamLogoUrl = try c.decodeIfPresent(String.self, forKey: .teamLogoUrl)
+        nationality = try c.decodeIfPresent(String.self, forKey: .nationality)
     }
 }
 

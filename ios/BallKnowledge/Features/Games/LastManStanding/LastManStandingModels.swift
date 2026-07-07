@@ -61,6 +61,7 @@ struct LMSOption: Identifiable, Equatable, Codable {
     let label: String
     var headshotUrl: String?
     var teamLogoUrl: String?
+    var nationality: String?
 }
 
 struct LMSQuestion: Identifiable, Equatable, Codable {

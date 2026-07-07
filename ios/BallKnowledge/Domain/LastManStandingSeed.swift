@@ -27,7 +27,13 @@ enum LastManStandingSeed {
             prompt: dto.prompt,
             subPrompt: dto.subPrompt,
             options: dto.options.map {
-                LMSOption(id: $0.id, label: $0.label, headshotUrl: $0.headshotUrl, teamLogoUrl: $0.teamLogoUrl)
+                LMSOption(
+                    id: $0.id,
+                    label: $0.label,
+                    headshotUrl: $0.headshotUrl,
+                    teamLogoUrl: $0.teamLogoUrl,
+                    nationality: $0.nationality
+                )
             },
             presentation: presentation
         )

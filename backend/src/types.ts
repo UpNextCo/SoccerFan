@@ -144,6 +144,7 @@ export interface LastManStandingOptionPublic {
   label: string;
   headshotUrl?: string;
   teamLogoUrl?: string;
+  nationality?: string;
 }
 
 export interface LastManStandingCareerClubPublic {

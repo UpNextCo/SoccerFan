@@ -11,6 +11,7 @@ import { difficultyForSlot } from './difficulty.js';
 import { famousPlayers } from './shared.js';
 import { validateLMSQuestion } from './validate.js';
 import { buildPlayerClubIndex, resetPlayerClubIndex } from './plausibility.js';
+import { enrichLMSBuilderResult, resetLMSEnrichCache } from './enrich.js';
 
 const BUILDERS: Record<
   LMSQuestionType,
@@ -32,6 +33,7 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
   const usedKeys = new Set<string>();
   const pool = await famousPlayers(4, 250);
   resetPlayerClubIndex();
+  resetLMSEnrichCache();
   const clubIndex = await buildPlayerClubIndex(pool);
 
   for (const slotDef of LMS_DAILY_SLOTS) {
@@ -49,8 +51,9 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
         famousPool: pool,
         clubIndex,
       };
-      const candidate = await builder(ctx);
+      let candidate = await builder(ctx);
       if (!candidate || usedKeys.has(candidate.repeatKey)) continue;
+      candidate = await enrichLMSBuilderResult(candidate);
       if (candidate.extraUsedKeys?.some((k) => usedKeys.has(k))) continue;
       if (!validateLMSQuestion(candidate, ctx)) continue;
       built = candidate;

@@ -80,13 +80,11 @@ function buildPair(
 ): LMSBuilderResult | null {
   const firstIsHi = (hashStr(`${ctx.seed}:side:${sideSalt}`) & 1) === 0;
   const ordered = firstIsHi ? [hi, lo] : [lo, hi];
-  const optA = makeOptionId(questionId, 'a');
-  const optB = makeOptionId(questionId, 'b');
-  const correctId = ordered[0]!.id === hi.id ? optA : optB;
+  const correctId = makeOptionId(questionId, hi.id);
 
   const options = [
-    { id: optA, label: ordered[0]!.name },
-    { id: optB, label: ordered[1]!.name },
+    { id: makeOptionId(questionId, ordered[0]!.id), label: ordered[0]!.name },
+    { id: makeOptionId(questionId, ordered[1]!.id), label: ordered[1]!.name },
   ];
 
   const reveal = `${hi.name} (${formatVal(hi.val, metric.id)}) vs ${lo.name} (${formatVal(lo.val, metric.id)})`;

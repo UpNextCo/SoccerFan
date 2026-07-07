@@ -255,17 +255,14 @@ struct LastManStandingView: View {
     }
 
     private var headerStrip: some View {
-        VStack(spacing: 10) {
-            GameXPBar(current: viewModel.currentScore, max: DailyXP.maxXP(.lastManStanding))
-            HStack {
-                Text(state.currentStep.label)
-                    .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.textSecondary)
-                Spacer()
-                Text("Q\(min(state.currentQuestionIndex + 1, LMSGameState.totalQuestions))/\(LMSGameState.totalQuestions)")
-                    .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.textMuted)
-            }
+        HStack {
+            Text(state.currentStep.label)
+                .font(BKFont.caption(11))
+                .foregroundStyle(BKTheme.textSecondary)
+            Spacer()
+            Text("Q\(min(state.currentQuestionIndex + 1, LMSGameState.totalQuestions))/\(LMSGameState.totalQuestions)")
+                .font(BKFont.caption(11))
+                .foregroundStyle(BKTheme.textMuted)
         }
         .padding(.top, 8)
     }
