@@ -42,7 +42,7 @@ export interface LMSQuestionAnswer {
 }
 
 /** Bump when question shape / answer format changes so stored dailies regenerate. */
-export const LMS_PUZZLE_VERSION = 1;
+export const LMS_PUZZLE_VERSION = 2;
 
 export interface LastManStandingPuzzle {
   modeId: 'last_man_standing';
@@ -63,11 +63,14 @@ export interface LMSBuilderResult {
   repeatKey: string;
 }
 
+import type { LMSDifficulty } from './difficulty.js';
+
 export interface LMSBuildContext {
   date: string;
   slot: number;
   signature: boolean;
   seed: string;
   usedKeys: Set<string>;
+  difficulty: LMSDifficulty;
   famousPool?: Awaited<ReturnType<typeof import('./shared.js').famousPlayers>>;
 }

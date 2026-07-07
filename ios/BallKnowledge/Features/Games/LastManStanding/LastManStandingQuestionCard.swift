@@ -118,9 +118,9 @@ struct LastManStandingQuestionCard: View {
                     image
                         .resizable()
                         .scaledToFit()
-                        .frame(maxHeight: 72)
-                        .blur(radius: question.presentation?.imageBlur ?? 10)
-                        .padding(20)
+                        .frame(maxHeight: 112)
+                        .blur(radius: question.presentation?.imageBlur ?? 6)
+                        .padding(12)
                 default:
                     RoundedRectangle(cornerRadius: 12)
                         .fill(BKTheme.card)

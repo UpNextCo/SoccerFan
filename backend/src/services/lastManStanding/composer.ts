@@ -7,7 +7,9 @@ import { buildOddOneOut } from './builders/oddOneOut.js';
 import { buildWhichClub } from './builders/whichClub.js';
 import type { LastManStandingAnswer, LastManStandingPuzzle } from './types.js';
 import { LMS_PUZZLE_VERSION } from './types.js';
+import { difficultyForSlot } from './difficulty.js';
 import { famousPlayers } from './shared.js';
+import { validateLMSQuestion } from './validate.js';
 
 const BUILDERS: Record<
   LMSQuestionType,
@@ -40,10 +42,12 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
         signature: slotDef.signature ?? false,
         seed: `${date}:lms:q${slotDef.slot}:a${attempt}`,
         usedKeys,
+        difficulty: difficultyForSlot(slotDef.slot, slotDef.signature ?? false),
         famousPool: pool,
       };
       const candidate = await builder(ctx);
       if (!candidate || usedKeys.has(candidate.repeatKey)) continue;
+      if (!validateLMSQuestion(candidate, ctx)) continue;
       built = candidate;
       usedKeys.add(candidate.repeatKey);
     }

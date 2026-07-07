@@ -26,15 +26,13 @@ export async function buildImageBadge(ctx: LMSBuildContext): Promise<LMSBuilderR
   if (rows.length < 8) return null;
 
   const start = seededIndex(ctx.seed, rows.length);
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
     const team = rows[(start + attempt) % rows.length]!;
     const repeatKey = `img:${team.id}`;
     if (ctx.usedKeys.has(repeatKey)) continue;
 
-    const wrong = rows.filter((t) => t.id !== team.id && t.league_id === team.league_id);
-    const fallback = rows.filter((t) => t.id !== team.id);
-    const pool = wrong.length >= 3 ? wrong : fallback;
-    const distractors = pickN(pool, `${ctx.seed}:img`, 3);
+    const sameLeague = rows.filter((t) => t.id !== team.id && t.league_id === team.league_id);
+    const distractors = pickN(sameLeague, `${ctx.seed}:img`, 3);
     if (distractors.length < 3) continue;
 
     const options = shuffleOptions(
@@ -57,7 +55,7 @@ export async function buildImageBadge(ctx: LMSBuildContext): Promise<LMSBuilderR
         presentation: {
           layout: 'image_header',
           imageUrl: team.logo_url,
-          imageBlur: 12,
+          imageBlur: ctx.difficulty.imageBlur,
         },
       },
       answer: {
