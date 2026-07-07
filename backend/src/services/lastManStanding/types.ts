@@ -41,11 +41,15 @@ export interface LMSQuestionAnswer {
   reveal?: string;
 }
 
+/** Bump when question shape / answer format changes so stored dailies regenerate. */
+export const LMS_PUZZLE_VERSION = 1;
+
 export interface LastManStandingPuzzle {
   modeId: 'last_man_standing';
   puzzleId: string;
   date: string;
   title: string;
+  version: number;
   questions: LMSQuestionPublic[];
 }
 

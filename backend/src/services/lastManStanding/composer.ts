@@ -6,6 +6,7 @@ import { buildImageBadge } from './builders/imageBadge.js';
 import { buildOddOneOut } from './builders/oddOneOut.js';
 import { buildWhichClub } from './builders/whichClub.js';
 import type { LastManStandingAnswer, LastManStandingPuzzle } from './types.js';
+import { LMS_PUZZLE_VERSION } from './types.js';
 import { famousPlayers } from './shared.js';
 
 const BUILDERS: Record<
@@ -60,6 +61,7 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
       puzzleId: `${date}-last_man_standing`,
       date,
       title: 'Last Man Standing',
+      version: LMS_PUZZLE_VERSION,
       questions,
     },
     answer: { questions: answers },

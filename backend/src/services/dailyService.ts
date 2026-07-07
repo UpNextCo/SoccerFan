@@ -10,6 +10,7 @@ import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js';
 import { generateLastManStandingPuzzle } from './lastManStandingGenerator.js';
+import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 import { checkLastManStandingAnswer } from './lastManStandingCheck.js';
 import { generateWorldCupXiPuzzle, WCXI_VERSION } from './worldCupXiGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
@@ -236,6 +237,58 @@ async function ensureClubChainPuzzle(date: string): Promise<void> {
 }
 
 /** Generate + store today's Last Man Standing quiz if not present. Best-effort. */
+const lmsRegenerationInFlight = new Set<string>();
+
+function isStaleLastManStanding(puzzleJson: unknown, answerJson: unknown): boolean {
+  const puzzle = puzzleJson as
+    | { version?: unknown; questions?: Array<{ type?: unknown; prompt?: unknown }> }
+    | undefined;
+  if (!puzzle || !Array.isArray(puzzle.questions) || puzzle.questions.length !== 10) return true;
+  if (puzzle.version !== LMS_PUZZLE_VERSION) return true;
+
+  const first = puzzle.questions[0];
+  if (!first || typeof first.type !== 'string') return true;
+  if (typeof first.prompt === 'string' && first.prompt.toLowerCase().includes('placeholder')) return true;
+
+  const answer = answerJson as { questions?: unknown; correctOptionIds?: unknown } | null;
+  if (!Array.isArray(answer?.questions)) return true;
+  if (Array.isArray(answer?.correctOptionIds)) return true;
+  return false;
+}
+
+/**
+ * Drop a stored Last Man Standing puzzle if it predates typed builders (stub "Option A" placeholders
+ * or legacy correctOptionIds answer shape), so it regenerates with real questions.
+ */
+async function migrateStaleLastManStanding(date: string): Promise<void> {
+  const rows = await db
+    .select({ puzzleJson: dailyPuzzles.puzzleJson, answerJson: dailyPuzzles.answerJson })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'last_man_standing')))
+    .limit(1);
+  if (!rows[0]) return;
+  if (isStaleLastManStanding(rows[0].puzzleJson, rows[0].answerJson)) {
+    await db
+      .delete(dailyPuzzles)
+      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'last_man_standing')));
+    console.log(`Removed stale last_man_standing puzzle for ${date} (will regenerate)`);
+  }
+}
+
+async function storeLastManStandingPuzzle(date: string): Promise<void> {
+  const { puzzle, answer } = await generateLastManStandingPuzzle(date);
+  if (puzzle.questions.length < 10) {
+    console.warn(`Skipped last_man_standing for ${date}: only ${puzzle.questions.length} questions`);
+    return;
+  }
+  await db
+    .insert(dailyPuzzles)
+    .values({ date, modeId: 'last_man_standing', puzzleJson: puzzle, answerPlayerId: null, answerJson: answer })
+    .onConflictDoNothing();
+  console.log(`Generated last_man_standing puzzle for ${date}`);
+}
+
+/** Generate + store today's Last Man Standing quiz if not present. Best-effort. */
 async function ensureLastManStandingPuzzle(date: string): Promise<void> {
   const existing = await db
     .select({ modeId: dailyPuzzles.modeId })
@@ -243,21 +296,17 @@ async function ensureLastManStandingPuzzle(date: string): Promise<void> {
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'last_man_standing')))
     .limit(1);
   if (existing.length > 0) return;
+  if (lmsRegenerationInFlight.has(date)) return;
 
-  try {
-    const { puzzle, answer } = await generateLastManStandingPuzzle(date);
-    if (puzzle.questions.length < 10) {
-      console.warn(`Skipped last_man_standing for ${date}: only ${puzzle.questions.length} questions`);
-      return;
-    }
-    await db
-      .insert(dailyPuzzles)
-      .values({ date, modeId: 'last_man_standing', puzzleJson: puzzle, answerPlayerId: null, answerJson: answer })
-      .onConflictDoNothing();
-    console.log(`Generated last_man_standing puzzle for ${date}`);
-  } catch (error) {
-    console.warn(`Skipped last_man_standing for ${date}: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  // Composition can take several minutes — don't block the daily bundle HTTP request.
+  lmsRegenerationInFlight.add(date);
+  void storeLastManStandingPuzzle(date)
+    .catch((error) => {
+      console.warn(`Skipped last_man_standing for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+    })
+    .finally(() => {
+      lmsRegenerationInFlight.delete(date);
+    });
 }
 
 /** Generate + store today's World Cup XI if not present. Best-effort. */
@@ -431,6 +480,7 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   await migrateStaleDraftMaster(date);
   await migrateStaleBingo(date);
   await migrateStaleOneMore(date);
+  await migrateStaleLastManStanding(date);
 
   const rows = await db
     .select({ modeId: dailyPuzzles.modeId })

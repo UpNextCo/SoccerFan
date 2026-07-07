@@ -174,6 +174,7 @@ export interface LastManStandingPuzzlePublic {
   puzzleId: string;
   date: string;
   title: string;
+  version?: number;
   questions: LastManStandingQuestionPublic[];
 }
 
