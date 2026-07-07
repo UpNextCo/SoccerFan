@@ -273,6 +273,34 @@ struct OneMorePuzzleDTO: Codable, Equatable {
     }
 }
 
+struct LastManStandingOptionDTO: Codable, Equatable {
+    let id: String
+    let label: String
+}
+
+struct LastManStandingQuestionDTO: Codable, Equatable {
+    let id: String
+    let prompt: String
+    let options: [LastManStandingOptionDTO]
+}
+
+struct LastManStandingPuzzleDTO: Codable, Equatable {
+    let modeId: String
+    let puzzleId: String
+    let date: String
+    let title: String
+    let questions: [LastManStandingQuestionDTO]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        modeId = try c.decode(String.self, forKey: .modeId)
+        puzzleId = try c.decode(String.self, forKey: .puzzleId)
+        date = try c.decode(String.self, forKey: .date)
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Last Man Standing"
+        questions = try c.decodeIfPresent([LastManStandingQuestionDTO].self, forKey: .questions) ?? []
+    }
+}
+
 struct FootballGolfAnswerDTO: Codable, Equatable {
     let id: String
     let name: String
@@ -470,6 +498,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
     case worldCupXI(WorldCupXIPuzzleDTO)
     case draftMaster(DraftMasterPuzzleDTO)
     case clubChain(ClubChainPuzzleDTO)
+    case lastManStanding(LastManStandingPuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
         case modeId
@@ -500,6 +529,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .draftMaster(try DraftMasterPuzzleDTO(from: decoder))
         case GameModeID.clubChain.rawValue:
             self = .clubChain(try ClubChainPuzzleDTO(from: decoder))
+        case GameModeID.lastManStanding.rawValue:
+            self = .lastManStanding(try LastManStandingPuzzleDTO(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .modeId,
@@ -531,6 +562,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .clubChain(let puzzle):
             try puzzle.encode(to: encoder)
+        case .lastManStanding(let puzzle):
+            try puzzle.encode(to: encoder)
         }
     }
 
@@ -546,6 +579,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .worldCupXI: return GameModeID.worldCupXI.rawValue
         case .draftMaster: return GameModeID.draftMaster.rawValue
         case .clubChain: return GameModeID.clubChain.rawValue
+        case .lastManStanding: return GameModeID.lastManStanding.rawValue
         }
     }
 }
@@ -656,6 +690,11 @@ extension DailyBundleDTO {
 
     var clubChainPuzzle: ClubChainPuzzleDTO? {
         guard case .clubChain(let puzzle) = game(for: .clubChain)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var lastManStandingPuzzle: LastManStandingPuzzleDTO? {
+        guard case .lastManStanding(let puzzle) = game(for: .lastManStanding)?.puzzle else { return nil }
         return puzzle
     }
 }

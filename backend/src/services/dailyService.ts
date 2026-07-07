@@ -9,6 +9,7 @@ import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGen
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js';
+import { generateLastManStandingPuzzle } from './lastManStandingGenerator.js';
 import { generateWorldCupXiPuzzle, WCXI_VERSION } from './worldCupXiGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
@@ -25,6 +26,7 @@ const GAME_MODES = [
   { id: 'draft_master', title: 'DRAFT XI', subtitle: 'Build the highest-scoring XI', playerCount: 11300, isAvailable: true },
   { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Name the mystery XI', playerCount: 8900, isAvailable: true },
   { id: 'club_chain', title: 'CLUB CHAIN', subtitle: 'Link them by shared clubs', playerCount: 9200, isAvailable: true },
+  { id: 'last_man_standing', title: 'LAST MAN STANDING', subtitle: 'Survive the field', playerCount: 10100, isAvailable: true },
 ];
 
 const DAILY_PUZZLE_MODES = [
@@ -44,6 +46,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'world_cup_xi', title: 'WORLD CUP XI' },
   { modeId: 'draft_master', title: 'DRAFT XI' },
   { modeId: 'club_chain', title: 'CLUB CHAIN' },
+  { modeId: 'last_man_standing', title: 'LAST MAN STANDING' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -57,6 +60,7 @@ export const DAILY_PLAYABLE_MODES = [
   'world_cup_xi',
   'football_golf',
   'club_chain',
+  'last_man_standing',
 ] as const;
 
 function todayUTC(): string {
@@ -87,6 +91,7 @@ export const MAX_XP: Record<string, number> = {
   draft_master: 1100,
   football_tower: 900,
   football_golf: 1200,
+  last_man_standing: 900,
 };
 
 export function maxXpForMode(modeId: string): number {
@@ -226,6 +231,31 @@ async function ensureClubChainPuzzle(date: string): Promise<void> {
     console.log(`Generated club_chain puzzle for ${date} (${generated.puzzle.difficulty}, par ${generated.puzzle.shortestPathLength})`);
   } catch (error) {
     console.warn(`Skipped club_chain for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** Generate + store today's Last Man Standing quiz if not present. Best-effort. */
+async function ensureLastManStandingPuzzle(date: string): Promise<void> {
+  const existing = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'last_man_standing')))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  try {
+    const { puzzle, answer } = generateLastManStandingPuzzle(date);
+    if (puzzle.questions.length < 10) {
+      console.warn(`Skipped last_man_standing for ${date}: only ${puzzle.questions.length} questions`);
+      return;
+    }
+    await db
+      .insert(dailyPuzzles)
+      .values({ date, modeId: 'last_man_standing', puzzleJson: puzzle, answerPlayerId: null, answerJson: answer })
+      .onConflictDoNothing();
+    console.log(`Generated last_man_standing puzzle for ${date}`);
+  } catch (error) {
+    console.warn(`Skipped last_man_standing for ${date}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -429,6 +459,9 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   }
   if (!existing.has('club_chain')) {
     await ensureClubChainPuzzle(date);
+  }
+  if (!existing.has('last_man_standing')) {
+    await ensureLastManStandingPuzzle(date);
   }
 }
 

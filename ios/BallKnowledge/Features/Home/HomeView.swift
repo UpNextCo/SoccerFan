@@ -701,6 +701,7 @@ struct DailyGameCard: View {
         case .worldCupXI: return "World Cup XI"
         case .blindRank: return "Blind Rank"
         case .footballTower: return "Football Tower"
+        case .lastManStanding: return "Last Man Standing"
         }
     }
 
@@ -729,6 +730,8 @@ struct DailyGameCard: View {
             return "Find the missing links"
         case .footballTower:
             return "Climb the tower"
+        case .lastManStanding:
+            return "Survive the field"
         }
     }
 }
@@ -891,6 +894,18 @@ struct DailyGameHost: View {
             case .clubChain:
                 if let bundle = dailyBundle, let puzzle = DailyChallengeResolver.clubChainPuzzle(from: bundle) {
                     ClubChainView(dailyDate: bundle.date, puzzle: puzzle, allowReplay: allowReplay, onComplete: onFinished)
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
+            case .lastManStanding:
+                if let bundle = dailyBundle, let puzzle = bundle.lastManStandingPuzzle,
+                   let prompt = LastManStandingSeed.makeServerPrompt(from: puzzle) {
+                    LastManStandingView(
+                        dailyDate: bundle.date,
+                        prompt: prompt,
+                        allowReplay: allowReplay,
+                        onComplete: onFinished
+                    )
                 } else {
                     DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
                 }

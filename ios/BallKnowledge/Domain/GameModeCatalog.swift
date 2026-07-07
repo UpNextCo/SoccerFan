@@ -8,7 +8,7 @@ enum GameModeCatalog {
     private static let defaultPlayerCounts = [12400, 6400, 15200, 22100, 7600, 9800, 11300, 8900, 9200, 8700]
 
     private static let locallyAvailable: Set<GameModeID> = [
-        .footballBingo, .targetMan, .footballGolf, .oneMore, .draftMaster, .clubChain,
+        .footballBingo, .targetMan, .footballGolf, .oneMore, .draftMaster, .clubChain, .lastManStanding,
     ]
 
     /// Maps retired API ids to their replacement mode.

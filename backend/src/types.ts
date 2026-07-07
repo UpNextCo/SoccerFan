@@ -139,13 +139,33 @@ export interface OneMorePuzzlePublic {
   rounds: OneMoreRoundPublic[];
 }
 
+export interface LastManStandingOptionPublic {
+  id: string;
+  label: string;
+}
+
+export interface LastManStandingQuestionPublic {
+  id: string;
+  prompt: string;
+  options: LastManStandingOptionPublic[];
+}
+
+export interface LastManStandingPuzzlePublic {
+  modeId: 'last_man_standing';
+  puzzleId: string;
+  date: string;
+  title: string;
+  questions: LastManStandingQuestionPublic[];
+}
+
 export type DailyPuzzlePublic =
   | GuessWhoPuzzlePublic
   | TargetManPuzzlePublic
   | BlindRankPuzzlePublic
   | FootballBingoPuzzlePublic
   | FootballGolfPuzzlePublic
-  | OneMorePuzzlePublic;
+  | OneMorePuzzlePublic
+  | LastManStandingPuzzlePublic;
 
 export interface GuessFeedbackField {
   field: string;

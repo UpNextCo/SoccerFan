@@ -147,4 +147,9 @@ enum DailyChallengeResolver {
             date: date
         )
     }
+
+    static func lastManStandingPrompt(from bundle: DailyBundleDTO?) -> LMSPrompt? {
+        guard let bundle, let dto = bundle.lastManStandingPuzzle else { return nil }
+        return LastManStandingSeed.makeServerPrompt(from: dto)
+    }
 }

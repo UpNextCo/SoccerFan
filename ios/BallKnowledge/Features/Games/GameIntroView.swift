@@ -120,6 +120,15 @@ struct GameIntroContent {
                     "The higher you climb, the more XP.",
                 ]
             )
+        case .lastManStanding:
+            return GameIntroContent(
+                tagline: "Outlast the field.",
+                steps: [
+                    "100 anonymous entrants. One of them is you.",
+                    "Answer 10 football questions — one wrong answer and you're out.",
+                    "Survive every round to be the Last Man Standing.",
+                ]
+            )
         }
     }
 }

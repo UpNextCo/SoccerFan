@@ -101,6 +101,45 @@ function scoreOneMore(row: PuzzleRow, answer: unknown): ServerScore | null {
   return { score, won: cashedOut || streak >= rounds };
 }
 
+// ---- Last Man Standing -----------------------------------------------------------------------
+// answer: { picks: string[] } — chosen option id per question, in order; streak until first wrong.
+function scoreLastManStanding(row: PuzzleRow, answer: unknown): ServerScore | null {
+  const picks = (answer as { picks?: unknown })?.picks;
+  if (!Array.isArray(picks) || picks.some((x) => typeof x !== 'string')) return null;
+
+  const stored = row.answerJson as { correctOptionIds?: unknown };
+  let correctIds = stored?.correctOptionIds;
+  if (!Array.isArray(correctIds)) {
+    const questions = (row.puzzleJson as { questions?: Array<{ id: string; options: Array<{ id: string }> }> })?.questions;
+    const date = (row.puzzleJson as { date?: string })?.date ?? '';
+    if (!Array.isArray(questions)) return null;
+    correctIds = questions.map((q) => {
+      const h = hashStr(`${date}-lms-${q.id}`);
+      return q.options[h % q.options.length]?.id;
+    });
+  }
+  const expected = correctIds as string[];
+  if (expected.length === 0) return null;
+
+  let streak = 0;
+  for (let i = 0; i < picks.length; i += 1) {
+    if (picks[i] !== expected[i]) break;
+    streak += 1;
+  }
+  const perQuestion = expected.length > 0 ? Math.round(900 / expected.length) : 0;
+  const score = Math.min(900, streak * perQuestion);
+  return { score, won: streak >= expected.length };
+}
+
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
+}
+
 // ---- Draft XI (async — needs the DB) --------------------------------------------------------
 // answer: { picks: [{ slotId, constraintId, playerId }] }
 async function scoreDraft(row: PuzzleRow, answer: unknown): Promise<ServerScore | null> {
@@ -129,6 +168,7 @@ export async function computeServerScore(
       case 'blind_rank': return scoreBlindRank(row, answer);
       case 'world_cup_xi': return scoreWorldCupXi(row, answer);
       case 'one_more': return scoreOneMore(row, answer);
+      case 'last_man_standing': return scoreLastManStanding(row, answer);
       case 'draft_master': return await scoreDraft(row, answer);
       default: return null;
     }

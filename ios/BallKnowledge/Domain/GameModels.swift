@@ -12,6 +12,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
     case worldCupXI = "world_cup_xi" // DEFUNCT
     case clubChain = "club_chain"
     case footballTower = "football_tower" // DEFUNCT
+    case lastManStanding = "last_man_standing"
 
     var title: String {
         switch self {
@@ -25,6 +26,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .oneMore: return "ONE MORE"
         case .clubChain: return "CLUB CHAIN"
         case .footballTower: return "FOOTBALL TOWER"
+        case .lastManStanding: return "LAST MAN STANDING"
         }
     }
 
@@ -40,6 +42,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .oneMore: return "flame.fill"
         case .clubChain: return "link"
         case .footballTower: return "building.2.fill"
+        case .lastManStanding: return "person.3.sequence.fill"
         }
     }
 }
@@ -57,6 +60,7 @@ enum DailyPlayOrder {
         .footballGolf,
         .clubChain,
         .targetMan,
+        .lastManStanding,
     ]
 
     static func completedCount(in bundle: DailyBundleDTO) -> Int {
@@ -280,6 +284,7 @@ enum DailyXP {
         "draft_master": 1100,
         "football_tower": 900,
         "football_golf": 1200,
+        "last_man_standing": 900,
     ]
     static let defaultMax = 1000
 
@@ -383,5 +388,10 @@ enum DailyXP {
         if moves <= par { return 1000 }
         if moves <= par + 2 { return 750 }
         return 500
+    }
+
+    /// Last Man Standing: 90 XP per question survived (partial credit on loss); full clear = 900.
+    static func lastManStanding(survived: Int) -> Int {
+        min(900, max(0, survived) * 90)
     }
 }
