@@ -67,12 +67,15 @@ function canonicalTrophy(raw: string): string | null {
 }
 
 // Individual honours we hold in player_awards (only shown if enough matchers).
-const AWARD_DEFS: Array<{ award: string; title: string }> = [
-  { award: "Ballon d'Or", title: "Ballon d'Or Winner" },
-  { award: 'European Golden Shoe', title: 'European Golden Boot' },
-  { award: 'World Cup Golden Boot', title: 'World Cup Golden Boot' },
-  { award: 'World Cup Golden Ball', title: 'World Cup Golden Ball' },
+// Ballon d'Or is a podium award (1st/2nd/3rd) — only 1st counts as a win for the tile.
+const AWARD_DEFS: Array<{ award: string; title: string; placements: string[] }> = [
+  { award: "Ballon d'Or", title: "Ballon d'Or Winner", placements: ['1st'] },
+  { award: 'European Golden Shoe', title: 'European Golden Boot', placements: ['winner'] },
+  { award: 'World Cup Golden Boot', title: 'World Cup Golden Boot', placements: ['winner'] },
+  { award: 'World Cup Golden Ball', title: 'World Cup Golden Ball', placements: ['winner'] },
 ];
+
+const AWARD_WIN_PLACEMENTS = new Map(AWARD_DEFS.map((a) => [a.award, new Set(a.placements)]));
 
 // Milestone tiles, matched against the generalised stats map. icon = the headline number.
 const STAT_DEFS: Array<{ rule: string; title: string; icon: string }> = [
@@ -292,10 +295,9 @@ async function loadPool(): Promise<BingoPlayer[]> {
     FROM player_honours WHERE player_id IN (${idList}) AND placement ILIKE '%winner%'
     GROUP BY player_id
   `);
-  const awardRows = await rows<{ player_id: string; awards: string[] }>(sql`
-    SELECT player_id, array_agg(DISTINCT award) AS awards
+  const awardRows = await rows<{ player_id: string; award: string; placement: string }>(sql`
+    SELECT player_id, award, placement
     FROM player_awards WHERE player_id IN (${idList})
-    GROUP BY player_id
   `);
   const feeRows = await rows<{ player_id: string; max_fee: number }>(sql`
     SELECT player_id, COALESCE(MAX(fee_eur_m), 0)::int AS max_fee
@@ -309,7 +311,14 @@ async function loadPool(): Promise<BingoPlayer[]> {
   const clubsById = new Map(clubRows.map((r) => [r.player_id, r.clubs]));
   const leaguesById = new Map(leagueRows.map((r) => [r.player_id, r.leagues]));
   const trophiesById = new Map(trophyRows.map((r) => [r.player_id, r.trophies]));
-  const awardsById = new Map(awardRows.map((r) => [r.player_id, r.awards]));
+  const awardsById = new Map<string, string[]>();
+  for (const r of awardRows) {
+    const winPlacements = AWARD_WIN_PLACEMENTS.get(r.award);
+    if (!winPlacements?.has(r.placement)) continue;
+    const list = awardsById.get(r.player_id) ?? [];
+    if (!list.includes(r.award)) list.push(r.award);
+    awardsById.set(r.player_id, list);
+  }
   const feeById = new Map(feeRows.map((r) => [r.player_id, r.max_fee]));
   const overrides = await getPhotoOverrides();
 
