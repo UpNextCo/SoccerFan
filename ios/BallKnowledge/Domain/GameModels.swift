@@ -1,16 +1,17 @@
 import SwiftUI
 
+// DEFUNCT modes (code retained, hidden from homepage daily): guessWho, worldCupXI, blindRank, footballTower.
 enum GameModeID: String, CaseIterable, Identifiable {
     case footballBingo = "football_bingo"
     case oneMore = "one_more"
     case targetMan = "target_man"
-    case guessWho = "guess_who"
+    case guessWho = "guess_who" // DEFUNCT
     case footballGolf = "football_golf"
-    case blindRank = "blind_rank"
+    case blindRank = "blind_rank" // DEFUNCT
     case draftMaster = "draft_master"
-    case worldCupXI = "world_cup_xi"
+    case worldCupXI = "world_cup_xi" // DEFUNCT
     case clubChain = "club_chain"
-    case footballTower = "football_tower"
+    case footballTower = "football_tower" // DEFUNCT
 
     var title: String {
         switch self {
@@ -48,15 +49,14 @@ extension GameModeID {
 }
 
 enum DailyPlayOrder {
+    /// Modes shown on the homepage daily list (excludes defunct guessWho / worldCupXI / blindRank / footballTower).
     static let playableModes: [GameModeID] = [
         .footballBingo,
         .oneMore,
         .draftMaster,
         .footballGolf,
         .clubChain,
-        .guessWho,
         .targetMan,
-        .worldCupXI,
     ]
 
     static func completedCount(in bundle: DailyBundleDTO) -> Int {
