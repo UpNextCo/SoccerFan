@@ -429,8 +429,13 @@ function toCard(p: PoolPlayer, headshot: string | undefined): ClubChainPlayerCar
   };
 }
 
+function pairKey(a: string, b: string): string {
+  return [a, b].sort().join('|');
+}
+
 export async function generateClubChainPuzzle(
-  date: string
+  date: string,
+  opts?: { excludePairKeys?: Set<string> }
 ): Promise<{ puzzle: ClubChainPuzzlePublic; answer: ClubChainPuzzleAnswer } | null> {
   const graph = await buildGraph();
   const seed = hashString(`${date}:club_chain`);
@@ -498,7 +503,12 @@ export async function generateClubChainPuzzle(
       : dayDifficulty === 'medium'
         ? candidates.slice(Math.floor(n / 3), Math.ceil((2 * n) / 3))
         : candidates.slice(Math.floor((2 * n) / 3));
-  const chosen = seededShuffle(bucket.length > 0 ? bucket : candidates, seed)[0]!;
+  let pool = bucket.length > 0 ? bucket : candidates;
+  if (opts?.excludePairKeys?.size) {
+    const filtered = pool.filter((c) => !opts.excludePairKeys!.has(pairKey(c.start.id, c.target.id)));
+    if (filtered.length > 0) pool = filtered;
+  }
+  const chosen = seededShuffle(pool, seed)[0]!;
 
   const overrides = await getPhotoOverrides();
   const startCard = toCard(chosen.start, resolveHeadshot(overrides.get(chosen.start.id), chosen.start.apiFootballId) ?? undefined);
