@@ -1,6 +1,5 @@
 /**
- * Apply curated position overrides (constants/positionOverrides.ts) to players.sub_positions.
- * Merges with any existing TM primary/alternates — never drops a valid stored position.
+ * Apply curated position overrides + tier-4+ backfill entries to players.sub_positions.
  *
  * Usage: DATABASE_URL=... npm run job:apply-position-overrides
  */
@@ -8,7 +7,8 @@ import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { POSITION_OVERRIDES } from '../constants/positionOverrides.js';
-import { mergeSubPositions, primarySubPosition } from '../services/playerPositionService.js';
+import { POSITION_BACKFILL } from '../constants/positionBackfill.js';
+import { applyPositionEntry, toApplyEntry } from '../services/applyPlayerPositions.js';
 
 async function main() {
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS sub_positions text[] DEFAULT '{}'::text[] NOT NULL`);
@@ -21,39 +21,28 @@ async function main() {
 
   let updated = 0;
   let missing = 0;
+  let ambiguous = 0;
 
-  for (const [name, nationality, positions] of POSITION_OVERRIDES) {
-    const rows = (await db.execute(sql`
-      SELECT id, sub_position, sub_positions
-      FROM players
-      WHERE name = ${name} AND nationality = ${nationality}
-      LIMIT 2
-    `)) as unknown as Array<{ id: string; sub_position: string | null; sub_positions: string[] | null }>;
+  const entries = [
+    ...POSITION_OVERRIDES.map(([name, nationality, positions]) => ({ name, nationality, positions })),
+    ...POSITION_BACKFILL.map(toApplyEntry),
+  ];
 
-    if (rows.length !== 1) {
+  for (const entry of entries) {
+    const result = await applyPositionEntry(entry);
+    if (result === 'updated') updated += 1;
+    else if (result === 'missing') {
       missing += 1;
-      console.warn(`Skip (0 or ambiguous): ${name} (${nationality}) — ${rows.length} matches`);
-      continue;
+      console.warn(`Skip (not found): ${entry.name} (${entry.nationality})`);
+    } else if (result === 'ambiguous') {
+      ambiguous += 1;
+      console.warn(`Skip (ambiguous): ${entry.name} (${entry.nationality})`);
     }
-
-    const row = rows[0]!;
-    const merged = mergeSubPositions(row.sub_position, row.sub_positions, positions);
-    if (merged.length === 0) {
-      console.warn(`Skip (no valid positions): ${name}`);
-      continue;
-    }
-
-    const primary = row.sub_position && merged.includes(row.sub_position) ? row.sub_position : primarySubPosition(merged);
-    await db.execute(sql`
-      UPDATE players
-      SET sub_position = ${primary},
-          sub_positions = ${merged}::text[]
-      WHERE id = ${row.id}::uuid
-    `);
-    updated += 1;
   }
 
-  console.log(`Applied position overrides to ${updated}/${POSITION_OVERRIDES.length} players (${missing} missing/ambiguous).`);
+  console.log(
+    `Applied positions to ${updated}/${entries.length} entries (${missing} not found, ${ambiguous} ambiguous).`
+  );
   process.exit(0);
 }
 

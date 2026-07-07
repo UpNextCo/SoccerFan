@@ -59,7 +59,6 @@ export const POSITION_OVERRIDES: Array<[string, string, string[]]> = [
   ['Edgar Davids', 'Netherlands', ['Defensive Midfield']],
   ['Gennaro Gattuso', 'Italy', ['Defensive Midfield']],
   ['Dietmar Hamann', 'Germany', ['Defensive Midfield']],
-  ['Rodri', 'Spain', ['Defensive Midfield']],
   ['Frank Rijkaard', 'Netherlands', ['Defensive Midfield', 'Centre-Back']],
   ['Alessio Tacchinardi', 'Italy', ['Defensive Midfield']],
   ['Michael Ballack', 'Germany', ['Central Midfield']],
