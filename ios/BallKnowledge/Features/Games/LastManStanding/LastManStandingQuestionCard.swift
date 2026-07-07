@@ -29,7 +29,7 @@ struct LastManStandingQuestionCard: View {
                 careerPathBody
             case .imageBadge:
                 imageHeader
-                clubOptionGrid
+                textClubOptionGrid
             case .oddOneOut, .whichClub:
                 if showsClubOptions {
                     clubOptionGrid
@@ -138,7 +138,6 @@ struct LastManStandingQuestionCard: View {
                         Text(club.name)
                             .font(BKFont.body(15))
                             .foregroundStyle(BKTheme.textPrimary)
-                        Spacer(minLength: 0)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -146,6 +145,7 @@ struct LastManStandingQuestionCard: View {
                         Image(systemName: "arrow.down")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(BKTheme.textMuted)
+                            .frame(maxWidth: .infinity)
                     }
                 }
             }
@@ -185,7 +185,7 @@ struct LastManStandingQuestionCard: View {
         VStack(spacing: 8) {
             ForEach(question.options) { option in
                 Button { onSelect(option.id) } label: {
-                    playerOptionCard(option, avatarSize: 44, compact: true)
+                    careerPathPlayerOptionCard(option)
                 }
                 .disabled(!isInteractive)
                 .opacity(isInteractive ? 1 : 0.55)
@@ -215,6 +215,48 @@ struct LastManStandingQuestionCard: View {
                 .opacity(isInteractive ? 1 : 0.55)
             }
         }
+    }
+
+    private var textClubOptionGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+            ForEach(question.options) { option in
+                Button { onSelect(option.id) } label: {
+                    textClubOptionCard(option)
+                }
+                .disabled(!isInteractive)
+                .opacity(isInteractive ? 1 : 0.55)
+            }
+        }
+    }
+
+    private func careerPathPlayerOptionCard(_ option: LMSOption) -> some View {
+        HStack(spacing: 12) {
+            PlayerAvatar(urlString: option.headshotUrl, size: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(option.label)
+                    .font(BKFont.body(15))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .multilineTextAlignment(.leading)
+                if let position = option.position, !position.isEmpty {
+                    Text(GuessWhoDisplay.positionAbbrev(position))
+                        .font(BKFont.caption(11))
+                        .foregroundStyle(BKTheme.textMuted)
+                }
+            }
+            Spacer(minLength: 0)
+            if let nat = option.nationality, !nat.isEmpty {
+                Text(GuessWhoDisplay.nationalityFlag(nat))
+                    .font(.system(size: 28))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
     }
 
     private func playerOptionCard(_ option: LMSOption, avatarSize: CGFloat, compact: Bool) -> some View {
@@ -261,6 +303,24 @@ struct LastManStandingQuestionCard: View {
             RoundedRectangle(cornerRadius: compact ? 12 : 14)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         )
+    }
+
+    private func textClubOptionCard(_ option: LMSOption) -> some View {
+        Text(option.label)
+            .font(BKFont.body(14))
+            .foregroundStyle(BKTheme.textPrimary)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .minimumScaleFactor(0.85)
+            .frame(maxWidth: .infinity, minHeight: 72)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 8)
+            .background(BKTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            )
     }
 
     private func clubOptionCard(_ option: LMSOption) -> some View {

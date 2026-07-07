@@ -193,7 +193,6 @@ struct LastManStandingView: View {
             NavigationStack {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
-                        headerStrip
                         questionSection
                         survivorSection
                             .padding(.top, 8)
@@ -252,19 +251,6 @@ struct LastManStandingView: View {
                 }
             )
         }
-    }
-
-    private var headerStrip: some View {
-        HStack {
-            Text(state.currentStep.label)
-                .font(BKFont.caption(11))
-                .foregroundStyle(BKTheme.textSecondary)
-            Spacer()
-            Text("Q\(min(state.currentQuestionIndex + 1, LMSGameState.totalQuestions))/\(LMSGameState.totalQuestions)")
-                .font(BKFont.caption(11))
-                .foregroundStyle(BKTheme.textMuted)
-        }
-        .padding(.top, 8)
     }
 
     @ViewBuilder

@@ -11,6 +11,7 @@ export interface LMSOptionPublic {
   headshotUrl?: string;
   teamLogoUrl?: string;
   nationality?: string;
+  position?: string;
 }
 
 export interface LMSCareerClubPublic {
@@ -43,7 +44,7 @@ export interface LMSQuestionAnswer {
 }
 
 /** Bump when question shape / answer format changes so stored dailies regenerate. */
-export const LMS_PUZZLE_VERSION = 6;
+export const LMS_PUZZLE_VERSION = 7;
 
 export interface LastManStandingPuzzle {
   modeId: 'last_man_standing';

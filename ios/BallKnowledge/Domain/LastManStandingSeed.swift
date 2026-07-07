@@ -32,7 +32,8 @@ enum LastManStandingSeed {
                     label: $0.label,
                     headshotUrl: $0.headshotUrl,
                     teamLogoUrl: $0.teamLogoUrl,
-                    nationality: $0.nationality
+                    nationality: $0.nationality,
+                    position: $0.position
                 )
             },
             presentation: presentation

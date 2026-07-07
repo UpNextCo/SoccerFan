@@ -13,6 +13,7 @@ interface PlayerRow {
   id: string;
   name: string;
   nationality: string;
+  position: string;
   api_football_id: number | null;
 }
 
@@ -47,6 +48,7 @@ async function loadPlayers(ids: string[]): Promise<Map<string, PlayerRow>> {
       id: players.id,
       name: players.name,
       nationality: players.nationality,
+      position: players.position,
       api_football_id: players.apiFootballId,
     })
     .from(players)
@@ -58,7 +60,7 @@ async function loadPlayersByNames(names: string[]): Promise<Map<string, PlayerRo
   const unique = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
   if (unique.length === 0) return new Map();
   const rows = (await db.execute(sql`
-    SELECT id, name, nationality, api_football_id
+    SELECT id, name, nationality, position, api_football_id
     FROM players
     WHERE name IN (${sql.join(unique.map((n) => sql`${n}`), sql`, `)})
       AND market_value_tier >= 4
@@ -107,6 +109,7 @@ export async function enrichLMSBuilderResult(result: LMSBuilderResult): Promise<
         headshotUrl:
           resolveHeadshot(overrides.get(row.id), row.api_football_id) ?? opt.headshotUrl,
         nationality: row.nationality,
+        position: row.position,
       };
     })
   );
