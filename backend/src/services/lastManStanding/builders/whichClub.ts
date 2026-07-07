@@ -1,8 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../../db/index.js';
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
+import { famousClubsInLeague, isFamousEnough, MIN_NAME_PRESTIGE } from '../fame.js';
 import { associationAt, maxClueAssociation } from '../plausibility.js';
-import { makeOptionId, pickN, seededIndex } from '../shared.js';
+import { makeOptionId, pickN, seededIndex, seededShuffle } from '../shared.js';
 
 interface ClubPlayerRow {
   player_id: string;
@@ -48,51 +49,74 @@ export async function buildWhichClub(ctx: LMSBuildContext): Promise<LMSBuilderRe
     byClub.set(r.team_name, list);
   }
 
-  const clubs = [...byClub.entries()].filter(([, players]) => players.length >= 8);
-  if (clubs.length < 5) return null;
+  // Prefer well-known clubs with several famous alumni (secondary spells).
+  const clubs = [...byClub.entries()]
+    .filter(([name, players]) => {
+      const leagueId = players[0]?.league_id;
+      if (leagueId == null) return false;
+      const famous = players.filter((p) => isFamousEnough(index, p.player_id));
+      const isKnownClub = famousClubsInLeague(leagueId).includes(name);
+      return famous.length >= 4 && isKnownClub;
+    })
+    .sort((a, b) => {
+      const fa = a[1].filter((p) => isFamousEnough(index, p.player_id)).length;
+      const fb = b[1].filter((p) => isFamousEnough(index, p.player_id)).length;
+      return fb - fa;
+    });
+
+  if (clubs.length < 3) return null;
 
   const start = seededIndex(ctx.seed, clubs.length);
-  for (let attempt = 0; attempt < 24; attempt += 1) {
+  for (let attempt = 0; attempt < 28; attempt += 1) {
     const [teamName, roster] = clubs[(start + attempt) % clubs.length]!;
     const leagueId = roster[0]?.league_id;
     if (leagueId == null) continue;
 
-    const cluePool = roster.filter((p) => {
-      const assoc = associationAt(index, p.player_id, teamName) || p.assoc;
-      const primary = index.primaryClubByPlayer.get(p.player_id);
-      if (primary === teamName) return false;
-      return assoc > 0.08 && assoc <= maxAssoc;
-    });
+    const cluePool = roster
+      .filter((p) => {
+        if (!isFamousEnough(index, p.player_id)) return false;
+        const assoc = associationAt(index, p.player_id, teamName) || p.assoc;
+        const primary = index.primaryClubByPlayer.get(p.player_id);
+        if (primary === teamName) return false;
+        return assoc >= 0.08 && assoc <= maxAssoc;
+      })
+      .sort(
+        (a, b) =>
+          (index.prestigeByPlayer.get(b.player_id) ?? 0) - (index.prestigeByPlayer.get(a.player_id) ?? 0)
+      );
+
     if (cluePool.length < 4) continue;
 
-    const picked = pickN(cluePool, `${ctx.seed}:names`, 3);
+    // Famous names, but not the most iconic pair at this club.
+    const pickFrom = cluePool.slice(0, Math.min(12, cluePool.length));
+    const picked = pickN(pickFrom, `${ctx.seed}:names:${attempt}`, 3);
+    const avgPrestige =
+      picked.reduce((s, p) => s + (index.prestigeByPlayer.get(p.player_id) ?? 0), 0) / 3;
+    if (avgPrestige < MIN_NAME_PRESTIGE) continue;
+
     const repeatKey = `wc:${teamName}:${picked.map((p) => p.player_id).join(',')}`;
     if (ctx.usedKeys.has(repeatKey)) continue;
 
-    const wrongClubCandidates = clubs
-      .filter(([name]) => name !== teamName)
-      .filter(([, players]) => players[0]?.league_id === leagueId)
-      .map(([name]) => name);
-
-    const overlappingWrong = wrongClubCandidates.filter((club) =>
-      picked.some((p) => (index.clubsByPlayer.get(p.player_id)?.has(club) ?? false))
+    const famousWrong = famousClubsInLeague(leagueId, teamName);
+    const overlappingWrong = famousWrong.filter((club) =>
+      picked.some((p) => index.clubsByPlayer.get(p.player_id)?.has(club))
     );
     const wrongPool =
       overlappingWrong.length >= 3
         ? overlappingWrong
-        : wrongClubCandidates.length >= 3
-          ? wrongClubCandidates
+        : famousWrong.length >= 4
+          ? famousWrong
           : [];
     if (wrongPool.length < 3) continue;
 
-    const distractors = pickN(wrongPool, `${ctx.seed}:clubs`, 3);
+    const distractors = pickN(wrongPool, `${ctx.seed}:clubs:${attempt}`, 3);
 
     const options = shuffleOptions(
       [
         { id: makeOptionId(questionId, 'correct'), label: teamName },
         ...distractors.map((c, i) => ({ id: makeOptionId(questionId, `w${i}`), label: c })),
       ],
-      ctx.seed
+      `${ctx.seed}:${attempt}`
     );
 
     return {
@@ -118,13 +142,5 @@ export async function buildWhichClub(ctx: LMSBuildContext): Promise<LMSBuilderRe
 }
 
 function shuffleOptions<T extends { id: string; label: string }>(items: T[], seed: string): T[] {
-  const arr = [...items];
-  for (let i = arr.length - 1; i > 0; i -= 1) {
-    let h = 0;
-    const s = `${seed}:wc:${i}`;
-    for (let j = 0; j < s.length; j += 1) h = (h << 5) - h + s.charCodeAt(j);
-    const k = Math.abs(h) % (i + 1);
-    [arr[i], arr[k]] = [arr[k]!, arr[i]!];
-  }
-  return arr;
+  return seededShuffle(items, seed);
 }

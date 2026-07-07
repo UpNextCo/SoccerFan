@@ -30,7 +30,7 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
   const questions: LastManStandingPuzzle['questions'] = [];
   const answers: LastManStandingAnswer['questions'] = [];
   const usedKeys = new Set<string>();
-  const pool = await famousPlayers(4, 300);
+  const pool = await famousPlayers(4, 250);
   resetPlayerClubIndex();
   const clubIndex = await buildPlayerClubIndex(pool);
 

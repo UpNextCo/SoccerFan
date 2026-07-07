@@ -2,16 +2,20 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../../db/index.js';
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
 import {
-  maxOddPrestigeSpread,
-  playerPlayedInLeague,
-  prestigeSpread,
-} from '../plausibility.js';
+  FAMOUS_CLUBS_BY_LEAGUE,
+  famousClubsInLeague,
+  isFamousEnough,
+  LEAGUE_LABELS,
+  MIN_NAME_PRESTIGE,
+  SHARED_CLUB_CANDIDATES,
+} from '../fame.js';
+import { maxOddPrestigeSpread, playerPlayedInLeague, prestigeSpread } from '../plausibility.js';
 import { famousPlayers, makeOptionId, pickN, seededIndex } from '../shared.js';
 
-type OddTemplate = 'shared_club' | 'nationality' | 'league_club';
+type OddTemplate = 'shared_club' | 'league_players' | 'league_club';
 
 export async function buildOddOneOut(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
-  const templates: OddTemplate[] = ['shared_club', 'nationality', 'league_club'];
+  const templates: OddTemplate[] = ['shared_club', 'league_players', 'league_club'];
   const order = seededIndex(`${ctx.seed}:odd`, templates.length);
   const rotated = [...templates.slice(order), ...templates.slice(0, order)];
 
@@ -19,147 +23,51 @@ export async function buildOddOneOut(ctx: LMSBuildContext): Promise<LMSBuilderRe
     const built =
       template === 'shared_club'
         ? await buildSharedClubOdd(ctx)
-        : template === 'nationality'
-          ? await buildNationalityOdd(ctx)
+        : template === 'league_players'
+          ? await buildLeaguePlayersOdd(ctx)
           : await buildLeagueClubOdd(ctx);
     if (built) return built;
   }
   return null;
 }
 
-/** Three players who all played for the same club — one plausible outsider who didn't. */
+/** Three famous players who all played for the same big club — one famous player who never did. */
 async function buildSharedClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
   const questionId = `${ctx.date}-lms-q${ctx.slot}`;
-  const pool = ctx.famousPool ?? (await famousPlayers(4, 400));
+  const pool = ctx.famousPool ?? (await famousPlayers(4, 250));
   const index = ctx.clubIndex;
   if (!index) return null;
 
   const maxSpread = maxOddPrestigeSpread(ctx.difficulty.tier);
+  const famousPool = pool.filter((p) => p.prestige >= MIN_NAME_PRESTIGE);
 
-  const rows = (await db.execute(sql`
-    WITH per_club AS (
-      SELECT ps.player_id, ps.team_name, SUM(ps.appearances)::int AS apps
-      FROM player_stats ps
-      JOIN players p ON p.id = ps.player_id
-      WHERE p.market_value_tier >= 4 AND ps.appearances >= 15
-      GROUP BY ps.player_id, ps.team_name
-    ),
-    totals AS (
-      SELECT player_id, SUM(apps)::int AS total FROM per_club GROUP BY player_id
-    ),
-    scored AS (
-      SELECT pc.player_id, pc.team_name, pc.apps::float / NULLIF(t.total, 0) AS assoc
-      FROM per_club pc JOIN totals t ON t.player_id = pc.player_id
-    ),
-    grouped AS (
-      SELECT team_name, array_agg(player_id ORDER BY assoc DESC) AS ids, count(*)::int AS n
-      FROM scored
-      WHERE assoc BETWEEN 0.08 AND 0.65
-      GROUP BY team_name
-      HAVING count(*) >= 5
-    )
-    SELECT team_name, ids FROM grouped ORDER BY n DESC LIMIT 80
-  `)) as unknown as Array<{ team_name: string; ids: string[] }>;
-
-  if (rows.length < 5) return null;
-
-  const start = seededIndex(ctx.seed, rows.length);
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const row = rows[(start + attempt) % rows.length]!;
-    const leagueId = index.leagueByClub.get(row.team_name);
+  const clubOrder = seededShuffleClubs(`${ctx.seed}:clubs`);
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const club = clubOrder[attempt % clubOrder.length]!;
+    const leagueId = index.leagueByClub.get(club);
     if (leagueId == null) continue;
 
-    const memberIds = new Set(row.ids ?? []);
-    const memberPool = pool.filter((p) => memberIds.has(p.id));
-    if (memberPool.length < 4) continue;
+    const members = famousPool.filter((p) => index.clubsByPlayer.get(p.id)?.has(club));
+    if (members.length < 4) continue;
 
-    const three = pickN(memberPool, `${ctx.seed}:sc3`, 3);
+    const three = pickN(members, `${ctx.seed}:sc3:${attempt}`, 3);
     const avgPrestige = three.reduce((s, p) => s + p.prestige, 0) / 3;
 
-    const outsiders = pool.filter((p) => {
-      if (memberIds.has(p.id)) return false;
-      if (index.clubsByPlayer.get(p.id)?.has(row.team_name)) return false;
-      if (leagueId != null && !playerPlayedInLeague(index, p.id, leagueId)) return false;
-      if (Math.abs(p.prestige - avgPrestige) > maxSpread + 4) return false;
-      return true;
+    const outsiders = famousPool.filter((p) => {
+      if (members.some((m) => m.id === p.id)) return false;
+      if (index.clubsByPlayer.get(p.id)?.has(club)) return false;
+      if (!playerPlayedInLeague(index, p.id, leagueId)) return false;
+      return Math.abs(p.prestige - avgPrestige) <= maxSpread + 3;
     });
-    if (outsiders.length < 1) continue;
+    if (outsiders.length < 2) continue;
 
-    const odd = outsiders[seededIndex(`${ctx.seed}:oddp`, outsiders.length)]!;
+    const odd = outsiders[seededIndex(`${ctx.seed}:oddp:${attempt}`, outsiders.length)]!;
     const fourIds = [...three.map((p) => p.id), odd.id];
     if (prestigeSpread(index, fourIds) > maxSpread + 2) continue;
 
-    const repeatKey = `ooo:club:${row.team_name}:${odd.id}`;
+    const repeatKey = `ooo:club:${club}:${odd.id}`;
+    if (ctx.usedKeys.has(repeatKey)) continue;
 
-    const options = shuffleFour(
-      [
-        ...three.map((p) => ({ id: makeOptionId(questionId, p.id), label: p.name })),
-        { id: makeOptionId(questionId, odd.id), label: odd.name },
-      ],
-      ctx.seed
-    );
-
-    return {
-      repeatKey,
-      question: {
-        id: questionId,
-        type: 'odd_one_out',
-        slot: ctx.slot,
-        signature: ctx.signature,
-        prompt: 'Odd one out',
-        options,
-        presentation: { layout: 'grid' },
-      },
-      answer: {
-        questionId,
-        correctOptionId: makeOptionId(questionId, odd.id),
-        reveal: `${odd.name} never played for ${row.team_name}`,
-      },
-    };
-  }
-  return null;
-}
-
-/** Three players of the same nationality — one from another nation, matched fame. */
-async function buildNationalityOdd(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
-  const questionId = `${ctx.date}-lms-q${ctx.slot}`;
-  const pool = ctx.famousPool ?? (await famousPlayers(4, 400));
-  const index = ctx.clubIndex;
-  if (!index) return null;
-
-  const maxSpread = maxOddPrestigeSpread(ctx.difficulty.tier);
-
-  const byNat = new Map<string, typeof pool>();
-  for (const p of pool) {
-    const list = byNat.get(p.nationality) ?? [];
-    list.push(p);
-    byNat.set(p.nationality, list);
-  }
-
-  const viableNats = [...byNat.entries()].filter(([, list]) => list.length >= 6);
-  if (viableNats.length < 4) return null;
-
-  for (let attempt = 0; attempt < 16; attempt += 1) {
-    const natPick = viableNats[seededIndex(`${ctx.seed}:nat:${attempt}`, viableNats.length)]!;
-    const [nat, members] = natPick;
-    const three = pickN(members, `${ctx.seed}:nat3:${attempt}`, 3);
-    const avgPrestige = three.reduce((s, p) => s + p.prestige, 0) / 3;
-
-    const oddCandidates = pool.filter((p) => {
-      if (p.nationality === nat) return false;
-      if (three.some((t) => t.id === p.id)) return false;
-      return Math.abs(p.prestige - avgPrestige) <= maxSpread;
-    });
-    if (oddCandidates.length < 2) continue;
-
-    oddCandidates.sort(
-      (a, b) => Math.abs(a.prestige - avgPrestige) - Math.abs(b.prestige - avgPrestige)
-    );
-    const odd = oddCandidates[seededIndex(`${ctx.seed}:onat:${attempt}`, Math.min(5, oddCandidates.length))]!;
-    const fourIds = [...three.map((p) => p.id), odd.id];
-    if (prestigeSpread(index, fourIds) > maxSpread) continue;
-
-    const repeatKey = `ooo:nat:${nat}:${odd.id}`;
     const options = shuffleFour(
       [
         ...three.map((p) => ({ id: makeOptionId(questionId, p.id), label: p.name })),
@@ -176,60 +84,131 @@ async function buildNationalityOdd(ctx: LMSBuildContext): Promise<LMSBuilderResu
         slot: ctx.slot,
         signature: ctx.signature,
         prompt: 'Odd one out',
+        subPrompt: `Who never played for ${club}?`,
         options,
         presentation: { layout: 'grid' },
       },
       answer: {
         questionId,
         correctOptionId: makeOptionId(questionId, odd.id),
-        reveal: `${odd.name} (${odd.nationality}) — the others are ${nat}`,
+        reveal: `${odd.name} never played for ${club}`,
       },
     };
   }
   return null;
 }
 
-/** Three clubs from the same league — one from another top league (similar tier names). */
-async function buildLeagueClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
+/** Three famous players with a real spell in a top league — one famous player who never did. */
+async function buildLeaguePlayersOdd(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
   const questionId = `${ctx.date}-lms-q${ctx.slot}`;
-  const TOP5 = [39, 140, 135, 78, 61];
-  const midTier = (names: string[]) => {
-    const slice = names.slice(4, Math.max(5, names.length - 4));
-    return slice.length >= 4 ? slice : names;
-  };
+  const pool = ctx.famousPool ?? (await famousPlayers(4, 250));
+  const index = ctx.clubIndex;
+  if (!index) return null;
+
+  const maxSpread = maxOddPrestigeSpread(ctx.difficulty.tier);
+  const leagueIds = [39, 140, 135, 78, 61];
 
   const rows = (await db.execute(sql`
-    SELECT league_id, array_agg(name ORDER BY name) AS names
-    FROM teams
-    WHERE league_id IN (${sql.join(TOP5.map((id) => sql`${id}`), sql`, `)})
-      AND logo_url IS NOT NULL AND logo_url <> ''
-    GROUP BY league_id
-  `)) as unknown as Array<{ league_id: number; names: string[] }>;
+    SELECT ps.league_id, p.id, SUM(ps.appearances)::int AS apps
+    FROM player_stats ps
+    JOIN players p ON p.id = ps.player_id
+    WHERE p.market_value_tier >= 4
+      AND ps.league_id IN (${sql.join(leagueIds.map((id) => sql`${id}`), sql`, `)})
+    GROUP BY ps.league_id, p.id
+    HAVING SUM(ps.appearances) >= 30
+  `)) as unknown as Array<{ league_id: number; id: string; apps: number }>;
 
-  if (rows.length < 3) return null;
+  const byLeague = new Map<number, string[]>();
+  for (const r of rows) {
+    if (!isFamousEnough(index, r.id)) continue;
+    const list = byLeague.get(r.league_id) ?? [];
+    list.push(r.id);
+    byLeague.set(r.league_id, list);
+  }
 
-  for (let attempt = 0; attempt < 14; attempt += 1) {
-    const main = rows[seededIndex(`${ctx.seed}:lg:${attempt}`, rows.length)]!;
-    const others = rows.filter((r) => r.league_id !== main.league_id);
-    if (others.length < 1) continue;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const leagueId = leagueIds[seededIndex(`${ctx.seed}:lgp:${attempt}`, leagueIds.length)]!;
+    const inLeague = byLeague.get(leagueId) ?? [];
+    if (inLeague.length < 6) continue;
 
-    const mainPool = midTier(main.names ?? []);
-    const oddLeague = others[seededIndex(`${ctx.seed}:olg:${attempt}`, others.length)]!;
-    const oddPool = midTier(oddLeague.names ?? []);
-    if (mainPool.length < 3 || oddPool.length < 2) continue;
+    const inPool = pool.filter((p) => inLeague.includes(p.id) && p.prestige >= MIN_NAME_PRESTIGE);
+    if (inPool.length < 4) continue;
 
-    const threeClubs = pickN(mainPool, `${ctx.seed}:lc3:${attempt}`, 3);
+    const three = pickN(inPool, `${ctx.seed}:lp3:${attempt}`, 3);
+    const avgPrestige = three.reduce((s, p) => s + p.prestige, 0) / 3;
+
+    const outsiders = pool.filter((p) => {
+      if (three.some((t) => t.id === p.id)) return false;
+      if (playerPlayedInLeague(index, p.id, leagueId)) return false;
+      if (p.prestige < MIN_NAME_PRESTIGE - 4) return false;
+      return Math.abs(p.prestige - avgPrestige) <= maxSpread + 2;
+    });
+    if (outsiders.length < 2) continue;
+
+    const odd = outsiders[seededIndex(`${ctx.seed}:lpo:${attempt}`, outsiders.length)]!;
+    const fourIds = [...three.map((p) => p.id), odd.id];
+    if (prestigeSpread(index, fourIds) > maxSpread + 2) continue;
+
+    const label = LEAGUE_LABELS[leagueId] ?? 'this league';
+    const repeatKey = `ooo:lgp:${leagueId}:${odd.id}`;
+
+    const options = shuffleFour(
+      [
+        ...three.map((p) => ({ id: makeOptionId(questionId, p.id), label: p.name })),
+        { id: makeOptionId(questionId, odd.id), label: odd.name },
+      ],
+      `${ctx.seed}:lp:${attempt}`
+    );
+
+    return {
+      repeatKey,
+      question: {
+        id: questionId,
+        type: 'odd_one_out',
+        slot: ctx.slot,
+        signature: ctx.signature,
+        prompt: 'Odd one out',
+        subPrompt: `All played in the ${label}`,
+        options,
+        presentation: { layout: 'grid' },
+      },
+      answer: {
+        questionId,
+        correctOptionId: makeOptionId(questionId, odd.id),
+        reveal: `${odd.name} never played in the ${label}`,
+      },
+    };
+  }
+  return null;
+}
+
+/** Three famous clubs from one top league — one famous club from another. */
+async function buildLeagueClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
+  const questionId = `${ctx.date}-lms-q${ctx.slot}`;
+  const leagueIds = [39, 140, 135, 78, 61] as const;
+
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const mainId = leagueIds[seededIndex(`${ctx.seed}:lg:${attempt}`, leagueIds.length)]!;
+    const others = leagueIds.filter((id) => id !== mainId);
+    const oddLeagueId = others[seededIndex(`${ctx.seed}:olg:${attempt}`, others.length)]!;
+
+    const mainPool = FAMOUS_CLUBS_BY_LEAGUE[mainId] ?? [];
+    const oddPool = FAMOUS_CLUBS_BY_LEAGUE[oddLeagueId] ?? [];
+    if (mainPool.length < 4 || oddPool.length < 2) continue;
+
+    const threeClubs = pickN([...mainPool], `${ctx.seed}:lc3:${attempt}`, 3);
     const oddClub = oddPool[seededIndex(`${ctx.seed}:oc:${attempt}`, oddPool.length)]!;
     if (threeClubs.includes(oddClub)) continue;
 
-    const repeatKey = `ooo:lg:${main.league_id}:${oddClub}`;
+    const repeatKey = `ooo:lg:${mainId}:${oddClub}`;
+    const mainLabel = LEAGUE_LABELS[mainId] ?? 'league';
 
     const options = shuffleFour(
       [
         ...threeClubs.map((c, i) => ({ id: makeOptionId(questionId, `m${i}`), label: c })),
         { id: makeOptionId(questionId, 'odd'), label: oddClub },
       ],
-      `${ctx.seed}:${attempt}`
+      `${ctx.seed}:lc:${attempt}`
     );
 
     return {
@@ -240,17 +219,30 @@ async function buildLeagueClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
         slot: ctx.slot,
         signature: ctx.signature,
         prompt: 'Odd one out',
+        subPrompt: `Three ${mainLabel} clubs`,
         options,
         presentation: { layout: 'grid' },
       },
       answer: {
         questionId,
         correctOptionId: makeOptionId(questionId, 'odd'),
-        reveal: `${oddClub} — different league`,
+        reveal: `${oddClub} — not a ${mainLabel} club`,
       },
     };
   }
   return null;
+}
+
+function seededShuffleClubs(seed: string): string[] {
+  const arr = [...SHARED_CLUB_CANDIDATES];
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    let h = 0;
+    const s = `${seed}:${i}`;
+    for (let j = 0; j < s.length; j += 1) h = (h << 5) - h + s.charCodeAt(j);
+    const k = Math.abs(h) % (i + 1);
+    [arr[i], arr[k]] = [arr[k]!, arr[i]!];
+  }
+  return arr;
 }
 
 function shuffleFour<T extends { id: string; label: string }>(items: T[], seed: string): T[] {

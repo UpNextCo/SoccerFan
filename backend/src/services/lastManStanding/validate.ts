@@ -5,10 +5,11 @@ import {
   minCareerOverlapClubs,
   pathOverlapCount,
 } from './plausibility.js';
+import { isFamousEnough, MIN_NAME_PRESTIGE } from './fame.js';
 
 const PLACEHOLDER_RE = /placeholder|option [a-d]/i;
 const GK_TELEGRAPH_RE = /goalkeeper|three outfield/i;
-const TELEGRAPH_SUBPROMPT_RE = /never played for|three .+ clubs|big six/i;
+const TELEGRAPH_SUBPROMPT_RE = /three outfield|big six/i;
 
 function playerIdFromOption(questionId: string, optionId: string): string {
   return optionId.startsWith(`${questionId}-`) ? optionId.slice(questionId.length + 1) : optionId;
@@ -55,7 +56,7 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
       const maxAssoc = maxClueAssociation(ctx.difficulty.tier);
       for (const name of names) {
         const playerId = index.playerIdByName.get(name);
-        if (!playerId) return false;
+        if (!playerId || !isFamousEnough(index, playerId, MIN_NAME_PRESTIGE)) return false;
         const assoc = index.associationByPlayer.get(playerId)?.get(answerClub) ?? 0;
         if (assoc > maxAssoc) return false;
         if (index.primaryClubByPlayer.get(playerId) === answerClub) return false;
@@ -64,6 +65,7 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
     }
     case 'odd_one_out': {
       if (question.presentation?.layout !== 'grid') return false;
+      if (!question.subPrompt?.trim()) return false;
       const ids = question.options.map((o) => playerIdFromOption(question.id, o.id));
       const prestiges = ids
         .map((id) => index.prestigeByPlayer.get(id))
@@ -71,6 +73,7 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
       if (prestiges.length >= 4) {
         const spread = Math.max(...prestiges) - Math.min(...prestiges);
         if (spread > maxOddPrestigeSpread(ctx.difficulty.tier) + 2) return false;
+        if (Math.min(...prestiges) < MIN_NAME_PRESTIGE - 6) return false;
       }
       return true;
     }
