@@ -10,6 +10,7 @@ import { LMS_PUZZLE_VERSION } from './types.js';
 import { difficultyForSlot } from './difficulty.js';
 import { famousPlayers } from './shared.js';
 import { validateLMSQuestion } from './validate.js';
+import { buildPlayerClubIndex, resetPlayerClubIndex } from './plausibility.js';
 
 const BUILDERS: Record<
   LMSQuestionType,
@@ -30,6 +31,8 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
   const answers: LastManStandingAnswer['questions'] = [];
   const usedKeys = new Set<string>();
   const pool = await famousPlayers(4, 300);
+  resetPlayerClubIndex();
+  const clubIndex = await buildPlayerClubIndex(pool);
 
   for (const slotDef of LMS_DAILY_SLOTS) {
     const builder = BUILDERS[slotDef.type];
@@ -44,6 +47,7 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
         usedKeys,
         difficulty: difficultyForSlot(slotDef.slot, slotDef.signature ?? false),
         famousPool: pool,
+        clubIndex,
       };
       const candidate = await builder(ctx);
       if (!candidate || usedKeys.has(candidate.repeatKey)) continue;

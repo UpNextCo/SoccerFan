@@ -2,19 +2,30 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../../db/index.js';
 import { isNationalTeam, isYouthOrReserveSide, nationSet } from '../../../utils/nationalTeam.js';
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
-import type { FamousPlayer } from '../shared.js';
-import { famousPlayers, makeOptionId, pickN, seededIndex } from '../shared.js';
+import {
+  careerPrestigeBand,
+  minCareerOverlapClubs,
+  pickPlausibleCareerDistractors,
+} from '../plausibility.js';
+import { famousPlayers, makeOptionId, seededIndex } from '../shared.js';
 
 interface CareerRow {
   player_id: string;
   name: string;
   nationality: string;
+  prestige: number;
   clubs: string[];
 }
 
 export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
   const questionId = `${ctx.date}-lms-q${ctx.slot}`;
+  const index = ctx.clubIndex;
+  const pool = ctx.famousPool;
+  if (!index || !pool) return null;
+
   const nations = await nationSet();
+  const minOverlap = minCareerOverlapClubs(ctx.difficulty.tier);
+  const band = careerPrestigeBand(ctx.difficulty.tier);
 
   const rows = (await db.execute(sql`
     WITH club_order AS (
@@ -33,7 +44,8 @@ export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderR
       GROUP BY co.player_id
       HAVING count(*) >= 3
     )
-    SELECT p.id AS player_id, p.name, p.nationality, paths.clubs
+    SELECT p.id AS player_id, p.name, p.nationality, paths.clubs,
+      (p.market_value_tier * 10)::int AS prestige
     FROM paths
     JOIN players p ON p.id = paths.player_id
     WHERE array_length(paths.clubs, 1) >= 3
@@ -43,10 +55,9 @@ export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderR
 
   if (rows.length < 20) return null;
 
-  const pool = ctx.famousPool ?? (await famousPlayers(4, 300));
   const start = seededIndex(ctx.seed, rows.length);
 
-  for (let attempt = 0; attempt < 24; attempt += 1) {
+  for (let attempt = 0; attempt < 32; attempt += 1) {
     const row = rows[(start + attempt) % rows.length]!;
     const clubs = filterClubPath(row.clubs, nations);
     if (clubs.length < 3) continue;
@@ -55,12 +66,20 @@ export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderR
     const maxStart = clubs.length - pathLen;
     const startIdx = seededIndex(`${ctx.seed}:path`, maxStart + 1);
     const path = clubs.slice(startIdx, startIdx + pathLen);
-    if (path.length < 3) continue;
+    if (path.length < 3 || new Set(path).size < path.length) continue;
 
-    // Require at least two distinct clubs (no duplicate spell noise).
-    if (new Set(path).size < path.length) continue;
-
-    const distractors = pickCareerDistractors(pool, row.player_id, row.nationality, ctx.seed);
+    const targetPrestige = index.prestigeByPlayer.get(row.player_id) ?? row.prestige;
+    const distractors = pickPlausibleCareerDistractors(
+      pool,
+      index,
+      row.player_id,
+      targetPrestige,
+      row.nationality,
+      path,
+      minOverlap,
+      band,
+      `${ctx.seed}:d`
+    );
     if (distractors.length < 3) continue;
 
     const repeatKey = `cp:${row.player_id}:${path.join('>')}`;
@@ -109,28 +128,6 @@ function filterClubPath(clubs: string[], nations: Set<string>): string[] {
     out.push(name);
   }
   return out;
-}
-
-function pickCareerDistractors(
-  pool: FamousPlayer[],
-  targetId: string,
-  nationality: string,
-  seed: string
-): FamousPlayer[] {
-  const nat = nationality.trim();
-  const sameNat = pool.filter((p) => p.id !== targetId && p.nationality === nat);
-  if (sameNat.length >= 3) return pickN(sameNat, `${seed}:d`, 3);
-
-  const target = pool.find((p) => p.id === targetId);
-  const band = target?.prestige ?? 50;
-  const similar = pool.filter(
-    (p) => p.id !== targetId && p.nationality !== nat && Math.abs(p.prestige - band) <= 18
-  );
-  const candidates = [...sameNat];
-  for (const p of similar) {
-    if (!candidates.some((c) => c.id === p.id)) candidates.push(p);
-  }
-  return candidates.length >= 3 ? pickN(candidates, `${seed}:d`, 3) : [];
 }
 
 function seededShuffleOptions<T extends { id: string }>(items: T[], seed: string): T[] {
