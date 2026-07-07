@@ -42,7 +42,7 @@ export interface LMSQuestionAnswer {
 }
 
 /** Bump when question shape / answer format changes so stored dailies regenerate. */
-export const LMS_PUZZLE_VERSION = 4;
+export const LMS_PUZZLE_VERSION = 5;
 
 export interface LastManStandingPuzzle {
   modeId: 'last_man_standing';
@@ -61,6 +61,8 @@ export interface LMSBuilderResult {
   question: LMSQuestionPublic;
   answer: LMSQuestionAnswer;
   repeatKey: string;
+  /** Extra dedupe keys reserved for this puzzle (clubs/players already used). */
+  extraUsedKeys?: string[];
 }
 
 import type { LMSDifficulty } from './difficulty.js';

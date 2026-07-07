@@ -3,19 +3,32 @@ import { db } from '../../../db/index.js';
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
 import {
   FAMOUS_CLUBS_BY_LEAGUE,
-  famousClubsInLeague,
   isFamousEnough,
   LEAGUE_LABELS,
   MIN_NAME_PRESTIGE,
   SHARED_CLUB_CANDIDATES,
 } from '../fame.js';
-import { maxOddPrestigeSpread, playerPlayedInLeague, prestigeSpread } from '../plausibility.js';
+import type { PlayerClubIndex } from '../plausibility.js';
+import {
+  associationAt,
+  maxOddPrestigeSpread,
+  playerPlayedInLeague,
+  prestigeSpread,
+} from '../plausibility.js';
+import type { FamousPlayer } from '../shared.js';
 import { famousPlayers, makeOptionId, pickN, seededIndex } from '../shared.js';
 
 type OddTemplate = 'shared_club' | 'league_players' | 'league_club';
 
+/** Primary club or heavy spell — "everyone knows they play there". */
+const OBVIOUS_ASSOC = 0.38;
+
 export async function buildOddOneOut(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
-  const templates: OddTemplate[] = ['shared_club', 'league_players', 'league_club'];
+  // Q4 = slightly easier templates first; Q9 = shared-club with stricter filters.
+  const templates: OddTemplate[] =
+    ctx.slot <= 5
+      ? ['league_players', 'league_club', 'shared_club']
+      : ['shared_club', 'league_players', 'league_club'];
   const order = seededIndex(`${ctx.seed}:odd`, templates.length);
   const rotated = [...templates.slice(order), ...templates.slice(0, order)];
 
@@ -39,10 +52,15 @@ async function buildSharedClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
   if (!index) return null;
 
   const maxSpread = maxOddPrestigeSpread(ctx.difficulty.tier);
+  const maxObvious = maxObviousForSlot(ctx.slot);
   const famousPool = pool.filter((p) => p.prestige >= MIN_NAME_PRESTIGE);
 
-  const clubOrder = seededShuffleClubs(`${ctx.seed}:clubs`);
-  for (let attempt = 0; attempt < 24; attempt += 1) {
+  const clubOrder = seededShuffleClubs(`${ctx.seed}:clubs`).filter(
+    (club) => !ctx.usedKeys.has(`ooo:club-used:${club}`)
+  );
+  if (clubOrder.length === 0) return null;
+
+  for (let attempt = 0; attempt < 32; attempt += 1) {
     const club = clubOrder[attempt % clubOrder.length]!;
     const leagueId = index.leagueByClub.get(club);
     if (leagueId == null) continue;
@@ -50,11 +68,27 @@ async function buildSharedClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
     const members = famousPool.filter((p) => index.clubsByPlayer.get(p.id)?.has(club));
     if (members.length < 4) continue;
 
-    const three = pickN(members, `${ctx.seed}:sc3:${attempt}`, 3);
+    const subtle = members
+      .filter((p) => !isObviousClubLink(club, p.id, index))
+      .sort((a, b) => associationAt(index, a.id, club) - associationAt(index, b.id, club));
+
+    let three: FamousPlayer[];
+    if (ctx.slot >= 6) {
+      if (subtle.length < 3) continue;
+      three = pickN(subtle.slice(0, Math.min(14, subtle.length)), `${ctx.seed}:sc3:${attempt}`, 3);
+    } else {
+      const mixPool =
+        subtle.length >= 2
+          ? [...subtle.slice(0, 10), ...members.filter((m) => isObviousClubLink(club, m.id, index)).slice(0, 4)]
+          : members;
+      three = pickN(mixPool, `${ctx.seed}:sc3:${attempt}`, 3);
+      if (obviousClubLinks(club, three, index) > maxObvious) continue;
+    }
+
     const avgPrestige = three.reduce((s, p) => s + p.prestige, 0) / 3;
 
     const outsiders = famousPool.filter((p) => {
-      if (members.some((m) => m.id === p.id)) return false;
+      if (three.some((t) => t.id === p.id)) return false;
       if (index.clubsByPlayer.get(p.id)?.has(club)) return false;
       if (!playerPlayedInLeague(index, p.id, leagueId)) return false;
       return Math.abs(p.prestige - avgPrestige) <= maxSpread + 3;
@@ -65,8 +99,13 @@ async function buildSharedClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
     const fourIds = [...three.map((p) => p.id), odd.id];
     if (prestigeSpread(index, fourIds) > maxSpread + 2) continue;
 
+    const extraUsedKeys = [
+      `ooo:club-used:${club}`,
+      ...fourIds.map((id) => `ooo:player:${id}`),
+    ];
+    if (extraUsedKeys.some((k) => ctx.usedKeys.has(k))) continue;
+
     const repeatKey = `ooo:club:${club}:${odd.id}`;
-    if (ctx.usedKeys.has(repeatKey)) continue;
 
     const options = shuffleFour(
       [
@@ -78,6 +117,7 @@ async function buildSharedClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
 
     return {
       repeatKey,
+      extraUsedKeys,
       question: {
         id: questionId,
         type: 'odd_one_out',
@@ -106,14 +146,17 @@ async function buildLeaguePlayersOdd(ctx: LMSBuildContext): Promise<LMSBuilderRe
   if (!index) return null;
 
   const maxSpread = maxOddPrestigeSpread(ctx.difficulty.tier);
-  const leagueIds = [39, 140, 135, 78, 61];
+  const leagueIds = [39, 140, 135, 78, 61].filter(
+    (id) => !ctx.usedKeys.has(`ooo:league-used:${id}`)
+  );
+  if (leagueIds.length === 0) return null;
 
   const rows = (await db.execute(sql`
     SELECT ps.league_id, p.id, SUM(ps.appearances)::int AS apps
     FROM player_stats ps
     JOIN players p ON p.id = ps.player_id
     WHERE p.market_value_tier >= 4
-      AND ps.league_id IN (${sql.join(leagueIds.map((id) => sql`${id}`), sql`, `)})
+      AND ps.league_id IN (${sql.join([39, 140, 135, 78, 61].map((id) => sql`${id}`), sql`, `)})
     GROUP BY ps.league_id, p.id
     HAVING SUM(ps.appearances) >= 30
   `)) as unknown as Array<{ league_id: number; id: string; apps: number }>;
@@ -126,7 +169,7 @@ async function buildLeaguePlayersOdd(ctx: LMSBuildContext): Promise<LMSBuilderRe
     byLeague.set(r.league_id, list);
   }
 
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 24; attempt += 1) {
     const leagueId = leagueIds[seededIndex(`${ctx.seed}:lgp:${attempt}`, leagueIds.length)]!;
     const inLeague = byLeague.get(leagueId) ?? [];
     if (inLeague.length < 6) continue;
@@ -149,6 +192,12 @@ async function buildLeaguePlayersOdd(ctx: LMSBuildContext): Promise<LMSBuilderRe
     const fourIds = [...three.map((p) => p.id), odd.id];
     if (prestigeSpread(index, fourIds) > maxSpread + 2) continue;
 
+    const extraUsedKeys = [
+      `ooo:league-used:${leagueId}`,
+      ...fourIds.map((id) => `ooo:player:${id}`),
+    ];
+    if (extraUsedKeys.some((k) => ctx.usedKeys.has(k))) continue;
+
     const label = LEAGUE_LABELS[leagueId] ?? 'this league';
     const repeatKey = `ooo:lgp:${leagueId}:${odd.id}`;
 
@@ -162,6 +211,7 @@ async function buildLeaguePlayersOdd(ctx: LMSBuildContext): Promise<LMSBuilderRe
 
     return {
       repeatKey,
+      extraUsedKeys,
       question: {
         id: questionId,
         type: 'odd_one_out',
@@ -185,11 +235,13 @@ async function buildLeaguePlayersOdd(ctx: LMSBuildContext): Promise<LMSBuilderRe
 /** Three famous clubs from one top league — one famous club from another. */
 async function buildLeagueClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
   const questionId = `${ctx.date}-lms-q${ctx.slot}`;
-  const leagueIds = [39, 140, 135, 78, 61] as const;
+  const allLeagueIds = [39, 140, 135, 78, 61] as const;
+  const leagueIds = allLeagueIds.filter((id) => !ctx.usedKeys.has(`ooo:league-club:${id}`));
+  if (leagueIds.length === 0) return null;
 
   for (let attempt = 0; attempt < 16; attempt += 1) {
     const mainId = leagueIds[seededIndex(`${ctx.seed}:lg:${attempt}`, leagueIds.length)]!;
-    const others = leagueIds.filter((id) => id !== mainId);
+    const others = allLeagueIds.filter((id) => id !== mainId);
     const oddLeagueId = others[seededIndex(`${ctx.seed}:olg:${attempt}`, others.length)]!;
 
     const mainPool = FAMOUS_CLUBS_BY_LEAGUE[mainId] ?? [];
@@ -202,6 +254,8 @@ async function buildLeagueClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
 
     const repeatKey = `ooo:lg:${mainId}:${oddClub}`;
     const mainLabel = LEAGUE_LABELS[mainId] ?? 'league';
+    const extraUsedKeys = [`ooo:league-club:${mainId}`];
+    if (extraUsedKeys.some((k) => ctx.usedKeys.has(k))) continue;
 
     const options = shuffleFour(
       [
@@ -213,6 +267,7 @@ async function buildLeagueClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
 
     return {
       repeatKey,
+      extraUsedKeys,
       question: {
         id: questionId,
         type: 'odd_one_out',
@@ -231,6 +286,19 @@ async function buildLeagueClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
     };
   }
   return null;
+}
+
+function isObviousClubLink(club: string, playerId: string, index: PlayerClubIndex): boolean {
+  if (index.primaryClubByPlayer.get(playerId) === club) return true;
+  return associationAt(index, playerId, club) > OBVIOUS_ASSOC;
+}
+
+function obviousClubLinks(club: string, players: FamousPlayer[], index: PlayerClubIndex): number {
+  return players.filter((p) => isObviousClubLink(club, p.id, index)).length;
+}
+
+function maxObviousForSlot(slot: number): number {
+  return slot <= 5 ? 1 : 0;
 }
 
 function seededShuffleClubs(seed: string): string[] {
