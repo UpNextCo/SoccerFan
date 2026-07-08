@@ -192,21 +192,29 @@ struct LastManStandingView: View {
         ZStack {
             NavigationStack {
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 20) {
                         questionSection
                         survivorSection
-                            .padding(.top, 8)
                     }
+                    .animation(.easeOut(duration: 0.32), value: state.currentQuestionIndex)
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 28)
+                    .padding(.top, 4)
+                    .padding(.bottom, 32)
                 }
-                .background(StadiumBackground())
+                .background(StadiumBackground(glowIntensity: 0.28))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { dismiss() } label: {
-                            Ph.x.bold.color(BKTheme.textPrimary).frame(width: 20, height: 20)
+                            Ph.x.bold
+                                .color(BKTheme.textSecondary)
+                                .frame(width: 13, height: 13)
+                                .frame(width: 32, height: 32)
+                                .background(BKTheme.card.opacity(0.9))
+                                .clipShape(Circle())
+                                .overlay(LMSVisualStyle.cardStroke(Circle()))
                         }
+                        .buttonStyle(.plain)
                     }
                     ToolbarItem(placement: .principal) {
                         Text("LAST MAN STANDING")
@@ -262,17 +270,21 @@ struct LastManStandingView: View {
             ) { optionId in
                 Task { await viewModel.submit(optionId: optionId) }
             }
+            .id(question.id)
+            .transition(.opacity.combined(with: .offset(y: 8)))
 
             if viewModel.isChecking {
                 ProgressView()
-                    .tint(BKTheme.accent)
+                    .controlSize(.small)
+                    .tint(BKTheme.textMuted)
+                    .padding(.top, 2)
             }
         }
     }
 
     private var survivorSection: some View {
         let profile = LMSGameState.layoutProfile(forRemaining: state.displayedRemaining)
-        return VStack(spacing: 10) {
+        return VStack(spacing: 12) {
             LastManStandingSurvivorField(
                 entrants: state.visibleEntrants,
                 remaining: state.displayedRemaining,
@@ -284,12 +296,12 @@ struct LastManStandingView: View {
                 .font(BKFont.body(14))
                 .foregroundStyle(BKTheme.textPrimary)
                 .contentTransition(.numericText())
-                .animation(.easeOut(duration: 0.25), value: state.displayedRemaining)
+                .animation(.easeOut(duration: 0.28), value: state.displayedRemaining)
 
             if let summary = viewModel.eliminationSummary {
                 Text(summary)
                     .font(BKFont.caption(12))
-                    .foregroundStyle(BKTheme.accent)
+                    .foregroundStyle(BKTheme.accent.opacity(0.85))
                     .transition(.opacity)
             }
 
@@ -301,18 +313,18 @@ struct LastManStandingView: View {
                     .transition(.opacity)
             }
         }
-        .padding(.top, 4)
+        .padding(.top, 6)
     }
 
     private var correctFlash: some View {
         Text("Correct")
             .font(BKFont.headline(20))
             .foregroundStyle(BKTheme.accent)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 10)
-            .background(BKTheme.cardElevated.opacity(0.95))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 9)
+            .background(BKTheme.card.opacity(0.96))
             .clipShape(Capsule())
-            .shadow(color: BKTheme.accent.opacity(0.35), radius: 12)
+            .overlay(LMSVisualStyle.cardStroke(Capsule()))
     }
 
     private var lossOverlay: some View {

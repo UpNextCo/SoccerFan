@@ -72,6 +72,7 @@
 		E7A1B2C3D4E5F601010103 /* LastManStandingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A1B2C3D4E5F602010103 /* LastManStandingView.swift */; };
 		E7A1B2C3D4E5F601010104 /* LastManStandingSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A1B2C3D4E5F602010104 /* LastManStandingSeed.swift */; };
 		E7A1B2C3D4E5F601010105 /* LastManStandingQuestionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A1B2C3D4E5F602010105 /* LastManStandingQuestionCard.swift */; };
+		E7A1B2C3D4E5F601010106 /* LMSVisualStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A1B2C3D4E5F602010106 /* LMSVisualStyle.swift */; };
 		EE6672A880D715EB249E491C /* BlindRankView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF8E55ABF47595B1A2EF4C43 /* BlindRankView.swift */; };
 		FA6776AED5C7DA3C6291EA66 /* WorldCupXIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB738E61FA78C25E6A33B47F /* WorldCupXIModels.swift */; };
 		FEEF00D3BDD7648A935B071D /* FootballBingoSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B42BB208E7E01B1BD110962 /* FootballBingoSeed.swift */; };
@@ -95,6 +96,7 @@
 		E7A1B2C3D4E5F602010103 /* LastManStandingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastManStandingView.swift; sourceTree = "<group>"; };
 		E7A1B2C3D4E5F602010104 /* LastManStandingSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastManStandingSeed.swift; sourceTree = "<group>"; };
 		E7A1B2C3D4E5F602010105 /* LastManStandingQuestionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastManStandingQuestionCard.swift; sourceTree = "<group>"; };
+		E7A1B2C3D4E5F602010106 /* LMSVisualStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LMSVisualStyle.swift; sourceTree = "<group>"; };
 		2788D368A9154DB9D526DD10 /* FootballGolfView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballGolfView.swift; sourceTree = "<group>"; };
 		28C709EF976C20D67984569C /* GameEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameEngine.swift; sourceTree = "<group>"; };
 		2B36E8D6474C28DEE4701C12 /* StatsModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsModels.swift; sourceTree = "<group>"; };
@@ -399,6 +401,7 @@
 				E7A1B2C3D4E5F602010102 /* LastManStandingSurvivorField.swift */,
 				E7A1B2C3D4E5F602010103 /* LastManStandingView.swift */,
 				E7A1B2C3D4E5F602010105 /* LastManStandingQuestionCard.swift */,
+				E7A1B2C3D4E5F602010106 /* LMSVisualStyle.swift */,
 			);
 			path = LastManStanding;
 			sourceTree = "<group>";
@@ -495,6 +498,7 @@
 				E7A1B2C3D4E5F601010103 /* LastManStandingView.swift in Sources */,
 				E7A1B2C3D4E5F601010104 /* LastManStandingSeed.swift in Sources */,
 				E7A1B2C3D4E5F601010105 /* LastManStandingQuestionCard.swift in Sources */,
+				E7A1B2C3D4E5F601010106 /* LMSVisualStyle.swift in Sources */,
 				C4F799AF15D7E8C7423B5C7D /* Config.swift in Sources */,
 				3A0297A08B6E104DA7807595 /* DailyChallengeResolver.swift in Sources */,
 				046B77DFB3F7062D4E4A64D2 /* DailyPuzzleDTO.swift in Sources */,

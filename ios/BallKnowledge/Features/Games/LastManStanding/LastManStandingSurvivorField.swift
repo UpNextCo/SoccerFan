@@ -12,30 +12,29 @@ struct LMSEntrantIcon: View {
     @State private var eliminationOpacity: Double = 1
 
     private var bustOpacity: Double {
-        if entrant.isEliminated || emphasizeElimination { return 0.14 }
-        if entrant.isUser { return 0.92 }
-        return 0.38
+        if entrant.isEliminated || emphasizeElimination { return 0.12 }
+        if entrant.isUser { return 0.88 }
+        return 0.26
     }
 
     var body: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 2) {
             ZStack {
                 if entrant.isUser {
                     Circle()
-                        .stroke(BKTheme.accent.opacity(0.85), lineWidth: max(1.2, size * 0.07))
-                        .frame(width: size + 4, height: size + 4)
+                        .stroke(BKTheme.accent.opacity(0.55), lineWidth: max(1, size * 0.045))
+                        .frame(width: size + 3, height: size + 3)
                 }
 
                 Image(systemName: "person.fill")
-                    .font(.system(size: size * 0.72, weight: .medium))
+                    .font(.system(size: size * 0.68, weight: .regular))
                     .foregroundStyle(Color.white.opacity(bustOpacity))
                     .frame(width: size, height: size)
 
                 if entrant.isEliminated || emphasizeElimination {
                     Image(systemName: "xmark")
-                        .font(.system(size: size * 0.38, weight: .black))
-                        .foregroundStyle(BKTheme.wrong)
-                        .shadow(color: .black.opacity(0.4), radius: 1, y: 1)
+                        .font(.system(size: size * 0.34, weight: .bold))
+                        .foregroundStyle(BKTheme.wrong.opacity(0.9))
                 }
             }
             .scaleEffect(eliminationScale)
@@ -46,15 +45,15 @@ struct LMSEntrantIcon: View {
                     Text("YOU")
                         .font(.system(size: max(7, size * 0.15), weight: .bold, design: .rounded))
                         .tracking(0.4)
-                        .foregroundStyle(BKTheme.accent)
+                        .foregroundStyle(BKTheme.accent.opacity(0.8))
                 } else {
                     Text(" ")
-                        .font(.system(size: max(7, size * 0.15)))
+                        .font(.system(size: max(6, size * 0.13)))
                 }
             }
-            .frame(height: max(8, size * 0.18))
+            .frame(height: max(7, size * 0.16))
         }
-        .frame(width: size + 2, height: size + max(10, size * 0.22))
+        .frame(width: size + 2, height: size + max(9, size * 0.2))
         .onChange(of: entrant.eliminationToken) { _, token in
             guard token > 0 else {
                 eliminationScale = 1
@@ -98,37 +97,19 @@ struct LastManStandingSurvivorField: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            if profile.spotlight, entrants.count <= 3 {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [BKTheme.accent.opacity(0.22), .clear],
-                            center: .center,
-                            startRadius: 4,
-                            endRadius: profile.iconSize * 2.2
-                        )
-                    )
-                    .frame(width: profile.iconSize * 4, height: profile.iconSize * 4)
-                    .blur(radius: 6)
-                    .padding(.top, 8)
+        LazyVGrid(columns: columns, alignment: .center, spacing: profile.spacing) {
+            ForEach(entrants) { entrant in
+                LMSEntrantIcon(
+                    entrant: entrant,
+                    size: profile.iconSize,
+                    showYouLabel: remaining <= 22 || entrant.isUser
+                )
             }
-
-            LazyVGrid(columns: columns, alignment: .center, spacing: profile.spacing) {
-                ForEach(entrants) { entrant in
-                    LMSEntrantIcon(
-                        entrant: entrant,
-                        size: profile.iconSize,
-                        showYouLabel: remaining <= 22 || entrant.isUser
-                    )
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .top)
-            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: profile.maxHeight, alignment: .top)
+        .padding(.top, 2)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .animation(freezeField ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: entrants.count)
+        .animation(freezeField ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: entrants.count)
     }
 }

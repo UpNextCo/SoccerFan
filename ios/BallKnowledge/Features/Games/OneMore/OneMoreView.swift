@@ -372,7 +372,6 @@ private struct OneMoreChoiceCard: View {
         Button(action: onTap) {
             VStack(spacing: 8) {
                 PlayerAvatar(urlString: option.headshotUrl, size: 80)
-                .shadow(color: BKTheme.accent.opacity(0.5), radius: 5, y: 3) // tight green glow under the circle
 
                 Text(option.name)
                     .font(BKFont.headline(15))
@@ -428,24 +427,11 @@ private struct OneMoreChoiceCard: View {
             .padding(.horizontal, 10)
             .background(cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(borderColor, lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
         .disabled(revealed)
     }
 
-    /// A slight neutral edge that only goes green/red once revealed (win/loss feedback).
-    private var borderColor: Color {
-        guard revealed else { return Color.white.opacity(0.10) }
-        if qualifies { return BKTheme.accent.opacity(0.7) }
-        return isChosen ? BKTheme.wrong.opacity(0.7) : Color.white.opacity(0.10)
-    }
-
-    /// FIFA/EA-style panel: dark fill that fades into the page, a faint accent slash, and a subtle
-    /// diagonal line texture — no borders.
     @ViewBuilder private var cardBackground: some View {
         ZStack {
             // Flat fill matching the question rectangle at the top.

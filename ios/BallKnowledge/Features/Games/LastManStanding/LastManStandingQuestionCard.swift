@@ -19,7 +19,7 @@ struct LastManStandingQuestionCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             promptHeader
 
             switch question.type {
@@ -61,6 +61,7 @@ struct LastManStandingQuestionCard: View {
                 .font(BKFont.headline(18))
                 .foregroundStyle(BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             if let sub = question.subPrompt, !sub.isEmpty {
                 if cluePlayerNames(from: sub) != nil {
                     cluePlayerRow(sub)
@@ -72,10 +73,12 @@ struct LastManStandingQuestionCard: View {
                 }
             }
         }
-        .padding(18)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
         .frame(maxWidth: .infinity)
-        .background(BKTheme.cardElevated.opacity(0.95))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: LMSVisualStyle.cardRadius, style: .continuous))
+        .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: LMSVisualStyle.cardRadius, style: .continuous)))
     }
 
     @ViewBuilder
@@ -110,13 +113,14 @@ struct LastManStandingQuestionCard: View {
     }
 
     private var higherLowerOptions: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             ForEach(question.options) { option in
                 Button { onSelect(option.id) } label: {
-                    playerOptionCard(option, avatarSize: 72, compact: false)
+                    playerOptionCard(option, avatarSize: 68, compact: false)
                 }
+                .buttonStyle(LMSOptionButtonStyle())
                 .disabled(!isInteractive)
-                .opacity(isInteractive ? 1 : 0.55)
+                .opacity(isInteractive ? 1 : 0.5)
             }
         }
     }
@@ -187,8 +191,9 @@ struct LastManStandingQuestionCard: View {
                 Button { onSelect(option.id) } label: {
                     careerPathPlayerOptionCard(option)
                 }
+                .buttonStyle(LMSOptionButtonStyle())
                 .disabled(!isInteractive)
-                .opacity(isInteractive ? 1 : 0.55)
+                .opacity(isInteractive ? 1 : 0.5)
             }
         }
     }
@@ -199,8 +204,9 @@ struct LastManStandingQuestionCard: View {
                 Button { onSelect(option.id) } label: {
                     playerOptionCard(option, avatarSize: 56, compact: false)
                 }
+                .buttonStyle(LMSOptionButtonStyle())
                 .disabled(!isInteractive)
-                .opacity(isInteractive ? 1 : 0.55)
+                .opacity(isInteractive ? 1 : 0.5)
             }
         }
     }
@@ -211,8 +217,9 @@ struct LastManStandingQuestionCard: View {
                 Button { onSelect(option.id) } label: {
                     clubOptionCard(option)
                 }
+                .buttonStyle(LMSOptionButtonStyle())
                 .disabled(!isInteractive)
-                .opacity(isInteractive ? 1 : 0.55)
+                .opacity(isInteractive ? 1 : 0.5)
             }
         }
     }
@@ -223,8 +230,9 @@ struct LastManStandingQuestionCard: View {
                 Button { onSelect(option.id) } label: {
                     textClubOptionCard(option)
                 }
+                .buttonStyle(LMSOptionButtonStyle())
                 .disabled(!isInteractive)
-                .opacity(isInteractive ? 1 : 0.55)
+                .opacity(isInteractive ? 1 : 0.5)
             }
         }
     }
@@ -249,21 +257,18 @@ struct LastManStandingQuestionCard: View {
                     .font(.system(size: 28))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
         .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous))
+        .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous)))
     }
 
     private func playerOptionCard(_ option: LMSOption, avatarSize: CGFloat, compact: Bool) -> some View {
         Group {
             if compact {
                 HStack(spacing: 12) {
-                    PlayerAvatar(urlString: option.headshotUrl, size: avatarSize)
+                    playerAvatar(option, size: avatarSize)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(option.label)
                             .font(BKFont.body(15))
@@ -279,8 +284,8 @@ struct LastManStandingQuestionCard: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
             } else {
-                VStack(spacing: 8) {
-                    PlayerAvatar(urlString: option.headshotUrl, size: avatarSize)
+                VStack(spacing: 10) {
+                    playerAvatar(option, size: avatarSize)
                     Text(option.label)
                         .font(BKFont.headline(compact ? 14 : 15))
                         .foregroundStyle(BKTheme.textPrimary)
@@ -289,19 +294,31 @@ struct LastManStandingQuestionCard: View {
                         .minimumScaleFactor(0.85)
                     if let nat = option.nationality, !nat.isEmpty {
                         Text(GuessWhoDisplay.nationalityFlag(nat))
-                            .font(.system(size: 15))
+                            .font(.system(size: 13))
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, compact ? 10 : 14)
-                .padding(.horizontal, 8)
+                .padding(.vertical, 16)
+                .padding(.horizontal, 10)
             }
         }
         .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: compact ? 12 : 14))
+        .clipShape(RoundedRectangle(cornerRadius: compact ? 12 : LMSVisualStyle.optionRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: compact ? 12 : 14)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            LMSVisualStyle.cardStroke(
+                RoundedRectangle(cornerRadius: compact ? 12 : LMSVisualStyle.optionRadius, style: .continuous)
+            )
+        )
+    }
+
+    @ViewBuilder
+    private func playerAvatar(_ option: LMSOption, size: CGFloat) -> some View {
+        PlayerAvatar(urlString: option.headshotUrl, size: size) {
+            PlayerSilhouette(size: size)
+        }
+        .overlay(
+            Circle()
+                .strokeBorder(Color.white.opacity(0.07), lineWidth: 0.5)
         )
     }
 
@@ -316,11 +333,8 @@ struct LastManStandingQuestionCard: View {
             .padding(.vertical, 12)
             .padding(.horizontal, 8)
             .background(BKTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-            )
+            .clipShape(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous))
+            .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous)))
     }
 
     private func clubOptionCard(_ option: LMSOption) -> some View {
@@ -344,11 +358,8 @@ struct LastManStandingQuestionCard: View {
         .padding(.vertical, 10)
         .padding(.horizontal, 8)
         .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous))
+        .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous)))
     }
 }
 
