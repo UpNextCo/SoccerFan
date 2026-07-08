@@ -222,17 +222,9 @@ enum OfflineCache {
         try? context.save()
     }
 
-    /// UTC "today" and "yesterday" date strings — mirrors the server's completion-date window.
+    /// Local "today" and "yesterday" — mirrors the server's completion-date window.
     private static func acceptableSyncDates() -> Set<String>? {
-        var calendar = Calendar(identifier: .gregorian)
-        guard let utc = TimeZone(identifier: "UTC") else { return nil }
-        calendar.timeZone = utc
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = utc
-        let today = Date()
-        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else { return nil }
-        return [formatter.string(from: today), formatter.string(from: yesterday)]
+        DailyDate.acceptableSyncDates()
     }
 }
 

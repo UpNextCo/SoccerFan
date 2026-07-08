@@ -7,7 +7,8 @@ export const dailyRouter = Router();
 
 dailyRouter.get('/today', requireAuth, async (req, res) => {
   try {
-    const bundle = await getDailyBundle(req.auth!.userId);
+    const clientDate = typeof req.query.date === 'string' ? req.query.date : undefined;
+    const bundle = await getDailyBundle(req.auth!.userId, clientDate);
     sendSuccess(res, bundle);
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load daily', 500);

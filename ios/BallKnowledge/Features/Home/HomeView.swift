@@ -23,8 +23,8 @@ final class HomeViewModel {
             let apiModes = try await APIClient.shared.gameModes()
             gameModes = GameModeCatalog.resolve(from: apiModes)
         } catch {
-            let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
-            if let cached = try? OfflineCache.loadDailyBundle(date: String(today), context: context) {
+            let today = DailyDate.localToday()
+            if let cached = try? OfflineCache.loadDailyBundle(date: today, context: context) {
                 dailyBundle = cached
             }
             if gameModes.isEmpty {
@@ -40,11 +40,13 @@ final class HomeViewModel {
 struct HomeView: View {
     @Environment(AuthManager.self) private var auth
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel = HomeViewModel()
     @State private var presentedMode: GameModeID?
     @State private var showAlreadyPlayedAlert = false
     @State private var alreadyPlayedTitle = ""
     @State private var inProgressModes: Set<String> = []
+    @State private var trackedDailyDate = DailyDate.localToday()
     @Binding var selectedTab: AppTab
 
     private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
@@ -84,8 +86,17 @@ struct HomeView: View {
             await auth.refreshProfile()
         }
         .task {
-            await viewModel.load(context: modelContext)
-            refreshInProgress()
+            await reloadIfNeeded(force: true, context: modelContext)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await reloadIfNeeded(force: false, context: modelContext) }
+            }
+        }
+        .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
+            let today = DailyDate.localToday()
+            guard today != trackedDailyDate || viewModel.dailyBundle?.date != today else { return }
+            Task { await reloadIfNeeded(force: false, context: modelContext) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .dailyCompletionRecorded)) { _ in
             // The completion POST has landed on the server — refresh XP (top bar + card) and the
@@ -113,6 +124,15 @@ struct HomeView: View {
         } message: {
             Text("You've finished \(alreadyPlayedTitle) for today. Come back tomorrow for a new daily.")
         }
+    }
+
+    private func reloadIfNeeded(force: Bool, context: ModelContext) async {
+        let today = DailyDate.localToday()
+        if !force, viewModel.dailyBundle?.date == today, trackedDailyDate == today { return }
+        trackedDailyDate = today
+        await viewModel.load(context: context)
+        refreshInProgress()
+        await auth.refreshProfile()
     }
 
     private func openMode(_ mode: GameModeMetaDTO, bundle: DailyBundleDTO) {
@@ -426,7 +446,7 @@ struct DailySection: View {
                         .foregroundStyle(BKTheme.textPrimary)
                 }
                 Spacer()
-                TimelineView(.periodic(from: .now, by: 60)) { context in
+                TimelineView(.periodic(from: .now, by: 30)) { context in
                     Text((allComplete ? "New in " : "Resets in ") + DailyTime.untilReset(from: context.date))
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textMuted)
@@ -545,16 +565,9 @@ struct DailySection: View {
     private var dateline: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE d MMM"
-        // Show the daily's actual (UTC) date from the bundle — around UTC midnight the device's
-        // local date can differ from the puzzle day the player is completing.
-        if let bundleDate = bundle?.date {
-            let parser = DateFormatter()
-            parser.dateFormat = "yyyy-MM-dd"
-            parser.timeZone = TimeZone(identifier: "UTC")
-            formatter.timeZone = TimeZone(identifier: "UTC")
-            if let d = parser.date(from: bundleDate) {
-                return formatter.string(from: d)
-            }
+        formatter.timeZone = .current
+        if let bundleDate = bundle?.date, let d = DailyDate.displayDate(from: bundleDate) {
+            return formatter.string(from: d)
         }
         return formatter.string(from: Date())
     }
@@ -737,18 +750,9 @@ struct DailyGameCard: View {
 }
 
 enum DailyTime {
-    /// Time until the next daily reset. The server rolls puzzles + streaks at **UTC midnight**
-    /// (`todayUTC()` in dailyService.ts), so the countdown must use a UTC calendar — a local-time
-    /// countdown would promise players hours they don't actually have.
+    /// Countdown to local midnight — puzzles roll on the user's calendar day (NYT-style).
     static func untilReset(from date: Date) -> String {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
-        let startOfToday = calendar.startOfDay(for: date)
-        guard let midnight = calendar.date(byAdding: .day, value: 1, to: startOfToday) else {
-            return "tomorrow"
-        }
-
-        let seconds = max(0, midnight.timeIntervalSince(date))
+        let seconds = DailyDate.secondsUntilLocalMidnight(from: date)
         let totalMinutes = Int(seconds / 60)
         let hours = totalMinutes / 60
         let minutes = totalMinutes % 60

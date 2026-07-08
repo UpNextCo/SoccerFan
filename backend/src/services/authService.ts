@@ -9,17 +9,15 @@ function computeLevel(xp: number): number {
   return Math.max(1, Math.floor(Math.sqrt(xp / 100)));
 }
 
-function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { resolveClientDailyDate } from '../utils/dailyDate.js';
 
 function toUserProfile(
   user: typeof users.$inferSelect,
-  progress: typeof userProgress.$inferSelect
+  progress: typeof userProgress.$inferSelect,
+  clientDate?: string
 ): UserProfile {
-  // "Today's XP" only counts if the stored tally is actually from today — otherwise it's
-  // yesterday's total and should read 0 (the dailies have reset for the new day).
-  const todayXp = progress.todayXpDate === todayUTC() ? progress.todayXp : 0;
+  const dailyDate = resolveClientDailyDate(clientDate);
+  const todayXp = progress.todayXpDate === dailyDate ? progress.todayXp : 0;
   return {
     id: user.id,
     displayName: user.displayName,
@@ -98,7 +96,7 @@ export async function authenticateWithApple(
   return { token, user: toUserProfile(user, progress) };
 }
 
-export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+export async function getUserProfile(userId: string, clientDate?: string): Promise<UserProfile | null> {
   const userRows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   const user = userRows[0];
   if (!user) return null;
@@ -111,7 +109,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   const progress = progressRows[0];
   if (!progress) return null;
 
-  return toUserProfile(user, progress);
+  return toUserProfile(user, progress, clientDate);
 }
 
 export async function deleteUserAccount(userId: string): Promise<void> {

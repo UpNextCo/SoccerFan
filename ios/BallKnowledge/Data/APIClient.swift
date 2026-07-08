@@ -95,8 +95,9 @@ actor APIClient {
         )
     }
 
-    func me() async throws -> UserProfileDTO {
-        try await request("auth/me")
+    func me(localDate: String? = nil) async throws -> UserProfileDTO {
+        let date = localDate ?? DailyDate.localToday()
+        return try await request("auth/me", queryItems: [URLQueryItem(name: "date", value: date)])
     }
 
     func deleteAccount() async throws {
@@ -104,8 +105,9 @@ actor APIClient {
         let _: DeleteResponse = try await request("auth/me", method: "DELETE")
     }
 
-    func dailyToday() async throws -> DailyBundleDTO {
-        try await request("daily/today")
+    func dailyToday(localDate: String? = nil) async throws -> DailyBundleDTO {
+        let date = localDate ?? DailyDate.localToday()
+        return try await request("daily/today", queryItems: [URLQueryItem(name: "date", value: date)])
     }
 
     func dailyComplete(_ body: DailyCompleteRequestDTO) async throws -> DailyCompleteResponseDTO {

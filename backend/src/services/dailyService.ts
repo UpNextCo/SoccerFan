@@ -16,6 +16,7 @@ import { generateWorldCupXiPuzzle, WCXI_VERSION } from './worldCupXiGenerator.js
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
 import { computeServerScore, clampClientScore } from './dailyScoring.js';
+import { isAcceptableCompletionDate, previousDay, resolveClientDailyDate, todayUTC } from '../utils/dailyDate.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
 const GAME_MODES = [
@@ -65,14 +66,8 @@ export const DAILY_PLAYABLE_MODES = [
   'last_man_standing',
 ] as const;
 
-function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function yesterdayUTC(): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return previousDay(todayUTC());
 }
 
 // ---- XP model ------------------------------------------------------------------------------------
@@ -567,8 +562,8 @@ export async function getDailyPuzzle(date: string, modeId: string) {
   };
 }
 
-export async function getDailyBundle(userId: string): Promise<DailyBundle> {
-  const date = todayUTC();
+export async function getDailyBundle(userId: string, clientDate?: string): Promise<DailyBundle> {
+  const date = resolveClientDailyDate(clientDate);
   await ensureDailyPuzzles(date);
 
   const puzzles = await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.date, date));
@@ -620,9 +615,8 @@ export async function completeDaily(
     answer?: unknown;
   }
 ): Promise<DailyCompleteResponse> {
-  // Only today's daily can be completed. The one legitimate stale case is the offline queue
-  // syncing yesterday's finish after UTC midnight, so allow exactly today or yesterday.
-  if (input.date !== todayUTC() && input.date !== yesterdayUTC()) {
+  // Client sends its local calendar day (NYT-style). Allow a small window for offline sync.
+  if (!isAcceptableCompletionDate(input.date)) {
     throw new Error('Completion date is not the current daily');
   }
 
@@ -688,20 +682,20 @@ export async function completeDaily(
     .limit(1);
   const progress = progressRows[0]!;
 
-  const today = todayUTC();
-  const yesterday = yesterdayUTC();
+  const playDate = input.date;
+  const prevDay = previousDay(playDate);
   let newStreak = progress.streak;
   const lastPlayed = progress.lastPlayedDate;
 
-  if (lastPlayed !== today) {
-    if (lastPlayed === yesterday) {
+  if (lastPlayed !== playDate) {
+    if (lastPlayed === prevDay) {
       newStreak = progress.streak + 1;
     } else {
       newStreak = 1;
     }
   }
 
-  const todayXp = progress.todayXpDate === today ? progress.todayXp + xpEarned : xpEarned;
+  const todayXp = progress.todayXpDate === playDate ? progress.todayXp + xpEarned : xpEarned;
   const newXp = progress.xp + xpEarned;
   const newLevel = computeLevel(newXp);
 
@@ -711,9 +705,9 @@ export async function completeDaily(
       xp: newXp,
       level: newLevel,
       streak: newStreak,
-      lastPlayedDate: today,
+      lastPlayedDate: playDate,
       todayXp,
-      todayXpDate: today,
+      todayXpDate: playDate,
     })
     .where(eq(userProgress.userId, userId));
 

@@ -32,7 +32,8 @@ authRouter.post('/apple', async (req, res) => {
 });
 
 authRouter.get('/me', requireAuth, async (req, res) => {
-  const profile = await getUserProfile(req.auth!.userId);
+  const clientDate = typeof req.query.date === 'string' ? req.query.date : undefined;
+  const profile = await getUserProfile(req.auth!.userId, clientDate);
   if (!profile) {
     sendError(res, 'User not found', 404, 'NOT_FOUND');
     return;
