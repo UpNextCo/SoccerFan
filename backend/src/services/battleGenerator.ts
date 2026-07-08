@@ -26,6 +26,7 @@ import {
   peakValueSub,
   recordFeeSub,
   careerTrophiesSub,
+  intlCapsSub,
 } from './statMetrics.js';
 
 // ---------------------------------------------------------------------------
@@ -52,8 +53,6 @@ const LEAGUE_TITLE_COMPETITIONS = ['Premier League', 'La Liga', 'Serie A', 'Bund
 const leagueTitlesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM player_honours
   WHERE lower(placement) = 'winner' AND competition IN (${sql.join(LEAGUE_TITLE_COMPETITIONS.map((c) => sql`${c}`), sql`, `)})
   GROUP BY player_id)`;
-
-const intlCapsSub: SQL = sql`(SELECT player_id, intl_caps::int AS value FROM player_extra_stats)`;
 
 const mostClubsSub: SQL = sql`(SELECT player_id, COUNT(DISTINCT team_id)::int AS value FROM player_career GROUP BY player_id)`;
 

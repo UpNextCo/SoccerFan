@@ -42,3 +42,11 @@ export const TROPHY_COMPETITIONS = [
 export const careerTrophiesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM player_honours
   WHERE lower(placement) = 'winner' AND competition IN (${sql.join(TROPHY_COMPETITIONS.map((c) => sql`${c}`), sql`, `)})
   GROUP BY player_id)`;
+
+/** TM's players.csv international_caps is sometimes club appearances or a merged-id artefact. */
+export const INTL_CAPS_SANITY_MAX = 280;
+
+/** International caps from player_extra_stats (Wikipedia + TM), with out-of-range values zeroed. */
+export const intlCapsSub: SQL = sql`(SELECT player_id,
+  CASE WHEN intl_caps BETWEEN 1 AND ${INTL_CAPS_SANITY_MAX} THEN intl_caps ELSE 0 END::int AS value
+  FROM player_extra_stats)`;

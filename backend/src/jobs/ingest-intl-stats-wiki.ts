@@ -22,6 +22,33 @@ import { normalizeSearchText } from '../utils/playerSearch.js';
 const GOALS_PAGE = "List of men's footballers with 50 or more international goals";
 const CAPS_PAGE = "List of men's footballers with 100 or more international caps";
 
+/** FIFA codes from {{fb|EGY}} nation cells → canonical nationality (matches players.nationality). */
+const FIFA_CODE: Record<string, string> = {
+  ALG: 'Algeria', ARG: 'Argentina', AUS: 'Australia', AUT: 'Austria', BEL: 'Belgium',
+  BRA: 'Brazil', CMR: 'Cameroon', CHI: 'Chile', COL: 'Colombia', CRO: 'Croatia',
+  CIV: 'Ivory Coast', CZE: 'Czech Republic', DEN: 'Denmark', ECU: 'Ecuador', EGY: 'Egypt',
+  ENG: 'England', FRA: 'France', GER: 'Germany', GHA: 'Ghana', GRE: 'Greece',
+  IRN: 'Iran', ITA: 'Italy', JPN: 'Japan', KSA: 'Saudi Arabia', KOR: 'South Korea',
+  MEX: 'Mexico', MAR: 'Morocco', NED: 'Netherlands', NGA: 'Nigeria', NOR: 'Norway',
+  PAR: 'Paraguay', POL: 'Poland', POR: 'Portugal', ROU: 'Romania', RUS: 'Russia',
+  SCO: 'Scotland', SEN: 'Senegal', SRB: 'Serbia', RSA: 'South Africa', ESP: 'Spain',
+  SWE: 'Sweden', SUI: 'Switzerland', TUN: 'Tunisia', TUR: 'Turkey', UKR: 'Ukraine',
+  URU: 'Uruguay', USA: 'United States', WAL: 'Wales',
+};
+
+function nationFrom(cell: string): string | null {
+  const m = cell.match(/\{\{\s*fb[a-z-]*\s*\|\s*([A-Za-z]{3})/i);
+  if (!m) return null;
+  return FIFA_CODE[m[1]!.toUpperCase()] ?? null;
+}
+
+function nationalityMatches(dbNat: string | null | undefined, wikiNat: string): boolean {
+  if (!dbNat || !wikiNat) return false;
+  const a = dbNat.toLowerCase();
+  const b = wikiNat.toLowerCase();
+  return a === b || a.includes(b) || b.includes(a);
+}
+
 async function fetchWikitext(title: string): Promise<string | null> {
   const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json&formatversion=2&redirects=1`;
   const res = await fetch(url, { headers: { 'User-Agent': 'BallKnowledge/1.0 (dev@ballknowledge.app)' } });
@@ -50,6 +77,7 @@ function playerFrom(cell: string): string {
 
 interface IntlRow {
   player: string;
+  nation: string | null;
   goals: number | null;
   caps: number | null;
 }
@@ -88,6 +116,12 @@ function parseList(wt: string, kind: 'goals' | 'caps'): IntlRow[] {
     }
     if (!player) continue;
 
+    let nation: string | null = null;
+    for (let i = playerIdx + 1; i < Math.min(cells.length, playerIdx + 4); i += 1) {
+      nation = nationFrom(cells[i]!);
+      if (nation) break;
+    }
+
     // Numbers after the nation/confederation cells: first numeric = goals (goals page) or caps
     // (caps page); on the goals page the second numeric is caps.
     const nums: number[] = [];
@@ -104,8 +138,8 @@ function parseList(wt: string, kind: 'goals' | 'caps'): IntlRow[] {
     }
     if (nums.length === 0) continue;
 
-    if (kind === 'goals') out.push({ player, goals: nums[0]!, caps: nums[1] ?? null });
-    else out.push({ player, goals: null, caps: nums[0]! });
+    if (kind === 'goals') out.push({ player, nation, goals: nums[0]!, caps: nums[1] ?? null });
+    else out.push({ player, nation, goals: null, caps: nums[0]! });
   }
   return out;
 }
@@ -122,31 +156,37 @@ async function main() {
   const capRows = parseList(capsWt, 'caps');
   console.log(`Parsed: ${goalRows.length} rows from 50+ goals list, ${capRows.length} rows from 100+ caps list`);
 
-  // Merge by normalized name, keeping max values.
-  const merged = new Map<string, { player: string; goals: number; caps: number }>();
+  // Merge by normalized name, keeping max values (and the nation tag from whichever row had it).
+  const merged = new Map<string, { player: string; nation: string | null; goals: number; caps: number }>();
   for (const r of [...goalRows, ...capRows]) {
     const k = normalizeSearchText(r.player);
-    const e = merged.get(k) ?? { player: r.player, goals: 0, caps: 0 };
+    const e = merged.get(k) ?? { player: r.player, nation: r.nation, goals: 0, caps: 0 };
     e.goals = Math.max(e.goals, r.goals ?? 0);
     e.caps = Math.max(e.caps, r.caps ?? 0);
+    if (!e.nation && r.nation) e.nation = r.nation;
     merged.set(k, e);
   }
 
-  // Match to players (name or alias; tie-break career apps like the awards importer).
+  // Match to players (name or alias; tie-break by nation then career apps / birth year).
   const players = (await db.execute(sql`
-    SELECT p.id, p.name, p.aliases, COALESCE(SUM(s.appearances),0)::int AS apps
+    SELECT p.id, p.name, p.nationality, p.birth_date::text AS birth_date, p.aliases,
+           COALESCE(SUM(s.appearances),0)::int AS apps
     FROM players p LEFT JOIN player_stats s ON s.player_id = p.id GROUP BY p.id
-  `)) as unknown as Array<{ id: string; name: string; aliases: string[]; apps: number }>;
-  const byName = new Map<string, Array<{ id: string; apps: number }>>();
-  const add = (k: string, id: string, apps: number) => {
+  `)) as unknown as Array<{ id: string; name: string; nationality: string | null; birth_date: string | null; aliases: string[]; apps: number }>;
+  const byName = new Map<string, Array<{ id: string; apps: number; nationality: string | null; birthYear: number | null }>>();
+  const add = (k: string, id: string, apps: number, nationality: string | null, birthYear: number | null) => {
     if (!k) return;
     const arr = byName.get(k);
-    if (arr) arr.push({ id, apps });
-    else byName.set(k, [{ id, apps }]);
+    const row = { id, apps, nationality, birthYear };
+    if (arr) arr.push(row);
+    else byName.set(k, [row]);
   };
   for (const p of players) {
-    add(normalizeSearchText(p.name), p.id, p.apps);
-    for (const a of Array.isArray(p.aliases) ? p.aliases : []) add(normalizeSearchText(a), p.id, p.apps);
+    const birthYear = p.birth_date ? parseInt(p.birth_date.slice(0, 4), 10) : null;
+    add(normalizeSearchText(p.name), p.id, p.apps, p.nationality, birthYear);
+    for (const a of Array.isArray(p.aliases) ? p.aliases : []) {
+      add(normalizeSearchText(a), p.id, p.apps, p.nationality, birthYear);
+    }
   }
 
   let matched = 0;
@@ -158,8 +198,21 @@ async function main() {
       unmatched += 1;
       continue;
     }
+    let pool = cands;
+    if (e.nation) {
+      const natFiltered = cands.filter((c) => nationalityMatches(c.nationality, e.nation!));
+      if (natFiltered.length > 0) pool = natFiltered;
+    }
+    const pick = pool.slice().sort((a, b) => {
+      if (e.caps >= 100) {
+        const ay = a.birthYear ?? 9999;
+        const by = b.birthYear ?? 9999;
+        if (ay !== by) return ay - by;
+      }
+      return b.apps - a.apps;
+    })[0]!;
     matched += 1;
-    updates.push({ id: cands.slice().sort((a, b) => b.apps - a.apps)[0]!.id, goals: e.goals, caps: e.caps, player: e.player });
+    updates.push({ id: pick.id, goals: e.goals, caps: e.caps, player: e.player });
   }
   console.log(`Matched ${matched} players (${unmatched} not in DB — mostly pre-1990s internationals)`);
 

@@ -634,7 +634,7 @@ private struct BattlePitchSlot: View {
                     .foregroundStyle(Color.white.opacity(0.7))
             }
         }
-        .shadow(color: .black.opacity(0.55), radius: 2, x: 0, y: 1)
+        .shadow(color: .black.opacity(0.35), radius: 1, x: 0, y: 1)
         .frame(width: 76)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
@@ -694,12 +694,12 @@ struct PitchBackground: View {
 
             // Fine grass grain — sparse vertical strokes, stable per layout size.
             ctx.drawLayer { layer in
-                let cols = max(24, Int(w / 5.5))
-                let rows = max(40, Int(h / 3.8))
+                let cols = max(16, Int(w / 10))
+                let rows = max(24, Int(h / 7))
                 for row in 0..<rows {
                     for col in 0..<cols {
                         let seed = Self.textureHash(row, col)
-                        guard seed > 0.52 else { continue }
+                        guard seed > 0.72 else { continue }
                         let x = CGFloat(col) / CGFloat(cols) * w + CGFloat(Self.textureHash(row, col + 911)) * 4
                         let y = CGFloat(row) / CGFloat(rows) * h + CGFloat(Self.textureHash(row + 407, col)) * 3
                         let len = 2.2 + CGFloat(seed) * 4.8
@@ -707,7 +707,7 @@ struct PitchBackground: View {
                         var blade = Path()
                         blade.move(to: CGPoint(x: x, y: y))
                         blade.addLine(to: CGPoint(x: x + tilt, y: y + len))
-                        let shade = seed > 0.78 ? grassHighlight.opacity(0.10) : grassShadow.opacity(0.14)
+                        let shade = seed > 0.88 ? grassHighlight.opacity(0.10) : grassShadow.opacity(0.14)
                         layer.stroke(blade, with: .color(shade), lineWidth: 0.65)
                     }
                 }
@@ -826,6 +826,8 @@ struct PitchBackground: View {
                 .fill(RadialGradient(colors: [.clear, .black.opacity(0.32)], center: .center, startRadius: 10, endRadius: 320))
         )
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.08), lineWidth: 1))
+        // Rasterize once per layout pass so slot/state updates don't redraw ~4k grass strokes.
+        .drawingGroup(opaque: true)
     }
 
     /// Deterministic 0…1 hash for procedural grass grain (stable across redraws).

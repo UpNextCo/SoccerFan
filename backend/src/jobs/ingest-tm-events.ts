@@ -17,6 +17,7 @@ import { readFileSync, createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import { INTL_CAPS_SANITY_MAX } from '../services/statMetrics.js';
 
 const DIR = process.argv[2] ?? process.env.TM_DIR ?? 'transferdata';
 const YEAR_MS = 365.25 * 86_400_000;
@@ -190,8 +191,11 @@ async function main() {
   const agg = new Map<string, Agg>();
   const get = (ourId: string): Agg => { let a = agg.get(ourId); if (!a) { a = blank(); agg.set(ourId, a); } return a; };
 
-  // Caps from players.csv
-  for (const [tmId, t] of tmById) { const o = tmToOur.get(tmId); if (o && t.caps > 0) get(o).intlCaps = t.caps; }
+  // Caps from players.csv — reject garbage (TM sometimes stores club apps or merged totals here).
+  for (const [tmId, t] of tmById) {
+    const o = tmToOur.get(tmId);
+    if (o && t.caps > 0 && t.caps <= INTL_CAPS_SANITY_MAX) get(o).intlCaps = t.caps;
+  }
 
   // ---- Stream appearances: debut, first goal, goals-before-21, hat-tricks ----
   console.log('Streaming appearances.csv...');
@@ -264,7 +268,12 @@ async function main() {
         career_hattricks = EXCLUDED.career_hattricks, ucl_knockout_goals = EXCLUDED.ucl_knockout_goals,
         ucl_goals_vs_english = EXCLUDED.ucl_goals_vs_english, ucl_red_cards = EXCLUDED.ucl_red_cards,
         goals_before_21 = EXCLUDED.goals_before_21, first_goal_age_days = EXCLUDED.first_goal_age_days,
-        debut_age_days = EXCLUDED.debut_age_days, intl_caps = EXCLUDED.intl_caps, updated_at = now()
+        debut_age_days = EXCLUDED.debut_age_days,
+        intl_caps = CASE
+          WHEN EXCLUDED.intl_caps > ${INTL_CAPS_SANITY_MAX} THEN p.intl_caps
+          ELSE GREATEST(p.intl_caps, EXCLUDED.intl_caps)
+        END,
+        updated_at = now()
     `);
   }
   console.log('Done.');

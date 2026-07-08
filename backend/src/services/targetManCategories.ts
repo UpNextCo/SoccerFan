@@ -1,7 +1,7 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import type { FactPackPlayer } from './dailyPuzzleTypes.js';
-import { careerGoalsSub, peakValueSub, careerTrophiesSub } from './statMetrics.js';
+import { careerGoalsSub, peakValueSub, careerTrophiesSub, intlCapsSub } from './statMetrics.js';
 
 /**
  * Target Man categories. Each one is a self-describing, fan-friendly stat with a SQL
@@ -47,7 +47,7 @@ export const TARGET_CATEGORIES: TargetCategoryDef[] = [
   { id: 'cl_assists', label: 'Champions League Assists', valueNoun: 'assists', offNoun: 'assists off', unit: null, round: 5, min: 8, sub: leagueMetric('assists', 2) },
   { id: 'pl_apps', label: 'Premier League Appearances', valueNoun: 'apps', offNoun: 'apps off', unit: null, round: 5, min: 100, sub: leagueMetric('appearances', 39) },
   { id: 'cl_apps', label: 'Champions League Appearances', valueNoun: 'apps', offNoun: 'apps off', unit: null, round: 5, min: 30, sub: leagueMetric('appearances', 2) },
-  { id: 'intl_caps', label: 'International Caps', valueNoun: 'caps', offNoun: 'caps off', unit: null, round: 5, min: 30, sub: extraStat('intl_caps') },
+  { id: 'intl_caps', label: 'International Caps', valueNoun: 'caps', offNoun: 'caps off', unit: null, round: 5, min: 30, sub: intlCapsSub },
   { id: 'pl_penalties', label: 'Premier League Penalties', valueNoun: 'pens', offNoun: 'pens off', unit: null, round: 1, min: 5, sub: extraStat('pl_penalties') },
   { id: 'laliga_penalties', label: 'La Liga Penalties', valueNoun: 'pens', offNoun: 'pens off', unit: null, round: 1, min: 5, sub: extraStat('laliga_penalties') },
   { id: 'seriea_penalties', label: 'Serie A Penalties', valueNoun: 'pens', offNoun: 'pens off', unit: null, round: 1, min: 5, sub: extraStat('seriea_penalties') },

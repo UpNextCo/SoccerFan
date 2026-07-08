@@ -172,22 +172,24 @@ struct OneMoreView: View {
                             .padding(.vertical, 16)
                             .padding(.horizontal, 16)
                             .frame(maxWidth: .infinity)
-                            .background(
-                                // Very subtle green glow behind the run that slowly breathes, like
-                                // the home hero's orbs.
-                                TimelineView(.animation(minimumInterval: 1 / 30)) { tl in
-                                    let t = tl.date.timeIntervalSinceReferenceDate
-                                    let pulse = 0.022 + 0.012 * (0.5 + 0.5 * sin(t * 0.5))
+                            .background {
+                                GeometryReader { geo in
+                                    let radius = max(geo.size.width, geo.size.height) * 0.72
                                     RadialGradient(
-                                        colors: [BKTheme.accent.opacity(pulse), BKTheme.accent.opacity(pulse * 0.25), .clear],
+                                        colors: [
+                                            BKTheme.accent.opacity(0.028),
+                                            BKTheme.accent.opacity(0.007),
+                                            .clear,
+                                        ],
                                         center: .center,
                                         startRadius: 0,
-                                        endRadius: 260
+                                        endRadius: radius
                                     )
-                                    .blur(radius: 28)
+                                    .blur(radius: 18)
+                                    .frame(width: geo.size.width, height: geo.size.height)
                                 }
                                 .allowsHitTesting(false)
-                            )
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 12)
@@ -206,6 +208,7 @@ struct OneMoreView: View {
                 }
                 .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.state.streak)
                 .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.canCashOut)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(StadiumBackground(glowIntensity: 0.32))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
