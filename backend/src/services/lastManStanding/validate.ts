@@ -11,6 +11,13 @@ import { MIN_NAME_PRESTIGE } from './fame.js';
 const PLACEHOLDER_RE = /placeholder|option [a-d]/i;
 const GK_TELEGRAPH_RE = /goalkeeper|three outfield/i;
 const TELEGRAPH_SUBPROMPT_RE = /three outfield|big six/i;
+const LEAGUE_GEOGRAPHY_ODD_RE = /^three .+ clubs$/i;
+
+function isGiveawayClubOddOneOut(built: LMSBuilderResult): boolean {
+  const sub = built.question.subPrompt?.trim() ?? '';
+  if (LEAGUE_GEOGRAPHY_ODD_RE.test(sub)) return true;
+  return false;
+}
 
 function playerIdFromOption(questionId: string, optionId: string): string | null {
   if (!optionId.startsWith(`${questionId}-`)) return null;
@@ -85,6 +92,8 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
     case 'odd_one_out': {
       if (question.presentation?.layout !== 'grid') return false;
       if (!question.subPrompt?.trim()) return false;
+      if (isGiveawayClubOddOneOut(built)) return false;
+      if (ctx.slot >= 6 && question.subPrompt.startsWith('All played in the ')) return false;
       const ids = question.options
         .map((o) => playerIdFromOption(question.id, o.id))
         .filter((id): id is string => id != null);

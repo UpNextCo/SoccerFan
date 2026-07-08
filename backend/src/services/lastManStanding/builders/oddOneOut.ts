@@ -25,11 +25,11 @@ type OddTemplate = 'shared_club' | 'league_players' | 'league_club';
 const OBVIOUS_ASSOC = 0.38;
 
 export async function buildOddOneOut(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
-  // Q4 = slightly easier templates first; Q9 = shared-club with stricter filters.
+  // Q4 can use easier templates; Q9 must be player knowledge, not league geography.
   const templates: OddTemplate[] =
     ctx.slot <= 5
       ? ['league_players', 'league_club', 'shared_club']
-      : ['shared_club', 'league_players', 'league_club'];
+      : ['shared_club', 'league_players'];
   const order = seededIndex(`${ctx.seed}:odd`, templates.length);
   const rotated = [...templates.slice(order), ...templates.slice(0, order)];
 
