@@ -96,6 +96,8 @@ const AGG = sql`
     SELECT p.id, p.nationality, p.position, p.market_value_tier AS mvt,
       COALESCE(p.peak_market_value_eur, 0)::bigint AS peak_value,
       COALESCE(p.record_fee_eur, 0)::bigint AS record_fee,
+      (SELECT COUNT(*)::int FROM final_appearances f WHERE f.player_id = p.id) AS finals,
+      (SELECT COUNT(*)::int FROM player_awards aw WHERE aw.player_id = p.id) AS awards,
       COALESCE(SUM(s.appearances)   FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_apps,
       COALESCE(SUM(s.goals)         FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_goals,
       COALESCE(SUM(s.assists)       FILTER (WHERE s.league_id = ${PL}), 0)::int AS pl_assists,
@@ -185,6 +187,10 @@ export interface AnswerPlayer {
   big5: number;
   ucl: number;
   total: number;
+  /** Major finals (WC, Euro, UCL…) from final_appearances — same source as compute-fame. */
+  finals: number;
+  /** Individual honours (Ballon d'Or, Golden Boot…) from player_awards. */
+  awards: number;
 }
 
 /** EVERY player satisfying the rule, with fame fields — the full answer set for a
@@ -199,7 +205,9 @@ export async function enumeratePlayers(rule: TowerRule): Promise<AnswerPlayer[]>
         COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 39),0)::int AS pl,
         COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id IN (39,140,135,78,61)),0)::int AS big5,
         COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2),0)::int AS ucl,
-        COALESCE(SUM(s.appearances),0)::int AS total
+        COALESCE(SUM(s.appearances),0)::int AS total,
+        (SELECT COUNT(*)::int FROM final_appearances f WHERE f.player_id = p.id) AS finals,
+        (SELECT COUNT(*)::int FROM player_awards aw WHERE aw.player_id = p.id) AS awards
       FROM players p LEFT JOIN player_stats s ON s.player_id = p.id
       WHERE p.id IN (${ids}) GROUP BY p.id, p.name, p.market_value_tier
     `)) as unknown as AnswerPlayer[];
@@ -209,7 +217,8 @@ export async function enumeratePlayers(rule: TowerRule): Promise<AnswerPlayer[]>
   const rows = (await db.execute(sql`
     ${AGG}
     SELECT a.id, (SELECT name FROM players WHERE id = a.id) AS name, a.mvt,
-           a.pl_apps AS pl, a.big5_apps AS big5, a.ucl_apps AS ucl, a.total_apps AS total
+           a.pl_apps AS pl, a.big5_apps AS big5, a.ucl_apps AS ucl, a.total_apps AS total,
+           a.finals, a.awards
     FROM agg a WHERE ${conds}
   `)) as unknown as AnswerPlayer[];
   return rows;

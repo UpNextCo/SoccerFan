@@ -15,6 +15,7 @@
     "db:seed": "tsx src/db/seed-cli.ts",
     "job:generate-daily": "tsx src/jobs/generate-daily.ts",
     "job:regenerate-lms": "tsx src/jobs/regenerate-lms.ts",
+    "job:regenerate-golf": "tsx src/jobs/regenerate-golf.ts",
     "job:gen-bingo": "tsx src/services/footballBingoGenerator.ts",
     "job:gen-tower": "tsx src/services/footballTowerGenerator.ts",
     "job:tower-daily": "tsx src/services/footballTowerGenerator.ts store",

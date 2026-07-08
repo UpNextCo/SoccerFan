@@ -59,24 +59,48 @@ function targetForPar(par: 2 | 3 | 4, famous: number): number {
   return Math.min(MAX_TARGET, par);
 }
 
-/** Inverse of fame: a household name is "common", a deep cut is "ultraRare". This is
- *  what powers the satisfying "I found a rarer answer" moment. */
+/** Achievement prestige — same weights as compute-fame.ts (finals×3 + awards×4). */
+function achievementPrestige(p: AnswerPlayer): number {
+  return p.finals * 3 + p.awards * 4;
+}
+
+/** Composite name-recognition score. Peak € tier alone mis-ranks legends (e.g. Sergio Ramos
+ *  can sit at tier 4 while being a household name) — CL/PL exposure + major honours lift icons. */
+function recognitionScore(p: AnswerPlayer): number {
+  let s = p.mvt * 10;
+  if (p.ucl >= 80) s += 14;
+  else if (p.ucl >= 40) s += 9;
+  else if (p.ucl >= 20) s += 5;
+  if (p.pl >= 80) s += 12;
+  else if (p.pl >= 40) s += 8;
+  else if (p.pl >= 20) s += 4;
+  if (p.big5 >= 350) s += 6;
+  else if (p.big5 >= 200) s += 3;
+  const ach = achievementPrestige(p);
+  if (ach >= 12) s += 18;
+  else if (ach >= 6) s += 10;
+  else if (ach >= 2.5) s += 5;
+  else if (ach >= 0.8) s += 2;
+  return s;
+}
+
+/** Inverse of fame for scoring: household → common, deep cut → ultraRare. Uses recognition
+ *  (tier + CL/PL/BIG5 + finals/awards), not market tier alone. */
 function rarityFor(p: AnswerPlayer): Rarity {
-  // Fame = market_value_tier (the validated signal). Career apps are NOT used for the
-  // famous tiers, because long-serving journeymen rack up apps without being nameable —
-  // that's exactly what made niche prompts (e.g. Ivorian-in-Bundesliga) look fair when
-  // they weren't.
-  if (p.mvt >= 5) return 'common';
-  if (p.mvt >= 4) return 'uncommon';
-  if (p.mvt >= 3 || p.big5 >= 120) return 'rare';
+  const rec = recognitionScore(p);
+  const ach = achievementPrestige(p);
+  // Household names — megastars, CL icons, major-final winners, Ballon-tier honours.
+  if (p.mvt >= 5 || ach >= 12 || rec >= 58 || p.ucl >= 70 || p.pl >= 70 || (p.mvt >= 4 && p.ucl >= 35)) return 'common';
+  // Regular fan knows them — solid PL/UCL regulars, tier-4 peaks, WC/Euro finalists.
+  if (p.mvt >= 4 || ach >= 6 || rec >= 44 || p.pl >= 25 || p.ucl >= 30 || p.big5 >= 200) return 'uncommon';
+  // Footy-nerd picks — some fame signal but not casual-audience names.
+  if (p.mvt >= 3 || ach >= 2.5 || rec >= 34 || p.big5 >= 100 || p.pl >= 12 || p.ucl >= 15) return 'rare';
   return 'ultraRare';
 }
 
-/** Whether THIS audience could name the player: a global megastar (mvt 5), a Premier
- *  League regular, or a Champions League regular. Crucially NOT "high market value in a
- *  foreign league" — that's how niche prompts (Ivorian-in-Bundesliga) snuck through. */
+/** Whether THIS audience could name the player: megastar, PL/UCL regular, or major honours. */
 function isNameable(p: AnswerPlayer): boolean {
-  return p.mvt >= 5 || p.pl >= 25 || p.ucl >= 30;
+  return p.mvt >= 5 || p.pl >= 25 || p.ucl >= 30 || achievementPrestige(p) >= 6;
 }
 
 /** Count of answers the audience can actually name. Par is clamped below this. */
