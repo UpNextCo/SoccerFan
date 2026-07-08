@@ -163,32 +163,32 @@ struct BattleResult: Equatable, Codable {
 enum BattleFormations {
     /// 4-3-3 with a keeper (appearances categories). y: 0.1 = attack (top) → 0.93 = own goal (bottom).
     private static let withGk: [String: (label: String, point: CGPoint)] = [
-        "gk": ("GK", CGPoint(x: 0.50, y: 0.93)),
-        "lb": ("LB", CGPoint(x: 0.12, y: 0.76)),
-        "cb1": ("CB", CGPoint(x: 0.37, y: 0.80)),
-        "cb2": ("CB", CGPoint(x: 0.63, y: 0.80)),
-        "rb": ("RB", CGPoint(x: 0.88, y: 0.76)),
-        "dm": ("DM", CGPoint(x: 0.50, y: 0.62)),
-        "cm": ("CM", CGPoint(x: 0.30, y: 0.50)),
-        "am": ("AM", CGPoint(x: 0.70, y: 0.50)),
-        "lw": ("LW", CGPoint(x: 0.16, y: 0.20)),
-        "cf": ("ST", CGPoint(x: 0.50, y: 0.13)),
-        "rw": ("RW", CGPoint(x: 0.84, y: 0.20)),
-    ]
-
-    /// All-outfield 4-3-3 (goals categories, no keeper) — uses the full pitch: defenders pushed back,
-    /// the two central mids on the halfway line, the DM just behind the centre circle.
-    private static let outfield: [String: (label: String, point: CGPoint)] = [
-        "lb": ("LB", CGPoint(x: 0.12, y: 0.78)),
-        "cb1": ("CB", CGPoint(x: 0.37, y: 0.82)),
-        "cb2": ("CB", CGPoint(x: 0.63, y: 0.82)),
-        "rb": ("RB", CGPoint(x: 0.88, y: 0.78)),
-        "dm": ("DM", CGPoint(x: 0.50, y: 0.61)),
+        "gk": ("GK", CGPoint(x: 0.50, y: 0.94)),
+        "lb": ("LB", CGPoint(x: 0.12, y: 0.74)),
+        "cb1": ("CB", CGPoint(x: 0.37, y: 0.78)),
+        "cb2": ("CB", CGPoint(x: 0.63, y: 0.78)),
+        "rb": ("RB", CGPoint(x: 0.88, y: 0.74)),
+        "dm": ("DM", CGPoint(x: 0.50, y: 0.57)),
         "cm": ("CM", CGPoint(x: 0.30, y: 0.50)),
         "am": ("AM", CGPoint(x: 0.70, y: 0.50)),
         "lw": ("LW", CGPoint(x: 0.16, y: 0.24)),
         "cf": ("ST", CGPoint(x: 0.50, y: 0.17)),
         "rw": ("RW", CGPoint(x: 0.84, y: 0.24)),
+    ]
+
+    /// All-outfield 4-3-3 (goals categories, no keeper) — uses the full pitch: defenders pushed back,
+    /// the two central mids on the halfway line, the DM just behind the centre circle.
+    private static let outfield: [String: (label: String, point: CGPoint)] = [
+        "lb": ("LB", CGPoint(x: 0.12, y: 0.76)),
+        "cb1": ("CB", CGPoint(x: 0.37, y: 0.80)),
+        "cb2": ("CB", CGPoint(x: 0.63, y: 0.80)),
+        "rb": ("RB", CGPoint(x: 0.88, y: 0.76)),
+        "dm": ("DM", CGPoint(x: 0.50, y: 0.56)),
+        "cm": ("CM", CGPoint(x: 0.30, y: 0.50)),
+        "am": ("AM", CGPoint(x: 0.70, y: 0.50)),
+        "lw": ("LW", CGPoint(x: 0.16, y: 0.28)),
+        "cf": ("ST", CGPoint(x: 0.50, y: 0.21)),
+        "rw": ("RW", CGPoint(x: 0.84, y: 0.28)),
     ]
 
     static func slot(id: String, position: String, index: Int, formationId: String) -> BattleSlot {

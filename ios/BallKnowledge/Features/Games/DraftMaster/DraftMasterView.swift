@@ -154,12 +154,13 @@ final class DraftMasterViewModel {
                 if wrongMessage == msg { wrongMessage = nil }
             }
         }
+        if state.isComplete { submit() }
     }
 
     // MARK: Submit
 
     func submit() {
-        guard state.isComplete else { return }
+        guard state.isComplete, state.phase != .complete else { return }
         let result = BattleResult(yourTotal: state.yourTotal, optimalScore: challenge.optimalScore)
         state.result = result
         state.phase = .complete
@@ -235,6 +236,9 @@ struct DraftMasterView: View {
                     BattleGameState.self, modeId: GameModeID.draftMaster.rawValue,
                     date: dailyDate, version: BattleGameState.progressVersion, context: modelContext) else { return }
             viewModel.restore(saved)
+            if viewModel.state.isComplete, viewModel.state.phase == .building {
+                viewModel.submit()
+            }
         }
         .sheet(item: Binding(get: { viewModel.activeSlot }, set: { if $0 == nil { viewModel.closeSlot() } })) { slot in
             BattleSearchSheet(viewModel: viewModel, slot: slot)
@@ -274,7 +278,6 @@ struct DraftMasterView: View {
 
     private var buildScreen: some View {
         VStack(spacing: 0) {
-            GameXPBar(current: DailyXP.draft(total: viewModel.state.yourTotal, optimal: viewModel.challenge.optimalScore), max: DailyXP.maxXP(.draftMaster))
             BattleBuildHeader(category: viewModel.category, total: viewModel.state.yourTotal)
 
             BattleConstraintsStrip(
@@ -305,16 +308,9 @@ struct DraftMasterView: View {
                     .font(BKFont.caption(11)).tracking(0.5)
                     .foregroundStyle(BKTheme.wrong)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16).padding(.bottom, 4)
+                    .padding(.horizontal, 16).padding(.bottom, 12)
                     .transition(.opacity)
             }
-
-            BattleSubmitBar(
-                ready: viewModel.state.isComplete,
-                filled: viewModel.state.filledCount,
-                total: viewModel.challenge.slots.count,
-                onSubmit: viewModel.submit
-            )
         }
         .animation(.easeInOut(duration: 0.2), value: viewModel.wrongMessage)
     }
@@ -406,9 +402,6 @@ private struct BattleBuildHeader: View {
                 .modifier(CountingNumber(value: Double(total)))
                 .font(BKFont.title(44)).foregroundStyle(BKTheme.accent)
                 .animation(.easeOut(duration: 0.5), value: total)
-            Text("TOTAL \(category.noun.uppercased())")
-                .font(BKFont.caption(11)).tracking(1.5)
-                .foregroundStyle(BKTheme.accent)
         }
         .frame(maxWidth: .infinity)
         .multilineTextAlignment(.center)
@@ -424,11 +417,8 @@ private struct BattleConstraintsStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("DRAG A CHIP ONTO A POSITION")
-                .font(BKFont.caption(9)).tracking(0.8).foregroundStyle(BKTheme.textMuted)
-                .padding(.horizontal, 16)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
                     ForEach(constraints) { constraint in
                         let used = usedIds.contains(constraint.id)
                         ConstraintChip(constraint: constraint, used: used)
@@ -455,11 +445,14 @@ private struct ConstraintChip: View {
             Text(constraint.label.uppercased())
                 .font(.system(size: 8, weight: .bold, design: .rounded))
                 .foregroundStyle(BKTheme.textMuted)
-                .lineLimit(2).frame(width: 60).minimumScaleFactor(0.6)
+                .lineLimit(2)
+                .minimumScaleFactor(0.6)
                 .multilineTextAlignment(.center)
+                .frame(width: 60, height: 22, alignment: .top)
         }
-        .padding(.vertical, 8).padding(.horizontal, 4)
-        .frame(width: 68)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .frame(width: 68, height: 82)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(alignment: .topTrailing) {
@@ -478,18 +471,21 @@ struct ConstraintIcon: View {
     var size: CGFloat = 40
 
     var body: some View {
-        switch constraint.type {
-        case .club:
-            crest
-        case .league:
-            leagueBadge
-        case .nationality:
-            flagCircle
-        case .nat_league:
-            leagueBadge.overlay(alignment: .bottomTrailing) { flagBadge }
-        case .nat_club:
-            crest.overlay(alignment: .bottomTrailing) { flagBadge }
+        Group {
+            switch constraint.type {
+            case .club:
+                crest
+            case .league:
+                leagueBadge
+            case .nationality:
+                flagCircle
+            case .nat_league:
+                leagueBadge.overlay(alignment: .bottomTrailing) { flagBadge }
+            case .nat_club:
+                crest.overlay(alignment: .bottomTrailing) { flagBadge }
+            }
         }
+        .frame(width: size, height: size)
     }
 
     private var crest: some View {
@@ -521,18 +517,15 @@ struct ConstraintIcon: View {
     }
 
     private var flagCircle: some View {
-        Circle().fill(BKTheme.cardElevated).frame(width: size, height: size)
-            .overlay(
-                Text(GuessWhoDisplay.nationalityFlag(constraint.nationality ?? ""))
-                    .font(.system(size: size * 0.5))
-            )
+        Text(GuessWhoDisplay.nationalityFlag(constraint.nationality ?? ""))
+            .font(.system(size: size))
+            .frame(width: size, height: size)
     }
 
     private var flagBadge: some View {
         Text(GuessWhoDisplay.nationalityFlag(constraint.nationality ?? ""))
-            .font(.system(size: size * 0.42))
-            .padding(1)
-            .background(Circle().fill(BKTheme.background))
+            .font(.system(size: size * 0.48))
+            .offset(x: size * 0.05, y: size * 0.05)
     }
 }
 
@@ -546,6 +539,8 @@ private struct BattlePitchView: View {
 
     var body: some View {
         GeometryReader { geo in
+            let verticalInset: CGFloat = 14
+            let usableHeight = max(0, geo.size.height - verticalInset * 2)
             ZStack {
                 PitchBackground()
                 ForEach(slots) { slot in
@@ -556,7 +551,10 @@ private struct BattlePitchView: View {
                         onTap: { onTapSlot(slot) },
                         onDrop: { id in onDropConstraint(id, slot) }
                     )
-                    .position(x: slot.point.x * geo.size.width, y: slot.point.y * geo.size.height)
+                    .position(
+                        x: slot.point.x * geo.size.width,
+                        y: verticalInset + slot.point.y * usableHeight
+                    )
                 }
             }
         }
@@ -677,7 +675,9 @@ struct PitchBackground: View {
             // Penalty + six-yard boxes, spots and arcs, top and bottom.
             let pbW = field.width * 0.58, pbH = field.height * 0.15
             let gbW = field.width * 0.30, gbH = field.height * 0.065
-            let arc = w * 0.11
+            // Regulation proportions (m): spot 11 from goal line, area 16.5 deep, arc radius 9.15.
+            let spotDepthRatio = 11.0 / 16.5
+            let arcRadiusRatio = 9.15 / 16.5
             // 3-sided box (open along the goal line, so we don't redraw the boundary there).
             func openBox(width bw: CGFloat, depth: CGFloat, top: Bool) {
                 let edge = top ? field.minY : field.maxY
@@ -695,11 +695,21 @@ struct PitchBackground: View {
                 let dir: CGFloat = top ? 1 : -1
                 openBox(width: pbW, depth: pbH, top: top)
                 openBox(width: gbW, depth: gbH, top: top)
-                let spotY = edge + dir * pbH * 0.72
-                dot(CGPoint(x: field.midX, y: spotY))
+                let inner = edge + dir * pbH
+                let spot = CGPoint(x: field.midX, y: edge + dir * pbH * spotDepthRatio)
+                dot(spot)
+                let r = pbH * arcRadiusRatio - lw / 2
+                let dy = abs(inner - spot.y)
+                guard dy < r else { continue }
+                let dx = sqrt(r * r - dy * dy)
+                let left = CGPoint(x: field.midX - dx, y: inner)
+                let right = CGPoint(x: field.midX + dx, y: inner)
+                let start = Angle(radians: atan2(left.y - spot.y, left.x - spot.x))
+                let end = Angle(radians: atan2(right.y - spot.y, right.x - spot.x))
                 var a = Path()
-                a.addArc(center: CGPoint(x: field.midX, y: spotY), radius: arc,
-                         startAngle: .degrees(top ? 20 : 200), endAngle: .degrees(top ? 160 : 340), clockwise: false)
+                // Top goal: end angle < start, so clockwise draws the outward (field-side) arc.
+                // Bottom goal: end > start, so counter-clockwise draws the outward arc.
+                a.addArc(center: spot, radius: r, startAngle: start, endAngle: end, clockwise: top)
                 stroke(a)
             }
 
@@ -721,32 +731,6 @@ struct PitchBackground: View {
                 .fill(RadialGradient(colors: [.clear, .black.opacity(0.28)], center: .center, startRadius: 10, endRadius: 320))
         )
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.08), lineWidth: 1))
-    }
-}
-
-// MARK: - Submit bar
-
-private struct BattleSubmitBar: View {
-    let ready: Bool
-    let filled: Int
-    let total: Int
-    var onSubmit: () -> Void
-
-    var body: some View {
-        Button(action: onSubmit) {
-            HStack(spacing: 8) {
-                Text(ready ? "SUBMIT XI" : "FILL YOUR XI (\(filled)/\(total))")
-                    .font(BKFont.headline(15))
-                if ready { Ph.arrowRight.bold.color(BKTheme.background).frame(width: 14, height: 14) }
-            }
-            .foregroundStyle(ready ? BKTheme.background : BKTheme.textMuted)
-            .frame(maxWidth: .infinity).padding(.vertical, 16)
-            .background(ready ? BKTheme.accent : BKTheme.card)
-            .clipShape(Capsule())
-        }
-        .disabled(!ready)
-        .padding(.horizontal, 16).padding(.vertical, 12)
-        .background(BKTheme.background)
     }
 }
 

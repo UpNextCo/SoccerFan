@@ -34,6 +34,22 @@ enum LeagueBadgeResolver {
         return URL(string: "\(cdnBase)/\(id).png")
     }
 
+    /// Logo fill inside the light backdrop circle — some CDN assets (Ligue 1) ship with heavy padding.
+    static func backdropLogoFraction(for league: String) -> CGFloat {
+        switch normalize(league) {
+        case "ligue 1": return 0.74
+        default: return 0.68
+        }
+    }
+
+    /// Extra zoom on the bitmap itself when the PNG has large transparent margins.
+    static func logoContentScale(for league: String) -> CGFloat {
+        switch normalize(league) {
+        case "ligue 1": return 1.68
+        default: return 1.0
+        }
+    }
+
     private static func normalize(_ value: String) -> String {
         value
             .folding(options: .diacriticInsensitive, locale: .current)
@@ -60,7 +76,11 @@ struct LeagueBadgeImage<Fallback: View>: View {
                     .frame(width: size, height: size)
                     .overlay {
                         badgeContent
-                            .frame(width: size * 0.68, height: size * 0.68)
+                            .frame(
+                                width: size * LeagueBadgeResolver.backdropLogoFraction(for: league),
+                                height: size * LeagueBadgeResolver.backdropLogoFraction(for: league)
+                            )
+                            .clipShape(Circle())
                     }
             } else {
                 badgeContent
@@ -79,6 +99,7 @@ struct LeagueBadgeImage<Fallback: View>: View {
                         .resizable()
                         .interpolation(.high)
                         .scaledToFit()
+                        .scaleEffect(LeagueBadgeResolver.logoContentScale(for: league))
                 case .failure:
                     fallback()
                         .onAppear { loadFailed = true }
