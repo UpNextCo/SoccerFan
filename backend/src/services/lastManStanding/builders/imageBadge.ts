@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../../db/index.js';
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
-import { clubUsedKey, INSTANT_BADGE_CLUBS } from '../recognition.js';
+import { clubUsedKey, isHouseholdBadgeClub } from '../recognition.js';
 import { makeOptionId, pickN, seededIndex } from '../shared.js';
 
 interface TeamRow {
@@ -24,12 +24,9 @@ export async function buildImageBadge(ctx: LMSBuildContext): Promise<LMSBuilderR
     ORDER BY name
   `)) as unknown as TeamRow[];
 
-  if (rows.length < 8) return null;
-
-  const banInstant = ctx.difficulty.tier === 'easy' || ctx.difficulty.tier === 'medium';
   const eligible = rows.filter((t) => {
+    if (!isHouseholdBadgeClub(t.name)) return false;
     if (ctx.usedKeys.has(clubUsedKey(t.name))) return false;
-    if (banInstant && INSTANT_BADGE_CLUBS.has(t.name)) return false;
     return true;
   });
   if (eligible.length < 4) return null;

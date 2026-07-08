@@ -1,3 +1,4 @@
+import { loadRecentLMSUsedKeys } from './history.js';
 import type { LMSBuildContext, LMSBuilderResult, LMSQuestionType } from './types.js';
 import { LMS_DAILY_SLOTS } from './slots.js';
 import { buildCareerPath } from './builders/careerPath.js';
@@ -30,7 +31,8 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
 } | null> {
   const questions: LastManStandingPuzzle['questions'] = [];
   const answers: LastManStandingAnswer['questions'] = [];
-  const usedKeys = new Set<string>();
+  const recentKeys = await loadRecentLMSUsedKeys(date);
+  const usedKeys = new Set<string>(recentKeys);
   const pool = await famousPlayers(4, 250);
   resetPlayerClubIndex();
   resetLMSEnrichCache();

@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../../db/index.js';
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
-import { isHouseholdIndexed, metricUsedKey, playerUsedKey } from '../recognition.js';
+import { isHouseholdIndexed, hlPairUsedKey, metricUsedKey, playerUsedKey } from '../recognition.js';
 import { hashStr, makeOptionId, seededIndex } from '../shared.js';
 
 interface StatPairRow {
@@ -78,6 +78,7 @@ export async function buildHigherLower(ctx: LMSBuildContext): Promise<LMSBuilder
       const b = household[i + 1]!;
       if (a.val === b.val) continue;
       if (ctx.usedKeys.has(playerUsedKey(a.id)) || ctx.usedKeys.has(playerUsedKey(b.id))) continue;
+      if (ctx.usedKeys.has(hlPairUsedKey(a.id, b.id, metric.id))) continue;
 
       const hi = a.val > b.val ? a : b;
       const lo = a.val > b.val ? b : a;
@@ -116,7 +117,7 @@ function buildPair(
 
   return {
     repeatKey,
-    extraUsedKeys: [playerUsedKey(hi.id), playerUsedKey(lo.id)],
+    extraUsedKeys: [playerUsedKey(hi.id), playerUsedKey(lo.id), hlPairUsedKey(hi.id, lo.id, metric.id)],
     question: {
       id: questionId,
       type: 'higher_lower',

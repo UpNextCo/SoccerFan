@@ -104,7 +104,7 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
     case 'higher_lower':
       return question.presentation?.layout === 'two_up';
     case 'image_badge':
-      return Boolean(question.presentation?.imageUrl) && (question.presentation?.imageBlur ?? 10) >= 10;
+      return Boolean(question.presentation?.imageUrl) && (question.presentation?.imageBlur ?? 5) >= 4;
     default:
       return true;
   }
