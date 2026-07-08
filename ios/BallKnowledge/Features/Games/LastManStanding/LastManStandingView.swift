@@ -67,7 +67,7 @@ final class LastManStandingViewModel {
         eliminationSummary = nil
         HapticManager.success()
 
-        try? await Task.sleep(for: .milliseconds(350))
+        try? await Task.sleep(for: .milliseconds(235))
         showCorrectFlash = false
         await runElimination()
     }
@@ -117,25 +117,25 @@ final class LastManStandingViewModel {
                 eliminationWaveToken += 1
                 state.markEliminated(id, token: eliminationWaveToken)
                 eliminatedSoFar += 1
-                try? await Task.sleep(for: .milliseconds(35))
+                try? await Task.sleep(for: .milliseconds(23))
             }
             HapticManager.light()
             let interim = max(targetRemaining, startRemaining - eliminatedSoFar)
-            withAnimation(.easeOut(duration: 0.18)) {
+            withAnimation(.easeOut(duration: 0.12)) {
                 state.displayedRemaining = interim
             }
             if waveIndex < waves.count - 1 {
-                try? await Task.sleep(for: .milliseconds(150))
+                try? await Task.sleep(for: .milliseconds(100))
             }
         }
 
-        withAnimation(.easeOut(duration: 0.25)) {
+        withAnimation(.easeOut(duration: 0.17)) {
             state.displayedRemaining = targetRemaining
         }
 
         let eliminated = startRemaining - targetRemaining
         eliminationSummary = "\(eliminated) eliminated · \(targetRemaining) remain"
-        try? await Task.sleep(for: .milliseconds(900))
+        try? await Task.sleep(for: .milliseconds(600))
 
         state.finalizeEliminations()
         eliminationSummary = nil
@@ -196,7 +196,7 @@ struct LastManStandingView: View {
                         questionSection
                         survivorSection
                     }
-                    .animation(.easeOut(duration: 0.32), value: state.currentQuestionIndex)
+                    .animation(.easeOut(duration: 0.21), value: state.currentQuestionIndex)
                     .padding(.horizontal, 16)
                     .padding(.top, 4)
                     .padding(.bottom, 32)
@@ -267,13 +267,8 @@ struct LastManStandingView: View {
             }
             .id(question.id)
             .transition(.opacity.combined(with: .offset(y: 8)))
-
-            if viewModel.isChecking {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(BKTheme.textMuted)
-                    .padding(.top, 2)
-            }
+            .opacity(viewModel.isChecking ? 0.72 : 1)
+            .animation(.easeOut(duration: 0.12), value: viewModel.isChecking)
         }
     }
 
@@ -291,7 +286,7 @@ struct LastManStandingView: View {
                 .font(BKFont.body(14))
                 .foregroundStyle(BKTheme.textPrimary)
                 .contentTransition(.numericText())
-                .animation(.easeOut(duration: 0.28), value: state.displayedRemaining)
+                .animation(.easeOut(duration: 0.19), value: state.displayedRemaining)
 
             if let summary = viewModel.eliminationSummary {
                 Text(summary)

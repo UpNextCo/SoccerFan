@@ -8,44 +8,35 @@ struct LMSEntrantIcon: View {
     var showYouLabel: Bool = true
     var emphasizeElimination: Bool = false
 
-    @State private var eliminationScale: CGFloat = 1
-    @State private var eliminationOpacity: Double = 1
+    private var isOut: Bool { entrant.isEliminated || emphasizeElimination }
 
-    private var bustOpacity: Double {
-        if entrant.isEliminated || emphasizeElimination { return 0.12 }
-        if entrant.isUser { return 0.88 }
-        return 0.26
+    private var iconColor: Color {
+        if isOut { return Color.white.opacity(0.14) }
+        if entrant.isUser { return BKTheme.accent }
+        return Color.white.opacity(0.26)
     }
 
     var body: some View {
         VStack(spacing: 2) {
             ZStack {
-                if entrant.isUser {
-                    Circle()
-                        .stroke(BKTheme.accent.opacity(0.55), lineWidth: max(1, size * 0.045))
-                        .frame(width: size + 3, height: size + 3)
-                }
-
                 Image(systemName: "person.fill")
                     .font(.system(size: size * 0.68, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(bustOpacity))
+                    .foregroundStyle(iconColor)
                     .frame(width: size, height: size)
 
-                if entrant.isEliminated || emphasizeElimination {
+                if isOut {
                     Image(systemName: "xmark")
-                        .font(.system(size: size * 0.34, weight: .bold))
-                        .foregroundStyle(BKTheme.wrong.opacity(0.9))
+                        .font(.system(size: size * 0.36, weight: .bold))
+                        .foregroundStyle(BKTheme.wrong)
                 }
             }
-            .scaleEffect(eliminationScale)
-            .opacity(eliminationOpacity)
 
             Group {
                 if entrant.isUser, showYouLabel {
                     Text("YOU")
                         .font(.system(size: max(7, size * 0.15), weight: .bold, design: .rounded))
                         .tracking(0.4)
-                        .foregroundStyle(BKTheme.accent.opacity(0.8))
+                        .foregroundStyle(BKTheme.accent.opacity(isOut ? 0.35 : 1))
                 } else {
                     Text(" ")
                         .font(.system(size: max(6, size * 0.13)))
@@ -54,31 +45,6 @@ struct LMSEntrantIcon: View {
             .frame(height: max(7, size * 0.16))
         }
         .frame(width: size + 2, height: size + max(9, size * 0.2))
-        .onChange(of: entrant.eliminationToken) { _, token in
-            guard token > 0 else {
-                eliminationScale = 1
-                eliminationOpacity = 1
-                return
-            }
-            runEliminationAnimation()
-        }
-        .onAppear {
-            if entrant.eliminationToken > 0 {
-                runEliminationAnimation()
-            }
-        }
-    }
-
-    private func runEliminationAnimation() {
-        eliminationScale = 1
-        eliminationOpacity = 1
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.45)) {
-            eliminationScale = 1.15
-        }
-        withAnimation(.easeOut(duration: 0.22).delay(0.12)) {
-            eliminationScale = 0.85
-            eliminationOpacity = 0.35
-        }
     }
 }
 
@@ -110,6 +76,6 @@ struct LastManStandingSurvivorField: View {
         .padding(.top, 2)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .animation(freezeField ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: entrants.count)
+        .animation(freezeField ? nil : .spring(response: 0.25, dampingFraction: 0.86), value: entrants.count)
     }
 }
