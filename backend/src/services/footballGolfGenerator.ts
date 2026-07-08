@@ -1,7 +1,7 @@
 /**
  * Football Golf generator. Each hole has:
  *   - PAR = expected shots to clear at a typical mix (2–4, capped)
- *   - TARGET = points to finish (≤ par, max 4 — usually all commons; broad holes may be par−1)
+ *   - TARGET = points to clear — equals par (all-common path), max 4
  * Rarity on each answer sets point value (common 1 … ultraRare 4). Prompts are broad
  * ("Played for both Arsenal and Chelsea", "Brazilian players in the Premier League"),
  * drawn from the same prompt bank that fed Tower (tower_prompts) — closed-set and
@@ -31,7 +31,7 @@ export interface GolfHole {
   id: string;
   holeNumber: number;
   par: 2 | 3 | 4;
-  /** Points to clear — capped at 4; usually equals par (all-common path). */
+  /** Points to clear — equals stroke par (all-common path). */
   target: number;
   prompt: string;
   category: string;
@@ -53,9 +53,8 @@ const MAX_TARGET = 4;
 // Stroke par per hole — capped at 4 so no hole asks for 5+ names on an all-common run.
 const PAR_SEQUENCE: Array<2 | 3 | 4> = [2, 2, 3, 3, 3, 3, 4, 4, 4];
 
-/** Points needed to clear. Max 4; usually equals par (all commons). Very broad prompts shave 1. */
-function targetForPar(par: 2 | 3 | 4, famous: number): number {
-  if (par >= 3 && famous >= 10) return Math.max(2, Math.min(MAX_TARGET, par - 1));
+/** Points needed to clear — always equals par (birdies come from picking rarer names). */
+function targetForPar(par: 2 | 3 | 4): number {
   return Math.min(MAX_TARGET, par);
 }
 
@@ -213,7 +212,7 @@ export async function generateFootballGolfCourse(
   const parsDesc = [...PAR_SEQUENCE].sort((a, b) => b - a); // [4,4,4,3,3,3,3,2,2]
   const withPar = chosen.map((c, i) => {
     const par = Math.max(2, Math.min(MAX_PAR, Math.min(parsDesc[i]!, c.famous - 2))) as 2 | 3 | 4;
-    return { ...c, par, target: targetForPar(par, c.famous) };
+    return { ...c, par, target: targetForPar(par) };
   });
 
   // Re-order holes for the round (deterministic), so pars aren't monotonic.

@@ -60,7 +60,7 @@ struct FootballGolfHole: Identifiable, Equatable {
     let holeNumber: Int
     /// Expected number of shots (guesses) to clear — golf stroke par.
     let par: Int
-    /// Points needed to finish (≤ par, max 4 — usually all commons).
+    /// Points needed to finish — equals stroke par (all-common path).
     let target: Int
     let prompt: String
     let category: String
