@@ -14,6 +14,9 @@ export interface PlayerClubIndex {
   leagueIdsByPlayer: Map<string, Set<number>>;
   leagueByClub: Map<string, number>;
   prestigeByPlayer: Map<string, number>;
+  mvtByPlayer: Map<string, number>;
+  plAppsByPlayer: Map<string, number>;
+  uclAppsByPlayer: Map<string, number>;
   playerIdByName: Map<string, string>;
 }
 
@@ -28,15 +31,34 @@ export async function buildPlayerClubIndex(pool: FamousPlayer[]): Promise<Player
 
   const nations = await nationSet();
   const prestigeByPlayer = new Map(pool.map((p) => [p.id, p.prestige]));
+  const mvtByPlayer = new Map(pool.map((p) => [p.id, p.mvt]));
+  const plAppsByPlayer = new Map(pool.map((p) => [p.id, p.plApps]));
+  const uclAppsByPlayer = new Map(pool.map((p) => [p.id, p.uclApps]));
 
   const nameRows = (await db.execute(sql`
-    SELECT id, name, (market_value_tier * 10)::int AS prestige
-    FROM players WHERE market_value_tier >= 4
-  `)) as unknown as Array<{ id: string; name: string; prestige: number }>;
+    SELECT p.id, p.name, p.market_value_tier AS mvt,
+      (p.market_value_tier * 10)::int AS prestige,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 39), 0)::int AS pl_apps,
+      COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2), 0)::int AS ucl_apps
+    FROM players p
+    LEFT JOIN player_stats s ON s.player_id = p.id
+    WHERE p.market_value_tier >= 4
+    GROUP BY p.id, p.name, p.market_value_tier
+  `)) as unknown as Array<{
+    id: string;
+    name: string;
+    mvt: number;
+    prestige: number;
+    pl_apps: number;
+    ucl_apps: number;
+  }>;
   const playerIdByName = new Map<string, string>();
   for (const r of nameRows) {
     playerIdByName.set(r.name, r.id);
     if (!prestigeByPlayer.has(r.id)) prestigeByPlayer.set(r.id, r.prestige);
+    if (!mvtByPlayer.has(r.id)) mvtByPlayer.set(r.id, r.mvt);
+    if (!plAppsByPlayer.has(r.id)) plAppsByPlayer.set(r.id, r.pl_apps);
+    if (!uclAppsByPlayer.has(r.id)) uclAppsByPlayer.set(r.id, r.ucl_apps);
   }
 
   const statRows = (await db.execute(sql`
@@ -136,6 +158,9 @@ export async function buildPlayerClubIndex(pool: FamousPlayer[]): Promise<Player
     leagueIdsByPlayer,
     leagueByClub,
     prestigeByPlayer,
+    mvtByPlayer,
+    plAppsByPlayer,
+    uclAppsByPlayer,
     playerIdByName,
   };
   return cachedIndex;

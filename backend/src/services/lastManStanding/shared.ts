@@ -50,16 +50,22 @@ export interface FamousPlayer {
   nationality: string;
   position: string;
   prestige: number;
+  mvt: number;
+  plApps: number;
+  uclApps: number;
 }
 
 export async function famousPlayers(minTier = 4, limit = 500): Promise<FamousPlayer[]> {
   const rows = (await db.execute(sql`
     WITH agg AS (
       SELECT p.id, p.name, p.nationality, p.position, p.market_value_tier AS mvt,
+        COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 39), 0)::int AS pl_apps,
+        COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2), 0)::int AS ucl_apps,
         (p.market_value_tier * 10
-          + LEAST(COALESCE(fa.finals, 0), 6) * 4
-          + LEAST(COALESCE(aw.awards, 0), 4) * 6)::int AS prestige
+          + LEAST(COALESCE(MAX(fa.finals), 0), 6) * 4
+          + LEAST(COALESCE(MAX(aw.awards), 0), 4) * 6)::int AS prestige
       FROM players p
+      LEFT JOIN player_stats s ON s.player_id = p.id
       LEFT JOIN (
         SELECT player_id, count(*)::int AS finals
         FROM final_appearances GROUP BY player_id
@@ -69,13 +75,32 @@ export async function famousPlayers(minTier = 4, limit = 500): Promise<FamousPla
         FROM player_awards GROUP BY player_id
       ) aw ON aw.player_id = p.id
       WHERE p.market_value_tier >= ${minTier}
+      GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier
     )
-    SELECT id, name, nationality, position, prestige
+    SELECT id, name, nationality, position, prestige, mvt, pl_apps, ucl_apps
     FROM agg
     ORDER BY prestige DESC
     LIMIT ${limit}
-  `)) as unknown as FamousPlayer[];
-  return rows;
+  `)) as unknown as Array<{
+    id: string;
+    name: string;
+    nationality: string;
+    position: string;
+    prestige: number;
+    mvt: number;
+    pl_apps: number;
+    ucl_apps: number;
+  }>;
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    nationality: r.nationality,
+    position: r.position,
+    prestige: r.prestige,
+    mvt: r.mvt,
+    plApps: r.pl_apps,
+    uclApps: r.ucl_apps,
+  }));
 }
 
 export const PL_LEAGUE = 'Premier League';

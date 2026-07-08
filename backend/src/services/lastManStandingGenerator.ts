@@ -24,7 +24,26 @@ export async function generateLastManStandingPuzzle(date: string) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const date = process.argv[2] ?? new Date().toISOString().slice(0, 10);
   generateLastManStandingPuzzle(date)
-    .then((r) => console.log(JSON.stringify(r, null, 2)))
+    .then((r) => {
+      const { puzzle } = r;
+      console.log(`\n=== LAST MAN STANDING ${date} (v${puzzle.version}) ===\n`);
+      const metrics = new Set<string>();
+      for (const q of puzzle.questions) {
+        const sig = q.signature ? ' ★' : '';
+        console.log(`Q${q.slot}${sig} [${q.type}] ${q.prompt}`);
+        if (q.subPrompt) console.log(`     ${q.subPrompt}`);
+        console.log(`     → ${q.options.map((o) => o.label).join(' · ')}`);
+        if (q.type === 'image_badge') console.log(`     blur ${q.presentation?.imageBlur ?? '?'}`);
+        if (q.type === 'higher_lower') {
+          const m = q.prompt.includes('Premier') ? 'pl' : q.prompt.includes('Champions League goals') ? 'cl_goals'
+            : q.prompt.includes('Champions League appearances') ? 'cl_apps'
+            : q.prompt.includes('international') ? 'intl_caps' : q.prompt.includes('value') ? 'peak' : '?';
+          metrics.add(m);
+        }
+      }
+      console.log(`\nH/L metrics used: ${[...metrics].join(', ') || 'none'}`);
+      process.exit(0);
+    })
     .catch((e) => {
       console.error(e);
       process.exit(1);

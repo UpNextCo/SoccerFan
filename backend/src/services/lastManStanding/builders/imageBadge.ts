@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../../db/index.js';
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
+import { clubUsedKey, INSTANT_BADGE_CLUBS } from '../recognition.js';
 import { makeOptionId, pickN, seededIndex } from '../shared.js';
 
 interface TeamRow {
@@ -25,13 +26,20 @@ export async function buildImageBadge(ctx: LMSBuildContext): Promise<LMSBuilderR
 
   if (rows.length < 8) return null;
 
-  const start = seededIndex(ctx.seed, rows.length);
-  for (let attempt = 0; attempt < 16; attempt += 1) {
-    const team = rows[(start + attempt) % rows.length]!;
-    const repeatKey = `img:${team.id}`;
-    if (ctx.usedKeys.has(repeatKey)) continue;
+  const banInstant = ctx.difficulty.tier === 'easy' || ctx.difficulty.tier === 'medium';
+  const eligible = rows.filter((t) => {
+    if (ctx.usedKeys.has(clubUsedKey(t.name))) return false;
+    if (banInstant && INSTANT_BADGE_CLUBS.has(t.name)) return false;
+    return true;
+  });
+  if (eligible.length < 4) return null;
 
-    const sameLeague = rows.filter((t) => t.id !== team.id && t.league_id === team.league_id);
+  const start = seededIndex(ctx.seed, eligible.length);
+  for (let attempt = 0; attempt < eligible.length; attempt += 1) {
+    const team = eligible[(start + attempt) % eligible.length]!;
+    const repeatKey = clubUsedKey(team.name);
+
+    const sameLeague = eligible.filter((t) => t.id !== team.id && t.league_id === team.league_id);
     const distractors = pickN(sameLeague, `${ctx.seed}:img`, 3);
     if (distractors.length < 3) continue;
 

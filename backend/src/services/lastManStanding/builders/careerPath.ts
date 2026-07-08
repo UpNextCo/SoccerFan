@@ -7,6 +7,7 @@ import {
   pickPlausibleCareerDistractors,
   preferredCareerOverlap,
 } from '../plausibility.js';
+import { isHouseholdIndexed, playerUsedKey } from '../recognition.js';
 import { famousPlayers, makeOptionId, seededIndex } from '../shared.js';
 
 interface CareerRow {
@@ -60,6 +61,8 @@ export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderR
 
   for (let attempt = 0; attempt < 32; attempt += 1) {
     const row = rows[(start + attempt) % rows.length]!;
+    if (ctx.usedKeys.has(playerUsedKey(row.player_id))) continue;
+    if (index && !isHouseholdIndexed(index, row.player_id)) continue;
     const clubs = filterClubPath(row.clubs, nations);
     if (clubs.length < 3) continue;
 
@@ -95,6 +98,8 @@ export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderR
       );
     }
     if (distractors.length < 3) continue;
+    if (distractors.some((d) => ctx.usedKeys.has(playerUsedKey(d.id)))) continue;
+    if (distractors.some((d) => index && !isHouseholdIndexed(index, d.id))) continue;
 
     const repeatKey = `cp:${row.player_id}:${path.join('>')}`;
     if (ctx.usedKeys.has(repeatKey)) continue;
@@ -109,6 +114,10 @@ export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderR
 
     return {
       repeatKey,
+      extraUsedKeys: [
+        playerUsedKey(row.player_id),
+        ...distractors.map((d) => playerUsedKey(d.id)),
+      ],
       question: {
         id: questionId,
         type: 'career_path',

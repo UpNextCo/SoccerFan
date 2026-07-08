@@ -44,7 +44,7 @@ export interface LMSQuestionAnswer {
 }
 
 /** Bump when question shape / answer format changes so stored dailies regenerate. */
-export const LMS_PUZZLE_VERSION = 7;
+export const LMS_PUZZLE_VERSION = 8;
 
 export interface LastManStandingPuzzle {
   modeId: 'last_man_standing';

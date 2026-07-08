@@ -3,7 +3,8 @@ import { db } from '../../../db/index.js';
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
 import { famousClubsInLeague, isFamousEnough, MIN_NAME_PRESTIGE } from '../fame.js';
 import { associationAt, maxClueAssociation } from '../plausibility.js';
-import { makeOptionId, pickN, seededIndex, seededShuffle } from '../shared.js';
+import { clubUsedKey, isHouseholdIndexed, playerUsedKey } from '../recognition.js';
+import { BIG6, makeOptionId, pickN, seededIndex, seededShuffle } from '../shared.js';
 
 interface ClubPlayerRow {
   player_id: string;
@@ -75,6 +76,7 @@ export async function buildWhichClub(ctx: LMSBuildContext): Promise<LMSBuilderRe
     const cluePool = roster
       .filter((p) => {
         if (!isFamousEnough(index, p.player_id)) return false;
+        if (!isHouseholdIndexed(index, p.player_id)) return false;
         const assoc = associationAt(index, p.player_id, teamName) || p.assoc;
         const primary = index.primaryClubByPlayer.get(p.player_id);
         if (primary === teamName) return false;
@@ -93,8 +95,10 @@ export async function buildWhichClub(ctx: LMSBuildContext): Promise<LMSBuilderRe
     const avgPrestige =
       picked.reduce((s, p) => s + (index.prestigeByPlayer.get(p.player_id) ?? 0), 0) / 3;
     if (avgPrestige < MIN_NAME_PRESTIGE) continue;
+    if (isGiveawayWhichClub(teamName, picked, index)) continue;
+    if (picked.some((p) => ctx.usedKeys.has(playerUsedKey(p.player_id)))) continue;
 
-    const repeatKey = `wc:${teamName}:${picked.map((p) => p.player_id).join(',')}`;
+    const repeatKey = clubUsedKey(teamName);
     if (ctx.usedKeys.has(repeatKey)) continue;
 
     const famousWrong = famousClubsInLeague(leagueId, teamName);
@@ -121,6 +125,9 @@ export async function buildWhichClub(ctx: LMSBuildContext): Promise<LMSBuilderRe
 
     return {
       repeatKey,
+      extraUsedKeys: [
+        ...picked.map((p) => playerUsedKey(p.player_id)),
+      ],
       question: {
         id: questionId,
         type: 'which_club',
@@ -143,4 +150,20 @@ export async function buildWhichClub(ctx: LMSBuildContext): Promise<LMSBuilderRe
 
 function shuffleOptions<T extends { id: string; label: string }>(items: T[], seed: string): T[] {
   return seededShuffle(items, seed);
+}
+
+/** Three megastars at a Big Six club is a giveaway even if spells were brief. */
+function isGiveawayWhichClub(
+  teamName: string,
+  picked: ClubPlayerRow[],
+  index: import('../plausibility.js').PlayerClubIndex
+): boolean {
+  if (!BIG6.includes(teamName)) return false;
+  const prestiges = picked.map((p) => index.prestigeByPlayer.get(p.player_id) ?? 0);
+  if (prestiges.every((pr) => pr >= 68)) return true;
+  const subtle = picked.filter((p) => {
+    const assoc = associationAt(index, p.player_id, teamName) || p.assoc;
+    return assoc < 0.2;
+  });
+  return subtle.length === 0 && prestiges.filter((pr) => pr >= 62).length >= 3;
 }

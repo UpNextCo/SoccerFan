@@ -8,6 +8,7 @@ import {
   MIN_NAME_PRESTIGE,
   SHARED_CLUB_CANDIDATES,
 } from '../fame.js';
+import { isHouseholdPlayer, playerUsedKey, clubUsedKey } from '../recognition.js';
 import type { PlayerClubIndex } from '../plausibility.js';
 import {
   associationAt,
@@ -53,10 +54,10 @@ async function buildSharedClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
 
   const maxSpread = maxOddPrestigeSpread(ctx.difficulty.tier);
   const maxObvious = maxObviousForSlot(ctx.slot);
-  const famousPool = pool.filter((p) => p.prestige >= MIN_NAME_PRESTIGE);
+  const famousPool = pool.filter((p) => isHouseholdPlayer(p) && !ctx.usedKeys.has(playerUsedKey(p.id)));
 
   const clubOrder = seededShuffleClubs(`${ctx.seed}:clubs`).filter(
-    (club) => !ctx.usedKeys.has(`ooo:club-used:${club}`)
+    (club) => !ctx.usedKeys.has(clubUsedKey(club))
   );
   if (clubOrder.length === 0) return null;
 
@@ -100,8 +101,8 @@ async function buildSharedClubOdd(ctx: LMSBuildContext): Promise<LMSBuilderResul
     if (prestigeSpread(index, fourIds) > maxSpread + 2) continue;
 
     const extraUsedKeys = [
-      `ooo:club-used:${club}`,
-      ...fourIds.map((id) => `ooo:player:${id}`),
+      clubUsedKey(club),
+      ...fourIds.map((id) => playerUsedKey(id)),
     ];
     if (extraUsedKeys.some((k) => ctx.usedKeys.has(k))) continue;
 
@@ -174,7 +175,9 @@ async function buildLeaguePlayersOdd(ctx: LMSBuildContext): Promise<LMSBuilderRe
     const inLeague = byLeague.get(leagueId) ?? [];
     if (inLeague.length < 6) continue;
 
-    const inPool = pool.filter((p) => inLeague.includes(p.id) && p.prestige >= MIN_NAME_PRESTIGE);
+    const inPool = pool.filter(
+      (p) => inLeague.includes(p.id) && isHouseholdPlayer(p) && !ctx.usedKeys.has(playerUsedKey(p.id))
+    );
     if (inPool.length < 4) continue;
 
     const three = pickN(inPool, `${ctx.seed}:lp3:${attempt}`, 3);
@@ -183,7 +186,8 @@ async function buildLeaguePlayersOdd(ctx: LMSBuildContext): Promise<LMSBuilderRe
     const outsiders = pool.filter((p) => {
       if (three.some((t) => t.id === p.id)) return false;
       if (playerPlayedInLeague(index, p.id, leagueId)) return false;
-      if (p.prestige < MIN_NAME_PRESTIGE - 4) return false;
+      if (!isHouseholdPlayer(p)) return false;
+      if (ctx.usedKeys.has(playerUsedKey(p.id))) return false;
       return Math.abs(p.prestige - avgPrestige) <= maxSpread + 2;
     });
     if (outsiders.length < 2) continue;
@@ -193,8 +197,8 @@ async function buildLeaguePlayersOdd(ctx: LMSBuildContext): Promise<LMSBuilderRe
     if (prestigeSpread(index, fourIds) > maxSpread + 2) continue;
 
     const extraUsedKeys = [
-      `ooo:league-used:${leagueId}`,
-      ...fourIds.map((id) => `ooo:player:${id}`),
+      `ooo:league:${leagueId}`,
+      ...fourIds.map((id) => playerUsedKey(id)),
     ];
     if (extraUsedKeys.some((k) => ctx.usedKeys.has(k))) continue;
 
