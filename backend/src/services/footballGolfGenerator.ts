@@ -83,13 +83,22 @@ function recognitionScore(p: AnswerPlayer): number {
   return s;
 }
 
+/** Household names for the "common" bucket — casual MOTD viewer knows them instantly. */
+function isHouseholdCommon(p: AnswerPlayer, rec: number, ach: number): boolean {
+  if (p.mvt >= 5 || ach >= 12) return true;
+  // CL regulars with a tier-4+ peak — not just high appearance counts.
+  if (p.mvt >= 4 && p.ucl >= 50) return true;
+  // Strong all-round recognition only when peak tier backs it up (avoids PL volume traps).
+  if (p.mvt >= 4 && rec >= 64) return true;
+  return false;
+}
+
 /** Inverse of fame for scoring: household → common, deep cut → ultraRare. Uses recognition
- *  (tier + CL/PL/BIG5 + finals/awards), not market tier alone. */
+ *  (tier + CL/PL/BIG5 + finals/awards), not market tier or raw apps alone. */
 function rarityFor(p: AnswerPlayer): Rarity {
   const rec = recognitionScore(p);
   const ach = achievementPrestige(p);
-  // Household names — megastars, CL icons, major-final winners, Ballon-tier honours.
-  if (p.mvt >= 5 || ach >= 12 || rec >= 58 || p.ucl >= 70 || p.pl >= 70 || (p.mvt >= 4 && p.ucl >= 35)) return 'common';
+  if (isHouseholdCommon(p, rec, ach)) return 'common';
   // Regular fan knows them — solid PL/UCL regulars, tier-4 peaks, WC/Euro finalists.
   if (p.mvt >= 4 || ach >= 6 || rec >= 44 || p.pl >= 25 || p.ucl >= 30 || p.big5 >= 200) return 'uncommon';
   // Footy-nerd picks — some fame signal but not casual-audience names.
