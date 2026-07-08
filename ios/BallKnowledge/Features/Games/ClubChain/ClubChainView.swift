@@ -209,11 +209,6 @@ struct ClubChainView: View {
             ClubChainResultView(
                 state: viewModel.state,
                 date: dailyDate ?? viewModel.state.puzzle.date,
-                allowReplay: allowReplay,
-                onPlayAgain: {
-                    viewModel.showResult = false
-                    viewModel.restart()
-                },
                 onHome: {
                     if !allowReplay, let dailyDate {
                         let s = viewModel.state
@@ -491,77 +486,51 @@ private struct ClubChainConnector: View {
 private struct ClubChainResultView: View {
     let state: ClubChainGameState
     let date: String
-    let allowReplay: Bool
-    var onPlayAgain: () -> Void
     var onHome: () -> Void
 
     private var won: Bool { state.won }
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 18) {
-                    Text(won ? "CONNECTED!" : "CHAIN BROKEN")
-                        .font(BKFont.headline(28))
-                        .foregroundStyle(won ? BKTheme.accent : BKTheme.textPrimary)
+        GameResultScreen(onExit: onHome) {
+            VStack(spacing: 18) {
+                Text(won ? "CONNECTED!" : "CHAIN BROKEN")
+                    .font(BKFont.headline(28))
+                    .foregroundStyle(won ? BKTheme.accent : BKTheme.textPrimary)
+                    .padding(.top, 8)
 
-                    if won {
-                        Text("\(state.medal.emoji) \(state.medal.title)")
-                            .font(BKFont.title(22))
-                            .foregroundStyle(BKTheme.textPrimary)
-                    } else {
-                        Text("You ran out of \(state.livesRemaining <= 0 ? "lives" : "moves").")
-                            .font(BKFont.body(14))
-                            .foregroundStyle(BKTheme.textSecondary)
-                    }
-
-                    XPResultSummary(
-                        earned: DailyXP.clubChain(reached: won, moves: state.moves, par: state.optimalMoves),
-                        max: DailyXP.maxXP(.clubChain)
-                    )
-
-                    HStack(spacing: 24) {
-                        statBlock(value: "\(state.moves)", label: won ? "YOUR MOVES" : "MOVES USED")
-                        statBlock(value: "\(state.optimalMoves)", label: "SHORTEST")
-                    }
-
-                    chainSummary
-
-                    HStack(spacing: 12) {
-                        ShareLink(item: state.shareText(date: date)) {
-                            Text("SHARE")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.card)
-                                .clipShape(Capsule())
-                        }
-                        if allowReplay {
-                            Button(action: onPlayAgain) {
-                                Text("PLAY AGAIN")
-                                    .font(BKFont.headline(14))
-                                    .foregroundStyle(BKTheme.textPrimary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .background(BKTheme.card)
-                                    .clipShape(Capsule())
-                            }
-                        }
-                        Button(action: onHome) {
-                            Text(allowReplay ? "CONTINUE" : "DONE")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.background)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.accent)
-                                .clipShape(Capsule())
-                        }
-                    }
+                if won {
+                    Text("\(state.medal.emoji) \(state.medal.title)")
+                        .font(BKFont.title(22))
+                        .foregroundStyle(BKTheme.textPrimary)
+                } else {
+                    Text("You ran out of \(state.livesRemaining <= 0 ? "lives" : "moves").")
+                        .font(BKFont.body(14))
+                        .foregroundStyle(BKTheme.textSecondary)
                 }
-                .padding(20)
+
+                XPResultSummary(
+                    earned: DailyXP.clubChain(reached: won, moves: state.moves, par: state.optimalMoves),
+                    max: DailyXP.maxXP(.clubChain)
+                )
+
+                HStack(spacing: 24) {
+                    statBlock(value: "\(state.moves)", label: won ? "YOUR MOVES" : "MOVES USED")
+                    statBlock(value: "\(state.optimalMoves)", label: "SHORTEST")
+                }
+
+                chainSummary
+
+                ShareLink(item: state.shareText(date: date)) {
+                    Text("SHARE")
+                        .font(BKFont.headline(14))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(BKTheme.card)
+                        .clipShape(Capsule())
+                }
             }
+            .padding(.horizontal, 20)
         }
     }
 

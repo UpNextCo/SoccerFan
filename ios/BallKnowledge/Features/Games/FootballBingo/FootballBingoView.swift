@@ -86,12 +86,14 @@ final class FootballBingoViewModel {
         guard game.isActive else { return }
         HapticManager.light()
         advanceTurn(by: 1)
+        presentResultIfNeeded()
     }
 
     func turnExpired() {
         guard game.isActive else { return }
         HapticManager.light()
         advanceTurn(by: 1)
+        presentResultIfNeeded()
     }
 
     func tapCategory(_ category: FootballBingoCategory) {
@@ -273,11 +275,6 @@ struct FootballBingoView: View {
                 completedCount: viewModel.game.completedCount,
                 totalCategories: viewModel.game.categories.count,
                 xpEarned: viewModel.xpEarned,
-                showPlayAgain: allowReplay,
-                onPlayAgain: {
-                    viewModel.showResult = false
-                    viewModel.restart()
-                },
                 onHome: {
                     if !allowReplay, let dailyDate {
                         Task {
@@ -691,16 +688,12 @@ private struct FootballBingoResultView: View {
     let completedCount: Int
     let totalCategories: Int
     let xpEarned: Int
-    var showPlayAgain = true
-    var onPlayAgain: () -> Void
     var onHome: () -> Void
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
-
+        GameResultScreen(onExit: onHome) {
             VStack(spacing: 20) {
-                Spacer()
+                Spacer(minLength: 40)
 
                 if won {
                     Ph.checkCircle.fill
@@ -726,34 +719,9 @@ private struct FootballBingoResultView: View {
                     XPResultSummary(earned: 0, max: DailyXP.maxXP(.footballBingo))
                 }
 
-                Spacer()
-
-                VStack(spacing: 12) {
-                    if showPlayAgain {
-                        Button(action: onPlayAgain) {
-                            Text(won ? "PLAY AGAIN" : "TRY AGAIN")
-                                .font(BKFont.headline())
-                                .foregroundStyle(BKTheme.background)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(BKTheme.accent)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                        }
-                    }
-
-                    Button(action: onHome) {
-                        Text(showPlayAgain ? "BACK HOME" : "DONE")
-                            .font(BKFont.headline())
-                            .foregroundStyle(BKTheme.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(BKTheme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 32)
+                Spacer(minLength: 40)
             }
+            .padding(.horizontal, 24)
         }
     }
 }

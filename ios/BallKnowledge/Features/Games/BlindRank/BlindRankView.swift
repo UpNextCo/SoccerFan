@@ -275,11 +275,6 @@ struct BlindRankView: View {
                 revealSteps: viewModel.state.revealSteps,
                 score: viewModel.state.score ?? 0,
                 xpEarned: viewModel.xpEarned,
-                showPlayAgain: allowReplay,
-                onPlayAgain: {
-                    viewModel.showResult = false
-                    viewModel.restart()
-                },
                 onHome: {
                     if !allowReplay, let dailyDate {
                         Task {
@@ -931,8 +926,6 @@ private struct BlindRankResultView: View {
     let revealSteps: [BlindRankRevealStep]
     let score: Int
     let xpEarned: Int
-    var showPlayAgain = true
-    var onPlayAgain: () -> Void
     var onHome: () -> Void
 
     var slotCount: Int { challenge.presentationOrder.count }
@@ -950,109 +943,79 @@ private struct BlindRankResultView: View {
     }
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    VStack(spacing: 8) {
-                        Text("BLIND RANK")
-                            .font(BKFont.caption(11))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.textMuted)
-                        Text(challenge.subtitle)
-                            .font(BKFont.headline(18))
-                            .foregroundStyle(BKTheme.textPrimary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.top, 24)
-
-                    XPResultSummary(
-                        earned: xpEarned,
-                        max: DailyXP.maxXP(.blindRank)
-                    )
-
-                    Text(BlindRankScoring.verdict(forScore: score))
-                        .font(BKFont.headline(15))
+        GameResultScreen(onExit: onHome) {
+            VStack(spacing: 20) {
+                VStack(spacing: 8) {
+                    Text("BLIND RANK")
+                        .font(BKFont.caption(11))
+                        .tracking(1)
+                        .foregroundStyle(BKTheme.textMuted)
+                    Text(challenge.subtitle)
+                        .font(BKFont.headline(18))
                         .foregroundStyle(BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
-
-                    HStack(spacing: 10) {
-                        BlindRankBreakdownChip(count: breakdown.exact, label: "SPOT ON", color: BKTheme.accent)
-                        BlindRankBreakdownChip(count: breakdown.close, label: "CLOSE", color: BKTheme.textSecondary)
-                        BlindRankBreakdownChip(count: breakdown.disaster, label: "WAY OFF", color: BKTheme.wrong)
-                    }
-
-                    VStack(spacing: 8) {
-                        ForEach(revealSteps) { step in
-                            HStack(spacing: 10) {
-                                Text("#\(step.rank)")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textMuted)
-                                    .frame(width: 24, alignment: .leading)
-                                Text(step.player.name)
-                                    .font(BKFont.body(13))
-                                    .foregroundStyle(BKTheme.textPrimary)
-                                    .lineLimit(1)
-                                Spacer(minLength: 0)
-                                Text("\(challenge.valuePrefix)\(step.player.statValue)")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textMuted)
-                                if step.isCorrect {
-                                    Ph.checkCircle.fill
-                                        .color(BKTheme.accent)
-                                        .frame(width: 14, height: 14)
-                                } else {
-                                    Ph.xCircle.fill
-                                        .color(BKTheme.wrong)
-                                        .frame(width: 14, height: 14)
-                                }
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(BKTheme.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                    }
-
-                    HStack(spacing: 10) {
-                        Label("\(score) / \(maxScore) XP", systemImage: "target")
-                            .font(BKFont.caption(11))
-                            .foregroundStyle(BKTheme.textSecondary)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(BKTheme.cardElevated)
-                    .clipShape(Capsule())
-
-                    VStack(spacing: 10) {
-                        if showPlayAgain {
-                            Button(action: onPlayAgain) {
-                                Text("PLAY AGAIN")
-                                    .font(BKFont.headline(14))
-                                    .foregroundStyle(BKTheme.background)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .background(BKTheme.accent)
-                                    .clipShape(Capsule())
-                            }
-                        }
-
-                        Button(action: onHome) {
-                            Text(showPlayAgain ? "BACK TO GAMES" : "DONE")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.card)
-                                .clipShape(Capsule())
-                        }
-                    }
-                    .padding(.top, 8)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 32)
+                .padding(.top, 24)
+
+                XPResultSummary(
+                    earned: xpEarned,
+                    max: DailyXP.maxXP(.blindRank)
+                )
+
+                Text(BlindRankScoring.verdict(forScore: score))
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                HStack(spacing: 10) {
+                    BlindRankBreakdownChip(count: breakdown.exact, label: "SPOT ON", color: BKTheme.accent)
+                    BlindRankBreakdownChip(count: breakdown.close, label: "CLOSE", color: BKTheme.textSecondary)
+                    BlindRankBreakdownChip(count: breakdown.disaster, label: "WAY OFF", color: BKTheme.wrong)
+                }
+
+                VStack(spacing: 8) {
+                    ForEach(revealSteps) { step in
+                        HStack(spacing: 10) {
+                            Text("#\(step.rank)")
+                                .font(BKFont.caption(10))
+                                .foregroundStyle(BKTheme.textMuted)
+                                .frame(width: 24, alignment: .leading)
+                            Text(step.player.name)
+                                .font(BKFont.body(13))
+                                .foregroundStyle(BKTheme.textPrimary)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                            Text("\(challenge.valuePrefix)\(step.player.statValue)")
+                                .font(BKFont.caption(10))
+                                .foregroundStyle(BKTheme.textMuted)
+                            if step.isCorrect {
+                                Ph.checkCircle.fill
+                                    .color(BKTheme.accent)
+                                    .frame(width: 14, height: 14)
+                            } else {
+                                Ph.xCircle.fill
+                                    .color(BKTheme.wrong)
+                                    .frame(width: 14, height: 14)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(BKTheme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    Label("\(score) / \(maxScore) XP", systemImage: "target")
+                        .font(BKFont.caption(11))
+                        .foregroundStyle(BKTheme.textSecondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(BKTheme.cardElevated)
+                .clipShape(Capsule())
             }
+            .padding(.horizontal, 16)
         }
     }
 }

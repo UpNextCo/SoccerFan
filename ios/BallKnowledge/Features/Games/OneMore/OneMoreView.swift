@@ -177,9 +177,9 @@ struct OneMoreView: View {
                                 // the home hero's orbs.
                                 TimelineView(.animation(minimumInterval: 1 / 30)) { tl in
                                     let t = tl.date.timeIntervalSinceReferenceDate
-                                    let pulse = 0.035 + 0.018 * (0.5 + 0.5 * sin(t * 0.5))
+                                    let pulse = 0.022 + 0.012 * (0.5 + 0.5 * sin(t * 0.5))
                                     RadialGradient(
-                                        colors: [BKTheme.accent.opacity(pulse), BKTheme.accent.opacity(pulse * 0.3), .clear],
+                                        colors: [BKTheme.accent.opacity(pulse), BKTheme.accent.opacity(pulse * 0.25), .clear],
                                         center: .center,
                                         startRadius: 0,
                                         endRadius: 260
@@ -206,7 +206,7 @@ struct OneMoreView: View {
                 }
                 .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.state.streak)
                 .animation(.spring(response: 0.38, dampingFraction: 0.78), value: viewModel.canCashOut)
-                .background(StadiumBackground())
+                .background(StadiumBackground(glowIntensity: 0.32))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -262,11 +262,6 @@ struct OneMoreView: View {
                 finalScore: viewModel.state.phase == .busted ? 0 : viewModel.state.bankedScore,
                 streak: viewModel.state.picks.count,
                 xpEarned: viewModel.xpEarned,
-                showPlayAgain: allowReplay,
-                onPlayAgain: {
-                    viewModel.showResult = false
-                    viewModel.restart()
-                },
                 onHome: {
                     if !allowReplay, let dailyDate {
                         Task {
@@ -458,7 +453,7 @@ private struct OneMoreScoreHero: View {
     @State private var pulseScale: CGFloat = 1
 
     var body: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 12) {
             HStack(spacing: 8) {
                 Ph.lightning.fill
                     .color(BKTheme.streak)
@@ -687,16 +682,12 @@ private struct OneMoreResultView: View {
     let finalScore: Int
     let streak: Int
     let xpEarned: Int
-    var showPlayAgain = true
-    var onPlayAgain: () -> Void
     var onHome: () -> Void
 
     private var isBusted: Bool { outcome == .busted }
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
-
+        VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     VStack(spacing: 8) {
@@ -769,34 +760,13 @@ private struct OneMoreResultView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
-
-                    VStack(spacing: 10) {
-                        if showPlayAgain {
-                            Button(action: onPlayAgain) {
-                                Text("PLAY AGAIN")
-                                    .font(BKFont.headline(14))
-                                    .foregroundStyle(BKTheme.background)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .background(BKTheme.accent)
-                                    .clipShape(Capsule())
-                            }
-                        }
-
-                        Button(action: onHome) {
-                            Text(showPlayAgain ? "BACK TO GAMES" : "DONE")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.card)
-                                .clipShape(Capsule())
-                        }
-                    }
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 32)
+                .padding(.bottom, 24)
             }
+
+            GameResultExitBar(action: onHome)
         }
+        .background(BKTheme.background.ignoresSafeArea())
     }
 }

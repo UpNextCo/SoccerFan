@@ -265,11 +265,6 @@ struct TargetManView: View {
                 difference: viewModel.state.difference ?? 0,
                 score: viewModel.state.score ?? 0,
                 xpEarned: viewModel.xpEarned,
-                showPlayAgain: allowReplay,
-                onPlayAgain: {
-                    viewModel.showResult = false
-                    viewModel.restart()
-                },
                 onHome: {
                     if !allowReplay, let dailyDate {
                         Task {
@@ -591,8 +586,6 @@ private struct TargetManResultView: View {
     let difference: Int
     let score: Int
     let xpEarned: Int
-    var showPlayAgain = true
-    var onPlayAgain: () -> Void
     var onHome: () -> Void
 
     @State private var step: Int = 0
@@ -620,12 +613,9 @@ private struct TargetManResultView: View {
     }
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 20) {
                         VStack(spacing: 6) {
                             Text("RESULT")
                                 .font(BKFont.caption(11))
@@ -752,38 +742,14 @@ private struct TargetManResultView: View {
                     }
                     .padding(.bottom, 24)
                     .animation(.spring(response: 0.38, dampingFraction: 0.78), value: step)
-                }
+            }
 
-                if step >= TargetManResultStep.actions.rawValue {
-                    VStack(spacing: 12) {
-                        if showPlayAgain {
-                            Button(action: onPlayAgain) {
-                                Text("PLAY AGAIN")
-                                    .font(BKFont.headline())
-                                    .foregroundStyle(BKTheme.background)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 16)
-                                    .background(BKTheme.accent)
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                            }
-                        }
-
-                        Button(action: onHome) {
-                            Text(showPlayAgain ? "BACK HOME" : "DONE")
-                                .font(BKFont.headline())
-                                .foregroundStyle(BKTheme.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(BKTheme.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 32)
+            if step >= TargetManResultStep.actions.rawValue {
+                GameResultExitBar(action: onHome)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
             }
         }
+        .background(BKTheme.background.ignoresSafeArea())
         .onAppear {
             runRevealSequence()
         }

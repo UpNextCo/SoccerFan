@@ -249,11 +249,6 @@ struct LastManStandingView: View {
                 finishRankOrdinal: state.finishRankOrdinal,
                 questionsSurvived: state.questionsSurvived,
                 xpEarned: viewModel.xpEarned,
-                showPlayAgain: allowReplay,
-                onPlayAgain: {
-                    viewModel.showResult = false
-                    viewModel.restart()
-                },
                 onHome: {
                     recordCompletionAndExit()
                 }
@@ -385,70 +380,40 @@ private struct LastManStandingResultView: View {
     let finishRankOrdinal: String
     let questionsSurvived: Int
     let xpEarned: Int
-    var showPlayAgain: Bool
-    var onPlayAgain: () -> Void
     var onHome: () -> Void
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    VStack(spacing: 8) {
-                        Text("LAST MAN STANDING")
-                            .font(BKFont.caption(11))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.textMuted)
-                        Text(won ? "Last Man Standing" : "Eliminated")
-                            .font(BKFont.title(28))
-                            .foregroundStyle(won ? BKTheme.accent : BKTheme.wrong)
-                        Text("Finished \(won ? "1st" : finishRankOrdinal) / \(LMSGameState.startingEntrants)")
-                            .font(BKFont.body(14))
-                            .foregroundStyle(BKTheme.textSecondary)
-                        Text("Questions survived: \(questionsSurvived) / \(LMSGameState.totalQuestions)")
-                            .font(BKFont.caption(11))
-                            .foregroundStyle(BKTheme.textMuted)
-                    }
-                    .padding(.top, 24)
+        GameResultScreen(onExit: onHome) {
+            VStack(spacing: 20) {
+                VStack(spacing: 8) {
+                    Text("LAST MAN STANDING")
+                        .font(BKFont.caption(11))
+                        .tracking(1)
+                        .foregroundStyle(BKTheme.textMuted)
+                    Text(won ? "Last Man Standing" : "Eliminated")
+                        .font(BKFont.title(28))
+                        .foregroundStyle(won ? BKTheme.accent : BKTheme.wrong)
+                    Text("Finished \(won ? "1st" : finishRankOrdinal) / \(LMSGameState.startingEntrants)")
+                        .font(BKFont.body(14))
+                        .foregroundStyle(BKTheme.textSecondary)
+                    Text("Questions survived: \(questionsSurvived) / \(LMSGameState.totalQuestions)")
+                        .font(BKFont.caption(11))
+                        .foregroundStyle(BKTheme.textMuted)
+                }
+                .padding(.top, 24)
 
-                    XPResultSummary(earned: xpEarned, max: DailyXP.maxXP(.lastManStanding))
+                XPResultSummary(earned: xpEarned, max: DailyXP.maxXP(.lastManStanding))
 
-                    if won {
-                        LMSEntrantIcon(
-                            entrant: LMSEntrant(id: UUID(), isUser: true, shirtHue: 0.12, isEliminated: false, eliminationToken: 0),
-                            size: 64,
-                            showYouLabel: true
-                        )
-                        .padding(.top, 8)
-                    }
-
-                    VStack(spacing: 10) {
-                        if showPlayAgain {
-                            Button(action: onPlayAgain) {
-                                Text("Play again")
-                                    .font(BKFont.headline(16))
-                                    .foregroundStyle(BKTheme.background)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .background(BKTheme.accent)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
-                        }
-                        Button(action: onHome) {
-                            Text("Home")
-                                .font(BKFont.headline(16))
-                                .foregroundStyle(BKTheme.textPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
+                if won {
+                    LMSEntrantIcon(
+                        entrant: LMSEntrant(id: UUID(), isUser: true, shirtHue: 0.12, isEliminated: false, eliminationToken: 0),
+                        size: 64,
+                        showYouLabel: true
+                    )
                     .padding(.top, 8)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 32)
             }
+            .padding(.horizontal, 20)
         }
     }
 }

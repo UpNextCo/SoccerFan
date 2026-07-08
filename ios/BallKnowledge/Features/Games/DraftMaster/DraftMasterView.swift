@@ -244,9 +244,7 @@ struct DraftMasterView: View {
                 BattleResultView(
                     state: viewModel.state,
                     result: result,
-                    showPlayAgain: allowReplay,
                     onShare: { viewModel.showShare = true },
-                    onPlayAgain: { viewModel.showResult = false; viewModel.restart() },
                     onHome: {
                         if !allowReplay, let dailyDate {
                             Task {
@@ -904,9 +902,7 @@ private struct BattleSearchSheet: View {
 private struct BattleResultView: View {
     let state: BattleGameState
     let result: BattleResult
-    var showPlayAgain = true
     var onShare: () -> Void
-    var onPlayAgain: () -> Void
     var onHome: () -> Void
 
     @State private var revealStep = 0
@@ -914,72 +910,58 @@ private struct BattleResultView: View {
     private var challenge: BattleChallenge { state.challenge }
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    VStack(spacing: 6) {
-                        Text(challenge.category.title.uppercased())
-                            .font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
-                        Text(result.verdict)
-                            .font(BKFont.title(32)).foregroundStyle(BKTheme.accent)
-                    }
-                    .padding(.top, 24)
-
-                    if revealStep >= 1 {
-                        VStack(spacing: 10) {
-                            VStack(spacing: 4) {
-                                Text("\(result.percentage)%")
-                                    .font(BKFont.title(56)).foregroundStyle(BKTheme.accent)
-                                    .contentTransition(.numericText())
-                                Text("OF THE PERFECT XI")
-                                    .font(BKFont.caption(10)).tracking(1).foregroundStyle(BKTheme.textMuted)
-                            }
-                            XPResultSummary(earned: result.xp, max: DailyXP.maxXP(.draftMaster))
-                        }
-                        .transition(.scale.combined(with: .opacity))
-                    }
-
-                    if revealStep >= 2 {
-                        HStack(spacing: 18) {
-                            totalSide(label: "YOUR XI", value: result.yourTotal, accent: true)
-                            Text("/").font(BKFont.title(28)).foregroundStyle(BKTheme.textMuted)
-                            totalSide(label: "OPTIMAL", value: result.optimalScore, accent: false)
-                        }
-                        .transition(.opacity)
-                    }
-
-                    if revealStep >= 3 {
-                        VStack(spacing: 14) {
-                            xiCard(title: "YOUR XI", total: result.yourTotal, rows: yourRows)
-                            if !optimalRows.isEmpty {
-                                xiCard(title: "PERFECT XI", total: result.optimalScore, rows: optimalRows)
-                            }
-                        }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-
-                    VStack(spacing: 10) {
-                        Button(action: onShare) {
-                            Text("SHARE RESULT").font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.background)
-                                .frame(maxWidth: .infinity).padding(.vertical, 14)
-                                .background(BKTheme.accent).clipShape(Capsule())
-                        }
-                        if showPlayAgain {
-                            Button(action: onPlayAgain) {
-                                Text("PLAY AGAIN").font(BKFont.headline(14)).foregroundStyle(BKTheme.textMuted)
-                            }.padding(.top, 2)
-                        }
-                        Button(action: onHome) {
-                            Text(showPlayAgain ? "BACK TO GAMES" : "DONE")
-                                .font(BKFont.caption(11)).foregroundStyle(BKTheme.textMuted)
-                        }
-                    }
-                    .padding(.top, 8)
+        GameResultScreen(onExit: onHome) {
+            VStack(spacing: 20) {
+                VStack(spacing: 6) {
+                    Text(challenge.category.title.uppercased())
+                        .font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                    Text(result.verdict)
+                        .font(BKFont.title(32)).foregroundStyle(BKTheme.accent)
                 }
-                .padding(.horizontal, 16).padding(.bottom, 32)
+                .padding(.top, 24)
+
+                if revealStep >= 1 {
+                    VStack(spacing: 10) {
+                        VStack(spacing: 4) {
+                            Text("\(result.percentage)%")
+                                .font(BKFont.title(56)).foregroundStyle(BKTheme.accent)
+                                .contentTransition(.numericText())
+                            Text("OF THE PERFECT XI")
+                                .font(BKFont.caption(10)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                        }
+                        XPResultSummary(earned: result.xp, max: DailyXP.maxXP(.draftMaster))
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                }
+
+                if revealStep >= 2 {
+                    HStack(spacing: 18) {
+                        totalSide(label: "YOUR XI", value: result.yourTotal, accent: true)
+                        Text("/").font(BKFont.title(28)).foregroundStyle(BKTheme.textMuted)
+                        totalSide(label: "OPTIMAL", value: result.optimalScore, accent: false)
+                    }
+                    .transition(.opacity)
+                }
+
+                if revealStep >= 3 {
+                    VStack(spacing: 14) {
+                        xiCard(title: "YOUR XI", total: result.yourTotal, rows: yourRows)
+                        if !optimalRows.isEmpty {
+                            xiCard(title: "PERFECT XI", total: result.optimalScore, rows: optimalRows)
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                Button(action: onShare) {
+                    Text("SHARE RESULT").font(BKFont.headline(14))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 14)
+                        .background(BKTheme.card).clipShape(Capsule())
+                }
+                .padding(.top, 8)
             }
+            .padding(.horizontal, 16)
         }
         .task {
             for step in 1...3 {

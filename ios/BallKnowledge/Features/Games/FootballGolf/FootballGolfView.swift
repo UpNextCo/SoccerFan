@@ -730,44 +730,34 @@ private struct FootballGolfFinalView: View {
     var onDone: () -> Void
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    VStack(spacing: 8) {
-                        Text("ROUND COMPLETE").font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
-                        Text("You finished \(FootballGolfScoring.scoreLabel(totalScore))")
-                            .font(BKFont.title(40)).foregroundStyle(totalScore <= 0 ? golfGreen : BKTheme.textPrimary)
-                        Text(FootballGolfScoring.finishMessage(totalScore))
-                            .font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
-                        XPResultSummary(earned: xpEarned, max: DailyXP.maxXP(.footballGolf))
-                    }
-                    .padding(.top, 28)
-
-                    VStack(spacing: 8) {
-                        ForEach(results) { result in
-                            HStack {
-                                Text("HOLE \(result.holeNumber)").font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted).frame(width: 56, alignment: .leading)
-                                Text("Par \(result.par)").font(BKFont.caption(10)).foregroundStyle(BKTheme.textSecondary)
-                                Spacer()
-                                Text(result.label).font(BKFont.caption(10))
-                                    .foregroundStyle(result.relativeToPar < 0 ? golfGreen : (result.relativeToPar == 0 ? BKTheme.textSecondary : BKTheme.wrong))
-                                Text(FootballGolfScoring.scoreLabel(result.relativeToPar))
-                                    .font(BKFont.headline(14)).foregroundStyle(BKTheme.textPrimary).frame(width: 32, alignment: .trailing)
-                            }
-                            .padding(.horizontal, 14).padding(.vertical, 11)
-                            .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                    }
-                    .padding(.horizontal, 20)
-
-                    Button(action: onDone) {
-                        Text("DONE").font(BKFont.headline()).foregroundStyle(BKTheme.background)
-                            .frame(maxWidth: .infinity).padding(.vertical, 16)
-                            .background(golfGreen).clipShape(RoundedRectangle(cornerRadius: 16))
-                    }
-                    .padding(.horizontal, 24).padding(.bottom, 32)
+        GameResultScreen(onExit: onDone) {
+            VStack(spacing: 20) {
+                VStack(spacing: 8) {
+                    Text("ROUND COMPLETE").font(BKFont.caption(11)).tracking(1).foregroundStyle(BKTheme.textMuted)
+                    Text("You finished \(FootballGolfScoring.scoreLabel(totalScore))")
+                        .font(BKFont.title(40)).foregroundStyle(totalScore <= 0 ? golfGreen : BKTheme.textPrimary)
+                    Text(FootballGolfScoring.finishMessage(totalScore))
+                        .font(BKFont.headline(16)).foregroundStyle(BKTheme.textPrimary)
+                    XPResultSummary(earned: xpEarned, max: DailyXP.maxXP(.footballGolf))
                 }
+                .padding(.top, 28)
+
+                VStack(spacing: 8) {
+                    ForEach(results) { result in
+                        HStack {
+                            Text("HOLE \(result.holeNumber)").font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted).frame(width: 56, alignment: .leading)
+                            Text("Par \(result.par)").font(BKFont.caption(10)).foregroundStyle(BKTheme.textSecondary)
+                            Spacer()
+                            Text(result.label).font(BKFont.caption(10))
+                                .foregroundStyle(result.relativeToPar < 0 ? golfGreen : (result.relativeToPar == 0 ? BKTheme.textSecondary : BKTheme.wrong))
+                            Text(FootballGolfScoring.scoreLabel(result.relativeToPar))
+                                .font(BKFont.headline(14)).foregroundStyle(BKTheme.textPrimary).frame(width: 32, alignment: .trailing)
+                        }
+                        .padding(.horizontal, 14).padding(.vertical, 11)
+                        .background(BKTheme.card).clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+                .padding(.horizontal, 20)
             }
         }
     }

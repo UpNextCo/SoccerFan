@@ -278,10 +278,6 @@ struct FootballTowerView: View {
                         viewModel.showLeaderboard = true
                     },
                     onShare: { viewModel.showShare = true },
-                    onReplay: allowReplay ? {
-                        viewModel.showResult = false
-                        viewModel.startDaily()
-                    } : nil,
                     onHome: {
                         if !allowReplay, let date = viewModel.state?.date {
                             Task {
@@ -684,68 +680,52 @@ private struct FootballTowerResultView: View {
     let failedAnswer: String?
     var onLeaderboard: () -> Void
     var onShare: () -> Void
-    var onReplay: (() -> Void)?   // dev-only: replay today's daily tower
     var onHome: () -> Void
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
+        GameResultScreen(onExit: onHome) {
+            VStack(spacing: 20) {
+                Text("RUN OVER")
+                    .font(BKFont.title(28))
+                    .foregroundStyle(BKTheme.wrong)
+                    .padding(.top, 24)
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    Text("RUN OVER")
-                        .font(BKFont.title(28))
-                        .foregroundStyle(BKTheme.wrong)
-                        .padding(.top, 24)
-
-                    VStack(spacing: 8) {
-                        Text("You reached Floor \(summary.failedFloor)")
-                            .font(BKFont.headline(18))
-                            .foregroundStyle(BKTheme.textPrimary)
-                        Text("Correct answers: \(summary.correctCount)")
-                            .font(BKFont.body(14))
-                            .foregroundStyle(BKTheme.textSecondary)
-                        if let failedAnswer {
-                            Text("Wrong: \(failedAnswer)")
-                                .font(BKFont.caption(11))
-                                .foregroundStyle(BKTheme.wrong.opacity(0.85))
-                        }
-                    }
-
-                    VStack(spacing: 2) {
-                        Text(mode == .daily ? "\(summary.xpEarned)" : "\(summary.correctCount)")
-                            .font(BKFont.title(48))
-                            .foregroundStyle(BKTheme.accent)
-                        Text(mode == .daily ? "XP EARNED" : "FLOORS CLIMBED")
-                            .font(BKFont.caption(10))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.textMuted)
-                    }
-
-                    FootballTowerShareCardView(summary: summary, mode: mode)
-
-                    VStack(spacing: 10) {
-                        Button(action: onLeaderboard) {
-                            primaryButton("VIEW LEADERBOARD")
-                        }
-                        Button(action: onShare) {
-                            secondaryButton("SHARE RESULT")
-                        }
-                        if let onReplay {
-                            Button(action: onReplay) {
-                                secondaryButton("PLAY AGAIN")
-                            }
-                        }
-                        Button(action: onHome) {
-                            Text(onReplay == nil ? "DONE" : "BACK TO GAMES")
-                                .font(BKFont.caption(11))
-                                .foregroundStyle(BKTheme.textMuted)
-                        }
+                VStack(spacing: 8) {
+                    Text("You reached Floor \(summary.failedFloor)")
+                        .font(BKFont.headline(18))
+                        .foregroundStyle(BKTheme.textPrimary)
+                    Text("Correct answers: \(summary.correctCount)")
+                        .font(BKFont.body(14))
+                        .foregroundStyle(BKTheme.textSecondary)
+                    if let failedAnswer {
+                        Text("Wrong: \(failedAnswer)")
+                            .font(BKFont.caption(11))
+                            .foregroundStyle(BKTheme.wrong.opacity(0.85))
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 32)
+
+                VStack(spacing: 2) {
+                    Text(mode == .daily ? "\(summary.xpEarned)" : "\(summary.correctCount)")
+                        .font(BKFont.title(48))
+                        .foregroundStyle(BKTheme.accent)
+                    Text(mode == .daily ? "XP EARNED" : "FLOORS CLIMBED")
+                        .font(BKFont.caption(10))
+                        .tracking(1)
+                        .foregroundStyle(BKTheme.textMuted)
+                }
+
+                FootballTowerShareCardView(summary: summary, mode: mode)
+
+                VStack(spacing: 10) {
+                    Button(action: onLeaderboard) {
+                        primaryButton("VIEW LEADERBOARD")
+                    }
+                    Button(action: onShare) {
+                        secondaryButton("SHARE RESULT")
+                    }
+                }
             }
+            .padding(.horizontal, 16)
         }
     }
 

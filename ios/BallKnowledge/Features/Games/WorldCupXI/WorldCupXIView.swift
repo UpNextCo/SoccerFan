@@ -193,11 +193,6 @@ struct WorldCupXIView: View {
             if let result = viewModel.state.result {
                 WorldCupXIResultView(
                     result: result,
-                    allowReplay: allowReplay,
-                    onPlayAgain: {
-                        viewModel.showResult = false
-                        viewModel.restart()
-                    },
                     onHome: {
                         if !allowReplay, let dailyDate {
                             Task {
@@ -489,94 +484,66 @@ private struct WorldCupXIPitchSlot: View {
 
 private struct WorldCupXIResultView: View {
     let result: WorldCupXIResultSummary
-    let allowReplay: Bool
-    var onPlayAgain: () -> Void
     var onHome: () -> Void
 
     var body: some View {
-        ZStack {
-            BKTheme.background.ignoresSafeArea()
+        GameResultScreen(onExit: onHome) {
+            VStack(spacing: 20) {
+                Text(result.won ? "GREAT XI!" : "FULL TIME")
+                    .font(BKFont.headline(28))
+                    .foregroundStyle(result.won ? BKTheme.accent : BKTheme.textPrimary)
+                    .padding(.top, 8)
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    Text(result.won ? "GREAT XI!" : "FULL TIME")
-                        .font(BKFont.headline(28))
-                        .foregroundStyle(result.won ? BKTheme.accent : BKTheme.textPrimary)
+                Text("You named \(result.correctCount) of \(WorldCupXIPuzzle.slotCount).")
+                    .font(BKFont.body(15))
+                    .foregroundStyle(BKTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
 
-                    Text("You named \(result.correctCount) of \(WorldCupXIPuzzle.slotCount).")
-                        .font(BKFont.body(15))
-                        .foregroundStyle(BKTheme.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 8)
+                XPResultSummary(
+                    earned: WorldCupXIScoring.xp(from: result.score),
+                    max: DailyXP.maxXP(.worldCupXI)
+                )
 
-                    XPResultSummary(
-                        earned: WorldCupXIScoring.xp(from: result.score),
-                        max: DailyXP.maxXP(.worldCupXI)
-                    )
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("YOUR XI")
+                        .font(BKFont.caption(10))
+                        .tracking(0.8)
+                        .foregroundStyle(BKTheme.textMuted)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("YOUR XI")
-                            .font(BKFont.caption(10))
-                            .tracking(0.8)
-                            .foregroundStyle(BKTheme.textMuted)
+                    ForEach(result.slotResults) { row in
+                        HStack(spacing: 10) {
+                            Text(row.isCorrect ? "✓" : "✗")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(row.isCorrect ? BKTheme.guessCorrect : BKTheme.guessWrong)
+                                .frame(width: 20)
 
-                        ForEach(result.slotResults) { row in
-                            HStack(spacing: 10) {
-                                Text(row.isCorrect ? "✓" : "✗")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(row.isCorrect ? BKTheme.guessCorrect : BKTheme.guessWrong)
-                                    .frame(width: 20)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    if let guess = row.guessedName {
-                                        Text(guess)
-                                            .font(BKFont.headline(14))
-                                            .foregroundStyle(BKTheme.textPrimary)
-                                    } else {
-                                        Text("—")
-                                            .font(BKFont.headline(14))
-                                            .foregroundStyle(BKTheme.textMuted)
-                                    }
-                                    if !row.isCorrect {
-                                        Text("Correct: \(row.slot.expectedName)")
-                                            .font(BKFont.caption(11))
-                                            .foregroundStyle(BKTheme.textMuted)
-                                    }
+                            VStack(alignment: .leading, spacing: 2) {
+                                if let guess = row.guessedName {
+                                    Text(guess)
+                                        .font(BKFont.headline(14))
+                                        .foregroundStyle(BKTheme.textPrimary)
+                                } else {
+                                    Text("—")
+                                        .font(BKFont.headline(14))
+                                        .foregroundStyle(BKTheme.textMuted)
                                 }
-                                Spacer()
+                                if !row.isCorrect {
+                                    Text("Correct: \(row.slot.expectedName)")
+                                        .font(BKFont.caption(11))
+                                        .foregroundStyle(BKTheme.textMuted)
+                                }
                             }
-                            .padding(.vertical, 4)
+                            Spacer()
                         }
-                    }
-                    .padding(16)
-                    .background(BKTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-
-                    HStack(spacing: 12) {
-                        if allowReplay {
-                            Button(action: onPlayAgain) {
-                                Text("PLAY AGAIN")
-                                    .font(BKFont.headline(14))
-                                    .foregroundStyle(BKTheme.textPrimary)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .background(BKTheme.card)
-                                    .clipShape(Capsule())
-                            }
-                        }
-                        Button(action: onHome) {
-                            Text(allowReplay ? "CONTINUE" : "DONE")
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(BKTheme.background)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(BKTheme.accent)
-                                .clipShape(Capsule())
-                        }
+                        .padding(.vertical, 4)
                     }
                 }
-                .padding(20)
+                .padding(16)
+                .background(BKTheme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
             }
+            .padding(.horizontal, 20)
         }
     }
 }
