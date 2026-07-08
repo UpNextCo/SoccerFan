@@ -12,6 +12,15 @@ enum ClubChainDifficulty: String, Codable, Equatable {
         case .hard: return "HARD"
         }
     }
+
+    /// Shown under the difficulty badge — recall hardness, not chain length.
+    var subtitle: String {
+        switch self {
+        case .easy: return "Familiar connectors"
+        case .medium: return "Trickier links"
+        case .hard: return "Obscure bridges"
+        }
+    }
 }
 
 // MARK: - Players & puzzle
@@ -152,6 +161,15 @@ struct ClubChainGameState: Codable, Equatable {
     /// Fewest players you'd need to add on the optimal route (shortest chain minus the target hop).
     var optimalMoves: Int { max(1, puzzle.shortestPathLength - 1) }
 
+    /// Teammate links in the shortest route (start → … → target).
+    var linkCount: Int { puzzle.shortestPathLength }
+
+    /// Players you must insert for a gold medal on the shortest route.
+    var goldMoves: Int { optimalMoves }
+
+    /// Max players you may insert before the chain fails.
+    var moveLimit: Int { puzzle.maxMoves }
+
     var movesRemaining: Int { max(0, puzzle.maxMoves - steps.count) }
 
     var isResumable: Bool { phase == .playing && !steps.isEmpty }
@@ -172,7 +190,7 @@ struct ClubChainGameState: Codable, Equatable {
             + String(repeating: "🖤", count: max(0, puzzle.mistakesAllowed - livesRemaining))
         let header = "Club Chain 🔗 \(puzzle.difficulty.label.capitalized)"
         if phase == .won {
-            return "\(header)\n\(medal.emoji) Linked in \(moves) (best \(optimalMoves))\n\(hearts)"
+            return "\(header)\n\(medal.emoji) \(moves) players added (gold: \(optimalMoves) · \(linkCount)-link chain)\n\(hearts)"
         }
         return "\(header)\n❌ Couldn't connect them\n\(hearts)"
     }

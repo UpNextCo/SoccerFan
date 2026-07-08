@@ -158,28 +158,43 @@ struct ClubChainView: View {
     var body: some View {
         ZStack {
             NavigationStack {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
-                        headerStrip
-                        instruction
-                        chainColumn
+                VStack(spacing: 0) {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 16) {
+                            missionCard
+                            statsHero
+                            chainColumn
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 16)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 32)
+
+                    if state.phase == .playing {
+                        searchArea
+                            .padding(.horizontal, 16)
+                            .padding(.top, 4)
+                            .padding(.bottom, 16)
+                            .background(BKTheme.background.opacity(0.92))
+                    }
                 }
-                .background(StadiumBackground())
+                .animation(.spring(response: 0.38, dampingFraction: 0.78), value: state.moves)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(StadiumBackground(glowIntensity: 0.32))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { dismiss() } label: {
-                            Ph.x.bold.color(BKTheme.textPrimary).frame(width: 20, height: 20)
+                            Ph.x.bold
+                                .color(BKTheme.textPrimary)
+                                .frame(width: 15, height: 15)
                         }
                     }
                     ToolbarItem(placement: .principal) {
                         Text("CLUB CHAIN")
-                            .font(BKFont.caption(12))
-                            .tracking(1.2)
-                            .foregroundStyle(BKTheme.textPrimary)
+                            .font(BKFont.caption(13))
+                            .tracking(1.5)
+                            .foregroundStyle(BKTheme.textSecondary)
                     }
                 }
                 .scrollDismissesKeyboard(.interactively)
@@ -232,44 +247,115 @@ struct ClubChainView: View {
         }
     }
 
-    // MARK: Header
+    // MARK: Mission + stats
 
-    private var headerStrip: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+    private var missionCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
                 Text(state.puzzle.difficulty.label)
-                    .font(BKFont.caption(10)).tracking(0.8)
+                    .font(BKFont.caption(10))
+                    .tracking(1)
                     .foregroundStyle(BKTheme.accent)
-                Text("\(state.moves) / \(state.puzzle.maxMoves) MOVES")
-                    .font(BKFont.headline(15))
-                    .foregroundStyle(BKTheme.textPrimary)
+                Text("·")
+                    .foregroundStyle(BKTheme.textMuted)
+                Text("\(state.linkCount)-LINK CHAIN")
+                    .font(BKFont.caption(10))
+                    .tracking(0.8)
+                    .foregroundStyle(BKTheme.textMuted)
             }
-            Spacer()
-            VStack(alignment: .center, spacing: 4) {
-                Text("PAR").font(BKFont.caption(10)).tracking(0.8).foregroundStyle(BKTheme.textMuted)
-                Text("\(state.optimalMoves)").font(BKFont.headline(15)).foregroundStyle(BKTheme.textPrimary)
-            }
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("LIVES").font(BKFont.caption(10)).tracking(0.8).foregroundStyle(BKTheme.textMuted)
-                HStack(spacing: 3) {
-                    ForEach(0..<state.puzzle.mistakesAllowed, id: \.self) { i in
-                        Image(systemName: i < state.livesRemaining ? "heart.fill" : "heart")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(i < state.livesRemaining ? BKTheme.wrong : BKTheme.textMuted)
-                    }
-                }
-            }
+            Text("Link these players through club teammates")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(BKTheme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
+            Text("Each pick must have shared a club at the same time as the player above. Same league or nationality alone doesn't count.")
+                .font(BKFont.caption(10))
+                .tracking(0.3)
+                .foregroundStyle(BKTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(state.puzzle.difficulty.subtitle)
+                .font(BKFont.caption(10))
+                .foregroundStyle(BKTheme.textSecondary)
         }
-        .padding(14)
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
     }
 
-    private var instruction: some View {
-        Text("Connect the two players. Add teammates one at a time — each must have shared a club at the same time as the player above.")
-            .font(BKFont.caption(11))
-            .foregroundStyle(BKTheme.textMuted)
-            .multilineTextAlignment(.center)
+    private var statsHero: some View {
+        VStack(spacing: 14) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(BKTheme.wrong)
+                    Text("\(state.livesRemaining) left")
+                        .font(BKFont.caption(11))
+                        .foregroundStyle(BKTheme.textSecondary)
+                }
+                Spacer()
+                Text("\(state.movesRemaining) picks remaining")
+                    .font(BKFont.caption(11))
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+
+            VStack(spacing: 2) {
+                Text("\(state.moves)")
+                    .font(BKFont.title(52))
+                    .foregroundStyle(state.moves <= state.goldMoves ? BKTheme.accent : BKTheme.textPrimary)
+                    .contentTransition(.numericText())
+                Text("PLAYERS ADDED")
+                    .font(BKFont.caption(11))
+                    .tracking(1)
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+            .frame(maxWidth: .infinity)
+
+            HStack(spacing: 0) {
+                statPill(value: "\(state.goldMoves)", label: "FOR GOLD", accent: true)
+                statPill(value: "\(state.linkCount)", label: "LINKS", accent: false)
+                statPill(value: "\(state.moveLimit)", label: "LIMIT", accent: false)
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background {
+            GeometryReader { geo in
+                let radius = max(geo.size.width, geo.size.height) * 0.72
+                RadialGradient(
+                    colors: [
+                        BKTheme.accent.opacity(0.028),
+                        BKTheme.accent.opacity(0.007),
+                        .clear,
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: radius
+                )
+                .blur(radius: 18)
+                .frame(width: geo.size.width, height: geo.size.height)
+            }
+            .allowsHitTesting(false)
+        }
+        .background(BKTheme.card.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+    }
+
+    private func statPill(value: String, label: String, accent: Bool) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(BKFont.headline(18))
+                .foregroundStyle(accent ? BKTheme.accent : BKTheme.textPrimary)
+            Text(label)
+                .font(BKFont.caption(9))
+                .tracking(0.6)
+                .foregroundStyle(BKTheme.textMuted)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: Chain
@@ -281,10 +367,6 @@ struct ClubChainView: View {
             ForEach(state.steps) { step in
                 ClubChainConnector(link: step.link, style: .confirmed)
                 ClubChainPlayerCard(player: step.player, role: .added)
-            }
-
-            if state.phase == .playing {
-                searchArea
             }
 
             if state.phase == .won, let closing = state.closingLink {
@@ -301,13 +383,11 @@ struct ClubChainView: View {
 
     private var searchArea: some View {
         VStack(spacing: 8) {
-            ClubChainConnector(link: nil, style: .pending)
-
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(BKTheme.textMuted)
-                TextField("Add the next player…", text: $viewModel.searchQuery)
+                TextField("Search a player to link…", text: $viewModel.searchQuery)
                     .font(BKFont.body())
                     .foregroundStyle(BKTheme.textPrimary)
                     .focused($isSearchFocused)
@@ -319,11 +399,11 @@ struct ClubChainView: View {
                 }
             }
             .padding(12)
-            .background(BKTheme.cardElevated)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background(BKTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(BKTheme.accent.opacity(0.35), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
             )
             .onChange(of: viewModel.searchQuery) { _, _ in
                 Task { await viewModel.search() }
@@ -418,10 +498,10 @@ private struct ClubChainPlayerCard: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(role == .targetSolved ? BKTheme.accent.opacity(0.12) : BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(accentColor.opacity(role == .start || role == .target ? 0.25 : 0.5), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
         )
     }
 }
@@ -502,6 +582,9 @@ private struct ClubChainResultView: View {
                     Text("\(state.medal.emoji) \(state.medal.title)")
                         .font(BKFont.title(22))
                         .foregroundStyle(BKTheme.textPrimary)
+                    Text("\(state.moves) players added · gold route was \(state.goldMoves)")
+                        .font(BKFont.caption(11))
+                        .foregroundStyle(BKTheme.textMuted)
                 } else {
                     Text("You ran out of \(state.livesRemaining <= 0 ? "lives" : "moves").")
                         .font(BKFont.body(14))
@@ -514,8 +597,9 @@ private struct ClubChainResultView: View {
                 )
 
                 HStack(spacing: 24) {
-                    statBlock(value: "\(state.moves)", label: won ? "YOUR MOVES" : "MOVES USED")
-                    statBlock(value: "\(state.optimalMoves)", label: "SHORTEST")
+                    statBlock(value: "\(state.moves)", label: "ADDED")
+                    statBlock(value: "\(state.goldMoves)", label: "FOR GOLD")
+                    statBlock(value: "\(state.linkCount)", label: "LINKS")
                 }
 
                 chainSummary
