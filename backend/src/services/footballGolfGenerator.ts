@@ -1,7 +1,7 @@
 /**
  * Football Golf generator. Each hole has:
- *   - PAR = expected shots to clear at a typical mix (2–5)
- *   - TARGET = points to finish (= par + 1; one ~2-pt pick + rest common)
+ *   - PAR = expected shots to clear at a typical mix (2–4, capped)
+ *   - TARGET = points to finish (≤ par, max 4 — usually all commons; broad holes may be par−1)
  * Rarity on each answer sets point value (common 1 … ultraRare 4). Prompts are broad
  * ("Played for both Arsenal and Chelsea", "Brazilian players in the Premier League"),
  * drawn from the same prompt bank that fed Tower (tower_prompts) — closed-set and
@@ -30,8 +30,8 @@ export interface GolfAnswer {
 export interface GolfHole {
   id: string;
   holeNumber: number;
-  par: 2 | 3 | 4 | 5;
-  /** Points to clear — one ~2-pt answer plus the rest common (+1 each): par 4 → 5 pts. */
+  par: 2 | 3 | 4;
+  /** Points to clear — capped at 4; usually equals par (all-common path). */
   target: number;
   prompt: string;
   category: string;
@@ -48,8 +48,16 @@ export interface FootballGolfPuzzle {
 }
 
 const HOLES = 9;
-// Stroke par per hole (expected shots). A varied spread; broader prompts get higher pars.
-const PAR_SEQUENCE: Array<2 | 3 | 4 | 5> = [2, 3, 3, 3, 4, 4, 4, 5, 5];
+const MAX_PAR = 4;
+const MAX_TARGET = 4;
+// Stroke par per hole — capped at 4 so no hole asks for 5+ names on an all-common run.
+const PAR_SEQUENCE: Array<2 | 3 | 4> = [2, 2, 3, 3, 3, 3, 4, 4, 4];
+
+/** Points needed to clear. Max 4; usually equals par (all commons). Very broad prompts shave 1. */
+function targetForPar(par: 2 | 3 | 4, famous: number): number {
+  if (par >= 3 && famous >= 10) return Math.max(2, Math.min(MAX_TARGET, par - 1));
+  return Math.min(MAX_TARGET, par);
+}
 
 /** Inverse of fame: a household name is "common", a deep cut is "ultraRare". This is
  *  what powers the satisfying "I found a rarer answer" moment. */
@@ -178,11 +186,11 @@ export async function generateFootballGolfCourse(
   // Assign pars: broadest prompts get the highest pars, and every par is CLAMPED to
   // (famous − 2) so the hole is always completable from common knowledge.
   const chosen = candidates.slice(0, HOLES).sort((a, b) => b.famous - a.famous);
-  const parsDesc = [...PAR_SEQUENCE].sort((a, b) => b - a); // [5,5,4,4,4,3,3,3,2]
-  const withPar = chosen.map((c, i) => ({
-    ...c,
-    par: Math.max(2, Math.min(parsDesc[i]!, c.famous - 2)) as 2 | 3 | 4 | 5,
-  }));
+  const parsDesc = [...PAR_SEQUENCE].sort((a, b) => b - a); // [4,4,4,3,3,3,3,2,2]
+  const withPar = chosen.map((c, i) => {
+    const par = Math.max(2, Math.min(MAX_PAR, Math.min(parsDesc[i]!, c.famous - 2))) as 2 | 3 | 4;
+    return { ...c, par, target: targetForPar(par, c.famous) };
+  });
 
   // Re-order holes for the round (deterministic), so pars aren't monotonic.
   withPar.sort((a, b) => hashStr(`${seed}:order:${a.prompt}`) - hashStr(`${seed}:order:${b.prompt}`));
@@ -191,7 +199,7 @@ export async function generateFootballGolfCourse(
     id: `${date}-h${i + 1}`,
     holeNumber: i + 1,
     par: c.par,
-    target: c.par + 1,
+    target: c.target,
     prompt: c.prompt,
     category: categoryFor(c.rule, c.prompt),
     answers: c.answers,
@@ -243,7 +251,7 @@ async function scanCandidates(
     players = [...byName.values()];
     const famous = nameableCount(players);
     // A fair golf hole must be genuinely BROAD for THIS audience — ≥8 answers they could
-    // name (megastars / PL / UCL), so any par (2–5) is reachable and there's depth for
+    // name (megastars / PL / UCL), so any par (2–4) is reachable and there's depth for
     // birdies. Excludes niche foreign-league prompts. Bounded total so it ships.
     // Manager pair links need a higher bar — knowing who played under both X and Y is harder.
     const minFamous = cat === 'Managers' && /\bboth\b/i.test(prompt) ? 12 : 8;

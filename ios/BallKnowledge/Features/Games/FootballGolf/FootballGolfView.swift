@@ -108,7 +108,7 @@ final class FootballGolfViewModel {
         showResult = false
     }
 
-    // Par = expected shots at one solid pick + rest common; target = par + 1 points.
+    // Par = expected shots on an all-common run; target ≤ par (max 4 pts).
     var par: Int { currentHole?.par ?? 0 }
     var target: Int { currentHole?.target ?? FootballGolfRules.targetPoints(forPar: par) }
     var points: Int { matched.reduce(0) { $0 + $1.rarity.points } }

@@ -44,8 +44,8 @@ enum FootballGolfRarity: String, Codable, Equatable, CaseIterable {
 
 /// Shared rules for target vs stroke par.
 enum FootballGolfRules {
-    /// Points to clear: one solid (~2 pt) answer and the rest common. Par 4 → 5 pts.
-    static func targetPoints(forPar par: Int) -> Int { par + 1 }
+    /// Points to clear — equals stroke par (all-common path), capped at 4.
+    static func targetPoints(forPar par: Int) -> Int { min(4, max(2, par)) }
 }
 
 struct FootballGolfAnswer: Identifiable, Equatable, Codable {
@@ -60,7 +60,7 @@ struct FootballGolfHole: Identifiable, Equatable {
     let holeNumber: Int
     /// Expected number of shots (guesses) to clear — golf stroke par.
     let par: Int
-    /// Points needed to finish the hole (par + 1 — one solid pick, rest common).
+    /// Points needed to finish (≤ par, max 4 — usually all commons).
     let target: Int
     let prompt: String
     let category: String
