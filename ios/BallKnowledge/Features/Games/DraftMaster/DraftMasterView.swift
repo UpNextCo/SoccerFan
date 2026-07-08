@@ -191,11 +191,15 @@ struct DraftMasterView: View {
     var body: some View {
         ZStack {
             NavigationStack {
-                Group {
+                ZStack {
+                    buildScreen
+
                     if viewModel.state.phase == .intro {
-                        BattleIntroView(challenge: viewModel.challenge, onStart: viewModel.start)
-                    } else {
-                        buildScreen
+                        BattleCategoryOverlay(
+                            challenge: viewModel.challenge,
+                            onStart: viewModel.start
+                        )
+                        .transition(.opacity)
                     }
                 }
                 .background(StadiumBackground())
@@ -326,14 +330,17 @@ private struct ShakeEffect: GeometryEffect {
     }
 }
 
-// MARK: - Intro
+// MARK: - Category overlay
 
-private struct BattleIntroView: View {
+private struct BattleCategoryOverlay: View {
     let challenge: BattleChallenge
     var onStart: () -> Void
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
+        ZStack {
+            Color.black.opacity(0.9)
+                .ignoresSafeArea()
+
             VStack(spacing: 20) {
                 VStack(spacing: 8) {
                     Text("TODAY'S CATEGORY")
@@ -342,13 +349,7 @@ private struct BattleIntroView: View {
                         .font(BKFont.title(26)).foregroundStyle(BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
                 }
-                .padding(.top, 16)
 
-                Text("Drag each chip onto a position, then name a player who fits it and plays there — a club, a whole league, a nationality, or a combo. Every pick scores their \(challenge.category.title.lowercased()). Reach 70% of the perfect XI's total to win.")
-                    .font(BKFont.body(14)).foregroundStyle(BKTheme.textSecondary)
-                    .multilineTextAlignment(.center).padding(.horizontal, 8)
-
-                // Constraint chips preview
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 14) {
                     ForEach(challenge.constraints) { constraint in
                         VStack(spacing: 5) {
@@ -360,9 +361,6 @@ private struct BattleIntroView: View {
                         }
                     }
                 }
-                .padding(16)
-                .background(BKTheme.cardElevated.opacity(0.9))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
 
                 Button(action: onStart) {
                     HStack(spacing: 8) {
@@ -373,10 +371,11 @@ private struct BattleIntroView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(BKTheme.accent).clipShape(Capsule())
                 }
-                .padding(.top, 4)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 32)
+            .padding(20)
+            .background(BKTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(.horizontal, 24)
         }
     }
 }
@@ -513,7 +512,7 @@ struct ConstraintIcon: View {
     }
 
     private var leagueBadge: some View {
-        LeagueBadgeImage(league: constraint.leagueName ?? "", size: size) {
+        LeagueBadgeImage(league: constraint.leagueName ?? "", size: size, lightBackdrop: true) {
             Circle().fill(BKTheme.cardElevated).frame(width: size, height: size)
                 .overlay(
                     Text(GuessWhoDisplay.leagueAbbrev(constraint.leagueName ?? ""))

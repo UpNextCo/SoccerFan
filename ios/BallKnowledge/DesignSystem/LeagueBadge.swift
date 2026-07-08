@@ -46,11 +46,31 @@ enum LeagueBadgeResolver {
 struct LeagueBadgeImage<Fallback: View>: View {
     let league: String
     var size: CGFloat = 32
+    /// Soft light circle so dark crests (Premier League, Ligue 1, etc.) read on dark UI.
+    var lightBackdrop: Bool = false
     @ViewBuilder var fallback: () -> Fallback
 
     @State private var loadFailed = false
 
     var body: some View {
+        Group {
+            if lightBackdrop {
+                Circle()
+                    .fill(Color(white: 0.93))
+                    .frame(width: size, height: size)
+                    .overlay {
+                        badgeContent
+                            .frame(width: size * 0.68, height: size * 0.68)
+                    }
+            } else {
+                badgeContent
+                    .frame(width: size, height: size)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var badgeContent: some View {
         if !loadFailed, let url = LeagueBadgeResolver.logoURL(league: league) {
             AsyncImage(url: url) { phase in
                 switch phase {
@@ -59,14 +79,12 @@ struct LeagueBadgeImage<Fallback: View>: View {
                         .resizable()
                         .interpolation(.high)
                         .scaledToFit()
-                        .frame(width: size, height: size)
                 case .failure:
                     fallback()
                         .onAppear { loadFailed = true }
                 case .empty:
                     ProgressView()
                         .scaleEffect(0.55)
-                        .frame(width: size, height: size)
                 @unknown default:
                     fallback()
                 }
