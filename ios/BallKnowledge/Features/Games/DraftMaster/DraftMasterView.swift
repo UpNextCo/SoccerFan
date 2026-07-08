@@ -89,7 +89,14 @@ final class DraftMasterViewModel {
         selectionError = nil
     }
 
-    func closeSlot() { activeSlot = nil; searchQuery = ""; results = [] }
+    func closeSlot() {
+        if let slot = activeSlot, !state.isLocked(slot.id) {
+            state.assignments[slot.id] = nil
+        }
+        activeSlot = nil
+        searchQuery = ""
+        results = []
+    }
 
     func setActiveSlotConstraint(_ constraint: BattleConstraint) {
         guard let slot = activeSlot else { return }
@@ -278,7 +285,11 @@ struct DraftMasterView: View {
 
     private var buildScreen: some View {
         VStack(spacing: 0) {
-            BattleBuildHeader(category: viewModel.category, total: viewModel.state.yourTotal)
+            BattleBuildHeader(
+                category: viewModel.category,
+                formationId: viewModel.challenge.formationId,
+                total: viewModel.state.yourTotal
+            )
 
             BattleConstraintsStrip(
                 constraints: viewModel.challenge.constraints,
@@ -342,6 +353,9 @@ private struct BattleCategoryOverlay: View {
                     Text(challenge.category.title)
                         .font(BKFont.title(26)).foregroundStyle(BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
+                    Text(BattleFormations.displayName(for: challenge.formationId))
+                        .font(BKFont.caption(12)).tracking(1.4)
+                        .foregroundStyle(BKTheme.textMuted)
                 }
 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 14) {
@@ -390,6 +404,7 @@ private struct CountingNumber: AnimatableModifier {
 
 private struct BattleBuildHeader: View {
     let category: BattleCategory
+    let formationId: String
     let total: Int
 
     var body: some View {
@@ -398,6 +413,9 @@ private struct BattleBuildHeader: View {
                 .font(BKFont.headline(14)).tracking(1)
                 .foregroundStyle(BKTheme.textSecondary)
                 .lineLimit(1).minimumScaleFactor(0.7)
+            Text(BattleFormations.displayName(for: formationId))
+                .font(BKFont.caption(11)).tracking(1.1)
+                .foregroundStyle(BKTheme.textMuted)
             Text("")
                 .modifier(CountingNumber(value: Double(total)))
                 .font(BKFont.title(44)).foregroundStyle(BKTheme.accent)
@@ -641,6 +659,8 @@ private struct BattlePitchSlot: View {
 struct PitchBackground: View {
     private let grassA = Color(red: 0.11, green: 0.26, blue: 0.16)
     private let grassB = Color(red: 0.14, green: 0.31, blue: 0.19)
+    private let grassHighlight = Color(red: 0.18, green: 0.38, blue: 0.22)
+    private let grassShadow = Color(red: 0.07, green: 0.18, blue: 0.11)
     private let line = Color.white.opacity(0.32)
 
     var body: some View {
@@ -648,12 +668,49 @@ struct PitchBackground: View {
             let w = size.width, h = size.height
             let lw: CGFloat = 1.4
 
-            // Mown stripes (parallel to the goal lines).
+            // Mown stripes with soft transitions between bands.
             let stripes = 7
             let band = h / CGFloat(stripes)
             for i in 0..<stripes {
-                var p = Path(); p.addRect(CGRect(x: 0, y: band * CGFloat(i), width: w, height: band + 1))
-                ctx.fill(p, with: .color(i.isMultiple(of: 2) ? grassA : grassB))
+                let y0 = band * CGFloat(i)
+                let base = i.isMultiple(of: 2) ? grassA : grassB
+                var p = Path()
+                p.addRect(CGRect(x: 0, y: y0, width: w, height: band + 1))
+                ctx.fill(p, with: .color(base))
+                if i < stripes - 1 {
+                    let fadeH = min(band * 0.24, 12)
+                    let fadeRect = CGRect(x: 0, y: y0 + band - fadeH, width: w, height: fadeH + 1)
+                    let next = i.isMultiple(of: 2) ? grassB : grassA
+                    ctx.fill(
+                        Path(fadeRect),
+                        with: .linearGradient(
+                            Gradient(colors: [base.opacity(0), next.opacity(0.42)]),
+                            startPoint: CGPoint(x: 0, y: fadeRect.minY),
+                            endPoint: CGPoint(x: 0, y: fadeRect.maxY)
+                        )
+                    )
+                }
+            }
+
+            // Fine grass grain — sparse vertical strokes, stable per layout size.
+            ctx.drawLayer { layer in
+                let cols = max(24, Int(w / 5.5))
+                let rows = max(40, Int(h / 3.8))
+                for row in 0..<rows {
+                    for col in 0..<cols {
+                        let seed = Self.textureHash(row, col)
+                        guard seed > 0.52 else { continue }
+                        let x = CGFloat(col) / CGFloat(cols) * w + CGFloat(Self.textureHash(row, col + 911)) * 4
+                        let y = CGFloat(row) / CGFloat(rows) * h + CGFloat(Self.textureHash(row + 407, col)) * 3
+                        let len = 2.2 + CGFloat(seed) * 4.8
+                        let tilt = (CGFloat(Self.textureHash(col, row + 733)) - 0.5) * 1.4
+                        var blade = Path()
+                        blade.move(to: CGPoint(x: x, y: y))
+                        blade.addLine(to: CGPoint(x: x + tilt, y: y + len))
+                        let shade = seed > 0.78 ? grassHighlight.opacity(0.10) : grassShadow.opacity(0.14)
+                        layer.stroke(blade, with: .color(shade), lineWidth: 0.65)
+                    }
+                }
             }
 
             func stroke(_ p: Path) { ctx.stroke(p, with: .color(line), lineWidth: lw) }
@@ -664,16 +721,43 @@ struct PitchBackground: View {
 
             let inset: CGFloat = 9
             let field = CGRect(x: inset, y: inset, width: w - inset * 2, height: h - inset * 2)
+
+            // Worn high-traffic patches (centre circle + both penalty boxes).
+            func wearPatch(_ frame: CGRect, opacity: Double) {
+                ctx.drawLayer { layer in
+                    layer.opacity = opacity
+                    layer.blendMode = .softLight
+                    layer.fill(
+                        Path(ellipseIn: frame),
+                        with: .radialGradient(
+                            Gradient(colors: [grassHighlight.opacity(0.55), .clear]),
+                            center: CGPoint(x: frame.midX, y: frame.midY),
+                            startRadius: 0,
+                            endRadius: max(frame.width, frame.height) * 0.55
+                        )
+                    )
+                }
+            }
+            let cr = w * 0.13
+            wearPatch(CGRect(x: field.midX - cr * 1.05, y: field.midY - cr * 1.05, width: cr * 2.1, height: cr * 2.1), opacity: 0.55)
+            let pbW = field.width * 0.58, pbH = field.height * 0.15
+            wearPatch(
+                CGRect(x: field.midX - pbW * 0.44, y: field.minY + pbH * 0.18, width: pbW * 0.88, height: pbH * 0.72),
+                opacity: 0.38
+            )
+            wearPatch(
+                CGRect(x: field.midX - pbW * 0.44, y: field.maxY - pbH * 0.90, width: pbW * 0.88, height: pbH * 0.72),
+                opacity: 0.38
+            )
+
             stroke(rect(field))
 
             // Halfway line + centre circle + spot.
             var mid = Path(); mid.move(to: CGPoint(x: field.minX, y: field.midY)); mid.addLine(to: CGPoint(x: field.maxX, y: field.midY)); stroke(mid)
-            let cr = w * 0.13
             stroke(Path(ellipseIn: CGRect(x: field.midX - cr, y: field.midY - cr, width: cr * 2, height: cr * 2)))
             dot(CGPoint(x: field.midX, y: field.midY))
 
             // Penalty + six-yard boxes, spots and arcs, top and bottom.
-            let pbW = field.width * 0.58, pbH = field.height * 0.15
             let gbW = field.width * 0.30, gbH = field.height * 0.065
             // Regulation proportions (m): spot 11 from goal line, area 16.5 deep, arc radius 9.15.
             let spotDepthRatio = 11.0 / 16.5
@@ -726,11 +810,30 @@ struct PitchBackground: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.07), .clear, Color.black.opacity(0.14)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .blendMode(.overlay)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 18)
-                .fill(RadialGradient(colors: [.clear, .black.opacity(0.28)], center: .center, startRadius: 10, endRadius: 320))
+                .fill(RadialGradient(colors: [.clear, .black.opacity(0.32)], center: .center, startRadius: 10, endRadius: 320))
         )
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.08), lineWidth: 1))
+    }
+
+    /// Deterministic 0…1 hash for procedural grass grain (stable across redraws).
+    private static func textureHash(_ x: Int, _ y: Int) -> Double {
+        var n = UInt64(bitPattern: Int64(x &* 374_761_393 &+ y &* 668_265_263))
+        n ^= n >> 13
+        n &*= 1_274_126_177
+        return Double(n % 10_000) / 10_000
     }
 }
 
@@ -838,7 +941,7 @@ private struct BattleSearchSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.foregroundStyle(BKTheme.accent)
+                    Button("Done") { viewModel.closeSlot() }.foregroundStyle(BKTheme.accent)
                 }
             }
         }

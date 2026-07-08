@@ -161,39 +161,129 @@ struct BattleResult: Equatable, Codable {
 // MARK: - Formation layout
 
 enum BattleFormations {
-    /// 4-3-3 with a keeper (appearances categories). y: 0.1 = attack (top) → 0.93 = own goal (bottom).
-    private static let withGk: [String: (label: String, point: CGPoint)] = [
-        "gk": ("GK", CGPoint(x: 0.50, y: 0.94)),
-        "lb": ("LB", CGPoint(x: 0.12, y: 0.74)),
-        "cb1": ("CB", CGPoint(x: 0.37, y: 0.78)),
-        "cb2": ("CB", CGPoint(x: 0.63, y: 0.78)),
-        "rb": ("RB", CGPoint(x: 0.88, y: 0.74)),
-        "dm": ("DM", CGPoint(x: 0.50, y: 0.57)),
-        "cm": ("CM", CGPoint(x: 0.30, y: 0.50)),
-        "am": ("AM", CGPoint(x: 0.70, y: 0.50)),
-        "lw": ("LW", CGPoint(x: 0.16, y: 0.24)),
-        "cf": ("ST", CGPoint(x: 0.50, y: 0.17)),
-        "rw": ("RW", CGPoint(x: 0.84, y: 0.24)),
+    /// y: 0.1 = attack (top) → 0.94 = own goal (bottom).
+    private typealias Layout = [String: (label: String, point: CGPoint)]
+
+    private static let layoutsGk: [String: Layout] = [
+        "4-3-3": [
+            "gk": ("GK", CGPoint(x: 0.50, y: 0.94)),
+            "lb": ("LB", CGPoint(x: 0.12, y: 0.74)),
+            "cb1": ("CB", CGPoint(x: 0.37, y: 0.78)),
+            "cb2": ("CB", CGPoint(x: 0.63, y: 0.78)),
+            "rb": ("RB", CGPoint(x: 0.88, y: 0.74)),
+            "dm": ("DM", CGPoint(x: 0.50, y: 0.57)),
+            "cm": ("CM", CGPoint(x: 0.30, y: 0.50)),
+            "am": ("AM", CGPoint(x: 0.70, y: 0.50)),
+            "lw": ("LW", CGPoint(x: 0.16, y: 0.24)),
+            "cf": ("ST", CGPoint(x: 0.50, y: 0.17)),
+            "rw": ("RW", CGPoint(x: 0.84, y: 0.24)),
+        ],
+        "4-4-2": [
+            "gk": ("GK", CGPoint(x: 0.50, y: 0.94)),
+            "lb": ("LB", CGPoint(x: 0.12, y: 0.74)),
+            "cb1": ("CB", CGPoint(x: 0.37, y: 0.78)),
+            "cb2": ("CB", CGPoint(x: 0.63, y: 0.78)),
+            "rb": ("RB", CGPoint(x: 0.88, y: 0.74)),
+            "lm": ("LM", CGPoint(x: 0.14, y: 0.50)),
+            "cm1": ("CM", CGPoint(x: 0.36, y: 0.52)),
+            "cm2": ("CM", CGPoint(x: 0.64, y: 0.52)),
+            "rm": ("RM", CGPoint(x: 0.86, y: 0.50)),
+            "st1": ("ST", CGPoint(x: 0.38, y: 0.18)),
+            "st2": ("ST", CGPoint(x: 0.62, y: 0.18)),
+        ],
+        "4-2-3-1": [
+            "gk": ("GK", CGPoint(x: 0.50, y: 0.94)),
+            "lb": ("LB", CGPoint(x: 0.12, y: 0.74)),
+            "cb1": ("CB", CGPoint(x: 0.37, y: 0.78)),
+            "cb2": ("CB", CGPoint(x: 0.63, y: 0.78)),
+            "rb": ("RB", CGPoint(x: 0.88, y: 0.74)),
+            "dm1": ("DM", CGPoint(x: 0.38, y: 0.58)),
+            "dm2": ("DM", CGPoint(x: 0.62, y: 0.58)),
+            "lw": ("LW", CGPoint(x: 0.16, y: 0.36)),
+            "am": ("AM", CGPoint(x: 0.50, y: 0.30)),
+            "rw": ("RW", CGPoint(x: 0.84, y: 0.36)),
+            "cf": ("ST", CGPoint(x: 0.50, y: 0.17)),
+        ],
+        "3-5-2": [
+            "gk": ("GK", CGPoint(x: 0.50, y: 0.94)),
+            "cb1": ("CB", CGPoint(x: 0.25, y: 0.78)),
+            "cb2": ("CB", CGPoint(x: 0.50, y: 0.76)),
+            "cb3": ("CB", CGPoint(x: 0.75, y: 0.78)),
+            "lb": ("LB", CGPoint(x: 0.10, y: 0.58)),
+            "rb": ("RB", CGPoint(x: 0.90, y: 0.58)),
+            "dm": ("DM", CGPoint(x: 0.50, y: 0.50)),
+            "cm1": ("CM", CGPoint(x: 0.32, y: 0.44)),
+            "cm2": ("CM", CGPoint(x: 0.68, y: 0.44)),
+            "st1": ("ST", CGPoint(x: 0.38, y: 0.18)),
+            "st2": ("ST", CGPoint(x: 0.62, y: 0.18)),
+        ],
     ]
 
-    /// All-outfield 4-3-3 (goals categories, no keeper) — uses the full pitch: defenders pushed back,
-    /// the two central mids on the halfway line, the DM just behind the centre circle.
-    private static let outfield: [String: (label: String, point: CGPoint)] = [
-        "lb": ("LB", CGPoint(x: 0.12, y: 0.76)),
-        "cb1": ("CB", CGPoint(x: 0.37, y: 0.80)),
-        "cb2": ("CB", CGPoint(x: 0.63, y: 0.80)),
-        "rb": ("RB", CGPoint(x: 0.88, y: 0.76)),
-        "dm": ("DM", CGPoint(x: 0.50, y: 0.56)),
-        "cm": ("CM", CGPoint(x: 0.30, y: 0.50)),
-        "am": ("AM", CGPoint(x: 0.70, y: 0.50)),
-        "lw": ("LW", CGPoint(x: 0.16, y: 0.28)),
-        "cf": ("ST", CGPoint(x: 0.50, y: 0.21)),
-        "rw": ("RW", CGPoint(x: 0.84, y: 0.28)),
+    /// All-outfield variants — defenders pushed back, attackers given a touch more room.
+    private static let layoutsOutfield: [String: Layout] = [
+        "4-3-3": [
+            "lb": ("LB", CGPoint(x: 0.12, y: 0.76)),
+            "cb1": ("CB", CGPoint(x: 0.37, y: 0.80)),
+            "cb2": ("CB", CGPoint(x: 0.63, y: 0.80)),
+            "rb": ("RB", CGPoint(x: 0.88, y: 0.76)),
+            "dm": ("DM", CGPoint(x: 0.50, y: 0.56)),
+            "cm": ("CM", CGPoint(x: 0.30, y: 0.50)),
+            "am": ("AM", CGPoint(x: 0.70, y: 0.50)),
+            "lw": ("LW", CGPoint(x: 0.16, y: 0.28)),
+            "cf": ("ST", CGPoint(x: 0.50, y: 0.21)),
+            "rw": ("RW", CGPoint(x: 0.84, y: 0.28)),
+        ],
+        "4-4-2": [
+            "lb": ("LB", CGPoint(x: 0.12, y: 0.76)),
+            "cb1": ("CB", CGPoint(x: 0.37, y: 0.80)),
+            "cb2": ("CB", CGPoint(x: 0.63, y: 0.80)),
+            "rb": ("RB", CGPoint(x: 0.88, y: 0.76)),
+            "lm": ("LM", CGPoint(x: 0.14, y: 0.52)),
+            "cm1": ("CM", CGPoint(x: 0.36, y: 0.54)),
+            "cm2": ("CM", CGPoint(x: 0.64, y: 0.54)),
+            "rm": ("RM", CGPoint(x: 0.86, y: 0.52)),
+            "st1": ("ST", CGPoint(x: 0.38, y: 0.21)),
+            "st2": ("ST", CGPoint(x: 0.62, y: 0.21)),
+        ],
+        "4-2-3-1": [
+            "lb": ("LB", CGPoint(x: 0.12, y: 0.76)),
+            "cb1": ("CB", CGPoint(x: 0.37, y: 0.80)),
+            "cb2": ("CB", CGPoint(x: 0.63, y: 0.80)),
+            "rb": ("RB", CGPoint(x: 0.88, y: 0.76)),
+            "dm1": ("DM", CGPoint(x: 0.38, y: 0.60)),
+            "dm2": ("DM", CGPoint(x: 0.62, y: 0.60)),
+            "lw": ("LW", CGPoint(x: 0.16, y: 0.38)),
+            "am": ("AM", CGPoint(x: 0.50, y: 0.32)),
+            "rw": ("RW", CGPoint(x: 0.84, y: 0.38)),
+            "cf": ("ST", CGPoint(x: 0.50, y: 0.21)),
+        ],
+        "3-5-2": [
+            "cb1": ("CB", CGPoint(x: 0.25, y: 0.80)),
+            "cb2": ("CB", CGPoint(x: 0.50, y: 0.78)),
+            "cb3": ("CB", CGPoint(x: 0.75, y: 0.80)),
+            "lb": ("LB", CGPoint(x: 0.10, y: 0.60)),
+            "rb": ("RB", CGPoint(x: 0.90, y: 0.60)),
+            "dm": ("DM", CGPoint(x: 0.50, y: 0.52)),
+            "cm1": ("CM", CGPoint(x: 0.32, y: 0.46)),
+            "cm2": ("CM", CGPoint(x: 0.68, y: 0.46)),
+            "st1": ("ST", CGPoint(x: 0.38, y: 0.21)),
+            "st2": ("ST", CGPoint(x: 0.62, y: 0.21)),
+        ],
     ]
+
+    static func displayName(for formationId: String) -> String {
+        formationId.hasSuffix("-of") ? String(formationId.dropLast(3)) : formationId
+    }
+
+    private static func baseId(_ formationId: String) -> String {
+        formationId.hasSuffix("-of") ? String(formationId.dropLast(3)) : formationId
+    }
 
     static func slot(id: String, position: String, index: Int, formationId: String) -> BattleSlot {
-        let table = formationId == "4-3-3-of" ? outfield : withGk
-        if let l = table[id] {
+        let outfield = formationId.hasSuffix("-of")
+        let base = baseId(formationId)
+        let table = outfield ? layoutsOutfield[base] : layoutsGk[base]
+        if let l = table?[id] {
             return BattleSlot(id: id, position: position, label: l.label, point: l.point)
         }
         // Fallback: spread unknown ids in a grid, label from position.
@@ -211,6 +301,8 @@ enum BattleFormations {
         case "Defensive Midfield": return "DM"
         case "Central Midfield": return "CM"
         case "Attacking Midfield": return "AM"
+        case "Left Midfield": return "LM"
+        case "Right Midfield": return "RM"
         case "Left Winger": return "LW"
         case "Right Winger": return "RW"
         case "Centre-Forward": return "ST"

@@ -128,23 +128,68 @@ function eligibilityIds(c: Constraint): SQL {
 }
 
 // ---------------------------------------------------------------------------
-// Formation (unchanged from the club-only version).
+// Formations — rotated daily among popular shapes (4-3-3, 4-4-2, 4-2-3-1, 3-5-2).
 // ---------------------------------------------------------------------------
 
 interface Slot { id: string; position: string }
-const GK_SLOT: Slot = { id: 'gk', position: 'Goalkeeper' };
-const OUTFIELD_SLOTS: Slot[] = [
-  { id: 'lb', position: 'Left-Back' },
-  { id: 'cb1', position: 'Centre-Back' },
-  { id: 'cb2', position: 'Centre-Back' },
-  { id: 'rb', position: 'Right-Back' },
-  { id: 'dm', position: 'Defensive Midfield' },
-  { id: 'cm', position: 'Central Midfield' },
-  { id: 'am', position: 'Attacking Midfield' },
-  { id: 'lw', position: 'Left Winger' },
-  { id: 'cf', position: 'Centre-Forward' },
-  { id: 'rw', position: 'Right Winger' },
-];
+const GK: Slot = { id: 'gk', position: 'Goalkeeper' };
+
+const FORMATION_TEMPLATES: Record<string, Slot[]> = {
+  '4-3-3': [
+    GK,
+    { id: 'lb', position: 'Left-Back' },
+    { id: 'cb1', position: 'Centre-Back' },
+    { id: 'cb2', position: 'Centre-Back' },
+    { id: 'rb', position: 'Right-Back' },
+    { id: 'dm', position: 'Defensive Midfield' },
+    { id: 'cm', position: 'Central Midfield' },
+    { id: 'am', position: 'Attacking Midfield' },
+    { id: 'lw', position: 'Left Winger' },
+    { id: 'cf', position: 'Centre-Forward' },
+    { id: 'rw', position: 'Right Winger' },
+  ],
+  '4-4-2': [
+    GK,
+    { id: 'lb', position: 'Left-Back' },
+    { id: 'cb1', position: 'Centre-Back' },
+    { id: 'cb2', position: 'Centre-Back' },
+    { id: 'rb', position: 'Right-Back' },
+    { id: 'lm', position: 'Left Midfield' },
+    { id: 'cm1', position: 'Central Midfield' },
+    { id: 'cm2', position: 'Central Midfield' },
+    { id: 'rm', position: 'Right Midfield' },
+    { id: 'st1', position: 'Centre-Forward' },
+    { id: 'st2', position: 'Centre-Forward' },
+  ],
+  '4-2-3-1': [
+    GK,
+    { id: 'lb', position: 'Left-Back' },
+    { id: 'cb1', position: 'Centre-Back' },
+    { id: 'cb2', position: 'Centre-Back' },
+    { id: 'rb', position: 'Right-Back' },
+    { id: 'dm1', position: 'Defensive Midfield' },
+    { id: 'dm2', position: 'Defensive Midfield' },
+    { id: 'lw', position: 'Left Winger' },
+    { id: 'am', position: 'Attacking Midfield' },
+    { id: 'rw', position: 'Right Winger' },
+    { id: 'cf', position: 'Centre-Forward' },
+  ],
+  '3-5-2': [
+    GK,
+    { id: 'cb1', position: 'Centre-Back' },
+    { id: 'cb2', position: 'Centre-Back' },
+    { id: 'cb3', position: 'Centre-Back' },
+    { id: 'lb', position: 'Left-Back' },
+    { id: 'rb', position: 'Right-Back' },
+    { id: 'dm', position: 'Defensive Midfield' },
+    { id: 'cm1', position: 'Central Midfield' },
+    { id: 'cm2', position: 'Central Midfield' },
+    { id: 'st1', position: 'Centre-Forward' },
+    { id: 'st2', position: 'Centre-Forward' },
+  ],
+};
+
+const ROTATING_FORMATIONS = ['4-3-3', '4-4-2', '4-2-3-1', '3-5-2'] as const;
 
 // Goalkeepers score ~0 for goals/assists, so those categories play an all-outfield XI.
 function includeGk(cat: Category): boolean {
@@ -153,10 +198,12 @@ function includeGk(cat: Category): boolean {
     cat.id === 'league_titles' || cat.id === 'intl_caps' || cat.id === 'most_clubs';
 }
 
-function formationFor(cat: Category): { id: string; slots: Slot[] } {
-  return includeGk(cat)
-    ? { id: '4-3-3', slots: [GK_SLOT, ...OUTFIELD_SLOTS] }
-    : { id: '4-3-3-of', slots: [...OUTFIELD_SLOTS] };
+function formationFor(cat: Category, date: string): { id: string; slots: Slot[] } {
+  const base = ROTATING_FORMATIONS[dayNumber(date) % ROTATING_FORMATIONS.length]!;
+  const template = FORMATION_TEMPLATES[base]!;
+  const withGk = includeGk(cat);
+  const slots = withGk ? template : template.filter((s) => s.id !== 'gk');
+  return { id: withGk ? base : `${base}-of`, slots };
 }
 
 // ---------------------------------------------------------------------------
@@ -377,8 +424,9 @@ async function buildConstraintPool(
   cat: Category,
   clubs: Array<{ club: string; leagueId: number }>,
   seed: number,
+  date: string,
 ): Promise<Constraint[]> {
-  const n = formationFor(cat).slots.length;
+  const n = formationFor(cat, date).slots.length;
   const mix = boardMix(n, cat.scope);
   const isPl = cat.scope === 'pl';
   const clubNames = clubs.map((c) => c.club);
@@ -428,7 +476,7 @@ async function buildConstraintPool(
 export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJson | null> {
   const baseSeed = hashString(`${date}:battle`);
   const category = CATEGORIES[dayNumber(date) % CATEGORIES.length]!;
-  const formation = formationFor(category);
+  const formation = formationFor(category, date);
   const slots = formation.slots;
   const positions = [...new Set(slots.map((s) => s.position))];
 
@@ -439,7 +487,7 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
   // real eligible player with a positive value). Reshuffle with a new seed on failure.
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const seed = baseSeed + attempt * 101;
-    const constraints = await buildConstraintPool(category, clubs, seed);
+    const constraints = await buildConstraintPool(category, clubs, seed, date);
     if (constraints.length !== slots.length) continue;
 
     // Ranked eligible players per (constraint, position). The Hungarian assignment below uses the
