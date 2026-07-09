@@ -15,6 +15,8 @@ final class LastManStandingViewModel {
     var isChecking = false
     var eliminationWaveToken = 0
     var checkError: String?
+    /// When true, survivor grid won't animate position changes (X marks stamp in place first).
+    var freezeSurvivorLayout = false
     /// Sequential run token from POST /daily/lms/start — required for each check.
     var runToken: String?
 
@@ -55,6 +57,7 @@ final class LastManStandingViewModel {
         lastReveal = nil
         isChecking = false
         checkError = nil
+        freezeSurvivorLayout = false
         runToken = nil
     }
 
@@ -152,6 +155,7 @@ final class LastManStandingViewModel {
 
         state.prepareEliminations()
         state.status = .eliminating
+        freezeSurvivorLayout = true
         activeCommentary = state.currentStep.commentary
 
         let ids = state.pendingEliminationIds
@@ -159,10 +163,13 @@ final class LastManStandingViewModel {
         let startRemaining = state.displayedRemaining
 
         guard !ids.isEmpty else {
+            freezeSurvivorLayout = false
             advanceToNextQuestion()
             return
         }
 
+        // Phase 1 — stamp X marks in place. Layout stays frozen on the pre-elim
+        // field so icons don't slide while crosses appear.
         let waveCount = ids.count >= 20 ? 4 : 3
         let waves = splitIntoWaves(ids, waveCount: waveCount)
         var eliminatedSoFar = 0
@@ -172,7 +179,7 @@ final class LastManStandingViewModel {
                 eliminationWaveToken += 1
                 state.markEliminated(id, token: eliminationWaveToken)
                 eliminatedSoFar += 1
-                try? await Task.sleep(for: .milliseconds(23))
+                try? await Task.sleep(for: .milliseconds(20))
             }
             HapticManager.light()
             let interim = max(targetRemaining, startRemaining - eliminatedSoFar)
@@ -180,19 +187,27 @@ final class LastManStandingViewModel {
                 state.displayedRemaining = interim
             }
             if waveIndex < waves.count - 1 {
-                try? await Task.sleep(for: .milliseconds(100))
+                try? await Task.sleep(for: .milliseconds(80))
             }
         }
 
-        withAnimation(.easeOut(duration: 0.17)) {
+        withAnimation(.easeOut(duration: 0.15)) {
             state.displayedRemaining = targetRemaining
         }
 
         let eliminated = startRemaining - targetRemaining
         eliminationSummary = "\(eliminated) eliminated · \(targetRemaining) remain"
-        try? await Task.sleep(for: .milliseconds(600))
 
-        state.finalizeEliminations()
+        // Hold so the crossed-out field reads clearly before anything moves.
+        try? await Task.sleep(for: .milliseconds(520))
+
+        // Phase 2 — drop the eliminated icons and let survivors reflow.
+        freezeSurvivorLayout = false
+        withAnimation(.easeInOut(duration: 0.32)) {
+            state.finalizeEliminations()
+        }
+        try? await Task.sleep(for: .milliseconds(340))
+
         eliminationSummary = nil
         advanceToNextQuestion()
     }
@@ -221,6 +236,7 @@ final class LastManStandingViewModel {
         eliminationSummary = nil
         lastReveal = nil
         confettiBurstToken = 0
+        freezeSurvivorLayout = false
     }
 }
 
@@ -368,7 +384,10 @@ struct LastManStandingView: View {
     }
 
     private var survivorDock: some View {
-        let profile = LMSGameState.layoutProfile(forRemaining: state.displayedRemaining)
+        // During elimination, visibleEntrants still includes crossed-out icons — key
+        // layout off that count so icon size/spacing don't jump until they actually leave.
+        let layoutCount = max(state.displayedRemaining, state.visibleEntrants.count)
+        let profile = LMSGameState.layoutProfile(forRemaining: layoutCount)
         let dockWidth = UIScreen.main.bounds.width - 32
         let entrantCount = state.visibleEntrants.count
         let contentHeight = LastManStandingSurvivorField.contentHeight(
@@ -411,7 +430,8 @@ struct LastManStandingView: View {
             entrants: state.visibleEntrants,
             remaining: state.displayedRemaining,
             profile: profile,
-            freezeField: state.status == .lost
+            // Freeze layout while X marks stamp in; reflow only after finalize.
+            freezeField: state.status == .lost || viewModel.freezeSurvivorLayout
         )
     }
 

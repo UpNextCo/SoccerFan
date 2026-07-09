@@ -76,7 +76,7 @@ struct LastManStandingSurvivorField: View {
         .padding(.top, 4)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .animation(freezeField ? nil : .spring(response: 0.25, dampingFraction: 0.86), value: entrants.count)
+        .animation(freezeField ? nil : .easeInOut(duration: 0.32), value: entrants.count)
     }
 
     /// Pixel height of the grid for a given width — used to size the dock without dead space.
