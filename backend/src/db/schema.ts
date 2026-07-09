@@ -205,11 +205,17 @@ export const dailyPuzzles = pgTable(
     puzzleJson: jsonb('puzzle_json').notNull(),
     answerPlayerId: uuid('answer_player_id').references(() => players.id),
     answerJson: jsonb('answer_json'),
+    /** Ops review: generated | approved | locked — locked rows are never auto-overwritten. */
+    status: text('status').notNull().default('generated'),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewNote: text('review_note'),
+    contentHash: text('content_hash'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('daily_puzzles_date_mode_idx').on(table.date, table.modeId),
     uniqueIndex('daily_puzzles_date_mode_unique').on(table.date, table.modeId),
+    index('daily_puzzles_status_idx').on(table.status),
   ]
 );
 

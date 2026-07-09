@@ -6,8 +6,10 @@ Daily football puzzle app — native iOS (SwiftUI) + Node/TypeScript backend on 
 
 - `ios/` — SwiftUI iOS app
 - `backend/` — Express API + Drizzle + PostgreSQL
+- `admin/` — Monthly Quiz Ops dashboard (served at `/admin`)
 - `shared/` — Shared TypeScript types
 - `scripts/` — Data ingestion scripts
+- `docs/ops-quiz-dashboard.md` — Ops runbook for the quiz dashboard
 
 ## Backend setup
 
@@ -33,9 +35,10 @@ curl -X POST http://localhost:3000/auth/apple \
 ## Railway deployment
 
 1. Create Railway project with PostgreSQL + Node service
-2. Set env vars: `DATABASE_URL`, `JWT_SECRET`, `APPLE_CLIENT_ID`, `API_FOOTBALL_KEY`
-3. Point service root to `backend/`
-4. Deploy — migrations run on start via `railway.toml`
+2. Set env vars: `DATABASE_URL`, `JWT_SECRET`, `APPLE_CLIENT_ID`, `API_FOOTBALL_KEY`, `ADMIN_PASSWORD`
+3. Build from repo root (`npm run build`) so `admin/` is emitted into `backend/public/admin`
+4. Point service root to repo root (or ensure start script builds admin) — migrations run on start
+5. Open `https://<host>/admin` — see [docs/ops-quiz-dashboard.md](docs/ops-quiz-dashboard.md)
 
 ## iOS setup
 

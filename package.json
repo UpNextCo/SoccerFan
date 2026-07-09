@@ -5,7 +5,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "npm --prefix backend ci && npm --prefix backend run build",
-    "start": "npm --prefix backend run db:migrate && npm --prefix backend start"
+    "build": "npm --prefix backend ci && npm --prefix admin ci && npm --prefix admin run build && npm --prefix backend run build:api",
+    "start": "npm --prefix backend run db:migrate && npm --prefix backend start",
+    "admin:dev": "npm --prefix admin run dev"
   }
 }

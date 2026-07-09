@@ -257,11 +257,16 @@ function isStaleLastManStanding(puzzleJson: unknown, answerJson: unknown): boole
  */
 async function migrateStaleLastManStanding(date: string): Promise<void> {
   const rows = await db
-    .select({ puzzleJson: dailyPuzzles.puzzleJson, answerJson: dailyPuzzles.answerJson })
+    .select({
+      puzzleJson: dailyPuzzles.puzzleJson,
+      answerJson: dailyPuzzles.answerJson,
+      status: dailyPuzzles.status,
+    })
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'last_man_standing')))
     .limit(1);
   if (!rows[0]) return;
+  if (rows[0].status === 'locked' || rows[0].status === 'approved') return;
   if (isStaleLastManStanding(rows[0].puzzleJson, rows[0].answerJson)) {
     await db
       .delete(dailyPuzzles)
@@ -310,11 +315,12 @@ async function ensureLastManStandingPuzzle(date: string): Promise<void> {
  */
 async function migrateStaleDraftMaster(date: string): Promise<void> {
   const rows = await db
-    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .select({ puzzleJson: dailyPuzzles.puzzleJson, status: dailyPuzzles.status })
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')))
     .limit(1);
-  const puzzle = rows[0]?.puzzleJson as { constraints?: unknown; optimalScore?: unknown; optimalLineup?: unknown } | undefined;
+  if (!rows[0] || rows[0].status === 'locked' || rows[0].status === 'approved') return;
+  const puzzle = rows[0].puzzleJson as { constraints?: unknown; optimalScore?: unknown; optimalLineup?: unknown } | undefined;
   if (!puzzle) return;
   // Current Battle format has `constraints` + `optimalScore` + `optimalLineup`; drop anything older
   // so it regenerates (scenario/budget puzzles, or pre-lineup/pre-GK-aware puzzles).
@@ -332,11 +338,12 @@ async function migrateStaleDraftMaster(date: string): Promise<void> {
  */
 async function migrateStaleOneMore(date: string): Promise<void> {
   const rows = await db
-    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .select({ puzzleJson: dailyPuzzles.puzzleJson, status: dailyPuzzles.status })
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'one_more')))
     .limit(1);
-  const puzzle = rows[0]?.puzzleJson as
+  if (!rows[0] || rows[0].status === 'locked' || rows[0].status === 'approved') return;
+  const puzzle = rows[0].puzzleJson as
     | { rounds?: Array<{ options?: Array<{ headshotUrl?: unknown; nationality?: unknown }> }> }
     | undefined;
   if (!puzzle || !Array.isArray(puzzle.rounds)) return;
@@ -358,11 +365,12 @@ async function migrateStaleOneMore(date: string): Promise<void> {
  */
 async function migrateStaleBingo(date: string): Promise<void> {
   const rows = await db
-    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .select({ puzzleJson: dailyPuzzles.puzzleJson, status: dailyPuzzles.status })
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'football_bingo')))
     .limit(1);
-  const puzzle = rows[0]?.puzzleJson as
+  if (!rows[0] || rows[0].status === 'locked' || rows[0].status === 'approved') return;
+  const puzzle = rows[0].puzzleJson as
     | { players?: Array<Record<string, unknown>>; categories?: Array<Record<string, unknown>> }
     | undefined;
   if (!puzzle || !Array.isArray(puzzle.players) || puzzle.players.length === 0) return;

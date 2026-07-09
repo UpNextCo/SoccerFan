@@ -9,6 +9,10 @@ DerivedData/
 backend/node_modules/
 backend/dist/
 backend/.env
+backend/public/admin/
+
+admin/node_modules/
+admin/dist/
 
 ios/*.xcodeproj/xcuserdata/
 ios/DerivedData/

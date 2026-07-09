@@ -1,8 +1,15 @@
+/**
+ * Force-regenerate Club Chain for a date.
+ * Skips locked (and approved unless --force) rows.
+ *
+ *   DATABASE_URL=... npx tsx src/jobs/regenerate-club-chain.ts [YYYY-MM-DD] [--force]
+ */
 import 'dotenv/config';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { dailyPuzzles } from '../db/schema.js';
 import { generateClubChainPuzzle } from '../services/clubChainGenerator.js';
+import { contentHash } from '../services/puzzleOps.js';
 
 function pairKey(a: string, b: string): string {
   return [a, b].sort().join('|');
@@ -10,12 +17,23 @@ function pairKey(a: string, b: string): string {
 
 async function main() {
   const date = process.argv[2] ?? new Date().toISOString().slice(0, 10);
+  const force = process.argv.includes('--force');
 
   const existing = await db
     .select()
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'club_chain')))
     .limit(1);
+
+  const status = existing[0]?.status;
+  if (status === 'locked') {
+    console.error(`Refusing to regenerate locked club_chain for ${date}`);
+    process.exit(1);
+  }
+  if (status === 'approved' && !force) {
+    console.error(`Refusing to regenerate approved club_chain for ${date} (pass --force)`);
+    process.exit(1);
+  }
 
   const oldPuzzle = existing[0]?.puzzleJson as { start?: { id: string }; target?: { id: string } } | undefined;
   const excludePairKeys = new Set<string>();
@@ -39,6 +57,8 @@ async function main() {
     puzzleJson: result.puzzle,
     answerPlayerId: null,
     answerJson: result.answer,
+    status: 'generated',
+    contentHash: contentHash(result.puzzle, result.answer),
   });
 
   console.log(

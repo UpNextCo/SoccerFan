@@ -1,5 +1,6 @@
 [build]
 builder = "NIXPACKS"
+# Repo checkout includes ../admin; build emits SPA into public/admin then compiles API.
 buildCommand = "npm install && npm run build"
 
 [deploy]

@@ -64,6 +64,13 @@
       "when": 1782860000000,
       "tag": "0014_lms_bank",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782870000000,
+      "tag": "0015_daily_puzzle_ops",
+      "breakpoints": true
     }
   ]
 }
