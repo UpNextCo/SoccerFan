@@ -21,14 +21,14 @@ final class FootballBingoViewModel {
         self.game = FootballBingoSeed.makeGame(from: serverPuzzle)
     }
 
-    /// XP submitted to the server — 0 unless the grid is completed, then an efficiency slide (fewer
-    /// players used = more XP). This IS the XP.
+    /// XP submitted to the server — clear the grid for 400–1000 (efficiency), or near-miss XP if
+    /// only a few tiles are left. This IS the XP.
     var rawScore: Int {
         DailyXP.bingo(
-            completed: game.status == .won,
+            filled: game.completedCount,
+            tiles: game.categories.count,
             remaining: game.remainingPlayers,
-            queueSize: game.playerQueue.count,
-            tiles: game.categories.count
+            queueSize: game.playerQueue.count
         )
     }
 
@@ -717,7 +717,7 @@ private struct FootballBingoResultView: View {
                     Text("\(completedCount)/\(totalCategories) squares completed")
                         .font(BKFont.body())
                         .foregroundStyle(BKTheme.textSecondary)
-                    XPResultSummary(earned: 0, max: DailyXP.maxXP(.footballBingo))
+                    XPResultSummary(earned: xpEarned, max: DailyXP.maxXP(.footballBingo))
                 }
 
                 Spacer(minLength: 40)

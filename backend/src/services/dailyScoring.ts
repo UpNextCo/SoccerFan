@@ -38,12 +38,25 @@ function targetManXp(pctOff: number): number {
   return 0;
 }
 
-function bingoXp(completed: boolean, remaining: number, queueSize: number, tiles: number): number {
-  if (!completed) return 0;
-  if (queueSize <= tiles) return 1000;
-  const maxRemaining = queueSize - tiles;
-  const efficiency = Math.min(1, Math.max(0, remaining / maxRemaining));
-  return 400 + Math.round(600 * efficiency);
+/** Clear the grid → 400–1000 by efficiency. Near-miss: 1/2/3 tiles left → 250/150/75. Else 0. */
+function bingoXp(filled: number, tiles: number, remaining: number, queueSize: number): number {
+  const filledClamped = Math.max(0, Math.min(filled, tiles));
+  if (filledClamped >= tiles) {
+    if (queueSize <= tiles) return 1000;
+    const maxRemaining = queueSize - tiles;
+    const efficiency = Math.min(1, Math.max(0, remaining / maxRemaining));
+    return 400 + Math.round(600 * efficiency);
+  }
+  switch (tiles - filledClamped) {
+    case 1:
+      return 250;
+    case 2:
+      return 150;
+    case 3:
+      return 75;
+    default:
+      return 0;
+  }
 }
 
 function clubChainXp(reached: boolean, moves: number, par: number): number {
@@ -215,8 +228,10 @@ function scoreFootballBingo(row: PuzzleRow, answer: unknown): ServerScore | null
   }
 
   const tiles = puzzle.categories.length;
-  const completedAll = won && completed.size === tiles;
-  const score = bingoXp(completedAll, remainingPlayers, queueSize, tiles);
+  const filled = completed.size;
+  const completedAll = won && filled === tiles;
+  // Prefer verified placement count; if client claims a win with a full set, treat as filled.
+  const score = bingoXp(completedAll ? tiles : filled, tiles, remainingPlayers, queueSize);
   return { score, won: completedAll };
 }
 
