@@ -207,7 +207,7 @@ struct LMSGameState: Equatable, Codable {
     }
 
     static func layoutProfile(forRemaining remaining: Int) -> LMSLayoutProfile {
-        // Packed crowd: larger glyphs, near-zero gaps.
+        // Packed crowd uses fixed minColumns so 100 always fits in the card with no scroll.
         switch remaining {
         case 1:
             return LMSLayoutProfile(iconSize: 56, spacing: 8, minColumns: 1, maxHeight: 96, spotlight: true)
@@ -218,9 +218,10 @@ struct LMSGameState: Equatable, Codable {
         case 11...22:
             return LMSLayoutProfile(iconSize: 28, spacing: 2, minColumns: 7, maxHeight: 140, spotlight: false)
         case 23...45:
-            return LMSLayoutProfile(iconSize: 24, spacing: 1, minColumns: 9, maxHeight: 152, spotlight: false)
+            return LMSLayoutProfile(iconSize: 24, spacing: 1, minColumns: 10, maxHeight: 160, spotlight: false)
         default:
-            return LMSLayoutProfile(iconSize: 24, spacing: 0, minColumns: 11, maxHeight: 200, spotlight: false)
+            // 10×10 grid of 100 — card height is derived from content, not maxHeight.
+            return LMSLayoutProfile(iconSize: 26, spacing: 0, minColumns: 10, maxHeight: 268, spotlight: false)
         }
     }
 

@@ -392,25 +392,17 @@ struct LastManStandingView: View {
         let profile = LMSGameState.layoutProfile(forRemaining: layoutCount)
         let innerWidth = UIScreen.main.bounds.width - (SurvivorDockMetrics.horizontalInset * 2) - 24
         let entrantCount = state.visibleEntrants.count
-        let contentHeight = LastManStandingSurvivorField.contentHeight(
+        let fieldHeight = LastManStandingSurvivorField.contentHeight(
             entrantCount: entrantCount,
             profile: profile,
-            availableWidth: innerWidth
+            availableWidth: innerWidth,
+            remaining: layoutCount
         )
-        let scrollCap = profile.maxHeight
-        let needsScroll = contentHeight > scrollCap
 
         return VStack(spacing: SurvivorDockMetrics.labelGap) {
-            Group {
-                if needsScroll {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        survivorField(profile: profile)
-                    }
-                    .frame(height: scrollCap)
-                } else {
-                    survivorField(profile: profile)
-                }
-            }
+            survivorField(profile: profile)
+                .frame(height: fieldHeight)
+                .frame(maxWidth: .infinity)
 
             survivorStatusRow
         }

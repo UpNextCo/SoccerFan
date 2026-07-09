@@ -59,13 +59,19 @@ struct LMSEntrantIcon: View {
     let size: CGFloat
     var showYouLabel: Bool = true
     var emphasizeElimination: Bool = false
+    /// When false, skip the per-cell label gutter so a packed crowd fits without scrolling.
+    var reserveLabelGutter: Bool = true
 
     private var isOut: Bool { entrant.isEliminated || emphasizeElimination }
 
     private var emoji: String { LMSEntrantEmoji.glyph(for: entrant) }
 
+    private var labelHeight: CGFloat {
+        reserveLabelGutter ? max(7, size * 0.16) : 0
+    }
+
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: reserveLabelGutter ? 2 : 0) {
             ZStack {
                 Text(emoji)
                     .font(.system(size: size * 0.82))
@@ -80,20 +86,29 @@ struct LMSEntrantIcon: View {
                 }
             }
 
-            Group {
-                if entrant.isUser, showYouLabel {
-                    Text("YOU")
-                        .font(.system(size: max(7, size * 0.15), weight: .bold, design: .rounded))
-                        .tracking(0.4)
-                        .foregroundStyle(BKTheme.accent.opacity(isOut ? 0.35 : 1))
-                } else {
-                    Text(" ")
-                        .font(.system(size: max(6, size * 0.13)))
+            if reserveLabelGutter {
+                Group {
+                    if entrant.isUser, showYouLabel {
+                        Text("YOU")
+                            .font(.system(size: max(7, size * 0.15), weight: .bold, design: .rounded))
+                            .tracking(0.4)
+                            .foregroundStyle(BKTheme.accent.opacity(isOut ? 0.35 : 1))
+                    } else {
+                        Text(" ")
+                            .font(.system(size: max(6, size * 0.13)))
+                    }
                 }
+                .frame(height: labelHeight)
+            } else if entrant.isUser, showYouLabel {
+                // Compact crowd: tiny YOU tag overlaid under the glyph without padding every cell.
+                Text("YOU")
+                    .font(.system(size: 7, weight: .bold, design: .rounded))
+                    .tracking(0.3)
+                    .foregroundStyle(BKTheme.accent.opacity(isOut ? 0.35 : 1))
+                    .offset(y: -1)
             }
-            .frame(height: max(7, size * 0.16))
         }
-        .frame(width: size, height: size + max(9, size * 0.2))
+        .frame(width: size, height: size + (reserveLabelGutter ? labelHeight + 2 : (entrant.isUser && showYouLabel ? 8 : 0)))
     }
 }
 
@@ -105,10 +120,18 @@ struct LastManStandingSurvivorField: View {
     let profile: LMSLayoutProfile
     var freezeField: Bool = false
 
-    private var cellSize: CGFloat { profile.iconSize }
+    /// Dense opening field — no label gutters, fixed column count.
+    private var isPackedCrowd: Bool { remaining > 22 }
 
     private var columns: [GridItem] {
-        [GridItem(.adaptive(minimum: cellSize, maximum: cellSize), spacing: profile.spacing)]
+        if isPackedCrowd {
+            return Array(
+                repeating: GridItem(.flexible(minimum: 0), spacing: profile.spacing),
+                count: profile.minColumns
+            )
+        }
+        let cell = profile.iconSize
+        return [GridItem(.adaptive(minimum: cell, maximum: cell), spacing: profile.spacing)]
     }
 
     var body: some View {
@@ -117,7 +140,8 @@ struct LastManStandingSurvivorField: View {
                 LMSEntrantIcon(
                     entrant: entrant,
                     size: profile.iconSize,
-                    showYouLabel: remaining <= 22 || entrant.isUser
+                    showYouLabel: remaining <= 22 || entrant.isUser,
+                    reserveLabelGutter: !isPackedCrowd
                 )
             }
         }
@@ -127,14 +151,25 @@ struct LastManStandingSurvivorField: View {
         .animation(freezeField ? nil : .easeInOut(duration: 0.32), value: entrants.count)
     }
 
-    /// Pixel height of the grid for a given width — used to size the dock without dead space.
-    static func contentHeight(entrantCount: Int, profile: LMSLayoutProfile, availableWidth: CGFloat) -> CGFloat {
+    /// Exact height needed to show every entrant — dock sizes to this (no inner scroll).
+    static func contentHeight(entrantCount: Int, profile: LMSLayoutProfile, availableWidth: CGFloat, remaining: Int) -> CGFloat {
         guard entrantCount > 0, availableWidth > 0 else { return 0 }
-        let cellSize = profile.iconSize
+        let packed = remaining > 22
         let spacing = profile.spacing
-        let cols = max(1, Int((availableWidth + spacing) / (cellSize + spacing)))
+        let cols: Int
+        if packed {
+            cols = max(1, profile.minColumns)
+        } else {
+            let cell = profile.iconSize
+            cols = max(1, Int((availableWidth + spacing) / (cell + spacing)))
+        }
         let rows = (entrantCount + cols - 1) / cols
-        let rowHeight = profile.iconSize + max(9, profile.iconSize * 0.2)
-        return CGFloat(rows) * rowHeight + CGFloat(max(0, rows - 1)) * spacing
+        // Packed crowd: emoji-only rows. Later rounds: emoji + YOU label gutter.
+        let rowHeight: CGFloat = packed
+            ? profile.iconSize + (/* YOU tag under first cell */ 0)
+            : profile.iconSize + max(9, profile.iconSize * 0.2)
+        // Leave a sliver for the YOU tag that hangs under the user cell in packed mode.
+        let youSlop: CGFloat = packed ? 8 : 0
+        return CGFloat(rows) * rowHeight + CGFloat(max(0, rows - 1)) * spacing + youSlop
     }
 }
