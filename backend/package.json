@@ -46,6 +46,7 @@
     "job:reparse-fees": "tsx src/jobs/reparse-fees.ts",
     "job:ingest-trophies": "tsx src/jobs/ingest-trophies.ts",
     "job:ingest-career": "tsx src/jobs/ingest-career.ts",
+    "job:backfill-career-from-transfers": "tsx src/jobs/backfill-career-from-transfers.ts",
     "job:ingest-teams": "tsx src/jobs/ingest-teams.ts",
     "job:ingest-stats-all": "tsx src/jobs/ingest-stats-all.ts",
     "job:refresh-player-search": "tsx src/jobs/refresh-player-search.ts",
