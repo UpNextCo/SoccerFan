@@ -207,20 +207,20 @@ struct LMSGameState: Equatable, Codable {
     }
 
     static func layoutProfile(forRemaining remaining: Int) -> LMSLayoutProfile {
-        // Bigger icons + tighter gaps so the field reads as a packed crowd, not sparse chrome.
+        // Packed crowd: larger glyphs, near-zero gaps.
         switch remaining {
         case 1:
-            return LMSLayoutProfile(iconSize: 56, spacing: 10, minColumns: 1, maxHeight: 100, spotlight: true)
+            return LMSLayoutProfile(iconSize: 56, spacing: 8, minColumns: 1, maxHeight: 96, spotlight: true)
         case 2...3:
-            return LMSLayoutProfile(iconSize: 44, spacing: 8, minColumns: 3, maxHeight: 120, spotlight: true)
+            return LMSLayoutProfile(iconSize: 44, spacing: 6, minColumns: 3, maxHeight: 110, spotlight: true)
         case 4...10:
-            return LMSLayoutProfile(iconSize: 32, spacing: 4, minColumns: 5, maxHeight: 140, spotlight: false)
+            return LMSLayoutProfile(iconSize: 34, spacing: 3, minColumns: 5, maxHeight: 128, spotlight: false)
         case 11...22:
-            return LMSLayoutProfile(iconSize: 26, spacing: 2, minColumns: 8, maxHeight: 156, spotlight: false)
+            return LMSLayoutProfile(iconSize: 28, spacing: 2, minColumns: 7, maxHeight: 140, spotlight: false)
         case 23...45:
-            return LMSLayoutProfile(iconSize: 22, spacing: 1, minColumns: 10, maxHeight: 170, spotlight: false)
+            return LMSLayoutProfile(iconSize: 24, spacing: 1, minColumns: 9, maxHeight: 152, spotlight: false)
         default:
-            return LMSLayoutProfile(iconSize: 20, spacing: 1, minColumns: 12, maxHeight: 220, spotlight: false)
+            return LMSLayoutProfile(iconSize: 24, spacing: 0, minColumns: 11, maxHeight: 200, spotlight: false)
         }
     }
 

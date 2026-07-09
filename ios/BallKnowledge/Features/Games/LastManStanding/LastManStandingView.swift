@@ -380,7 +380,9 @@ struct LastManStandingView: View {
     }
 
     private enum SurvivorDockMetrics {
-        static let labelGap: CGFloat = 10
+        static let labelGap: CGFloat = 8
+        static let cornerRadius: CGFloat = 18
+        static let horizontalInset: CGFloat = 12
     }
 
     private var survivorDock: some View {
@@ -388,21 +390,17 @@ struct LastManStandingView: View {
         // layout off that count so icon size/spacing don't jump until they actually leave.
         let layoutCount = max(state.displayedRemaining, state.visibleEntrants.count)
         let profile = LMSGameState.layoutProfile(forRemaining: layoutCount)
-        let dockWidth = UIScreen.main.bounds.width - 32
+        let innerWidth = UIScreen.main.bounds.width - (SurvivorDockMetrics.horizontalInset * 2) - 24
         let entrantCount = state.visibleEntrants.count
         let contentHeight = LastManStandingSurvivorField.contentHeight(
             entrantCount: entrantCount,
             profile: profile,
-            availableWidth: dockWidth
+            availableWidth: innerWidth
         )
         let scrollCap = profile.maxHeight
         let needsScroll = contentHeight > scrollCap
 
-        return VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.white.opacity(0.06))
-                .frame(height: 1)
-
+        return VStack(spacing: SurvivorDockMetrics.labelGap) {
             Group {
                 if needsScroll {
                     ScrollView(.vertical, showsIndicators: false) {
@@ -414,15 +412,22 @@ struct LastManStandingView: View {
                 }
             }
 
-            Spacer().frame(height: SurvivorDockMetrics.labelGap)
-
             survivorStatusRow
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity)
+        .background(BKTheme.card.opacity(0.96))
+        .clipShape(RoundedRectangle(cornerRadius: SurvivorDockMetrics.cornerRadius, style: .continuous))
+        .overlay(
+            LMSVisualStyle.cardStroke(
+                RoundedRectangle(cornerRadius: SurvivorDockMetrics.cornerRadius, style: .continuous)
+            )
+        )
+        .padding(.horizontal, SurvivorDockMetrics.horizontalInset)
+        .padding(.bottom, 8)
         .safeAreaPadding(.bottom, 4)
-        .background(BKTheme.background.opacity(0.92))
     }
 
     private func survivorField(profile: LMSLayoutProfile) -> some View {
