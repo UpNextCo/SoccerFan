@@ -28,4 +28,6 @@ enum UserDefaultsKeys {
     static let hasCompletedOnboarding = "hasCompletedOnboarding"
     static let isDevAccount = "isDevAccount"
     static let completedPostSignInSetup = "completedPostSignInSetup"
+    /// Local calendar date (YYYY-MM-DD) for which the all-7 celebration was already shown.
+    static let dailyCompleteCelebratedDate = "dailyCompleteCelebratedDate"
 }

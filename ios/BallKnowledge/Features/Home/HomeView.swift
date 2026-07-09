@@ -47,6 +47,9 @@ struct HomeView: View {
     @State private var alreadyPlayedTitle = ""
     @State private var inProgressModes: Set<String> = []
     @State private var trackedDailyDate = DailyDate.localToday()
+    /// True while a game cover is up — celebration waits until we're back on home.
+    @State private var isPlayingGame = false
+    @State private var celebrationPayload: DailyCompleteCelebrationPayload?
     @Binding var selectedTab: AppTab
 
     private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
@@ -111,7 +114,16 @@ struct HomeView: View {
         .fullScreenCover(item: $presentedMode, onDismiss: {
             // Fires however the game closes — including tapping X mid-game — so an "In Progress"
             // tile shows up immediately (not only after a force-close + relaunch).
+            isPlayingGame = false
             refreshInProgress()
+            Task {
+                await auth.refreshProfile()
+                await viewModel.load(context: modelContext)
+                refreshInProgress()
+                // Let the game cover finish dismissing before stacking the celebration cover.
+                try? await Task.sleep(for: .milliseconds(350))
+                presentCelebrationIfNeeded()
+            }
         }) { mode in
             DailyGameHost(
                 mode: mode,
@@ -119,6 +131,11 @@ struct HomeView: View {
                 allowReplay: allowsUnlimitedDailyPlay,
                 onFinished: { handleModeFinished(mode) }
             )
+        }
+        .fullScreenCover(item: $celebrationPayload) { payload in
+            DailyCompleteCelebrationView(payload: payload) {
+                celebrationPayload = nil
+            }
         }
         .alert("Already played today", isPresented: $showAlreadyPlayedAlert) {
             Button("OK", role: .cancel) {}
@@ -147,17 +164,13 @@ struct HomeView: View {
             return
         }
 
+        isPlayingGame = true
         presentedMode = modeId
     }
 
     private func handleModeFinished(_ mode: GameModeID) {
+        // Dismiss the game cover; onDismiss refreshes profile/bundle and may present celebration.
         presentedMode = nil
-        refreshInProgress()
-        Task {
-            await auth.refreshProfile()
-            await viewModel.load(context: modelContext)
-            refreshInProgress()
-        }
     }
 
     /// Recompute which games have saved mid-game progress for today, and drop stale (past-day) snapshots.
@@ -168,6 +181,23 @@ struct HomeView: View {
         }
         GameProgressStore.clearStale(keepingDate: date, context: modelContext)
         inProgressModes = GameProgressStore.inProgressModes(date: date, context: modelContext)
+    }
+
+    /// Show the all-7 celebration once per day when returning home after clearing the set.
+    private func presentCelebrationIfNeeded() {
+        guard celebrationPayload == nil, !isPlayingGame, presentedMode == nil else { return }
+        guard let bundle = viewModel.dailyBundle else { return }
+        guard DailyPlayOrder.allComplete(in: bundle) else { return }
+        guard !DailyCompleteCelebration.hasShown(for: bundle.date) else { return }
+
+        let todayXp = auth.user?.todayXp ?? 0
+        let streak = auth.user?.streak ?? 0
+        DailyCompleteCelebration.markShown(for: bundle.date)
+        celebrationPayload = DailyCompleteCelebrationPayload(
+            date: bundle.date,
+            todayXp: todayXp,
+            streak: streak
+        )
     }
 }
 
