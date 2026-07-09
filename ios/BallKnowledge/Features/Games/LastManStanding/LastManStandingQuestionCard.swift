@@ -6,7 +6,7 @@ struct LastManStandingQuestionCard: View {
     let onSelect: (String) -> Void
 
     private enum Layout {
-        static let sectionSpacing: CGFloat = 24
+        static let sectionSpacing: CGFloat = 14
         static let blockSpacing: CGFloat = 20
     }
 
@@ -77,7 +77,7 @@ struct LastManStandingQuestionCard: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
@@ -135,34 +135,36 @@ struct LastManStandingQuestionCard: View {
     }
 
     private func careerPathClubRow(_ clubs: [LMSCareerClub]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(Array(clubs.enumerated()), id: \.offset) { index, club in
-                    if index > 0 {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 9, weight: .bold))
+        let badgeSize: CGFloat = 42
+        let labelWidth: CGFloat = 78
+        return HStack(spacing: 8) {
+            ForEach(Array(clubs.enumerated()), id: \.offset) { index, club in
+                if index > 0 {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(BKTheme.textMuted)
+                }
+                VStack(spacing: 5) {
+                    TeamBadgeImage(club: club.name, league: "", logoURL: club.logoUrl.flatMap(URL.init(string:)), size: badgeSize) {
+                        Text(GuessWhoDisplay.clubAbbrev(club.name))
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(BKTheme.textMuted)
+                            .frame(width: badgeSize, height: badgeSize)
+                            .background(BKTheme.card.opacity(0.6))
+                            .clipShape(Circle())
                     }
-                    VStack(spacing: 3) {
-                        TeamBadgeImage(club: club.name, league: "", logoURL: club.logoUrl.flatMap(URL.init(string:)), size: 28) {
-                            Text(GuessWhoDisplay.clubAbbrev(club.name))
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(BKTheme.textMuted)
-                                .frame(width: 28, height: 28)
-                                .background(BKTheme.card.opacity(0.6))
-                                .clipShape(Circle())
-                        }
-                        Text(club.name)
-                            .font(BKFont.caption(9))
-                            .foregroundStyle(BKTheme.textSecondary)
-                            .lineLimit(1)
-                            .frame(maxWidth: 72)
-                    }
+                    Text(club.name)
+                        .font(BKFont.caption(10))
+                        .foregroundStyle(BKTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .frame(width: labelWidth)
                 }
             }
-            .padding(.horizontal, 2)
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 2)
     }
 
     @ViewBuilder

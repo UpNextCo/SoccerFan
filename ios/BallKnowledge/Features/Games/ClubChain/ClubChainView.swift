@@ -251,32 +251,16 @@ struct ClubChainView: View {
     // MARK: Mission + stats
 
     private var missionCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Text(state.puzzle.difficulty.label)
-                    .font(BKFont.caption(10))
-                    .tracking(1)
-                    .foregroundStyle(BKTheme.accent)
-                Text("·")
-                    .foregroundStyle(BKTheme.textMuted)
-                Text("\(state.linkCount)-LINK CHAIN")
-                    .font(BKFont.caption(10))
-                    .tracking(0.8)
-                    .foregroundStyle(BKTheme.textMuted)
-            }
+        VStack(alignment: .leading, spacing: 8) {
             Text("Link these players through club teammates")
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(BKTheme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .lineSpacing(2)
-            Text("Each pick must have shared a club at the same time as the player above. Same league or nationality alone doesn't count.")
-                .font(BKFont.caption(10))
-                .tracking(0.3)
+            Text("Each pick must share a club with the player above.")
+                .font(BKFont.caption(11))
                 .foregroundStyle(BKTheme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(state.puzzle.difficulty.subtitle)
-                .font(BKFont.caption(10))
-                .foregroundStyle(BKTheme.textSecondary)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -286,77 +270,28 @@ struct ClubChainView: View {
     }
 
     private var statsHero: some View {
-        VStack(spacing: 14) {
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(BKTheme.wrong)
-                    Text("\(state.livesRemaining) left")
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.textSecondary)
-                }
-                Spacer()
-                Text("\(state.movesRemaining) picks remaining")
+        HStack(alignment: .center, spacing: 12) {
+            HStack(spacing: 4) {
+                Text("Fastest Route")
                     .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.textMuted)
-            }
-
-            VStack(spacing: 2) {
-                Text("\(state.moves)")
-                    .font(BKFont.title(52))
-                    .foregroundStyle(state.moves <= state.goldMoves ? BKTheme.accent : BKTheme.textPrimary)
-                    .contentTransition(.numericText())
-                Text("PLAYERS ADDED")
+                    .foregroundStyle(BKTheme.textSecondary)
+                Text("\(state.goldMoves)")
                     .font(BKFont.caption(11))
-                    .tracking(1)
-                    .foregroundStyle(BKTheme.textMuted)
+                    .foregroundStyle(BKTheme.accent)
             }
-            .frame(maxWidth: .infinity)
 
-            HStack(spacing: 0) {
-                statPill(value: "\(state.goldMoves)", label: "FOR GOLD", accent: true)
-                statPill(value: "\(state.linkCount)", label: "LINKS", accent: false)
-                statPill(value: "\(state.moveLimit)", label: "LIMIT", accent: false)
-            }
-        }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity)
-        .background {
-            GeometryReader { geo in
-                let radius = max(geo.size.width, geo.size.height) * 0.72
-                RadialGradient(
-                    colors: [
-                        BKTheme.accent.opacity(0.028),
-                        BKTheme.accent.opacity(0.007),
-                        .clear,
-                    ],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: radius
-                )
-                .blur(radius: 18)
-                .frame(width: geo.size.width, height: geo.size.height)
-            }
-            .allowsHitTesting(false)
-        }
-        .background(BKTheme.card.opacity(0.55))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
-    }
+            Spacer(minLength: 8)
 
-    private func statPill(value: String, label: String, accent: Bool) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(BKFont.headline(18))
-                .foregroundStyle(accent ? BKTheme.accent : BKTheme.textPrimary)
-            Text(label)
-                .font(BKFont.caption(9))
-                .tracking(0.6)
+            Text("\(state.movesRemaining) picks remaining")
+                .font(BKFont.caption(11))
                 .foregroundStyle(BKTheme.textMuted)
         }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
+        .background(BKTheme.card.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
     }
 
     // MARK: Chain
@@ -466,10 +401,6 @@ private struct ClubChainPlayerCard: View {
         }
     }
 
-    private var subtitle: String {
-        [player.position, player.nationality].filter { !$0.isEmpty }.joined(separator: " · ")
-    }
-
     var body: some View {
         HStack(spacing: 12) {
             PlayerAvatar(urlString: player.headshotUrl, size: 46)
@@ -483,14 +414,19 @@ private struct ClubChainPlayerCard: View {
                     .font(.system(size: 15, weight: .black, design: .rounded))
                     .foregroundStyle(BKTheme.textPrimary)
                     .lineLimit(1).minimumScaleFactor(0.8)
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(BKFont.caption(10))
+                if !player.position.isEmpty {
+                    Text(player.position)
+                        .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textMuted)
                         .lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
+
+            if !player.nationality.isEmpty {
+                Text(GuessWhoDisplay.nationalityFlag(player.nationality))
+                    .font(.system(size: 22))
+            }
 
             if role == .targetSolved {
                 Ph.checkCircle.fill.color(BKTheme.accent).frame(width: 22, height: 22)
