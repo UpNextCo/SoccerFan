@@ -1,9 +1,17 @@
+import { api, type AdminTeamHit } from '../api'
+import { EntityPicker } from '../components/EntityPicker'
+
 type Cat = {
   id?: string
   title?: string
   label?: string
-  matchingRule?: unknown
+  type?: string
+  matchingRule?: string
   iconType?: string
+  iconValue?: string
+  logoUrl?: string | null
+  logo2Url?: string | null
+  flag?: string
   [k: string]: unknown
 }
 
@@ -11,6 +19,9 @@ type Player = {
   id?: string
   name?: string
   displayName?: string
+  headshotUrl?: string | null
+  nationality?: string
+  clubs?: string[]
   [k: string]: unknown
 }
 
@@ -18,6 +29,12 @@ type Puzzle = {
   categories: Cat[]
   players: Player[]
   [k: string]: unknown
+}
+
+function leagueFromIconValue(iconValue: string | undefined): string {
+  if (!iconValue) return 'Premier League'
+  const parts = iconValue.split('|')
+  return parts[1] || 'Premier League'
 }
 
 export function BingoEditor({
@@ -40,11 +57,89 @@ export function BingoEditor({
     })
   }
 
-  function updatePlayer(idx: number, patch: Partial<Player>) {
+  function replacePlayer(idx: number, next: Player) {
     onChange({
       ...p,
-      players: players.map((pl, i) => (i === idx ? { ...pl, ...patch } : pl)),
+      players: players.map((pl, i) => (i === idx ? next : pl)),
     })
+  }
+
+  async function pickPoolPlayer(idx: number, playerId: string) {
+    const resolved = (await api.resolvePlayer(playerId, 'bingo')) as Player
+    replacePlayer(idx, resolved)
+  }
+
+  async function pickClubRule(idx: number, hit: AdminTeamHit, slot: 'primary' | 'secondary' = 'primary') {
+    const team = await api.resolveTeam(hit.id)
+    const cat = categories[idx]!
+    const type = cat.type ?? ''
+
+    if (type === 'playedForClub' || cat.iconType === 'clubBadge') {
+      updateCat(idx, {
+        title: `Played for ${team.name}`,
+        matchingRule: team.name,
+        iconValue: `${team.name}|${team.leagueName ?? 'Premier League'}`,
+        logoUrl: team.logoUrl,
+      })
+      return
+    }
+
+    if (type === 'nationClub' || cat.iconType === 'nationClub') {
+      const nation = cat.flag || String(cat.matchingRule ?? '').split('|')[0] || ''
+      const rule = `${nation}|${team.name}`
+      updateCat(idx, {
+        matchingRule: rule,
+        iconValue: `${team.name}|${team.leagueName ?? 'Premier League'}`,
+        logoUrl: team.logoUrl,
+        title: cat.title?.includes('|') ? cat.title : `${nation} · ${team.name}`,
+      })
+      return
+    }
+
+    if (type === 'clubCombo' || cat.iconType === 'clubCombo') {
+      const [a, b] = String(cat.matchingRule ?? '').split('|')
+      if (slot === 'primary') {
+        const nextA = team.name
+        const nextB = b || a || ''
+        updateCat(idx, {
+          matchingRule: `${nextA}|${nextB}`,
+          iconValue: `${nextA}|${nextB}`,
+          title: `${nextA} & ${nextB}`,
+          logoUrl: team.logoUrl,
+        })
+      } else {
+        const nextA = a || team.name
+        const nextB = team.name
+        updateCat(idx, {
+          matchingRule: `${nextA}|${nextB}`,
+          iconValue: `${nextA}|${nextB}`,
+          title: `${nextA} & ${nextB}`,
+          logo2Url: team.logoUrl,
+        })
+      }
+    }
+  }
+
+  async function pickNationality(idx: number, name: string) {
+    const cat = categories[idx]!
+    const type = cat.type ?? ''
+    if (type === 'nationality' || cat.iconType === 'flag') {
+      updateCat(idx, {
+        title: name,
+        matchingRule: name,
+        iconValue: name,
+        flag: name,
+      })
+      return
+    }
+    if (type === 'nationClub' || cat.iconType === 'nationClub') {
+      const club = String(cat.matchingRule ?? '').split('|')[1] || ''
+      updateCat(idx, {
+        matchingRule: `${name}|${club}`,
+        flag: name,
+        title: `${name} · ${club}`,
+      })
+    }
   }
 
   return (
@@ -53,37 +148,100 @@ export function BingoEditor({
         <header>
           <strong>Categories ({categories.length})</strong>
         </header>
-        {categories.map((c, idx) => (
-          <div key={c.id ?? idx} className="bingo-cat">
-            <label className="field">
-              Title
-              <input
-                value={(c.title as string) ?? (c.label as string) ?? ''}
-                disabled={locked}
-                onChange={(e) => updateCat(idx, { title: e.target.value, label: e.target.value })}
-              />
-            </label>
-            <p className="muted tiny">
-              {String(c.iconType ?? '')} · rule:{' '}
-              <code>{JSON.stringify(c.matchingRule ?? null).slice(0, 80)}</code>
-            </p>
-            <label className="field">
-              matchingRule (JSON — edit carefully)
-              <textarea
-                rows={2}
-                disabled={locked}
-                value={JSON.stringify(c.matchingRule ?? null, null, 0)}
-                onChange={(e) => {
-                  try {
-                    updateCat(idx, { matchingRule: JSON.parse(e.target.value) })
-                  } catch {
-                    /* ignore while typing */
+        {categories.map((c, idx) => {
+          const type = c.type ?? ''
+          const isClub =
+            type === 'playedForClub' ||
+            type === 'nationClub' ||
+            type === 'clubCombo' ||
+            c.iconType === 'clubBadge' ||
+            c.iconType === 'nationClub' ||
+            c.iconType === 'clubCombo'
+          const isNat =
+            type === 'nationality' ||
+            type === 'nationClub' ||
+            c.iconType === 'flag' ||
+            c.iconType === 'nationClub'
+          const ruleParts = String(c.matchingRule ?? '').split('|')
+
+          return (
+            <div key={c.id ?? idx} className="bingo-cat">
+              <label className="field">
+                Title
+                <input
+                  value={(c.title as string) ?? (c.label as string) ?? ''}
+                  disabled={locked}
+                  onChange={(e) => updateCat(idx, { title: e.target.value, label: e.target.value })}
+                />
+              </label>
+              <p className="muted tiny">
+                {String(c.iconType ?? type)} · rule: <code>{String(c.matchingRule ?? '')}</code>
+              </p>
+
+              {isNat && (
+                <EntityPicker
+                  kind="nationality"
+                  label="Nationality"
+                  valueLabel={
+                    type === 'nationality'
+                      ? String(c.matchingRule ?? '')
+                      : ruleParts[0] || c.flag || undefined
                   }
-                }}
-              />
-            </label>
-          </div>
-        ))}
+                  disabled={locked}
+                  onPickNationality={(hit) => pickNationality(idx, hit.name)}
+                />
+              )}
+
+              {isClub && type !== 'clubCombo' && c.iconType !== 'clubCombo' && (
+                <EntityPicker
+                  kind="team"
+                  label="Club"
+                  valueLabel={
+                    type === 'playedForClub'
+                      ? String(c.matchingRule ?? '')
+                      : ruleParts[1] || undefined
+                  }
+                  imageUrl={c.logoUrl}
+                  disabled={locked}
+                  onPickTeam={(hit) => pickClubRule(idx, hit, 'primary')}
+                />
+              )}
+
+              {(type === 'clubCombo' || c.iconType === 'clubCombo') && (
+                <div className="row">
+                  <EntityPicker
+                    kind="team"
+                    label="Club A"
+                    valueLabel={ruleParts[0] || undefined}
+                    imageUrl={c.logoUrl}
+                    disabled={locked}
+                    onPickTeam={(hit) => pickClubRule(idx, hit, 'primary')}
+                  />
+                  <EntityPicker
+                    kind="team"
+                    label="Club B"
+                    valueLabel={ruleParts[1] || undefined}
+                    imageUrl={c.logo2Url}
+                    disabled={locked}
+                    onPickTeam={(hit) => pickClubRule(idx, hit, 'secondary')}
+                  />
+                </div>
+              )}
+
+              {!isClub && !isNat && (
+                <label className="field">
+                  matchingRule
+                  <input
+                    disabled={locked}
+                    value={String(c.matchingRule ?? '')}
+                    onChange={(e) => updateCat(idx, { matchingRule: e.target.value })}
+                  />
+                </label>
+              )}
+              <span className="muted tiny">league hint: {leagueFromIconValue(c.iconValue)}</span>
+            </div>
+          )
+        })}
       </section>
 
       <section className="q-card">
@@ -92,14 +250,14 @@ export function BingoEditor({
         </header>
         <div className="player-grid">
           {players.map((pl, idx) => (
-            <label key={pl.id ?? idx} className="field compact">
-              <input
-                value={(pl.name as string) ?? (pl.displayName as string) ?? ''}
-                disabled={locked}
-                onChange={(e) => updatePlayer(idx, { name: e.target.value, displayName: e.target.value })}
-              />
-              <span className="muted tiny">{String(pl.id ?? '').slice(0, 8)}</span>
-            </label>
+            <EntityPicker
+              key={pl.id ?? idx}
+              kind="player"
+              valueLabel={(pl.name as string) ?? (pl.displayName as string) ?? undefined}
+              imageUrl={pl.headshotUrl}
+              disabled={locked}
+              onPickPlayer={(hit) => pickPoolPlayer(idx, hit.id)}
+            />
           ))}
         </div>
       </section>

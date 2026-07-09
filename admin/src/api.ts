@@ -125,6 +125,52 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ date, modeId, force }),
     }),
+
+  searchPlayers: (q: string) =>
+    request<AdminPlayerHit[]>(`/search/players?q=${encodeURIComponent(q)}`),
+  searchTeams: (q: string) =>
+    request<AdminTeamHit[]>(`/search/teams?q=${encodeURIComponent(q)}`),
+  searchLeagues: (q: string) =>
+    request<AdminLeagueHit[]>(`/search/leagues?q=${encodeURIComponent(q)}`),
+  searchNationalities: (q: string) =>
+    request<AdminNationalityHit[]>(`/search/nationalities?q=${encodeURIComponent(q)}`),
+  resolvePlayer: (id: string, kind: 'card' | 'bingo' | 'golf' = 'card') =>
+    request<Record<string, unknown>>(
+      `/resolve/player/${encodeURIComponent(id)}?kind=${encodeURIComponent(kind)}`
+    ),
+  resolveTeam: (id: number) =>
+    request<AdminTeamResolved>(`/resolve/team/${id}`),
+}
+
+export type AdminPlayerHit = {
+  id: string
+  name: string
+  club: string
+  league: string
+  nationality: string
+  position: string
+  headshotUrl?: string
+  teamLogoUrl?: string
+}
+
+export type AdminTeamHit = {
+  id: number
+  name: string
+  logoUrl: string
+  leagueId: number | null
+  country: string | null
+}
+
+export type AdminLeagueHit = { id: number; name: string }
+export type AdminNationalityHit = { name: string }
+
+export type AdminTeamResolved = {
+  id: number
+  name: string
+  logoUrl: string
+  leagueId: number | null
+  leagueName: string | null
+  country: string | null
 }
 
 export const MODE_LABELS: Record<string, string> = {

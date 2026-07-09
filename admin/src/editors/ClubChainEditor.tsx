@@ -1,6 +1,13 @@
+import { api } from '../api'
+import { EntityPicker } from '../components/EntityPicker'
+
 type PlayerRef = {
   id: string
   name: string
+  club?: string
+  nationality?: string
+  position?: string
+  headshotUrl?: string
   [k: string]: unknown
 }
 
@@ -34,32 +41,58 @@ export function ClubChainEditor({
   const a = (answer as Answer) ?? {}
   const pathIds = a.shortestPathPlayerIds ?? []
 
+  async function pickEndpoint(which: 'start' | 'target', playerId: string) {
+    const resolved = (await api.resolvePlayer(playerId, 'card')) as PlayerRef
+    const nextCard: PlayerRef = {
+      id: resolved.id,
+      name: resolved.name,
+      club: resolved.club,
+      nationality: resolved.nationality,
+      position: resolved.position,
+      headshotUrl: resolved.headshotUrl,
+    }
+    const nextPuzzle = { ...p, [which]: nextCard }
+    // Keep answer path endpoints in sync when start/target change.
+    let nextAns = a
+    if (pathIds.length >= 2) {
+      const nextPath = [...pathIds]
+      if (which === 'start') nextPath[0] = resolved.id
+      if (which === 'target') nextPath[nextPath.length - 1] = resolved.id
+      nextAns = { ...a, shortestPathPlayerIds: nextPath }
+    }
+    onChange(nextPuzzle, nextAns)
+  }
+
+  async function pickPathPlayer(idx: number, playerId: string) {
+    const resolved = (await api.resolvePlayer(playerId, 'card')) as { id: string; name: string }
+    const nextPath = pathIds.map((id, i) => (i === idx ? resolved.id : id))
+    onChange(p, {
+      ...a,
+      shortestPathPlayerIds: nextPath,
+      shortestPathLength: nextPath.length > 0 ? nextPath.length - 1 : a.shortestPathLength,
+    })
+  }
+
   return (
     <div className="mode-editor">
       <div className="q-card">
         <div className="row">
-          <label className="field">
-            Start player
-            <input
-              value={p.start?.name ?? ''}
-              disabled={locked}
-              onChange={(e) =>
-                onChange({ ...p, start: { ...p.start, name: e.target.value } }, a)
-              }
-            />
-            <span className="muted tiny">{p.start?.id}</span>
-          </label>
-          <label className="field">
-            Target player
-            <input
-              value={p.target?.name ?? ''}
-              disabled={locked}
-              onChange={(e) =>
-                onChange({ ...p, target: { ...p.target, name: e.target.value } }, a)
-              }
-            />
-            <span className="muted tiny">{p.target?.id}</span>
-          </label>
+          <EntityPicker
+            kind="player"
+            label="Start player"
+            valueLabel={p.start?.name}
+            imageUrl={p.start?.headshotUrl}
+            disabled={locked}
+            onPickPlayer={(hit) => pickEndpoint('start', hit.id)}
+          />
+          <EntityPicker
+            kind="player"
+            label="Target player"
+            valueLabel={p.target?.name}
+            imageUrl={p.target?.headshotUrl}
+            disabled={locked}
+            onPickPlayer={(hit) => pickEndpoint('target', hit.id)}
+          />
         </div>
         <div className="row">
           <label className="field">
@@ -79,39 +112,24 @@ export function ClubChainEditor({
 
       <section className="q-card">
         <header>
-          <strong>Shortest path player IDs (answer_json)</strong>
+          <strong>Shortest path (answer_json)</strong>
         </header>
         {pathIds.length === 0 ? (
           <p className="muted">No path stored</p>
         ) : (
-          <ol className="lineup">
+          <div className="stack-gap">
             {pathIds.map((id, i) => (
-              <li key={i}>
-                <code>{id}</code>
-              </li>
+              <EntityPicker
+                key={`${i}-${id}`}
+                kind="player"
+                label={i === 0 ? 'Start' : i === pathIds.length - 1 ? 'Target' : `Step ${i}`}
+                valueLabel={id}
+                disabled={locked}
+                onPickPlayer={(hit) => pickPathPlayer(i, hit.id)}
+              />
             ))}
-          </ol>
+          </div>
         )}
-        <label className="field">
-          shortestPathPlayerIds (JSON array)
-          <textarea
-            rows={6}
-            disabled={locked}
-            value={JSON.stringify(pathIds, null, 2)}
-            onChange={(e) => {
-              try {
-                const ids = JSON.parse(e.target.value) as string[]
-                onChange(p, {
-                  ...a,
-                  shortestPathPlayerIds: ids,
-                  shortestPathLength: ids.length > 0 ? ids.length - 1 : a.shortestPathLength,
-                })
-              } catch {
-                /* ignore */
-              }
-            }}
-          />
-        </label>
       </section>
     </div>
   )

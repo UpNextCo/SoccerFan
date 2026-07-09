@@ -1,4 +1,8 @@
+import { api } from '../api'
+import { EntityPicker } from '../components/EntityPicker'
+
 type Answer = {
+  id?: string
   name: string
   aliases?: string[]
   rarity?: string
@@ -44,6 +48,22 @@ export function GolfEditor({
     const hole = holes.find((h) => h.holeNumber === n)!
     const answers = hole.answers.map((a, i) => (i === idx ? { ...a, ...patch } : a))
     updateHole(n, { answers })
+  }
+
+  async function pickAnswer(n: number, idx: number, playerId: string) {
+    const resolved = (await api.resolvePlayer(playerId, 'golf')) as {
+      id: string
+      name: string
+      aliases?: string[]
+    }
+    const hole = holes.find((h) => h.holeNumber === n)!
+    const prev = hole.answers[idx]!
+    updateAnswer(n, idx, {
+      id: resolved.id,
+      name: resolved.name,
+      aliases: resolved.aliases ?? [],
+      rarity: prev.rarity ?? 'common',
+    })
   }
 
   function addAnswer(n: number) {
@@ -115,29 +135,36 @@ export function GolfEditor({
             />
           </label>
           <fieldset disabled={locked} className="options">
-            <legend>Answers</legend>
+            <legend>Answers (search player to set id + aliases)</legend>
             {h.answers.map((ans, idx) => (
-              <div key={idx} className="option-row stack">
+              <div key={ans.id ?? idx} className="option-row stack">
                 <div className="row">
-                  <input
-                    className="grow"
-                    value={ans.name}
-                    placeholder="Name"
-                    onChange={(e) => updateAnswer(h.holeNumber, idx, { name: e.target.value })}
+                  <EntityPicker
+                    kind="player"
+                    valueLabel={ans.name || undefined}
+                    disabled={locked}
+                    onPickPlayer={(hit) => pickAnswer(h.holeNumber, idx, hit.id)}
                   />
                   <input
                     value={ans.rarity ?? ''}
                     placeholder="rarity"
                     style={{ width: 100 }}
+                    disabled={locked}
                     onChange={(e) => updateAnswer(h.holeNumber, idx, { rarity: e.target.value })}
                   />
-                  <button type="button" className="ghost tiny-btn" onClick={() => removeAnswer(h.holeNumber, idx)}>
+                  <button
+                    type="button"
+                    className="ghost tiny-btn"
+                    disabled={locked}
+                    onClick={() => removeAnswer(h.holeNumber, idx)}
+                  >
                     ×
                   </button>
                 </div>
                 <input
                   value={(ans.aliases ?? []).join(', ')}
                   placeholder="Aliases, comma-separated"
+                  disabled={locked}
                   onChange={(e) =>
                     updateAnswer(h.holeNumber, idx, {
                       aliases: e.target.value
@@ -147,9 +174,10 @@ export function GolfEditor({
                     })
                   }
                 />
+                {ans.id && <span className="muted tiny">{ans.id}</span>}
               </div>
             ))}
-            <button type="button" className="ghost" onClick={() => addAnswer(h.holeNumber)}>
+            <button type="button" className="ghost" disabled={locked} onClick={() => addAnswer(h.holeNumber)}>
               + Answer
             </button>
           </fieldset>

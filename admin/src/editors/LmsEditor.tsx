@@ -1,3 +1,6 @@
+import { api, type AdminPlayerHit, type AdminTeamHit } from '../api'
+import { EntityPicker } from '../components/EntityPicker'
+
 type Opt = {
   id: string
   label: string
@@ -15,7 +18,11 @@ type Q = {
   prompt: string
   subPrompt?: string
   options: Opt[]
-  presentation?: unknown
+  presentation?: {
+    careerClubs?: Array<{ name: string; logoUrl?: string }>
+    imageUrl?: string
+    [k: string]: unknown
+  }
 }
 
 type Ans = {
@@ -34,6 +41,17 @@ type Puzzle = {
 }
 
 type Answer = { questions: Ans[] }
+
+function makeOptionId(questionId: string, key: string): string {
+  return `${questionId}-${key}`
+}
+
+function isClubQuestion(q: Q): boolean {
+  if (q.type === 'which_club' || q.type === 'image_badge') return true
+  if (q.type !== 'odd_one_out') return false
+  const sub = q.subPrompt?.toLowerCase() ?? ''
+  return sub.includes('club')
+}
 
 export function LmsEditor({
   puzzle,
@@ -55,15 +73,34 @@ export function LmsEditor({
     onChange({ ...p, questions: nextQs }, a)
   }
 
-  function updateOption(slot: number, optId: string, patch: Partial<Opt>) {
+  function replaceOption(
+    question: Q,
+    oldOpt: Opt,
+    nextOpt: Opt,
+    answerPatch?: Partial<Ans>
+  ) {
     const nextQs = questions.map((q) => {
-      if (q.slot !== slot) return q
+      if (q.id !== question.id) return q
       return {
         ...q,
-        options: q.options.map((o) => (o.id === optId ? { ...o, ...patch } : o)),
+        options: q.options.map((o) => (o.id === oldOpt.id ? nextOpt : o)),
       }
     })
-    onChange({ ...p, questions: nextQs }, a)
+    let nextAns = a
+    if (answerPatch || oldOpt.id !== nextOpt.id) {
+      nextAns = {
+        questions: a.questions.map((ans) => {
+          if (ans.questionId !== question.id) return ans
+          const wasCorrect = ans.correctOptionId === oldOpt.id
+          return {
+            ...ans,
+            ...(wasCorrect ? { correctOptionId: nextOpt.id } : {}),
+            ...answerPatch,
+          }
+        }),
+      }
+    }
+    onChange({ ...p, questions: nextQs }, nextAns)
   }
 
   function updateAnswer(questionId: string, patch: Partial<Ans>) {
@@ -77,6 +114,57 @@ export function LmsEditor({
 
   function correctFor(q: Q): Ans | undefined {
     return a.questions.find((x) => x.questionId === q.id)
+  }
+
+  async function pickPlayer(q: Q, oldOpt: Opt, hit: AdminPlayerHit) {
+    const resolved = (await api.resolvePlayer(hit.id, 'card')) as {
+      id: string
+      name: string
+      nationality?: string
+      position?: string
+      headshotUrl?: string
+      teamLogoUrl?: string
+    }
+    const nextOpt: Opt = {
+      ...oldOpt,
+      id: makeOptionId(q.id, resolved.id),
+      label: resolved.name,
+      headshotUrl: resolved.headshotUrl,
+      teamLogoUrl: resolved.teamLogoUrl,
+      nationality: resolved.nationality,
+      position: resolved.position,
+    }
+    replaceOption(q, oldOpt, nextOpt)
+  }
+
+  async function pickClub(q: Q, oldOpt: Opt, hit: AdminTeamHit) {
+    const team = await api.resolveTeam(hit.id)
+    const suffix = oldOpt.id.startsWith(`${q.id}-`) ? oldOpt.id.slice(q.id.length + 1) : oldOpt.id
+    let optionKey = String(team.id)
+    if (q.type === 'which_club' || (q.type === 'odd_one_out' && isClubQuestion(q))) {
+      if (suffix === 'correct' || suffix === 'odd' || /^w\d+$/.test(suffix) || /^m\d+$/.test(suffix)) {
+        optionKey = suffix
+      }
+    } else if (q.type === 'image_badge') {
+      optionKey = String(team.id)
+    }
+    const nextOpt: Opt = {
+      ...oldOpt,
+      id: makeOptionId(q.id, optionKey),
+      label: team.name,
+      teamLogoUrl: team.logoUrl,
+      headshotUrl: undefined,
+    }
+    replaceOption(q, oldOpt, nextOpt)
+  }
+
+  async function pickCareerClub(q: Q, clubIdx: number, hit: AdminTeamHit) {
+    const team = await api.resolveTeam(hit.id)
+    const clubs = [...(q.presentation?.careerClubs ?? [])]
+    clubs[clubIdx] = { name: team.name, logoUrl: team.logoUrl }
+    updateQuestion(q.slot, {
+      presentation: { ...(q.presentation ?? {}), careerClubs: clubs },
+    })
   }
 
   return (
@@ -93,6 +181,7 @@ export function LmsEditor({
 
       {questions.map((q) => {
         const ans = correctFor(q)
+        const clubMode = isClubQuestion(q)
         return (
           <article key={q.id} className="q-card">
             <header>
@@ -121,22 +210,52 @@ export function LmsEditor({
               />
             </label>
 
+            {Array.isArray(q.presentation?.careerClubs) && q.presentation!.careerClubs!.length > 0 && (
+              <fieldset disabled={locked} className="options">
+                <legend>Career clubs</legend>
+                {q.presentation!.careerClubs!.map((club, idx) => (
+                  <EntityPicker
+                    key={`${q.id}-club-${idx}`}
+                    kind="team"
+                    label={`Club ${idx + 1}`}
+                    valueLabel={club.name}
+                    imageUrl={club.logoUrl}
+                    disabled={locked}
+                    onPickTeam={(hit) => pickCareerClub(q, idx, hit)}
+                  />
+                ))}
+              </fieldset>
+            )}
+
             <fieldset disabled={locked} className="options">
-              <legend>Options (pick correct)</legend>
+              <legend>Options (pick correct · search to replace)</legend>
               {q.options.map((o) => (
-                <div key={o.id} className="option-row">
-                  <input
-                    type="radio"
-                    name={`correct-${q.id}`}
-                    checked={ans?.correctOptionId === o.id}
-                    onChange={() => updateAnswer(q.id, { correctOptionId: o.id })}
-                  />
-                  <input
-                    className="grow"
-                    value={o.label}
-                    onChange={(e) => updateOption(q.slot, o.id, { label: e.target.value })}
-                  />
-                  <span className="muted tiny">{o.id}</span>
+                <div key={o.id} className="option-with-picker">
+                  <div className="radio-col">
+                    <input
+                      type="radio"
+                      name={`correct-${q.id}`}
+                      checked={ans?.correctOptionId === o.id}
+                      onChange={() => updateAnswer(q.id, { correctOptionId: o.id })}
+                    />
+                  </div>
+                  {clubMode ? (
+                    <EntityPicker
+                      kind="team"
+                      valueLabel={o.label}
+                      imageUrl={o.teamLogoUrl}
+                      disabled={locked}
+                      onPickTeam={(hit) => pickClub(q, o, hit)}
+                    />
+                  ) : (
+                    <EntityPicker
+                      kind="player"
+                      valueLabel={o.label}
+                      imageUrl={o.headshotUrl}
+                      disabled={locked}
+                      onPickPlayer={(hit) => pickPlayer(q, o, hit)}
+                    />
+                  )}
                 </div>
               ))}
             </fieldset>

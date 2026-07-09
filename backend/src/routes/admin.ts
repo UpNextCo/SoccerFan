@@ -19,6 +19,16 @@ import {
   setPuzzleStatus,
 } from '../services/puzzleOps.js';
 import { validatePuzzlePayload } from '../services/adminPuzzleValidation.js';
+import {
+  adminSearchLeagues,
+  adminSearchNationalities,
+  adminSearchPlayers,
+  adminSearchTeams,
+  resolveAdminBingoPlayer,
+  resolveAdminGolfAnswer,
+  resolveAdminPlayer,
+  resolveAdminTeam,
+} from '../services/adminEntitySearch.js';
 
 export const adminRouter = Router();
 
@@ -291,4 +301,93 @@ adminRouter.post('/puzzle/regenerate', requireAdmin, async (req, res) => {
         }
       : null,
   });
+});
+
+// ---- Entity search / resolve (for structured editors) --------------------
+
+adminRouter.get('/search/players', requireAdmin, async (req, res) => {
+  const q = String(req.query.q ?? '');
+  try {
+    sendSuccess(res, await adminSearchPlayers(q));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 500);
+  }
+});
+
+adminRouter.get('/search/teams', requireAdmin, async (req, res) => {
+  const q = String(req.query.q ?? '');
+  try {
+    sendSuccess(res, await adminSearchTeams(q));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 500);
+  }
+});
+
+adminRouter.get('/search/leagues', requireAdmin, async (req, res) => {
+  const q = String(req.query.q ?? '');
+  try {
+    sendSuccess(res, await adminSearchLeagues(q));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 500);
+  }
+});
+
+adminRouter.get('/search/nationalities', requireAdmin, async (req, res) => {
+  const q = String(req.query.q ?? '');
+  try {
+    sendSuccess(res, await adminSearchNationalities(q));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 500);
+  }
+});
+
+adminRouter.get('/resolve/player/:id', requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  const kind = String(req.query.kind ?? 'card');
+  try {
+    if (kind === 'bingo') {
+      const player = await resolveAdminBingoPlayer(id);
+      if (!player) {
+        sendError(res, 'Player not found', 404);
+        return;
+      }
+      sendSuccess(res, player);
+      return;
+    }
+    if (kind === 'golf') {
+      const player = await resolveAdminGolfAnswer(id);
+      if (!player) {
+        sendError(res, 'Player not found', 404);
+        return;
+      }
+      sendSuccess(res, player);
+      return;
+    }
+    const player = await resolveAdminPlayer(id);
+    if (!player) {
+      sendError(res, 'Player not found', 404);
+      return;
+    }
+    sendSuccess(res, player);
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 500);
+  }
+});
+
+adminRouter.get('/resolve/team/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    sendError(res, 'Invalid team id', 400);
+    return;
+  }
+  try {
+    const team = await resolveAdminTeam(id);
+    if (!team) {
+      sendError(res, 'Team not found', 404);
+      return;
+    }
+    sendSuccess(res, team);
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 500);
+  }
 });

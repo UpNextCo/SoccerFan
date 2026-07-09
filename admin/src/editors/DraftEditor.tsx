@@ -1,13 +1,26 @@
+import { api, type AdminLeagueHit, type AdminTeamHit } from '../api'
+import { EntityPicker } from '../components/EntityPicker'
+
 type Constraint = {
   id?: string
+  type?: string
   label?: string
+  club?: string | null
+  teamId?: number | null
+  logoUrl?: string | null
+  leagueId?: number | null
+  leagueName?: string | null
+  nationality?: string | null
   [k: string]: unknown
 }
 
 type LineupPick = {
+  slotId?: string
   position?: string
+  constraintId?: string
   constraintLabel?: string
   playerName?: string
+  playerId?: string
   statValue?: number
   [k: string]: unknown
 }
@@ -19,6 +32,20 @@ type Puzzle = {
   optimalScore?: number
   optimalLineup?: LineupPick[]
   [k: string]: unknown
+}
+
+function rebuildLabel(c: Constraint): string {
+  const type = c.type ?? ''
+  if (type === 'club') return c.club ? `Played for ${c.club}` : c.label ?? 'Club'
+  if (type === 'league') return c.leagueName ? `${c.leagueName}` : c.label ?? 'League'
+  if (type === 'nationality') return c.nationality ?? c.label ?? 'Nationality'
+  if (type === 'natLeague') {
+    return `${c.nationality ?? '?'} in ${c.leagueName ?? '?'}`
+  }
+  if (type === 'natClub') {
+    return `${c.nationality ?? '?'} · ${c.club ?? '?'}`
+  }
+  return c.label ?? type
 }
 
 export function DraftEditor({
@@ -33,6 +60,56 @@ export function DraftEditor({
   const p = puzzle as Puzzle
   const constraints = p.constraints ?? []
   const lineup = p.optimalLineup ?? []
+
+  function updateConstraint(idx: number, patch: Partial<Constraint>) {
+    const next = constraints.map((x, i) => {
+      if (i !== idx) return x
+      const merged = { ...x, ...patch }
+      return { ...merged, label: rebuildLabel(merged) }
+    })
+    // Keep optimal lineup constraint labels in sync when possible.
+    const updated = next[idx]!
+    const nextLineup = lineup.map((pick) =>
+      pick.constraintId === updated.id
+        ? { ...pick, constraintLabel: updated.label }
+        : pick
+    )
+    onChange({ ...p, constraints: next, optimalLineup: nextLineup })
+  }
+
+  async function pickClub(idx: number, hit: AdminTeamHit) {
+    const team = await api.resolveTeam(hit.id)
+    updateConstraint(idx, {
+      club: team.name,
+      teamId: team.id,
+      logoUrl: team.logoUrl,
+      leagueId: constraints[idx]?.type === 'club' ? team.leagueId : constraints[idx]?.leagueId,
+      leagueName:
+        constraints[idx]?.type === 'club' ? team.leagueName : constraints[idx]?.leagueName,
+    })
+  }
+
+  function pickLeague(idx: number, league: AdminLeagueHit) {
+    updateConstraint(idx, {
+      leagueId: league.id,
+      leagueName: league.name,
+    })
+  }
+
+  function pickNationality(idx: number, name: string) {
+    updateConstraint(idx, { nationality: name })
+  }
+
+  async function pickLineupPlayer(idx: number, playerId: string) {
+    const resolved = (await api.resolvePlayer(playerId, 'card')) as {
+      id: string
+      name: string
+    }
+    const nextLineup = lineup.map((pick, i) =>
+      i === idx ? { ...pick, playerId: resolved.id, playerName: resolved.name } : pick
+    )
+    onChange({ ...p, optimalLineup: nextLineup })
+  }
 
   return (
     <div className="mode-editor">
@@ -75,34 +152,82 @@ export function DraftEditor({
         <header>
           <strong>Constraints ({constraints.length})</strong>
         </header>
-        {constraints.map((c, idx) => (
-          <label key={c.id ?? idx} className="field">
-            <input
-              value={(c.label as string) ?? ''}
-              disabled={locked}
-              onChange={(e) => {
-                const next = constraints.map((x, i) =>
-                  i === idx ? { ...x, label: e.target.value } : x
-                )
-                onChange({ ...p, constraints: next })
-              }}
-            />
-          </label>
-        ))}
+        {constraints.map((c, idx) => {
+          const type = c.type ?? ''
+          const needsClub = type === 'club' || type === 'natClub'
+          const needsLeague = type === 'league' || type === 'natLeague'
+          const needsNat = type === 'nationality' || type === 'natLeague' || type === 'natClub'
+          return (
+            <div key={c.id ?? idx} className="bingo-cat">
+              <p>
+                <strong>{c.label}</strong>{' '}
+                <span className="muted tiny">{type}</span>
+              </p>
+              {needsNat && (
+                <EntityPicker
+                  kind="nationality"
+                  label="Nationality"
+                  valueLabel={c.nationality ?? undefined}
+                  disabled={locked}
+                  onPickNationality={(hit) => pickNationality(idx, hit.name)}
+                />
+              )}
+              {needsClub && (
+                <EntityPicker
+                  kind="team"
+                  label="Club"
+                  valueLabel={c.club ?? undefined}
+                  imageUrl={c.logoUrl}
+                  disabled={locked}
+                  onPickTeam={(hit) => pickClub(idx, hit)}
+                />
+              )}
+              {needsLeague && (
+                <EntityPicker
+                  kind="league"
+                  label="League"
+                  valueLabel={c.leagueName ?? undefined}
+                  disabled={locked}
+                  onPickLeague={(hit) => pickLeague(idx, hit)}
+                />
+              )}
+              {!needsClub && !needsLeague && !needsNat && (
+                <label className="field">
+                  Label
+                  <input
+                    value={(c.label as string) ?? ''}
+                    disabled={locked}
+                    onChange={(e) => {
+                      const next = constraints.map((x, i) =>
+                        i === idx ? { ...x, label: e.target.value } : x
+                      )
+                      onChange({ ...p, constraints: next })
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          )
+        })}
       </section>
 
       <section className="q-card">
         <header>
           <strong>Optimal lineup (QA)</strong>
         </header>
-        <ul className="lineup">
-          {lineup.map((pick, i) => (
-            <li key={i}>
-              <strong>{pick.position}</strong> · {pick.constraintLabel} → {pick.playerName} (
-              {pick.statValue})
-            </li>
-          ))}
-        </ul>
+        {lineup.map((pick, i) => (
+          <div key={pick.slotId ?? i} className="option-row stack">
+            <p className="muted tiny">
+              {pick.position} · {pick.constraintLabel} · score {pick.statValue}
+            </p>
+            <EntityPicker
+              kind="player"
+              valueLabel={pick.playerName}
+              disabled={locked}
+              onPickPlayer={(hit) => pickLineupPlayer(i, hit.id)}
+            />
+          </div>
+        ))}
       </section>
     </div>
   )
