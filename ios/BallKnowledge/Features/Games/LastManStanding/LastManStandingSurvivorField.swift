@@ -1,5 +1,57 @@
 import SwiftUI
 
+// MARK: - Entrant emoji palette
+
+/// Head-and-shoulders adult busts + Fitzpatrick skin tones. Seeded per entrant.
+/// Mostly clean 🧑 busts in light tones (same family as YOU); 👨 is rare because
+/// Apple's man glyph often renders with a moustache.
+enum LMSEntrantEmoji {
+    private static let tones: [String] = [
+        "\u{1F3FB}", // light
+        "\u{1F3FC}", // medium-light
+        "\u{1F3FD}", // medium
+        "\u{1F3FE}", // medium-dark
+        "\u{1F3FF}", // dark
+    ]
+
+    private static let youEmoji = "🧑" + "\u{1F3FB}"
+
+    static func glyph(for entrant: LMSEntrant) -> String {
+        if entrant.isUser { return youEmoji }
+        var hasher = Hasher()
+        hasher.combine(entrant.id)
+        let seed = UInt64(bitPattern: Int64(hasher.finalize()))
+
+        // ~85% 🧑 (clean bust), ~8% 👩, ~7% 👨 (moustache-prone — keep scarce).
+        let baseRoll = Int(seed % 100)
+        let base: String
+        if baseRoll < 8 {
+            base = "👩"
+        } else if baseRoll < 15 {
+            base = "👨"
+        } else {
+            base = "🧑"
+        }
+
+        // Mostly light like YOU; a little medium; sparse darker tones.
+        let toneRoll = Int((seed >> 8) % 100)
+        let toneIndex: Int
+        if toneRoll < 4 {
+            toneIndex = 4 // dark
+        } else if toneRoll < 8 {
+            toneIndex = 3 // medium-dark
+        } else if toneRoll < 22 {
+            toneIndex = 2 // medium
+        } else if toneRoll < 40 {
+            toneIndex = 1 // medium-light
+        } else {
+            toneIndex = 0 // light
+        }
+
+        return base + tones[toneIndex]
+    }
+}
+
 // MARK: - Entrant icon
 
 struct LMSEntrantIcon: View {
@@ -10,19 +62,16 @@ struct LMSEntrantIcon: View {
 
     private var isOut: Bool { entrant.isEliminated || emphasizeElimination }
 
-    private var iconColor: Color {
-        if isOut { return Color.white.opacity(0.14) }
-        if entrant.isUser { return BKTheme.accent }
-        return Color.white.opacity(0.34)
-    }
+    private var emoji: String { LMSEntrantEmoji.glyph(for: entrant) }
 
     var body: some View {
         VStack(spacing: 2) {
             ZStack {
-                Image(systemName: "person.fill")
-                    .font(.system(size: size * 0.78, weight: .medium))
-                    .foregroundStyle(iconColor)
+                Text(emoji)
+                    .font(.system(size: size * 0.82))
                     .frame(width: size, height: size)
+                    .opacity(isOut ? 0.28 : 1)
+                    .saturation(isOut ? 0.15 : 1)
 
                 if isOut {
                     Image(systemName: "xmark")
