@@ -242,6 +242,35 @@ export const towerPrompts = pgTable(
 );
 
 /**
+ * Curated Last Man Standing question bank. Built offline: DB builders fill facts →
+ * Claude reviews the FINISHED card (keep/reject + difficulty) → daily composer draws
+ * least-recently-used rows. Claude never invents football facts.
+ */
+export const lmsBank = pgTable(
+  'lms_bank',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    type: text('type').notNull(),
+    tier: text('tier').notNull(), // easy | medium | hard | signature
+    difficulty: integer('difficulty').notNull().default(50), // 0-100 from Claude review
+    repeatKey: text('repeat_key').notNull(),
+    repeatNorm: text('repeat_norm').notNull(),
+    questionJson: jsonb('question_json').notNull(),
+    answerJson: jsonb('answer_json').notNull(),
+    extraKeys: jsonb('extra_keys').$type<string[]>().notNull().default([]),
+    reviewReason: text('review_reason'),
+    status: text('status').notNull().default('active'), // active | rejected
+    usedCount: integer('used_count').notNull().default(0),
+    lastUsedDate: date('last_used_date'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('lms_bank_repeat_norm_unique').on(table.repeatNorm),
+    index('lms_bank_type_tier_status_idx').on(table.type, table.tier, table.status),
+  ]
+);
+
+/**
  * Curated club tenures for marquee managers (Ferguson, Mourinho, Guardiola…). Powers
  * "played under manager X" relationship prompts. Seasons are season-start years
  * (2008 = 2008/09). season_to NULL = ongoing. Derived against player_stats by club +
@@ -530,3 +559,4 @@ export type PlayerExtraStats = typeof playerExtraStats.$inferSelect;
 export type WcSquad = typeof wcSquads.$inferSelect;
 export type WcMatchEvent = typeof wcMatchEvents.$inferSelect;
 export type WcMemorable = typeof wcMemorable.$inferSelect;
+export type LmsBankRow = typeof lmsBank.$inferSelect;

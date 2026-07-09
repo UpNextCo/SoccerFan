@@ -521,3 +521,122 @@ export async function rateTowerDifficulty(items: CurationItem[]): Promise<Map<st
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Last Man Standing — finished-question QA (Claude never invents facts)
+// ---------------------------------------------------------------------------
+
+export interface LMSReviewItem {
+  id: string;
+  type: string;
+  targetTier: 'easy' | 'medium' | 'hard' | 'signature';
+  prompt: string;
+  subPrompt?: string;
+  /** Correct option label first, then distractors. */
+  options: string[];
+  correctLabel: string;
+}
+
+export interface LMSReviewVerdict {
+  id: string;
+  keep: boolean;
+  difficulty: number; // 0-100
+  casualWouldNailIt: boolean;
+  reason: string;
+}
+
+/**
+ * Review FINISHED LMS cards (prompt + real options already built from the DB).
+ * Claude only judges interest / giveaway risk — it must not invent football facts.
+ * Returns null if the model is unavailable.
+ */
+export async function reviewLMSQuestions(items: LMSReviewItem[]): Promise<LMSReviewVerdict[] | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || items.length === 0) return null;
+
+  const system = [
+    'You QA finished multiple-choice football quiz cards for a daily game "Last Man Standing".',
+    'Each card was built from a verified database — the options and correct answer are FACTS.',
+    'Your ONLY job is to judge whether the card is interesting and appropriately hard.',
+    'Do NOT invent or correct football facts. Do NOT change the answer.',
+    '',
+    'REJECT (keep=false) when ANY of these are true:',
+    '- A casual Premier League fan would nail it in under 3 seconds',
+    '- The answer is telegraphed by nationality / league geography alone',
+    '  (e.g. three iconic PL stars + one obvious La Liga defender who never played in England)',
+    '- All distractors are mega-household clubs/players and process-of-elimination is trivial',
+    '- Badge / club identity is instantly obvious with no real knowledge needed',
+    '- The card is boring or feels like filler',
+    '',
+    'KEEP (keep=true) when it needs real recall, a non-obvious comparison, or a secondary',
+    'career spell — something an engaged fan enjoys, not a giveaway.',
+    '',
+    'Also set:',
+    '- difficulty: 0 (trivial) to 100 (very hard) for an engaged fan',
+    '- casualWouldNailIt: true if a casual fan gets it instantly',
+    '- reason: one short sentence',
+    '',
+    'Return ONLY JSON, no prose.',
+  ].join('\n');
+
+  const lines = items.map((i) => {
+    const opts = i.options.map((o, idx) => `${idx + 1}. ${o}${o === i.correctLabel ? ' ✓' : ''}`).join(' | ');
+    const sub = i.subPrompt ? ` (${i.subPrompt})` : '';
+    return `[${i.id}] type=${i.type} targetTier=${i.targetTier}\n  Q: "${i.prompt}"${sub}\n  Options: ${opts}`;
+  });
+  const user = [
+    'Review every card below.',
+    '',
+    lines.join('\n\n'),
+    '',
+    'Return JSON exactly:',
+    '{"reviews":[{"id":"<id>","keep":true|false,"difficulty":<0-100>,"casualWouldNailIt":true|false,"reason":"<short>"}]}',
+    'covering all ids.',
+  ].join('\n');
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const resp = await client.messages.create({
+      model: MODEL,
+      max_tokens: 4000,
+      temperature: 0,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const text = resp.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    const parsed = JSON.parse(extractJson(text)) as {
+      reviews?: Array<{
+        id: string;
+        keep: boolean;
+        difficulty: number;
+        casualWouldNailIt: boolean;
+        reason?: string;
+      }>;
+    };
+    if (!parsed.reviews?.length) return null;
+
+    const byId = new Map(parsed.reviews.map((r) => [r.id, r]));
+    if (items.some((i) => !byId.has(i.id))) return null;
+
+    return items.map((i) => {
+      const r = byId.get(i.id)!;
+      const difficulty = Math.max(0, Math.min(100, Number(r.difficulty) || 0));
+      // Hard/signature slots that casuals nail are always rejects.
+      const needsBite = i.targetTier === 'hard' || i.targetTier === 'signature' || i.targetTier === 'medium';
+      const keep = Boolean(r.keep) && !(needsBite && r.casualWouldNailIt);
+      return {
+        id: i.id,
+        keep,
+        difficulty,
+        casualWouldNailIt: Boolean(r.casualWouldNailIt),
+        reason: (r.reason ?? '').slice(0, 240),
+      };
+    });
+  } catch (err) {
+    console.warn(`LMS review unavailable (${err instanceof Error ? err.message : String(err)})`);
+    return null;
+  }
+}

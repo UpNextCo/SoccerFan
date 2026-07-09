@@ -13,6 +13,7 @@ import { famousPlayers } from './shared.js';
 import { validateLMSQuestion } from './validate.js';
 import { buildPlayerClubIndex, resetPlayerClubIndex } from './plausibility.js';
 import { enrichLMSBuilderResult, resetLMSEnrichCache } from './enrich.js';
+import { drawLMSFromBank } from './bank.js';
 
 const BUILDERS: Record<
   LMSQuestionType,
@@ -38,9 +39,35 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
   resetLMSEnrichCache();
   const clubIndex = await buildPlayerClubIndex(pool);
 
+  let fromBank = 0;
+  let fromLive = 0;
+
   for (const slotDef of LMS_DAILY_SLOTS) {
     const builder = BUILDERS[slotDef.type];
+    const difficulty = difficultyForSlot(slotDef.slot, slotDef.signature ?? false);
     let built: LMSBuilderResult | null = null;
+
+    // Prefer Claude-reviewed bank rows when available.
+    try {
+      const bankHit = await drawLMSFromBank({
+        type: slotDef.type,
+        difficulty,
+        usedKeys,
+        date,
+        slot: slotDef.slot,
+      });
+      if (bankHit) {
+        built = bankHit;
+        fromBank += 1;
+      }
+    } catch (err) {
+      // Bank table may not exist yet — fall through to live builders.
+      if (fromBank + fromLive === 0) {
+        console.warn(
+          `LMS bank draw unavailable (${err instanceof Error ? err.message : String(err)}); using live builders`
+        );
+      }
+    }
 
     for (let attempt = 0; attempt < 16 && !built; attempt += 1) {
       const ctx: LMSBuildContext = {
@@ -49,7 +76,7 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
         signature: slotDef.signature ?? false,
         seed: `${date}:lms:q${slotDef.slot}:a${attempt}`,
         usedKeys,
-        difficulty: difficultyForSlot(slotDef.slot, slotDef.signature ?? false),
+        difficulty,
         famousPool: pool,
         clubIndex,
       };
@@ -59,19 +86,21 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
       if (candidate.extraUsedKeys?.some((k) => usedKeys.has(k))) continue;
       if (!validateLMSQuestion(candidate, ctx)) continue;
       built = candidate;
-      usedKeys.add(candidate.repeatKey);
-      candidate.extraUsedKeys?.forEach((k) => usedKeys.add(k));
+      fromLive += 1;
     }
 
     if (!built) {
-      console.warn(`LMS compose failed at slot ${slotDef.slot} (${slotDef.type}) after 16 attempts`);
+      console.warn(`LMS compose failed at slot ${slotDef.slot} (${slotDef.type}) after bank+16 attempts`);
       return null;
     }
+    usedKeys.add(built.repeatKey);
+    built.extraUsedKeys?.forEach((k) => usedKeys.add(k));
     questions.push(built.question);
     answers.push(built.answer);
   }
 
   if (questions.length !== 10) return null;
+  console.log(`LMS compose ${date}: ${fromBank} from bank · ${fromLive} live`);
 
   return {
     puzzle: {
