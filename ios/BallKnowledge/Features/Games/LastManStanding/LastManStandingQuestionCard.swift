@@ -5,6 +5,11 @@ struct LastManStandingQuestionCard: View {
     let isInteractive: Bool
     let onSelect: (String) -> Void
 
+    private enum Layout {
+        static let sectionSpacing: CGFloat = 24
+        static let blockSpacing: CGFloat = 20
+    }
+
     private var showsClubOptions: Bool {
         switch question.type {
         case .whichClub, .imageBadge:
@@ -19,46 +24,44 @@ struct LastManStandingQuestionCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Layout.sectionSpacing) {
             promptHeader
+            questionBody
+        }
+    }
 
-            switch question.type {
-            case .higherLower:
-                higherLowerOptions
-            case .careerPath:
-                careerPathBody
-            case .imageBadge:
+    @ViewBuilder
+    private var questionBody: some View {
+        switch question.type {
+        case .higherLower:
+            higherLowerOptions
+        case .careerPath:
+            careerPathBody
+        case .imageBadge:
+            VStack(spacing: Layout.blockSpacing) {
                 imageHeader
                 textClubOptionGrid
-            case .oddOneOut, .whichClub:
-                if showsClubOptions {
-                    clubOptionGrid
-                } else {
-                    playerOptionGrid
-                }
+            }
+        case .oddOneOut, .whichClub:
+            if showsClubOptions {
+                clubOptionGrid
+            } else {
+                playerOptionGrid
             }
         }
     }
 
     @ViewBuilder
     private var promptHeader: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
             if question.signature {
                 Text("FINAL QUESTION")
                     .font(BKFont.caption(10))
                     .tracking(1.2)
                     .foregroundStyle(BKTheme.accent)
-                Text("Signature Round")
-                    .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.textSecondary)
-            } else {
-                Text("QUESTION \(question.slot)")
-                    .font(BKFont.caption(10))
-                    .tracking(0.8)
-                    .foregroundStyle(BKTheme.textMuted)
             }
             Text(question.prompt)
-                .font(BKFont.headline(18))
+                .font(BKFont.title(24))
                 .foregroundStyle(BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -67,44 +70,40 @@ struct LastManStandingQuestionCard: View {
                     cluePlayerRow(sub)
                 } else {
                     Text(sub)
-                        .font(BKFont.body(13))
+                        .font(BKFont.body(15))
                         .foregroundStyle(BKTheme.textSecondary)
                         .multilineTextAlignment(.center)
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 22)
         .frame(maxWidth: .infinity)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: LMSVisualStyle.cardRadius, style: .continuous))
-        .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: LMSVisualStyle.cardRadius, style: .continuous)))
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
     private func cluePlayerRow(_ sub: String) -> some View {
         let names = sub.split(separator: "·").map { $0.trimmingCharacters(in: .whitespaces) }
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             ForEach(Array(names.enumerated()), id: \.offset) { _, name in
                 if let option = question.options.first(where: { $0.label == name }) {
-                    VStack(spacing: 4) {
-                        PlayerAvatar(urlString: option.headshotUrl, size: 40)
+                    VStack(spacing: 2) {
+                        PlayerAvatar(urlString: option.headshotUrl, size: 32)
                         Text(option.label)
-                            .font(BKFont.caption(10))
+                            .font(BKFont.caption(9))
                             .foregroundStyle(BKTheme.textSecondary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.75)
                     }
                     .frame(maxWidth: .infinity)
                 } else {
                     Text(name)
-                        .font(BKFont.caption(11))
+                        .font(BKFont.caption(10))
                         .foregroundStyle(BKTheme.textSecondary)
                         .frame(maxWidth: .infinity)
                 }
             }
         }
-        .padding(.top, 4)
+        .padding(.top, 2)
     }
 
     private func cluePlayerNames(from sub: String) -> [String]? {
@@ -113,10 +112,10 @@ struct LastManStandingQuestionCard: View {
     }
 
     private var higherLowerOptions: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             ForEach(question.options) { option in
                 Button { onSelect(option.id) } label: {
-                    playerOptionCard(option, avatarSize: 68, compact: false)
+                    playerOptionCard(option, avatarSize: 64, compact: false)
                 }
                 .buttonStyle(LMSOptionButtonStyle())
                 .disabled(!isInteractive)
@@ -127,38 +126,43 @@ struct LastManStandingQuestionCard: View {
 
     @ViewBuilder
     private var careerPathBody: some View {
-        if let clubs = question.presentation?.careerClubs, !clubs.isEmpty {
-            VStack(spacing: 0) {
+        VStack(spacing: Layout.blockSpacing) {
+            if let clubs = question.presentation?.careerClubs, !clubs.isEmpty {
+                careerPathClubRow(clubs)
+            }
+            playerOptionGrid
+        }
+    }
+
+    private func careerPathClubRow(_ clubs: [LMSCareerClub]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
                 ForEach(Array(clubs.enumerated()), id: \.offset) { index, club in
-                    HStack(spacing: 10) {
-                        TeamBadgeImage(club: club.name, league: "", logoURL: club.logoUrl.flatMap(URL.init(string:)), size: 36) {
+                    if index > 0 {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(BKTheme.textMuted)
+                    }
+                    VStack(spacing: 3) {
+                        TeamBadgeImage(club: club.name, league: "", logoURL: club.logoUrl.flatMap(URL.init(string:)), size: 28) {
                             Text(GuessWhoDisplay.clubAbbrev(club.name))
-                                .font(BKFont.caption(10))
+                                .font(.system(size: 8, weight: .bold))
                                 .foregroundStyle(BKTheme.textMuted)
-                                .frame(width: 36, height: 36)
-                                .background(BKTheme.card)
+                                .frame(width: 28, height: 28)
+                                .background(BKTheme.card.opacity(0.6))
                                 .clipShape(Circle())
                         }
                         Text(club.name)
-                            .font(BKFont.body(15))
-                            .foregroundStyle(BKTheme.textPrimary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    if index < clubs.count - 1 {
-                        Image(systemName: "arrow.down")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(BKTheme.textMuted)
-                            .frame(maxWidth: .infinity)
+                            .font(BKFont.caption(9))
+                            .foregroundStyle(BKTheme.textSecondary)
+                            .lineLimit(1)
+                            .frame(maxWidth: 72)
                     }
                 }
             }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 16)
-            .background(BKTheme.card.opacity(0.85))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 2)
         }
-        playerOptionList
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -170,39 +174,24 @@ struct LastManStandingQuestionCard: View {
                     image
                         .resizable()
                         .scaledToFit()
-                        .frame(maxHeight: 112)
+                        .frame(maxHeight: 80)
                         .blur(radius: question.presentation?.imageBlur ?? 6)
-                        .padding(12)
+                        .padding(8)
                 default:
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(BKTheme.card)
-                        .frame(height: 88)
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(BKTheme.card.opacity(0.5))
+                        .frame(height: 64)
                 }
             }
             .frame(maxWidth: .infinity)
-            .background(BKTheme.card.opacity(0.6))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-        }
-    }
-
-    private var playerOptionList: some View {
-        VStack(spacing: 8) {
-            ForEach(question.options) { option in
-                Button { onSelect(option.id) } label: {
-                    careerPathPlayerOptionCard(option)
-                }
-                .buttonStyle(LMSOptionButtonStyle())
-                .disabled(!isInteractive)
-                .opacity(isInteractive ? 1 : 0.5)
-            }
         }
     }
 
     private var playerOptionGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
             ForEach(question.options) { option in
                 Button { onSelect(option.id) } label: {
-                    playerOptionCard(option, avatarSize: 56, compact: false)
+                    compactPlayerOptionCard(option)
                 }
                 .buttonStyle(LMSOptionButtonStyle())
                 .disabled(!isInteractive)
@@ -237,129 +226,106 @@ struct LastManStandingQuestionCard: View {
         }
     }
 
-    private func careerPathPlayerOptionCard(_ option: LMSOption) -> some View {
-        HStack(spacing: 12) {
-            PlayerAvatar(urlString: option.headshotUrl, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(option.label)
-                    .font(BKFont.body(15))
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .multilineTextAlignment(.leading)
-                if let position = option.position, !position.isEmpty {
-                    Text(GuessWhoDisplay.positionAbbrev(position))
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.textMuted)
-                }
+    private func compactPlayerOptionCard(_ option: LMSOption) -> some View {
+        VStack(spacing: 8) {
+            PlayerAvatar(urlString: option.headshotUrl, size: 52) {
+                PlayerSilhouette(size: 52)
             }
-            Spacer(minLength: 0)
-            if let nat = option.nationality, !nat.isEmpty {
-                Text(GuessWhoDisplay.nationalityFlag(nat))
-                    .font(.system(size: 28))
-            }
+            Text(option.label)
+                .font(BKFont.headline(16))
+                .foregroundStyle(BKTheme.textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+            playerMetaRow(option)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, minHeight: 108)
+        .padding(.vertical, 14)
+        .padding(.horizontal, 8)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: 12, style: .continuous)))
+    }
+
+    private func playerOptionCard(_ option: LMSOption, avatarSize: CGFloat, compact: Bool) -> some View {
+        VStack(spacing: 10) {
+            PlayerAvatar(urlString: option.headshotUrl, size: avatarSize) {
+                PlayerSilhouette(size: avatarSize)
+            }
+            Text(option.label)
+                .font(BKFont.headline(16))
+                .foregroundStyle(BKTheme.textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+            playerMetaRow(option)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 10)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous))
         .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous)))
     }
 
-    private func playerOptionCard(_ option: LMSOption, avatarSize: CGFloat, compact: Bool) -> some View {
-        Group {
-            if compact {
-                HStack(spacing: 12) {
-                    playerAvatar(option, size: avatarSize)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(option.label)
-                            .font(BKFont.body(15))
-                            .foregroundStyle(BKTheme.textPrimary)
-                            .multilineTextAlignment(.leading)
-                        if let nat = option.nationality, !nat.isEmpty {
-                            Text(GuessWhoDisplay.nationalityFlag(nat))
-                                .font(.system(size: 14))
-                        }
-                    }
-                    Spacer(minLength: 0)
+    @ViewBuilder
+    private func playerMetaRow(_ option: LMSOption) -> some View {
+        let hasNationality = !(option.nationality?.isEmpty ?? true)
+        let hasPosition = !(option.position?.isEmpty ?? true)
+        if hasNationality || hasPosition {
+            HStack(spacing: 6) {
+                if hasNationality, let nat = option.nationality {
+                    Text(GuessWhoDisplay.nationalityFlag(nat))
+                        .font(.system(size: 15))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-            } else {
-                VStack(spacing: 10) {
-                    playerAvatar(option, size: avatarSize)
-                    Text(option.label)
-                        .font(BKFont.headline(compact ? 14 : 15))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                    if let nat = option.nationality, !nat.isEmpty {
-                        Text(GuessWhoDisplay.nationalityFlag(nat))
-                            .font(.system(size: 13))
-                    }
+                if hasPosition, let position = option.position {
+                    Text(GuessWhoDisplay.positionAbbrev(position))
+                        .font(BKFont.caption(11))
+                        .tracking(0.5)
+                        .foregroundStyle(BKTheme.textMuted)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .padding(.horizontal, 10)
             }
         }
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: compact ? 12 : LMSVisualStyle.optionRadius, style: .continuous))
-        .overlay(
-            LMSVisualStyle.cardStroke(
-                RoundedRectangle(cornerRadius: compact ? 12 : LMSVisualStyle.optionRadius, style: .continuous)
-            )
-        )
-    }
-
-    @ViewBuilder
-    private func playerAvatar(_ option: LMSOption, size: CGFloat) -> some View {
-        PlayerAvatar(urlString: option.headshotUrl, size: size) {
-            PlayerSilhouette(size: size)
-        }
-        .overlay(
-            Circle()
-                .strokeBorder(Color.white.opacity(0.07), lineWidth: 0.5)
-        )
     }
 
     private func textClubOptionCard(_ option: LMSOption) -> some View {
         Text(option.label)
-            .font(BKFont.body(14))
+            .font(BKFont.body(13))
             .foregroundStyle(BKTheme.textPrimary)
             .multilineTextAlignment(.center)
             .lineLimit(2)
             .minimumScaleFactor(0.85)
-            .frame(maxWidth: .infinity, minHeight: 72)
-            .padding(.vertical, 12)
-            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .padding(.vertical, 10)
+            .padding(.horizontal, 6)
             .background(BKTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous))
-            .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous)))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: 12, style: .continuous)))
     }
 
     private func clubOptionCard(_ option: LMSOption) -> some View {
-        VStack(spacing: 8) {
-            TeamBadgeImage(club: option.label, league: "", logoURL: option.teamLogoUrl.flatMap(URL.init(string:)), size: 44) {
+        VStack(spacing: 6) {
+            TeamBadgeImage(club: option.label, league: "", logoURL: option.teamLogoUrl.flatMap(URL.init(string:)), size: 36) {
                 Text(GuessWhoDisplay.clubAbbrev(option.label))
-                    .font(BKFont.caption(11))
+                    .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.textMuted)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 36, height: 36)
                     .background(BKTheme.cardElevated)
                     .clipShape(Circle())
             }
             Text(option.label)
-                .font(BKFont.body(13))
+                .font(BKFont.body(12))
                 .foregroundStyle(BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
         }
-        .frame(maxWidth: .infinity, minHeight: 96)
-        .padding(.vertical, 10)
-        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, minHeight: 80)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 6)
         .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous))
-        .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: LMSVisualStyle.optionRadius, style: .continuous)))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(LMSVisualStyle.cardStroke(RoundedRectangle(cornerRadius: 12, style: .continuous)))
     }
 }
 

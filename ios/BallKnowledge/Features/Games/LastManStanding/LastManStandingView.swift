@@ -191,15 +191,16 @@ struct LastManStandingView: View {
     var body: some View {
         ZStack {
             NavigationStack {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
+                VStack(spacing: 0) {
+                    ScrollView(showsIndicators: false) {
                         questionSection
-                        survivorSection
+                            .padding(.horizontal, 16)
+                            .padding(.top, 18)
+                            .padding(.bottom, 24)
                     }
-                    .animation(.easeOut(duration: 0.21), value: state.currentQuestionIndex)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
-                    .padding(.bottom, 32)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    survivorDock
                 }
                 .background(StadiumBackground(glowIntensity: 0.28))
                 .navigationBarTitleDisplayMode(.inline)
@@ -241,6 +242,7 @@ struct LastManStandingView: View {
                 .allowsHitTesting(false)
                 .zIndex(999)
         }
+        .animation(.easeOut(duration: 0.21), value: state.currentQuestionIndex)
         .onAppear { viewModel.beginIfNeeded() }
         .fullScreenCover(isPresented: $viewModel.showResult) {
             LastManStandingResultView(
@@ -254,6 +256,85 @@ struct LastManStandingView: View {
                 }
             )
         }
+    }
+
+    private enum SurvivorDockMetrics {
+        static let labelGap: CGFloat = 10
+    }
+
+    private var survivorDock: some View {
+        let profile = LMSGameState.layoutProfile(forRemaining: state.displayedRemaining)
+        let dockWidth = UIScreen.main.bounds.width - 32
+        let entrantCount = state.visibleEntrants.count
+        let contentHeight = LastManStandingSurvivorField.contentHeight(
+            entrantCount: entrantCount,
+            profile: profile,
+            availableWidth: dockWidth
+        )
+        let scrollCap = profile.maxHeight
+        let needsScroll = contentHeight > scrollCap
+
+        return VStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.white.opacity(0.06))
+                .frame(height: 1)
+
+            Group {
+                if needsScroll {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        survivorField(profile: profile)
+                    }
+                    .frame(height: scrollCap)
+                } else {
+                    survivorField(profile: profile)
+                }
+            }
+
+            Spacer().frame(height: SurvivorDockMetrics.labelGap)
+
+            survivorStatusRow
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 10)
+        .safeAreaPadding(.bottom, 4)
+        .background(BKTheme.background.opacity(0.92))
+    }
+
+    private func survivorField(profile: LMSLayoutProfile) -> some View {
+        LastManStandingSurvivorField(
+            entrants: state.visibleEntrants,
+            remaining: state.displayedRemaining,
+            profile: profile,
+            freezeField: state.status == .lost
+        )
+    }
+
+    private var survivorStatusRow: some View {
+        HStack(spacing: 8) {
+            Text("\(state.displayedRemaining) remaining")
+                .font(BKFont.body(14))
+                .foregroundStyle(BKTheme.textPrimary)
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.19), value: state.displayedRemaining)
+
+            if let summary = viewModel.eliminationSummary {
+                Text("·")
+                    .foregroundStyle(BKTheme.textMuted)
+                Text(summary)
+                    .font(BKFont.caption(11))
+                    .foregroundStyle(BKTheme.accent.opacity(0.85))
+                    .lineLimit(1)
+            } else if let commentary = viewModel.activeCommentary {
+                Text("·")
+                    .foregroundStyle(BKTheme.textMuted)
+                Text(commentary)
+                    .font(BKFont.caption(11))
+                    .foregroundStyle(BKTheme.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -270,40 +351,6 @@ struct LastManStandingView: View {
             .opacity(viewModel.isChecking ? 0.72 : 1)
             .animation(.easeOut(duration: 0.12), value: viewModel.isChecking)
         }
-    }
-
-    private var survivorSection: some View {
-        let profile = LMSGameState.layoutProfile(forRemaining: state.displayedRemaining)
-        return VStack(spacing: 12) {
-            LastManStandingSurvivorField(
-                entrants: state.visibleEntrants,
-                remaining: state.displayedRemaining,
-                profile: profile,
-                freezeField: state.status == .lost
-            )
-
-            Text("\(state.displayedRemaining) players remaining")
-                .font(BKFont.body(14))
-                .foregroundStyle(BKTheme.textPrimary)
-                .contentTransition(.numericText())
-                .animation(.easeOut(duration: 0.19), value: state.displayedRemaining)
-
-            if let summary = viewModel.eliminationSummary {
-                Text(summary)
-                    .font(BKFont.caption(12))
-                    .foregroundStyle(BKTheme.accent.opacity(0.85))
-                    .transition(.opacity)
-            }
-
-            if let commentary = viewModel.activeCommentary {
-                Text(commentary)
-                    .font(BKFont.caption(12))
-                    .foregroundStyle(BKTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .transition(.opacity)
-            }
-        }
-        .padding(.top, 6)
     }
 
     private var correctFlash: some View {

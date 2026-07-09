@@ -72,10 +72,22 @@ struct LastManStandingSurvivorField: View {
                 )
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: profile.maxHeight, alignment: .top)
-        .padding(.top, 2)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .padding(.top, 4)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .animation(freezeField ? nil : .spring(response: 0.25, dampingFraction: 0.86), value: entrants.count)
+    }
+
+    /// Pixel height of the grid for a given width — used to size the dock without dead space.
+    static func contentHeight(entrantCount: Int, profile: LMSLayoutProfile, availableWidth: CGFloat) -> CGFloat {
+        guard entrantCount > 0, availableWidth > 0 else { return 0 }
+        let cellSize = profile.iconSize + 2
+        let spacing = profile.spacing
+        let cols = max(1, Int((availableWidth + spacing) / (cellSize + spacing)))
+        let rows = (entrantCount + cols - 1) / cols
+        let rowHeight = profile.iconSize + max(9, profile.iconSize * 0.2)
+        let gridH = CGFloat(rows) * rowHeight + CGFloat(max(0, rows - 1)) * spacing
+        return gridH + 4 // top padding only
     }
 }

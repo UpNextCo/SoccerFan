@@ -219,7 +219,7 @@ struct LMSGameState: Equatable, Codable {
         case 23...45:
             return LMSLayoutProfile(iconSize: 20, spacing: 2, minColumns: 10, maxHeight: 162, spotlight: false)
         default:
-            return LMSLayoutProfile(iconSize: 17, spacing: 1, minColumns: 11, maxHeight: 196, spotlight: false)
+            return LMSLayoutProfile(iconSize: 17, spacing: 2, minColumns: 11, maxHeight: 220, spotlight: false)
         }
     }
 
