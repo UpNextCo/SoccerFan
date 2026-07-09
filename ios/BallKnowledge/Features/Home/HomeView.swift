@@ -56,7 +56,8 @@ struct HomeView: View {
             VStack(spacing: 20) {
                 HomeHeaderView(
                     user: auth.user,
-                    streak: auth.user?.streak ?? 0
+                    streak: auth.user?.streak ?? 0,
+                    dailyComplete: viewModel.dailyBundle.map { DailyPlayOrder.allComplete(in: $0) } ?? false
                 )
 
                 if viewModel.dailyBundle != nil || !viewModel.gameModes.isEmpty {
@@ -173,11 +174,12 @@ struct HomeView: View {
 struct HomeHeaderView: View {
     let user: UserProfileDTO?
     let streak: Int
+    var dailyComplete: Bool = false
     @State private var avatarImage: UIImage?
     @State private var showNotifications = false
 
     private var activityEvents: [ActivityEvent] {
-        HomeActivity.events(user: user, streak: streak)
+        HomeActivity.events(user: user, streak: streak, dailyComplete: dailyComplete)
     }
 
     private var hasUnread: Bool {
@@ -281,27 +283,35 @@ struct ActivityEvent: Identifiable {
 /// Builds the in-app activity feed from current profile state (client-derived for now —
 /// swap to a server activity endpoint later without changing NotificationsView).
 enum HomeActivity {
-    static func events(user: UserProfileDTO?, streak: Int) -> [ActivityEvent] {
+    static func events(user: UserProfileDTO?, streak: Int, dailyComplete: Bool = false) -> [ActivityEvent] {
         var events: [ActivityEvent] = []
         let todayXp = user?.todayXp ?? 0
         let level = user?.level ?? 1
         let xp = user?.xp ?? 0
 
-        if todayXp == 0 {
+        if dailyComplete {
+            events.append(ActivityEvent(
+                icon: "checkmark.circle.fill",
+                tint: BKTheme.accent,
+                title: "Daily complete",
+                message: "All 7 games done — \(todayXp) XP banked today.",
+                unread: false
+            ))
+        } else if todayXp == 0 {
             events.append(ActivityEvent(
                 icon: "flame.fill",
                 tint: BKTheme.streak,
                 title: streak > 0 ? "Keep your \(streak)-day streak alive" : "Start your streak today",
-                message: "Play today's games before the daily resets to \(streak > 0 ? "extend" : "begin") your streak.",
+                message: "Finish all 7 daily games to \(streak > 0 ? "extend" : "begin") your streak.",
                 unread: true
             ))
         } else {
             events.append(ActivityEvent(
-                icon: "checkmark.circle.fill",
-                tint: BKTheme.accent,
-                title: "You've played today",
-                message: "Nice — \(todayXp) XP banked so far today.",
-                unread: false
+                icon: "flame.fill",
+                tint: BKTheme.streak,
+                title: streak > 0 ? "Finish the set to keep your streak" : "Finish the set to start your streak",
+                message: "\(todayXp) XP so far — clear all 7 games before reset.",
+                unread: true
             ))
         }
 

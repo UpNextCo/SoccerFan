@@ -357,7 +357,7 @@ struct ReminderSetupStep: View {
                 Text("Never lose your streak")
                     .font(BKFont.title(26))
                     .foregroundStyle(BKTheme.textPrimary)
-                Text("Get a daily nudge when your games are ready, so your streak stays alive.")
+                Text("Get a daily nudge when your games are ready — finish all 7 to keep your streak.")
                     .font(BKFont.body(15))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(BKTheme.textSecondary)

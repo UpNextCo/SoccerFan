@@ -55,8 +55,28 @@ export const DAILY_PLAYABLE_MODES = [
   'last_man_standing',
 ] as const;
 
-function yesterdayUTC(): string {
-  return previousDay(todayUTC());
+/**
+ * True when the user has completed every playable mode that actually generated for `date`.
+ * Missing puzzles (generation failure) are excluded so a broken mode can't block the streak forever.
+ */
+async function hasClearedDaily(userId: string, date: string): Promise<boolean> {
+  const puzzles = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(eq(dailyPuzzles.date, date));
+
+  const availableModes = DAILY_PLAYABLE_MODES.filter((modeId) =>
+    puzzles.some((p) => p.modeId === modeId)
+  );
+  if (availableModes.length === 0) return false;
+
+  const completions = await db
+    .select({ modeId: dailyCompletions.modeId })
+    .from(dailyCompletions)
+    .where(and(eq(dailyCompletions.userId, userId), eq(dailyCompletions.date, date)));
+
+  const completed = new Set(completions.map((row) => row.modeId));
+  return availableModes.every((modeId) => completed.has(modeId));
 }
 
 // ---- XP model ------------------------------------------------------------------------------------
@@ -639,16 +659,19 @@ export async function completeDaily(
   const progress = progressRows[0]!;
 
   const playDate = input.date;
-  const prevDay = previousDay(playDate);
+  // Day streak only advances when every available daily mode for this date is done —
+  // partial play still banks XP, but does not count as a streak day.
+  const dayFullyCleared = await hasClearedDaily(userId, playDate);
   let newStreak = progress.streak;
-  const lastPlayed = progress.lastPlayedDate;
+  let lastPlayedDate = progress.lastPlayedDate;
 
-  if (lastPlayed !== playDate) {
-    if (lastPlayed === prevDay) {
+  if (dayFullyCleared && lastPlayedDate !== playDate) {
+    if (lastPlayedDate === previousDay(playDate)) {
       newStreak = progress.streak + 1;
     } else {
       newStreak = 1;
     }
+    lastPlayedDate = playDate;
   }
 
   const todayXp = progress.todayXpDate === playDate ? progress.todayXp + xpEarned : xpEarned;
@@ -661,7 +684,7 @@ export async function completeDaily(
       xp: newXp,
       level: newLevel,
       streak: newStreak,
-      lastPlayedDate: playDate,
+      lastPlayedDate,
       todayXp,
       todayXpDate: playDate,
     })

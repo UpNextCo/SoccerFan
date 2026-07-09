@@ -403,7 +403,7 @@ enum DailyReminder {
 
         let content = UNMutableNotificationContent()
         content.title = "Today's games are ready"
-        content.body = "Keep your streak alive — play your daily 9."
+        content.body = "Keep your streak alive — finish all 7 daily games."
         content.sound = .default
 
         var date = DateComponents()
