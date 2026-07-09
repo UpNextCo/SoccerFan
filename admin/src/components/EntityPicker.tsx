@@ -166,7 +166,11 @@ export function EntityPicker({
       {label && <div className="entity-picker-label">{label}</div>}
       {(valueLabel || imageUrl) && (
         <div className="entity-selected">
-          {imageUrl ? <img src={imageUrl} alt="" className="entity-thumb" /> : <span className="entity-thumb placeholder" />}
+          {imageUrl ? (
+            <img key={imageUrl} src={imageUrl} alt="" className="entity-thumb" />
+          ) : (
+            <span className="entity-thumb placeholder" />
+          )}
           <span className="entity-selected-name">{valueLabel || '—'}</span>
         </div>
       )}

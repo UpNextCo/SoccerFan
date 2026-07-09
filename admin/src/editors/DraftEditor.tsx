@@ -100,10 +100,16 @@ export function DraftEditor({
     updateConstraint(idx, { nationality: name })
   }
 
-  async function pickLineupPlayer(idx: number, playerId: string) {
-    const resolved = (await api.resolvePlayer(playerId, 'card')) as {
-      id: string
-      name: string
+  async function pickLineupPlayer(
+    idx: number,
+    hit: { id: string; name: string }
+  ) {
+    let resolved = { id: hit.id, name: hit.name }
+    try {
+      const full = (await api.resolvePlayer(hit.id, 'card')) as typeof resolved
+      resolved = { id: full.id || hit.id, name: full.name || hit.name }
+    } catch {
+      // search hit is enough
     }
     const nextLineup = lineup.map((pick, i) =>
       i === idx ? { ...pick, playerId: resolved.id, playerName: resolved.name } : pick
@@ -221,10 +227,11 @@ export function DraftEditor({
               {pick.position} · {pick.constraintLabel} · score {pick.statValue}
             </p>
             <EntityPicker
+              key={`${pick.slotId ?? i}-${pick.playerId ?? ''}-${pick.playerName ?? ''}`}
               kind="player"
               valueLabel={pick.playerName}
               disabled={locked}
-              onPickPlayer={(hit) => pickLineupPlayer(i, hit.id)}
+              onPickPlayer={(hit) => pickLineupPlayer(i, hit)}
             />
           </div>
         ))}

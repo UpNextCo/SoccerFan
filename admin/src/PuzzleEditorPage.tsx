@@ -43,7 +43,9 @@ export function PuzzleEditorPage() {
         reviewNote: note || undefined,
         keepApproved: query.data?.status === 'approved',
       }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data.puzzleJson !== undefined) setPuzzleJson(structuredClone(data.puzzleJson))
+      if (data.answerJson !== undefined) setAnswerJson(structuredClone(data.answerJson))
       setMsg('Saved')
       void qc.invalidateQueries({ queryKey: ['puzzle', date, modeId] })
     },
@@ -52,13 +54,15 @@ export function PuzzleEditorPage() {
 
   const approveMut = useMutation({
     mutationFn: async () => {
-      await api.savePuzzle({
+      const saved = await api.savePuzzle({
         date,
         modeId,
         puzzleJson,
         answerJson,
         reviewNote: note || undefined,
       })
+      if (saved.puzzleJson !== undefined) setPuzzleJson(structuredClone(saved.puzzleJson))
+      if (saved.answerJson !== undefined) setAnswerJson(structuredClone(saved.answerJson))
       await api.approvePuzzle(date, modeId, note || undefined)
     },
     onSuccess: () => {

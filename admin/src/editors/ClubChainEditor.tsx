@@ -41,8 +41,31 @@ export function ClubChainEditor({
   const a = (answer as Answer) ?? {}
   const pathIds = a.shortestPathPlayerIds ?? []
 
-  async function pickEndpoint(which: 'start' | 'target', playerId: string) {
-    const resolved = (await api.resolvePlayer(playerId, 'card')) as PlayerRef
+  async function pickEndpoint(
+    which: 'start' | 'target',
+    hit: { id: string; name: string; club?: string; nationality?: string; position?: string; headshotUrl?: string }
+  ) {
+    let resolved: PlayerRef = {
+      id: hit.id,
+      name: hit.name,
+      club: hit.club,
+      nationality: hit.nationality,
+      position: hit.position,
+      headshotUrl: hit.headshotUrl,
+    }
+    try {
+      const full = (await api.resolvePlayer(hit.id, 'card')) as PlayerRef
+      resolved = {
+        id: full.id || hit.id,
+        name: full.name || hit.name,
+        club: full.club ?? hit.club,
+        nationality: full.nationality ?? hit.nationality,
+        position: full.position ?? hit.position,
+        headshotUrl: full.headshotUrl ?? hit.headshotUrl,
+      }
+    } catch {
+      // search hit is enough
+    }
     const nextCard: PlayerRef = {
       id: resolved.id,
       name: resolved.name,
@@ -78,20 +101,22 @@ export function ClubChainEditor({
       <div className="q-card">
         <div className="row">
           <EntityPicker
+            key={`start-${p.start?.id}-${p.start?.headshotUrl ?? ''}`}
             kind="player"
             label="Start player"
             valueLabel={p.start?.name}
             imageUrl={p.start?.headshotUrl}
             disabled={locked}
-            onPickPlayer={(hit) => pickEndpoint('start', hit.id)}
+            onPickPlayer={(hit) => pickEndpoint('start', hit)}
           />
           <EntityPicker
+            key={`target-${p.target?.id}-${p.target?.headshotUrl ?? ''}`}
             kind="player"
             label="Target player"
             valueLabel={p.target?.name}
             imageUrl={p.target?.headshotUrl}
             disabled={locked}
-            onPickPlayer={(hit) => pickEndpoint('target', hit.id)}
+            onPickPlayer={(hit) => pickEndpoint('target', hit)}
           />
         </div>
         <div className="row">

@@ -77,16 +77,31 @@ export function OneMoreEditor({
     onChange({ ...p, rounds: nextRounds }, { ...a, valuesByRound: next })
   }
 
-  async function pickPlayer(ri: number, old: Opt, playerId: string) {
-    const resolved = (await api.resolvePlayer(playerId, 'card')) as {
-      id: string
-      name: string
-      nationality: string
-      position: string
-      clubs: string
-      headshotUrl?: string
-      teamId?: number
-      teamLogoUrl?: string
+  async function pickPlayer(ri: number, old: Opt, hit: { id: string; name: string; nationality?: string; position?: string; headshotUrl?: string; teamLogoUrl?: string }) {
+    let resolved = {
+      id: hit.id,
+      name: hit.name,
+      nationality: hit.nationality ?? '',
+      position: hit.position ?? '',
+      clubs: '',
+      headshotUrl: hit.headshotUrl,
+      teamId: undefined as number | undefined,
+      teamLogoUrl: hit.teamLogoUrl,
+    }
+    try {
+      const full = (await api.resolvePlayer(hit.id, 'card')) as typeof resolved
+      resolved = {
+        id: full.id || hit.id,
+        name: full.name || hit.name,
+        nationality: full.nationality || hit.nationality || '',
+        position: full.position || hit.position || '',
+        clubs: full.clubs || '',
+        headshotUrl: full.headshotUrl ?? hit.headshotUrl,
+        teamId: full.teamId,
+        teamLogoUrl: full.teamLogoUrl ?? hit.teamLogoUrl,
+      }
+    } catch {
+      // search hit is enough
     }
     const row = valuesByRound[ri] ?? {}
     const keepValue = row[old.id] ?? old.value
@@ -94,7 +109,6 @@ export function OneMoreEditor({
       ri,
       old.id,
       {
-        ...old,
         id: resolved.id,
         name: resolved.name,
         nationality: resolved.nationality,
@@ -122,11 +136,12 @@ export function OneMoreEditor({
             return (
               <div key={o.id} className="option-row stack">
                 <EntityPicker
+                  key={`${o.id}-${o.headshotUrl ?? ''}-${o.name ?? ''}`}
                   kind="player"
                   valueLabel={o.name}
                   imageUrl={o.headshotUrl}
                   disabled={locked}
-                  onPickPlayer={(hit) => pickPlayer(ri, o, hit.id)}
+                  onPickPlayer={(hit) => pickPlayer(ri, o, hit)}
                 />
                 <div className="row">
                   <label className="field">

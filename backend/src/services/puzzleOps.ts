@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { and, eq, gte, inArray, lte, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { dailyPuzzles } from '../db/schema.js';
+import { validatePuzzlePayload } from './adminPuzzleValidation.js';
+import { enrichAdminPuzzleForSave } from './adminPuzzleEnrich.js';
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
@@ -336,20 +338,30 @@ export async function savePuzzleForAdmin(args: {
   answerJson: unknown;
   reviewNote?: string;
   keepApproved?: boolean;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; puzzleJson?: unknown; answerJson?: unknown }> {
   const existing = await getPuzzleForAdmin(args.date, args.modeId);
   if (!existing) return { ok: false, error: 'not found' };
   if (existing.status === 'locked') return { ok: false, error: 'locked' };
 
-  const hash = contentHash(args.puzzleJson, args.answerJson);
+  const enriched = await enrichAdminPuzzleForSave(args.modeId, args.puzzleJson, args.answerJson);
+  const validation = validatePuzzlePayload(
+    args.modeId,
+    enriched.puzzleJson,
+    enriched.answerJson ?? null
+  );
+  if (!validation.ok) {
+    return { ok: false, error: validation.error || 'validation failed after enrich' };
+  }
+
+  const hash = contentHash(enriched.puzzleJson, enriched.answerJson);
   const nextStatus: PuzzleOpsStatus =
     args.keepApproved && existing.status === 'approved' ? 'approved' : 'generated';
 
   await db
     .update(dailyPuzzles)
     .set({
-      puzzleJson: args.puzzleJson,
-      answerJson: args.answerJson,
+      puzzleJson: enriched.puzzleJson,
+      answerJson: enriched.answerJson,
       contentHash: hash,
       status: nextStatus,
       reviewNote: args.reviewNote ?? existing.reviewNote,
@@ -357,7 +369,7 @@ export async function savePuzzleForAdmin(args: {
     })
     .where(and(eq(dailyPuzzles.date, args.date), eq(dailyPuzzles.modeId, args.modeId)));
 
-  return { ok: true };
+  return { ok: true, puzzleJson: enriched.puzzleJson, answerJson: enriched.answerJson };
 }
 
 export async function setPuzzleStatus(

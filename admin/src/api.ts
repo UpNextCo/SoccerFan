@@ -101,7 +101,7 @@ export const api = {
     reviewNote?: string
     keepApproved?: boolean
   }) =>
-    request<{ ok: boolean }>('/puzzle', {
+    request<{ ok: boolean; puzzleJson?: unknown; answerJson?: unknown }>('/puzzle', {
       method: 'PUT',
       body: JSON.stringify(body),
     }),

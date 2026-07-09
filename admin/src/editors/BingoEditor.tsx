@@ -64,9 +64,24 @@ export function BingoEditor({
     })
   }
 
-  async function pickPoolPlayer(idx: number, playerId: string) {
-    const resolved = (await api.resolvePlayer(playerId, 'bingo')) as Player
-    replacePlayer(idx, resolved)
+  async function pickPoolPlayer(
+    idx: number,
+    hit: { id: string; name: string; nationality?: string; headshotUrl?: string }
+  ) {
+    // Optimistic UI update so the thumb changes immediately.
+    replacePlayer(idx, {
+      ...players[idx],
+      id: hit.id,
+      name: hit.name,
+      nationality: hit.nationality,
+      headshotUrl: hit.headshotUrl ?? null,
+    })
+    try {
+      const resolved = (await api.resolvePlayer(hit.id, 'bingo')) as Player
+      replacePlayer(idx, resolved)
+    } catch {
+      // keep optimistic row
+    }
   }
 
   async function pickClubRule(idx: number, hit: AdminTeamHit, slot: 'primary' | 'secondary' = 'primary') {
@@ -251,12 +266,12 @@ export function BingoEditor({
         <div className="player-grid">
           {players.map((pl, idx) => (
             <EntityPicker
-              key={pl.id ?? idx}
+              key={`${pl.id ?? idx}-${pl.headshotUrl ?? ''}-${pl.name ?? ''}`}
               kind="player"
               valueLabel={(pl.name as string) ?? (pl.displayName as string) ?? undefined}
               imageUrl={pl.headshotUrl}
               disabled={locked}
-              onPickPlayer={(hit) => pickPoolPlayer(idx, hit.id)}
+              onPickPlayer={(hit) => pickPoolPlayer(idx, hit)}
             />
           ))}
         </div>

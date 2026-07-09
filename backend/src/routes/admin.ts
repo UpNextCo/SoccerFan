@@ -199,7 +199,11 @@ adminRouter.put('/puzzle', requireAdmin, async (req, res) => {
     sendError(res, result.error || 'Save failed', result.error === 'locked' ? 409 : 400);
     return;
   }
-  sendSuccess(res, { ok: true });
+  sendSuccess(res, {
+    ok: true,
+    puzzleJson: result.puzzleJson,
+    answerJson: result.answerJson,
+  });
 });
 
 adminRouter.post('/puzzle/approve', requireAdmin, async (req, res) => {

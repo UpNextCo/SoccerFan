@@ -50,18 +50,28 @@ export function GolfEditor({
     updateHole(n, { answers })
   }
 
-  async function pickAnswer(n: number, idx: number, playerId: string) {
-    const resolved = (await api.resolvePlayer(playerId, 'golf')) as {
-      id: string
-      name: string
-      aliases?: string[]
+  async function pickAnswer(
+    n: number,
+    idx: number,
+    hit: { id: string; name: string }
+  ) {
+    let resolved = { id: hit.id, name: hit.name, aliases: [] as string[] }
+    try {
+      const full = (await api.resolvePlayer(hit.id, 'golf')) as typeof resolved
+      resolved = {
+        id: full.id || hit.id,
+        name: full.name || hit.name,
+        aliases: full.aliases ?? [],
+      }
+    } catch {
+      // search hit is enough
     }
     const hole = holes.find((h) => h.holeNumber === n)!
     const prev = hole.answers[idx]!
     updateAnswer(n, idx, {
       id: resolved.id,
       name: resolved.name,
-      aliases: resolved.aliases ?? [],
+      aliases: resolved.aliases,
       rarity: prev.rarity ?? 'common',
     })
   }
@@ -140,10 +150,11 @@ export function GolfEditor({
               <div key={ans.id ?? idx} className="option-row stack">
                 <div className="row">
                   <EntityPicker
+                    key={`${ans.id ?? idx}-${ans.name}`}
                     kind="player"
                     valueLabel={ans.name || undefined}
                     disabled={locked}
-                    onPickPlayer={(hit) => pickAnswer(h.holeNumber, idx, hit.id)}
+                    onPickPlayer={(hit) => pickAnswer(h.holeNumber, idx, hit)}
                   />
                   <input
                     value={ans.rarity ?? ''}

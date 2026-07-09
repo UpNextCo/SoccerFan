@@ -424,3 +424,23 @@ button.danger {
   flex-direction: column;
   gap: 0.5rem;
 }
+
+.badge-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  padding: 0.65rem;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: #faf7f0;
+  align-items: flex-start;
+}
+
+.badge-preview-img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #fff;
+}

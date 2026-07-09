@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { api, type AdminPlayerHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 
@@ -10,6 +11,14 @@ type Opt = {
   position?: string
 }
 
+type Presentation = {
+  layout?: string
+  imageUrl?: string
+  imageBlur?: number
+  careerClubs?: Array<{ name: string; logoUrl?: string }>
+  [k: string]: unknown
+}
+
 type Q = {
   id: string
   type: string
@@ -18,11 +27,7 @@ type Q = {
   prompt: string
   subPrompt?: string
   options: Opt[]
-  presentation?: {
-    careerClubs?: Array<{ name: string; logoUrl?: string }>
-    imageUrl?: string
-    [k: string]: unknown
-  }
+  presentation?: Presentation
 }
 
 type Ans = {
@@ -53,6 +58,10 @@ function isClubQuestion(q: Q): boolean {
   return sub.includes('club')
 }
 
+function sortedQuestions(p: Puzzle): Q[] {
+  return [...(p.questions ?? [])].sort((x, y) => x.slot - y.slot)
+}
+
 export function LmsEditor({
   puzzle,
   answer,
@@ -66,50 +75,100 @@ export function LmsEditor({
 }) {
   const p = puzzle as Puzzle
   const a = (answer as Answer) ?? { questions: [] }
-  const questions = [...(p.questions ?? [])].sort((x, y) => x.slot - y.slot)
+  const questions = sortedQuestions(p)
+
+  // Keep latest puzzle/answer for async pick handlers (avoid stale closures wiping media).
+  const latestRef = useRef({ p, a })
+  useEffect(() => {
+    latestRef.current = { p, a }
+  }, [p, a])
+
+  function commit(nextPuzzle: Puzzle, nextAnswer: Answer) {
+    latestRef.current = { p: nextPuzzle, a: nextAnswer }
+    onChange(nextPuzzle, nextAnswer)
+  }
 
   function updateQuestion(slot: number, patch: Partial<Q>) {
-    const nextQs = questions.map((q) => (q.slot === slot ? { ...q, ...patch } : q))
-    onChange({ ...p, questions: nextQs }, a)
+    const { p: curP, a: curA } = latestRef.current
+    const nextQs = sortedQuestions(curP).map((q) => (q.slot === slot ? { ...q, ...patch } : q))
+    commit({ ...curP, questions: nextQs }, curA)
   }
 
   function replaceOption(
-    question: Q,
-    oldOpt: Opt,
+    questionId: string,
+    oldOptId: string,
     nextOpt: Opt,
-    answerPatch?: Partial<Ans>
+    extras?: {
+      presentation?: Presentation
+      answerPatch?: Partial<Ans>
+    }
   ) {
-    const nextQs = questions.map((q) => {
-      if (q.id !== question.id) return q
+    const { p: curP, a: curA } = latestRef.current
+    const nextQs = sortedQuestions(curP).map((q) => {
+      if (q.id !== questionId) return q
       return {
         ...q,
-        options: q.options.map((o) => (o.id === oldOpt.id ? nextOpt : o)),
+        options: q.options.map((o) => (o.id === oldOptId ? nextOpt : o)),
+        ...(extras?.presentation ? { presentation: extras.presentation } : {}),
       }
     })
-    let nextAns = a
-    if (answerPatch || oldOpt.id !== nextOpt.id) {
-      nextAns = {
-        questions: a.questions.map((ans) => {
-          if (ans.questionId !== question.id) return ans
-          const wasCorrect = ans.correctOptionId === oldOpt.id
-          return {
-            ...ans,
-            ...(wasCorrect ? { correctOptionId: nextOpt.id } : {}),
-            ...answerPatch,
-          }
-        }),
-      }
+    const nextAns: Answer = {
+      questions: curA.questions.map((ans) => {
+        if (ans.questionId !== questionId) return ans
+        const wasCorrect = ans.correctOptionId === oldOptId
+        return {
+          ...ans,
+          ...(wasCorrect ? { correctOptionId: nextOpt.id } : {}),
+          ...extras?.answerPatch,
+        }
+      }),
     }
-    onChange({ ...p, questions: nextQs }, nextAns)
+    commit({ ...curP, questions: nextQs }, nextAns)
+  }
+
+  function setCorrectOption(question: Q, optionId: string) {
+    const { p: curP, a: curA } = latestRef.current
+    const opt = question.options.find((o) => o.id === optionId)
+    const nextAns: Answer = {
+      questions: curA.questions.map((ans) =>
+        ans.questionId === question.id
+          ? {
+              ...ans,
+              correctOptionId: optionId,
+              reveal: opt?.label ?? ans.reveal,
+            }
+          : ans
+      ),
+    }
+
+    // image_badge blurred header must track the correct club.
+    if (question.type === 'image_badge' && opt) {
+      const nextQs = sortedQuestions(curP).map((q) => {
+        if (q.id !== question.id) return q
+        return {
+          ...q,
+          presentation: {
+            ...(q.presentation ?? {}),
+            layout: q.presentation?.layout ?? 'image_header',
+            imageUrl: opt.teamLogoUrl || q.presentation?.imageUrl,
+            imageBlur: q.presentation?.imageBlur ?? 6,
+          },
+        }
+      })
+      commit({ ...curP, questions: nextQs }, nextAns)
+      return
+    }
+
+    commit(curP, nextAns)
   }
 
   function updateAnswer(questionId: string, patch: Partial<Ans>) {
-    const nextAns = {
-      questions: a.questions.map((ans) =>
+    const { p: curP, a: curA } = latestRef.current
+    commit(curP, {
+      questions: curA.questions.map((ans) =>
         ans.questionId === questionId ? { ...ans, ...patch } : ans
       ),
-    }
-    onChange(p, nextAns)
+    })
   }
 
   function correctFor(q: Q): Ans | undefined {
@@ -117,24 +176,37 @@ export function LmsEditor({
   }
 
   async function pickPlayer(q: Q, oldOpt: Opt, hit: AdminPlayerHit) {
-    const resolved = (await api.resolvePlayer(hit.id, 'card')) as {
-      id: string
-      name: string
-      nationality?: string
-      position?: string
-      headshotUrl?: string
-      teamLogoUrl?: string
+    const nextId = makeOptionId(q.id, hit.id)
+    // Optimistic: update name + photo from search hit immediately (fixes stale Raul thumb).
+    replaceOption(q.id, oldOpt.id, {
+      id: nextId,
+      label: hit.name,
+      headshotUrl: hit.headshotUrl,
+      teamLogoUrl: hit.teamLogoUrl,
+      nationality: hit.nationality,
+      position: hit.position,
+    })
+
+    try {
+      const full = (await api.resolvePlayer(hit.id, 'card')) as {
+        id: string
+        name: string
+        nationality?: string
+        position?: string
+        headshotUrl?: string
+        teamLogoUrl?: string
+      }
+      replaceOption(q.id, nextId, {
+        id: makeOptionId(q.id, full.id || hit.id),
+        label: full.name || hit.name,
+        headshotUrl: full.headshotUrl ?? hit.headshotUrl,
+        teamLogoUrl: full.teamLogoUrl ?? hit.teamLogoUrl,
+        nationality: full.nationality ?? hit.nationality,
+        position: full.position ?? hit.position,
+      })
+    } catch {
+      // optimistic row is enough
     }
-    const nextOpt: Opt = {
-      ...oldOpt,
-      id: makeOptionId(q.id, resolved.id),
-      label: resolved.name,
-      headshotUrl: resolved.headshotUrl,
-      teamLogoUrl: resolved.teamLogoUrl,
-      nationality: resolved.nationality,
-      position: resolved.position,
-    }
-    replaceOption(q, oldOpt, nextOpt)
   }
 
   async function pickClub(q: Q, oldOpt: Opt, hit: AdminTeamHit) {
@@ -148,14 +220,34 @@ export function LmsEditor({
     } else if (q.type === 'image_badge') {
       optionKey = String(team.id)
     }
+
     const nextOpt: Opt = {
-      ...oldOpt,
       id: makeOptionId(q.id, optionKey),
       label: team.name,
       teamLogoUrl: team.logoUrl,
-      headshotUrl: undefined,
     }
-    replaceOption(q, oldOpt, nextOpt)
+
+    const { a: curA } = latestRef.current
+    const ans = curA.questions.find((x) => x.questionId === q.id)
+    const willBeCorrect =
+      ans?.correctOptionId === oldOpt.id || ans?.correctOptionId === nextOpt.id
+
+    const presentation =
+      q.type === 'image_badge' && willBeCorrect
+        ? {
+            ...(q.presentation ?? {}),
+            layout: 'image_header' as const,
+            imageUrl: team.logoUrl,
+            imageBlur: q.presentation?.imageBlur ?? 6,
+          }
+        : undefined
+
+    const answerPatch =
+      willBeCorrect
+        ? { reveal: team.name, correctOptionId: nextOpt.id }
+        : undefined
+
+    replaceOption(q.id, oldOpt.id, nextOpt, { presentation, answerPatch })
   }
 
   async function pickCareerClub(q: Q, clubIdx: number, hit: AdminTeamHit) {
@@ -174,7 +266,7 @@ export function LmsEditor({
         <input
           value={p.title ?? ''}
           disabled={locked}
-          onChange={(e) => onChange({ ...p, title: e.target.value }, a)}
+          onChange={(e) => commit({ ...p, title: e.target.value }, a)}
         />
       </label>
       <p className="muted">Version {p.version ?? '?'} · {questions.length} questions</p>
@@ -210,12 +302,29 @@ export function LmsEditor({
               />
             </label>
 
+            {q.type === 'image_badge' && (
+              <div className="badge-preview">
+                <div className="muted tiny">Blurred badge shown in-game (correct club)</div>
+                {q.presentation?.imageUrl ? (
+                  <img
+                    key={q.presentation.imageUrl}
+                    src={q.presentation.imageUrl}
+                    alt="Badge preview"
+                    className="badge-preview-img"
+                    style={{ filter: `blur(${Math.max(2, (q.presentation.imageBlur ?? 6) / 2)}px)` }}
+                  />
+                ) : (
+                  <p className="error tiny">No presentation.imageUrl — pick/mark the correct club</p>
+                )}
+              </div>
+            )}
+
             {Array.isArray(q.presentation?.careerClubs) && q.presentation!.careerClubs!.length > 0 && (
               <fieldset disabled={locked} className="options">
                 <legend>Career clubs</legend>
                 {q.presentation!.careerClubs!.map((club, idx) => (
                   <EntityPicker
-                    key={`${q.id}-club-${idx}`}
+                    key={`${q.id}-club-${idx}-${club.name}-${club.logoUrl ?? ''}`}
                     kind="team"
                     label={`Club ${idx + 1}`}
                     valueLabel={club.name}
@@ -230,17 +339,18 @@ export function LmsEditor({
             <fieldset disabled={locked} className="options">
               <legend>Options (pick correct · search to replace)</legend>
               {q.options.map((o) => (
-                <div key={o.id} className="option-with-picker">
+                <div key={`${q.id}-${o.id}`} className="option-with-picker">
                   <div className="radio-col">
                     <input
                       type="radio"
                       name={`correct-${q.id}`}
                       checked={ans?.correctOptionId === o.id}
-                      onChange={() => updateAnswer(q.id, { correctOptionId: o.id })}
+                      onChange={() => setCorrectOption(q, o.id)}
                     />
                   </div>
                   {clubMode ? (
                     <EntityPicker
+                      key={`team-${o.id}-${o.teamLogoUrl ?? ''}-${o.label}`}
                       kind="team"
                       valueLabel={o.label}
                       imageUrl={o.teamLogoUrl}
@@ -249,6 +359,7 @@ export function LmsEditor({
                     />
                   ) : (
                     <EntityPicker
+                      key={`player-${o.id}-${o.headshotUrl ?? ''}-${o.label}`}
                       kind="player"
                       valueLabel={o.label}
                       imageUrl={o.headshotUrl}
