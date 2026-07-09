@@ -87,8 +87,9 @@ struct BattleChallenge: Equatable, Codable {
     let formationId: String
     let slots: [BattleSlot]
     let constraints: [BattleConstraint]
-    let optimalScore: Int
-    let optimalLineup: [BattleOptimalPick]
+    var optimalScore: Int
+    /// Perfect XI — stripped from the live puzzle; filled from the completion response.
+    var optimalLineup: [BattleOptimalPick]
 }
 
 // MARK: - Game state
@@ -97,7 +98,7 @@ enum BattlePhase: Equatable, Codable { case intro, building, complete }
 
 struct BattleGameState: Equatable, Codable {
     static let progressVersion = 2
-    let challenge: BattleChallenge
+    var challenge: BattleChallenge
     var phase: BattlePhase
     var assignments: [String: BattleConstraint]   // slotId -> constraint chip dragged onto it
     var picks: [String: BattlePick]               // slotId -> chosen player (implies the chip)

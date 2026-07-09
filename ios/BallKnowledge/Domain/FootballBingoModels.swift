@@ -70,6 +70,8 @@ struct FootballBingoGame: Equatable, Codable {
     var playerQueue: [FootballBingoPlayer]
     var currentPlayerIndex: Int
     var completedCategoryIds: Set<String>
+    /// Successful placements in order — used for server score recompute.
+    var placements: [FootballBingoPlacement]
     var remainingPlayers: Int
     var status: FootballBingoStatus
 
@@ -82,8 +84,9 @@ struct FootballBingoGame: Equatable, Codable {
 
     var isActive: Bool { status == .active }
 
-    mutating func markCompleted(categoryId: String) {
+    mutating func markCompleted(categoryId: String, playerId: String) {
         completedCategoryIds.insert(categoryId)
+        placements.append(FootballBingoPlacement(playerId: playerId, categoryId: categoryId))
     }
 
     mutating func advance(by steps: Int) {
@@ -96,11 +99,30 @@ struct FootballBingoGame: Equatable, Codable {
             status = .lost
         }
     }
+
+    func answerPayload() -> JSONValue {
+        .object([
+            "placements": .array(placements.map {
+                .object([
+                    "playerId": .string($0.playerId),
+                    "categoryId": .string($0.categoryId),
+                ])
+            }),
+            "remainingPlayers": .number(Double(remainingPlayers)),
+            "queueSize": .number(Double(playerQueue.count)),
+            "won": .bool(status == .won),
+        ])
+    }
+}
+
+struct FootballBingoPlacement: Equatable, Codable {
+    let playerId: String
+    let categoryId: String
 }
 
 /// Persisted snapshot for resume: the board plus the one-shot wildcard flag (which lives on the VM).
 struct FootballBingoProgress: Equatable, Codable {
-    static let progressVersion = 1
+    static let progressVersion = 2
     var game: FootballBingoGame
     var wildcardUsed: Bool
 }

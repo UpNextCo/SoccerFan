@@ -1,7 +1,17 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
-import { completeDaily, getDailyBundle, getDailyPuzzle, guessWhoHint, revealGuessWhoAnswer, validateClubChainLink, validateGuess, validateLastManStandingCheck } from '../services/dailyService.js';
+import {
+  completeDaily,
+  getDailyBundle,
+  getDailyPuzzle,
+  guessWhoHint,
+  revealGuessWhoAnswer,
+  startLastManStanding,
+  validateClubChainLink,
+  validateGuess,
+  validateLastManStandingCheck,
+} from '../services/dailyService.js';
 
 export const dailyRouter = Router();
 
@@ -152,10 +162,81 @@ dailyRouter.post('/clubchain/link', requireAuth, async (req, res) => {
   }
 });
 
+const oneMoreStartSchema = z.object({
+  date: z.string(),
+  resumePicks: z.array(z.string()).optional(),
+});
+dailyRouter.post('/onemore/start', requireAuth, async (req, res) => {
+  const parsed = oneMoreStartSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    const { startOneMoreRun } = await import('../services/oneMoreCheck.js');
+    sendSuccess(
+      res,
+      await startOneMoreRun(req.auth!.userId, parsed.data.date, parsed.data.resumePicks ?? [])
+    );
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to start One More', 400);
+  }
+});
+
+const oneMoreCheckSchema = z.object({
+  date: z.string(),
+  token: z.string().min(1),
+  optionId: z.string().min(1),
+});
+dailyRouter.post('/onemore/check', requireAuth, async (req, res) => {
+  const parsed = oneMoreCheckSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    const { submitOneMorePick } = await import('../services/oneMoreCheck.js');
+    sendSuccess(
+      res,
+      await submitOneMorePick(
+        req.auth!.userId,
+        parsed.data.date,
+        parsed.data.token,
+        parsed.data.optionId
+      )
+    );
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Check failed', 400);
+  }
+});
+
+const lmsStartSchema = z.object({
+  date: z.string(),
+  /** Prior correct option ids (in order) when resuming a mid-game run. */
+  resumePicks: z.array(z.string()).optional(),
+});
+dailyRouter.post('/lms/start', requireAuth, async (req, res) => {
+  const parsed = lmsStartSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    const result = await startLastManStanding(
+      req.auth!.userId,
+      parsed.data.date,
+      parsed.data.resumePicks ?? []
+    );
+    sendSuccess(res, result);
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to start LMS run', 400);
+  }
+});
+
 const lmsCheckSchema = z.object({
   date: z.string(),
-  questionId: z.string(),
-  optionId: z.string(),
+  token: z.string().min(1),
+  optionId: z.string().min(1),
 });
 dailyRouter.post('/lms/check', requireAuth, async (req, res) => {
   const parsed = lmsCheckSchema.safeParse(req.body);
@@ -165,8 +246,9 @@ dailyRouter.post('/lms/check', requireAuth, async (req, res) => {
   }
   try {
     const result = await validateLastManStandingCheck(
+      req.auth!.userId,
       parsed.data.date,
-      parsed.data.questionId,
+      parsed.data.token,
       parsed.data.optionId
     );
     sendSuccess(res, result);

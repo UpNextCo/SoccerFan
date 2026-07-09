@@ -271,7 +271,7 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1200). Daily total 9000. A full loss
+    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1200). Live daily total 7000. A full loss
     /// earns 0 (no participation floor). Every game's on-screen score IS this XP.
     static let maxByMode: [String: Int] = [
         "guess_who": 800,

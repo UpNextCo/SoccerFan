@@ -184,6 +184,13 @@ struct ClubChainGameState: Codable, Equatable {
     var score: Int { medal.points }
     var won: Bool { phase == .won }
 
+    func answerPayload() -> JSONValue {
+        .object([
+            "steps": .array(steps.map { .string($0.player.id) }),
+            "won": .bool(phase == .won),
+        ])
+    }
+
     /// Spoiler-free share text: medal + move count + lives, never the players/solution.
     func shareText(date: String) -> String {
         let hearts = String(repeating: "❤️", count: max(0, livesRemaining))

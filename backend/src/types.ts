@@ -221,6 +221,16 @@ export interface DailyCompleteResponse {
   newLevel: number;
   streak: number;
   todayXp: number;
+  /** Draft XI only — perfect XI revealed after completion (stripped from the live puzzle). */
+  optimalLineup?: Array<{
+    slotId: string;
+    position: string;
+    constraintId: string;
+    constraintLabel: string;
+    playerName: string;
+    statValue: number;
+  }>;
+  optimalScore?: number;
 }
 
 export interface PlayerSearchResult {

@@ -176,16 +176,53 @@ actor APIClient {
         )
     }
 
-    func lastManStandingCheck(date: String, questionId: String, optionId: String) async throws -> LMSCheckResultDTO {
+    func lastManStandingStart(date: String, resumePicks: [String] = []) async throws -> LMSStartResultDTO {
         struct Body: Encodable {
             let date: String
-            let questionId: String
+            let resumePicks: [String]
+        }
+        return try await request(
+            "daily/lms/start",
+            method: "POST",
+            body: Body(date: date, resumePicks: resumePicks)
+        )
+    }
+
+    func lastManStandingCheck(date: String, token: String, optionId: String) async throws -> LMSCheckResultDTO {
+        struct Body: Encodable {
+            let date: String
+            let token: String
             let optionId: String
         }
         return try await request(
             "daily/lms/check",
             method: "POST",
-            body: Body(date: date, questionId: questionId, optionId: optionId)
+            body: Body(date: date, token: token, optionId: optionId)
+        )
+    }
+
+    func oneMoreStart(date: String, resumePicks: [String] = []) async throws -> OneMoreStartResultDTO {
+        struct Body: Encodable {
+            let date: String
+            let resumePicks: [String]
+        }
+        return try await request(
+            "daily/onemore/start",
+            method: "POST",
+            body: Body(date: date, resumePicks: resumePicks)
+        )
+    }
+
+    func oneMoreCheck(date: String, token: String, optionId: String) async throws -> OneMoreCheckResultDTO {
+        struct Body: Encodable {
+            let date: String
+            let token: String
+            let optionId: String
+        }
+        return try await request(
+            "daily/onemore/check",
+            method: "POST",
+            body: Body(date: date, token: token, optionId: optionId)
         )
     }
 

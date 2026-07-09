@@ -14,6 +14,9 @@ final class LastManStandingViewModel {
     var lastReveal: String?
     var isChecking = false
     var eliminationWaveToken = 0
+    var checkError: String?
+    /// Sequential run token from POST /daily/lms/start — required for each check.
+    var runToken: String?
 
     private let dailyDate: String?
 
@@ -31,33 +34,85 @@ final class LastManStandingViewModel {
         DailyXP.lastManStanding(survived: state.questionsSurvived)
     }
 
+    var isResumable: Bool {
+        state.status != .won && state.status != .lost &&
+        (state.questionsSurvived > 0 || !state.pickHistory.isEmpty || state.status != .intro)
+    }
+
+    func restore(_ saved: LMSGameState) {
+        var s = saved
+        // Mid-animation snapshots shouldn't leave the player stuck — re-pose the current question.
+        if s.status == .correctReveal || s.status == .eliminating {
+            s.status = .question
+            s.pendingEliminationIds = []
+            s.finalizeEliminations()
+        }
+        state = s
+        showResult = false
+        showCorrectFlash = false
+        activeCommentary = nil
+        eliminationSummary = nil
+        lastReveal = nil
+        isChecking = false
+        checkError = nil
+        runToken = nil
+    }
+
     func beginIfNeeded() {
         guard state.status == .intro else { return }
         state.status = .question
+        Task { await ensureRunToken() }
+    }
+
+    /// Start (or resume) a sequential LMS run. Passes local pickHistory so the server can
+    /// re-issue a token at the correct question index after an app kill.
+    func ensureRunToken() async {
+        guard let dailyDate, runToken == nil else { return }
+        do {
+            let started = try await APIClient.shared.lastManStandingStart(
+                date: dailyDate,
+                resumePicks: state.pickHistory
+            )
+            runToken = started.token
+            checkError = nil
+        } catch {
+            checkError = "Couldn't start today's quiz. Check your connection and try again."
+        }
     }
 
     func submit(optionId: String) async {
-        guard state.status == .question, let question = state.currentQuestion, !isChecking else { return }
+        guard state.status == .question, state.currentQuestion != nil, !isChecking else { return }
         guard let dailyDate else { return }
 
         isChecking = true
         defer { isChecking = false }
+        checkError = nil
+
+        if runToken == nil {
+            await ensureRunToken()
+        }
+        guard let token = runToken else {
+            checkError = "Couldn't reach the server. Try again."
+            return
+        }
 
         do {
             let result = try await APIClient.shared.lastManStandingCheck(
                 date: dailyDate,
-                questionId: question.id,
+                token: token,
                 optionId: optionId
             )
             state.pickHistory.append(optionId)
             lastReveal = result.reveal
             if result.correct {
+                runToken = result.nextToken
                 await handleCorrect()
             } else {
+                runToken = nil
                 handleWrong()
             }
         } catch {
-            // Offline / server error — don't advance on unknown result.
+            checkError = "Couldn't check that answer. Check your connection and try again."
         }
     }
 
@@ -243,7 +298,41 @@ struct LastManStandingView: View {
                 .zIndex(999)
         }
         .animation(.easeOut(duration: 0.21), value: state.currentQuestionIndex)
-        .onAppear { viewModel.beginIfNeeded() }
+        .persistsGameProgress(
+            viewModel.state,
+            isResumable: viewModel.isResumable,
+            modeId: GameModeID.lastManStanding.rawValue,
+            date: dailyDate,
+            version: LMSGameState.progressVersion,
+            enabled: !allowReplay
+        )
+        .onAppear {
+            if !allowReplay, let dailyDate,
+               let saved = GameProgressStore.load(
+                LMSGameState.self,
+                modeId: GameModeID.lastManStanding.rawValue,
+                date: dailyDate,
+                version: LMSGameState.progressVersion,
+                context: modelContext
+               ) {
+                viewModel.restore(saved)
+            }
+            viewModel.beginIfNeeded()
+        }
+        .alert(
+            "Connection issue",
+            isPresented: Binding(
+                get: { viewModel.checkError != nil },
+                set: { if !$0 { viewModel.checkError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { viewModel.checkError = nil }
+            Button("Retry") {
+                Task { await viewModel.ensureRunToken() }
+            }
+        } message: {
+            Text(viewModel.checkError ?? "")
+        }
         .fullScreenCover(isPresented: $viewModel.showResult) {
             LastManStandingResultView(
                 won: state.status == .won,
@@ -252,9 +341,25 @@ struct LastManStandingView: View {
                 questionsSurvived: state.questionsSurvived,
                 xpEarned: viewModel.xpEarned,
                 onHome: {
-                    recordCompletionAndExit()
+                    viewModel.showResult = false
+                    onComplete()
+                    dismiss()
                 }
             )
+            .task {
+                guard !allowReplay, let dailyDate else { return }
+                let answer = JSONValue.object([
+                    "picks": .array(state.pickHistory.map { .string($0) }),
+                ])
+                await DailyCompletionService.recordCompletion(
+                    modeId: GameModeID.lastManStanding.rawValue,
+                    date: dailyDate,
+                    score: viewModel.xpEarned,
+                    won: state.status == .won,
+                    answer: answer,
+                    context: modelContext
+                )
+            }
         }
     }
 
@@ -390,27 +495,6 @@ struct LastManStandingView: View {
             .padding(24)
         }
         .allowsHitTesting(false)
-    }
-
-    private func recordCompletionAndExit() {
-        if !allowReplay, let dailyDate {
-            Task {
-                let answer = JSONValue.object([
-                    "picks": .array(state.pickHistory.map { .string($0) }),
-                ])
-                await DailyCompletionService.recordCompletion(
-                    modeId: GameModeID.lastManStanding.rawValue,
-                    date: dailyDate,
-                    score: viewModel.xpEarned,
-                    won: state.status == .won,
-                    answer: answer,
-                    context: modelContext
-                )
-            }
-        }
-        viewModel.showResult = false
-        onComplete()
-        dismiss()
     }
 }
 

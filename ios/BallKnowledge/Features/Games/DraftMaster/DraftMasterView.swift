@@ -177,6 +177,26 @@ final class DraftMasterViewModel {
             showResult = true
         }
     }
+
+    /// Apply the Perfect XI revealed by the server after completion (stripped from the live puzzle).
+    func applyOptimalReveal(lineup: [BattleOptimalSlotDTO], optimalScore: Int?) {
+        state.challenge.optimalLineup = lineup.map {
+            BattleOptimalPick(
+                slotId: $0.slotId,
+                position: $0.position,
+                constraintId: $0.constraintId,
+                constraintLabel: $0.constraintLabel,
+                playerName: $0.playerName,
+                statValue: $0.statValue
+            )
+        }
+        if let optimalScore {
+            state.challenge.optimalScore = optimalScore
+            if let prior = state.result {
+                state.result = BattleResult(yourTotal: prior.yourTotal, optimalScore: optimalScore)
+            }
+        }
+    }
 }
 
 // MARK: - Main View
@@ -257,23 +277,28 @@ struct DraftMasterView: View {
                     result: result,
                     onShare: { viewModel.showShare = true },
                     onHome: {
-                        if !allowReplay, let dailyDate {
-                            Task {
-                                await DailyCompletionService.recordCompletion(
-                                    modeId: GameModeID.draftMaster.rawValue,
-                                    date: dailyDate,
-                                    score: result.xp,
-                                    won: result.percentage >= 70,
-                                    answer: viewModel.state.answerPayload(),
-                                    context: modelContext
-                                )
-                            }
-                        }
                         viewModel.showResult = false
                         onComplete()
                         dismiss()
                     }
                 )
+                .task {
+                    guard !allowReplay, let dailyDate else { return }
+                    let response = await DailyCompletionService.recordCompletion(
+                        modeId: GameModeID.draftMaster.rawValue,
+                        date: dailyDate,
+                        score: result.xp,
+                        won: result.percentage >= 70,
+                        answer: viewModel.state.answerPayload(),
+                        context: modelContext
+                    )
+                    if let lineup = response?.optimalLineup, !lineup.isEmpty {
+                        viewModel.applyOptimalReveal(
+                            lineup: lineup,
+                            optimalScore: response?.optimalScore
+                        )
+                    }
+                }
             }
         }
         .sheet(isPresented: $viewModel.showShare) {

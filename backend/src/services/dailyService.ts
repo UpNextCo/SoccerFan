@@ -11,58 +11,47 @@ import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js';
 import { generateLastManStandingPuzzle } from './lastManStandingGenerator.js';
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
-import { checkLastManStandingAnswer } from './lastManStandingCheck.js';
-import { generateWorldCupXiPuzzle, WCXI_VERSION } from './worldCupXiGenerator.js';
+import { startLastManStandingRun, submitLastManStandingAnswer } from './lastManStandingCheck.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
-import { BLIND_RANK_SLOT_COUNT } from './puzzleValidator.js';
 import { computeServerScore, clampClientScore } from './dailyScoring.js';
 import { isAcceptableCompletionDate, previousDay, resolveClientDailyDate, todayUTC } from '../utils/dailyDate.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
+/** Live homepage catalog — matches iOS DailyPlayOrder.playableModes. */
 const GAME_MODES = [
   { id: 'football_bingo', title: 'FOOTBALL BINGO', subtitle: 'Fill the grid', playerCount: 12400, isAvailable: true },
   { id: 'one_more', title: 'ONE MORE', subtitle: 'Risk it for points', playerCount: 6400, isAvailable: true },
-  { id: 'target_man', title: 'TARGET MAN', subtitle: 'Hit the stat target', playerCount: 15200, isAvailable: true },
-  { id: 'guess_who', title: 'GUESS WHO?', subtitle: 'Wordle-style player guess', playerCount: 22100, isAvailable: true },
-  { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9 holes, name the answers', playerCount: 7600, isAvailable: true },
-  { id: 'blind_rank', title: 'BLIND RANK', subtitle: 'Order the stats', playerCount: 9800, isAvailable: true },
   { id: 'draft_master', title: 'DRAFT XI', subtitle: 'Build the highest-scoring XI', playerCount: 11300, isAvailable: true },
-  { id: 'world_cup_xi', title: 'WORLD CUP XI', subtitle: 'Name the mystery XI', playerCount: 8900, isAvailable: true },
+  { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9 holes, name the answers', playerCount: 7600, isAvailable: true },
   { id: 'club_chain', title: 'CLUB CHAIN', subtitle: 'Link them by shared clubs', playerCount: 9200, isAvailable: true },
+  { id: 'target_man', title: 'TARGET MAN', subtitle: 'Hit the stat target', playerCount: 15200, isAvailable: true },
   { id: 'last_man_standing', title: 'LAST MAN STANDING', subtitle: 'Survive the field', playerCount: 10100, isAvailable: true },
 ];
 
+/** Modes still generated via generateAllDailyPuzzles (legacy Guess Who / Blind Rank retired). */
 const DAILY_PUZZLE_MODES = [
-  { modeId: 'guess_who', title: 'GUESS WHO?' },
   { modeId: 'target_man', title: 'TARGET MAN' },
-  { modeId: 'blind_rank', title: 'BLIND RANK' },
 ] as const;
 
 /** Modes whose puzzle is generated + stored server-side and shipped in the bundle. */
 const BUNDLE_PUZZLE_MODES = [
-  { modeId: 'guess_who', title: 'GUESS WHO?' },
-  { modeId: 'target_man', title: 'TARGET MAN' },
-  { modeId: 'blind_rank', title: 'BLIND RANK' },
   { modeId: 'football_bingo', title: 'FOOTBALL BINGO' },
-  { modeId: 'football_golf', title: 'FOOTBALL GOLF' },
   { modeId: 'one_more', title: 'ONE MORE' },
-  { modeId: 'world_cup_xi', title: 'WORLD CUP XI' },
   { modeId: 'draft_master', title: 'DRAFT XI' },
+  { modeId: 'football_golf', title: 'FOOTBALL GOLF' },
   { modeId: 'club_chain', title: 'CLUB CHAIN' },
+  { modeId: 'target_man', title: 'TARGET MAN' },
   { modeId: 'last_man_standing', title: 'LAST MAN STANDING' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
 export const DAILY_PLAYABLE_MODES = [
-  'guess_who',
-  'target_man',
-  'blind_rank',
   'football_bingo',
   'one_more',
   'draft_master',
-  'world_cup_xi',
   'football_golf',
   'club_chain',
+  'target_man',
   'last_man_standing',
 ] as const;
 
@@ -172,7 +161,18 @@ async function ensureOneMorePuzzle(date: string): Promise<void> {
     }
     await db
       .insert(dailyPuzzles)
-      .values({ date, modeId: 'one_more', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
+      .values({
+        date,
+        modeId: 'one_more',
+        puzzleJson: puzzle,
+        answerPlayerId: null,
+        // Values are also mirrored here so the public bundle can strip option.value.
+        answerJson: {
+          valuesByRound: puzzle.rounds.map((r) =>
+            Object.fromEntries(r.options.map((o) => [o.id, o.value]))
+          ),
+        },
+      })
       .onConflictDoNothing();
     console.log(`Generated one_more puzzle for ${date}`);
   } catch (error) {
@@ -304,87 +304,6 @@ async function ensureLastManStandingPuzzle(date: string): Promise<void> {
     });
 }
 
-/** Generate + store today's World Cup XI if not present. Best-effort. */
-async function ensureWorldCupXiPuzzle(date: string): Promise<void> {
-  const existing = await db
-    .select({ modeId: dailyPuzzles.modeId })
-    .from(dailyPuzzles)
-    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'world_cup_xi')))
-    .limit(1);
-  if (existing.length > 0) return;
-
-  try {
-    const puzzle = await generateWorldCupXiPuzzle(date);
-    if (!puzzle || puzzle.slots.length < 11) {
-      console.warn(`Skipped world_cup_xi for ${date}: no viable XI`);
-      return;
-    }
-    await db
-      .insert(dailyPuzzles)
-      .values({ date, modeId: 'world_cup_xi', puzzleJson: puzzle, answerPlayerId: null, answerJson: null })
-      .onConflictDoNothing();
-    console.log(`Generated world_cup_xi puzzle for ${date} (${puzzle.slots.length} slots)`);
-  } catch (error) {
-    console.warn(`Skipped world_cup_xi for ${date}: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-/**
- * Drop a stored Blind Rank puzzle if it predates the 10-slot / embedded-stat
- * format so the generator rebuilds it on the next pass. Prevents serving an old
- * 5-slot puzzle (or one without per-player statValue) to updated clients.
- */
-async function migrateStaleBlindRank(date: string): Promise<void> {
-  const rows = await db
-    .select({ puzzleJson: dailyPuzzles.puzzleJson })
-    .from(dailyPuzzles)
-    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'blind_rank')))
-    .limit(1);
-
-  const puzzle = rows[0]?.puzzleJson as
-    | { presentationOrder?: Array<{ statValue?: unknown; headshotUrl?: unknown }>; valueNoun?: unknown }
-    | undefined;
-  if (!puzzle) return;
-
-  const order = puzzle.presentationOrder;
-  const stale =
-    !Array.isArray(order) ||
-    order.length !== BLIND_RANK_SLOT_COUNT ||
-    order.some((player) => typeof player?.statValue !== 'number') ||
-    typeof puzzle.valueNoun !== 'string' ||
-    // Predates player headshots — no member has one. Fresh puzzles almost always have several
-    // (famous pool ~82% covered), so this regenerates old rounds without churning new ones.
-    order.every((player) => typeof player?.headshotUrl !== 'string');
-
-  if (stale) {
-    await db
-      .delete(dailyPuzzles)
-      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'blind_rank')));
-    console.log(`Removed stale blind_rank puzzle for ${date} (will regenerate)`);
-  }
-}
-
-/**
- * Drop a stored World Cup XI puzzle if it predates the current format, so it regenerates. Older
- * puzzles had `country`/no `title` (single-tournament), or lack the current `version` stamp (e.g.
- * the pre-curated-bank build that mostly served auto-generated clues).
- */
-async function migrateStaleWorldCupXi(date: string): Promise<void> {
-  const rows = await db
-    .select({ puzzleJson: dailyPuzzles.puzzleJson })
-    .from(dailyPuzzles)
-    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'world_cup_xi')))
-    .limit(1);
-  const puzzle = rows[0]?.puzzleJson as { country?: unknown; title?: unknown; version?: unknown } | undefined;
-  if (!puzzle) return;
-  if (puzzle.country !== undefined || typeof puzzle.title !== 'string' || puzzle.version !== WCXI_VERSION) {
-    await db
-      .delete(dailyPuzzles)
-      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'world_cup_xi')));
-    console.log(`Removed stale world_cup_xi puzzle for ${date} (will regenerate)`);
-  }
-}
-
 /**
  * Drop a stored Draft Master puzzle if it predates Battle Mode (the old format had `prompts`/
  * `category`; the new one has `scenario`/`formationId`), so it regenerates.
@@ -470,8 +389,7 @@ async function migrateStaleBingo(date: string): Promise<void> {
 }
 
 async function ensureDailyPuzzles(date: string): Promise<void> {
-  await migrateStaleBlindRank(date);
-  await migrateStaleWorldCupXi(date);
+  // Keep migrations for live modes only — defunct Guess Who / Blind Rank / WC XI are no longer generated.
   await migrateStaleDraftMaster(date);
   await migrateStaleBingo(date);
   await migrateStaleOneMore(date);
@@ -496,9 +414,6 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   }
   if (!existing.has('one_more')) {
     await ensureOneMorePuzzle(date);
-  }
-  if (!existing.has('world_cup_xi')) {
-    await ensureWorldCupXiPuzzle(date);
   }
   if (!existing.has('draft_master')) {
     await ensureDraftMasterPuzzle(date);
@@ -532,12 +447,17 @@ export async function validateClubChainLink(
   return { link, targetLink };
 }
 
+export async function startLastManStanding(userId: string, date: string, resumePicks: string[] = []) {
+  return startLastManStandingRun(userId, date, resumePicks);
+}
+
 export async function validateLastManStandingCheck(
+  userId: string,
   date: string,
-  questionId: string,
+  token: string,
   optionId: string
 ) {
-  return checkLastManStandingAnswer(date, questionId, optionId);
+  return submitLastManStandingAnswer(userId, date, token, optionId);
 }
 
 export async function getDailyPuzzle(date: string, modeId: string) {
@@ -575,7 +495,7 @@ export async function getDailyBundle(userId: string, clientDate?: string): Promi
       {
         modeId: mode.modeId,
         title: mode.title,
-        puzzle: row.puzzleJson as DailyBundle['games'][0]['puzzle'],
+        puzzle: sanitizePublicPuzzle(mode.modeId, row.puzzleJson) as DailyBundle['games'][0]['puzzle'],
       },
     ];
   });
@@ -599,6 +519,34 @@ export async function getDailyBundle(userId: string, clientDate?: string): Promi
     completedModeIds,
     games,
   };
+}
+
+/** Strip secrets from puzzle JSON before shipping to clients. */
+function sanitizePublicPuzzle(modeId: string, puzzleJson: unknown): unknown {
+  if (!puzzleJson || typeof puzzleJson !== 'object') return puzzleJson;
+
+  if (modeId === 'draft_master') {
+    const p = puzzleJson as Record<string, unknown>;
+    const { optimalLineup: _omit, ...rest } = p;
+    return rest;
+  }
+
+  if (modeId === 'one_more') {
+    const p = puzzleJson as {
+      rounds?: Array<{ options?: Array<Record<string, unknown>> }>;
+      [key: string]: unknown;
+    };
+    if (!Array.isArray(p.rounds)) return puzzleJson;
+    return {
+      ...p,
+      rounds: p.rounds.map((round) => ({
+        ...round,
+        options: (round.options ?? []).map(({ value: _v, ...opt }) => opt),
+      })),
+    };
+  }
+
+  return puzzleJson;
 }
 
 export async function completeDaily(
@@ -715,13 +663,29 @@ export async function completeDaily(
   await recordXp(userId, input.modeId, xpEarned, input.date);
   await ensureWeeklyMembership(userId, weekStartFor(input.date));
 
-  return {
+  const response: DailyCompleteResponse = {
     xpEarned,
     newXp,
     newLevel,
     streak: newStreak,
     todayXp,
   };
+
+  // Draft XI: perfect lineup is stripped from the live puzzle — reveal it only after completion.
+  if (input.modeId === 'draft_master') {
+    const draft = puzzle[0].puzzleJson as {
+      optimalLineup?: DailyCompleteResponse['optimalLineup'];
+      optimalScore?: number;
+    };
+    if (Array.isArray(draft.optimalLineup)) {
+      response.optimalLineup = draft.optimalLineup;
+    }
+    if (typeof draft.optimalScore === 'number') {
+      response.optimalScore = draft.optimalScore;
+    }
+  }
+
+  return response;
 }
 
 export async function validateGuess(

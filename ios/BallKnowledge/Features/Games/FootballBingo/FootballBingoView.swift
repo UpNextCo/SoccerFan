@@ -75,7 +75,7 @@ final class FootballBingoViewModel {
             !game.completedCategoryIds.contains($0.id) && FootballBingoMatcher.matches(player: player, category: $0)
         }
         for category in toComplete {
-            game.markCompleted(categoryId: category.id)
+            game.markCompleted(categoryId: category.id, playerId: player.id)
         }
         advanceTurn(by: 1)
         if game.status == .won { confettiBurstToken += 1 }
@@ -107,7 +107,7 @@ final class FootballBingoViewModel {
 
         if FootballBingoMatcher.matches(player: player, category: category) {
             HapticManager.success()
-            game.markCompleted(categoryId: category.id)
+            game.markCompleted(categoryId: category.id, playerId: player.id)
             popCategoryId = category.id
             advanceTurn(by: 1)
 
@@ -283,6 +283,7 @@ struct FootballBingoView: View {
                                 date: dailyDate,
                                 score: viewModel.rawScore,
                                 won: viewModel.game.status == .won,
+                                answer: viewModel.game.answerPayload(),
                                 context: modelContext
                             )
                         }

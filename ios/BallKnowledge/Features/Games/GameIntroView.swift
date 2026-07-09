@@ -72,7 +72,7 @@ struct GameIntroContent {
                 tagline: "Risk it for the streak.",
                 steps: [
                     "Two players are shown. Pick the one who meets today's target.",
-                    "Each correct answer earns more XP, but one wrong answer ends your run.",
+                    "Each correct answer banks XP, but one wrong answer ends your run.",
                     "Cash out whenever you like, or push your luck for more XP.",
                 ]
             )

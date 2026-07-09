@@ -184,6 +184,12 @@ struct TargetManGameState: Equatable, Codable {
 
     var isFull: Bool { selections.count >= Self.slotCount }
     var canLock: Bool { selections.count == Self.slotCount && phase == .selecting }
+
+    func answerPayload() -> JSONValue {
+        .object([
+            "playerIds": .array(selections.map { .string($0.player.id) }),
+        ])
+    }
 }
 
 enum TargetManScoring {

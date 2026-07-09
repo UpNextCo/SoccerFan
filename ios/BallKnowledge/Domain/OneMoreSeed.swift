@@ -9,7 +9,18 @@ enum OneMoreSeed {
         let rounds = dto.rounds.compactMap { round -> OneMoreRound? in
             guard round.options.count == 2 else { return nil }
             return OneMoreRound(options: round.options.map {
-                OneMoreOption(id: $0.id, name: $0.name, clubs: $0.clubs, position: $0.position, nationality: $0.nationality, value: $0.value, headshotUrl: $0.headshotUrl, teamId: $0.teamId, teamLogoUrl: $0.teamLogoUrl)
+                OneMoreOption(
+                    id: $0.id,
+                    name: $0.name,
+                    clubs: $0.clubs,
+                    position: $0.position,
+                    nationality: $0.nationality,
+                    value: $0.value,
+                    headshotUrl: $0.headshotUrl,
+                    teamId: $0.teamId,
+                    teamLogoUrl: $0.teamLogoUrl,
+                    valueRevealed: $0.value > 0
+                )
             })
         }
         guard rounds.count >= 3 else { return nil }

@@ -517,6 +517,7 @@ struct FootballGolfView: View {
                     date: dailyDate,
                     score: vm.xpEarned,   // per-hole XP summed (this IS the XP)
                     won: total <= 0,      // under/at par counts as a win for messaging
+                    answer: FootballGolfScoring.answerPayload(results: vm.results),
                     context: modelContext
                 )
             }

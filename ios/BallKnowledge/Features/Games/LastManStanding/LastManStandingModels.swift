@@ -95,7 +95,7 @@ struct LMSEntrant: Identifiable, Equatable, Codable {
 // MARK: - Game state
 
 struct LMSGameState: Equatable, Codable {
-    static let progressVersion = 1
+    static let progressVersion = 2
     static let totalQuestions = 10
     static let startingEntrants = 100
 

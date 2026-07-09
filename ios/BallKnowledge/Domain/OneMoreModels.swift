@@ -7,10 +7,13 @@ struct OneMoreOption: Identifiable, Equatable, Codable {
     let clubs: String
     let position: String
     var nationality: String = ""
-    let value: Int
+    /// Stat value — 0 until revealed via server check (stripped from the daily bundle).
+    var value: Int
     var headshotUrl: String? = nil
     var teamId: Int? = nil
     var teamLogoUrl: String? = nil
+    /// True once the server has revealed this option's value for the current round.
+    var valueRevealed: Bool = false
 
     /// The primary club (first of the "Club · Club" list) for the card badge + label.
     var primaryClub: String { clubs.split(separator: "·").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? clubs }
@@ -31,7 +34,7 @@ struct OneMorePrompt: Equatable, Codable {
     let metricTitle: String   // e.g. "Premier League goals", "career penalty goals"
     let valueNoun: String     // reveal unit, e.g. "goals", "pens", "caps"
     let minimum: Int
-    let rounds: [OneMoreRound]
+    var rounds: [OneMoreRound]
     let isDaily: Bool
     let date: String?
 
@@ -51,13 +54,16 @@ struct OneMorePrompt: Equatable, Codable {
         "One wrong pick loses everything"
     }
 
-    /// Whether an option clears the day's threshold (exactly one per round does).
-    func qualifies(_ option: OneMoreOption) -> Bool { option.value >= minimum }
+    /// Whether an option clears the day's threshold. Requires a revealed value from the server.
+    func qualifies(_ option: OneMoreOption) -> Bool {
+        option.valueRevealed && option.value >= minimum
+    }
 }
 
 struct OneMorePick: Identifiable, Equatable, Codable {
     var id = UUID()
     let name: String
+    let optionId: String
     let statValue: Int
     let pointsAfter: Int
 }
@@ -70,8 +76,8 @@ enum OneMorePhase: Equatable, Codable {
 }
 
 struct OneMoreGameState: Equatable, Codable {
-    static let progressVersion = 1
-    let prompt: OneMorePrompt
+    static let progressVersion = 2
+    var prompt: OneMorePrompt
     var phase: OneMorePhase
     var streak: Int
     var bankedScore: Int
@@ -110,6 +116,18 @@ struct OneMoreGameState: Equatable, Codable {
 
     var nextPickPoints: Int {
         OneMoreScoring.points(forPick: streak + 1, rounds: totalRounds)
+    }
+
+    /// Answer inputs for server-side score recompute.
+    func answerPayload() -> JSONValue {
+        var pickIds = picks.map(\.optionId)
+        if phase == .busted, let bust = bustPick {
+            pickIds.append(bust.optionId)
+        }
+        return .object([
+            "picks": .array(pickIds.map { .string($0) }),
+            "cashedOut": .bool(phase == .cashedOut),
+        ])
     }
 }
 

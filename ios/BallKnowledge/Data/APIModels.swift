@@ -270,6 +270,19 @@ struct DailyCompleteResponseDTO: Codable {
     let newLevel: Int
     let streak: Int
     let todayXp: Int
+    let optimalLineup: [BattleOptimalSlotDTO]?
+    let optimalScore: Int?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        xpEarned = try c.decode(Int.self, forKey: .xpEarned)
+        newXp = try c.decode(Int.self, forKey: .newXp)
+        newLevel = try c.decode(Int.self, forKey: .newLevel)
+        streak = try c.decode(Int.self, forKey: .streak)
+        todayXp = try c.decode(Int.self, forKey: .todayXp)
+        optimalLineup = try c.decodeIfPresent([BattleOptimalSlotDTO].self, forKey: .optimalLineup)
+        optimalScore = try c.decodeIfPresent(Int.self, forKey: .optimalScore)
+    }
 }
 
 struct DailyGuessRequestDTO: Encodable {

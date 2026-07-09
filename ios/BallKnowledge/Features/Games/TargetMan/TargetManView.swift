@@ -273,6 +273,7 @@ struct TargetManView: View {
                                 date: dailyDate,
                                 score: viewModel.state.score ?? 0,
                                 won: (viewModel.state.score ?? 0) >= TargetManScoring.winThreshold,
+                                answer: viewModel.state.answerPayload(),
                                 context: modelContext
                             )
                         }

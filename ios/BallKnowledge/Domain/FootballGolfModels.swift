@@ -180,6 +180,19 @@ enum FootballGolfScoring {
     static func xp(results: [FootballGolfHoleResult]) -> Int {
         DailyXP.xp(.footballGolf, score: results.reduce(0) { $0 + holeXP($1) })
     }
+
+    static func answerPayload(results: [FootballGolfHoleResult]) -> JSONValue {
+        .object([
+            "holes": .array(results.map { r in
+                .object([
+                    "holeId": .string(r.id),
+                    "matchedIds": .array(r.matched.map { .string($0.id) }),
+                    "shots": .number(Double(r.shots)),
+                    "skipped": .bool(r.skipped),
+                ])
+            }),
+        ])
+    }
 }
 
 // MARK: - Local answer matching (validate against the hole's shipped answers)

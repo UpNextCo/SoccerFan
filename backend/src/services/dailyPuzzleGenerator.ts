@@ -8,7 +8,7 @@ import { PuzzleValidationError, validateGeneratedPuzzle } from './puzzleValidato
 import { generateBlindRankPuzzle as generateThemedBlindRank } from './blindRankGenerator.js';
 import { recentGuessWhoAnswerIds, recentTargetManQuestions, targetManQuestionKey } from './puzzleHistory.js';
 
-const DAILY_MODES = ['guess_who', 'target_man', 'blind_rank'] as const;
+const DAILY_MODES = ['target_man'] as const;
 
 // Repeat-suppression windows (days). Content used inside the window can't be picked again;
 // once outside it only returns by seeded chance — never on a fixed schedule.
@@ -247,17 +247,11 @@ export async function generateDailyPuzzleForMode(
 
   let generated: GeneratedDailyPuzzle;
   switch (modeId) {
-    case 'guess_who':
-      generated = await generateGuessWhoPuzzle(date, pack);
-      break;
     case 'target_man':
       generated = await generateTargetManPuzzle(date, pack);
       break;
-    case 'blind_rank':
-      generated = await generateThemedBlindRank(date);
-      break;
     default:
-      throw new PuzzleValidationError(`Unsupported mode: ${modeId}`);
+      throw new PuzzleValidationError(`Unsupported daily mode: ${modeId}`);
   }
 
   await validateGeneratedPuzzle(generated);

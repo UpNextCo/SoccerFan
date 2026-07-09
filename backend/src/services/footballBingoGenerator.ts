@@ -114,7 +114,7 @@ type CatType =
   | 'wonCompetition' | 'award' | 'statThreshold';
 type IconType = 'flag' | 'clubBadge' | 'trophy' | 'nationClub' | 'clubCombo' | 'award' | 'custom';
 
-interface BingoCategory {
+export interface BingoCategory {
   id: string;
   title: string;
   type: CatType;
@@ -128,7 +128,7 @@ interface BingoCategory {
   flag?: string | null; // nationality for nationClub tiles
 }
 
-interface BingoPlayer {
+export interface BingoPlayer {
   id: string;
   name: string;
   nationality: string;
@@ -155,7 +155,7 @@ export interface FootballBingoPuzzle {
   players: BingoPlayer[];
 }
 
-function matches(p: BingoPlayer, c: BingoCategory): boolean {
+export function matches(p: BingoPlayer, c: BingoCategory): boolean {
   switch (c.type) {
     case 'nationality':
       return norm(p.nationality) === norm(c.matchingRule);

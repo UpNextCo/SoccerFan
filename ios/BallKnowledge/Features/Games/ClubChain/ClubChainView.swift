@@ -235,6 +235,7 @@ struct ClubChainView: View {
                                 guesses: s.moves,
                                 won: s.won,
                                 shareGrid: s.shareText(date: dailyDate),
+                                answer: s.answerPayload(),
                                 context: modelContext
                             )
                         }

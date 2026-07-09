@@ -11,9 +11,14 @@ final class OneMoreViewModel {
     var confettiBurstToken = 0
     var scorePulseToken = 0
     var lastFeedback: String?
+    var isChecking = false
+    var checkError: String?
+    var runToken: String?
+    private let dailyDate: String?
 
-    init(prompt: OneMorePrompt) {
+    init(prompt: OneMorePrompt, dailyDate: String? = nil) {
         self.state = OneMoreGameState(prompt: prompt)
+        self.dailyDate = dailyDate
     }
 
     var xpEarned: Int {
@@ -32,47 +37,111 @@ final class OneMoreViewModel {
 
     func restore(_ saved: OneMoreGameState) {
         var s = saved
-        // A snapshot taken mid-reveal has no resolved outcome — re-pose that round.
         if s.phase == .revealing { s.phase = .playing; s.chosenOptionId = nil }
         state = s
+        runToken = nil
         resetTransient()
     }
 
-    /// Tap an option → reveal both values briefly → resolve.
-    func choose(_ option: OneMoreOption) {
-        guard state.phase == .playing, let round = state.currentRound else { return }
-        state.chosenOptionId = option.id
-        state.phase = .revealing
-        HapticManager.light()
-        Task {
-            try? await Task.sleep(for: .seconds(OneMoreTiming.reveal))
-            resolve(option, in: round)
+    func ensureRunToken() async {
+        guard let dailyDate, runToken == nil else { return }
+        do {
+            let started = try await APIClient.shared.oneMoreStart(
+                date: dailyDate,
+                resumePicks: state.picks.map(\.optionId)
+            )
+            runToken = started.token
+            checkError = nil
+        } catch {
+            checkError = "Couldn't start today's run. Check your connection and try again."
         }
     }
 
-    private func resolve(_ option: OneMoreOption, in round: OneMoreRound) {
+    /// Tap an option → sequential server check → reveal both values briefly → resolve.
+    func choose(_ option: OneMoreOption) {
+        guard state.phase == .playing, state.currentRound != nil, !isChecking else { return }
+        guard let dailyDate else {
+            checkError = "This daily needs a network connection."
+            return
+        }
+        state.chosenOptionId = option.id
+        isChecking = true
+        checkError = nil
+        HapticManager.light()
+        Task {
+            defer { isChecking = false }
+            if runToken == nil { await ensureRunToken() }
+            guard let token = runToken else {
+                state.chosenOptionId = nil
+                checkError = "Couldn't reach the server. Try again."
+                return
+            }
+            do {
+                let result = try await APIClient.shared.oneMoreCheck(
+                    date: dailyDate,
+                    token: token,
+                    optionId: option.id
+                )
+                applyRevealedValues(result.values)
+                runToken = result.nextToken
+                state.phase = .revealing
+                try? await Task.sleep(for: .seconds(OneMoreTiming.reveal))
+                guard let round = state.currentRound,
+                      let picked = round.options.first(where: { $0.id == option.id }) else { return }
+                resolve(picked, in: round, serverCorrect: result.correct)
+            } catch {
+                state.chosenOptionId = nil
+                checkError = "Couldn't check that pick. Check your connection and try again."
+            }
+        }
+    }
+
+    private func applyRevealedValues(_ values: [String: Int]) {
+        guard state.prompt.rounds.indices.contains(state.roundIndex) else { return }
+        var options = state.prompt.rounds[state.roundIndex].options
+        for i in options.indices {
+            if let v = values[options[i].id] {
+                options[i].value = v
+                options[i].valueRevealed = true
+            }
+        }
+        state.prompt.rounds[state.roundIndex] = OneMoreRound(options: options)
+    }
+
+    private func resolve(_ option: OneMoreOption, in round: OneMoreRound, serverCorrect: Bool) {
         guard state.phase == .revealing else { return }
 
-        if state.prompt.qualifies(option) {
+        if serverCorrect {
             state.streak += 1
-            state.picks.append(OneMorePick(name: option.name, statValue: option.value, pointsAfter: state.currentScore))
+            state.picks.append(OneMorePick(
+                name: option.name,
+                optionId: option.id,
+                statValue: option.value,
+                pointsAfter: state.currentScore
+            ))
             lastFeedback = "+\(OneMoreScoring.points(forPick: state.streak, rounds: state.totalRounds)) XP"
             HapticManager.success()
             scorePulseToken += 1
             state.chosenOptionId = nil
             state.roundIndex += 1
             if state.currentRound == nil {
-                cashOut(cleared: true) // ran out of rounds → you cleared it
+                cashOut(cleared: true)
             } else {
                 state.phase = .playing
             }
         } else {
             let correct = round.options.first { state.prompt.qualifies($0) }
-            state.bustPick = OneMorePick(name: option.name, statValue: option.value, pointsAfter: state.currentScore)
+            state.bustPick = OneMorePick(
+                name: option.name,
+                optionId: option.id,
+                statValue: option.value,
+                pointsAfter: state.currentScore
+            )
             state.bustCorrect = correct
             state.streak = 0
             state.bankedScore = 0
             state.phase = .busted
+            runToken = nil
             lastFeedback = correct.map { "\($0.name) had \($0.value)" } ?? "Wrong pick"
             HapticManager.error()
             showBustOverlay = true
@@ -100,6 +169,7 @@ final class OneMoreViewModel {
 
     func restart() {
         state = OneMoreGameState(prompt: state.prompt)
+        runToken = nil
         resetTransient()
     }
 
@@ -109,6 +179,8 @@ final class OneMoreViewModel {
         confettiBurstToken = 0
         scorePulseToken = 0
         lastFeedback = nil
+        isChecking = false
+        checkError = nil
     }
 }
 
@@ -128,7 +200,7 @@ struct OneMoreView: View {
         allowReplay: Bool = false,
         onComplete: @escaping () -> Void
     ) {
-        _viewModel = State(initialValue: OneMoreViewModel(prompt: prompt))
+        _viewModel = State(initialValue: OneMoreViewModel(prompt: prompt, dailyDate: dailyDate))
         self.allowReplay = allowReplay
         self.dailyDate = dailyDate
         self.onComplete = onComplete
@@ -249,11 +321,27 @@ struct OneMoreView: View {
             enabled: !allowReplay
         )
         .onAppear {
-            guard !allowReplay, let dailyDate,
-                  let saved = GameProgressStore.load(
-                    OneMoreGameState.self, modeId: GameModeID.oneMore.rawValue,
-                    date: dailyDate, version: OneMoreGameState.progressVersion, context: modelContext) else { return }
-            viewModel.restore(saved)
+            if !allowReplay, let dailyDate,
+               let saved = GameProgressStore.load(
+                OneMoreGameState.self, modeId: GameModeID.oneMore.rawValue,
+                date: dailyDate, version: OneMoreGameState.progressVersion, context: modelContext) {
+                viewModel.restore(saved)
+            }
+            Task { await viewModel.ensureRunToken() }
+        }
+        .alert(
+            "Connection issue",
+            isPresented: Binding(
+                get: { viewModel.checkError != nil },
+                set: { if !$0 { viewModel.checkError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { viewModel.checkError = nil }
+            Button("Retry") {
+                Task { await viewModel.ensureRunToken() }
+            }
+        } message: {
+            Text(viewModel.checkError ?? "")
         }
         .fullScreenCover(isPresented: $viewModel.showResult) {
             OneMoreResultView(
@@ -266,22 +354,22 @@ struct OneMoreView: View {
                 streak: viewModel.state.picks.count,
                 xpEarned: viewModel.xpEarned,
                 onHome: {
-                    if !allowReplay, let dailyDate {
-                        Task {
-                            await DailyCompletionService.recordCompletion(
-                                modeId: GameModeID.oneMore.rawValue,
-                                date: dailyDate,
-                                score: viewModel.state.phase == .busted ? 0 : viewModel.state.bankedScore,
-                                won: viewModel.state.phase == .cashedOut,
-                                context: modelContext
-                            )
-                        }
-                    }
                     viewModel.showResult = false
                     onComplete()
                     dismiss()
                 }
             )
+            .task {
+                guard !allowReplay, let dailyDate else { return }
+                await DailyCompletionService.recordCompletion(
+                    modeId: GameModeID.oneMore.rawValue,
+                    date: dailyDate,
+                    score: viewModel.state.phase == .busted ? 0 : viewModel.state.bankedScore,
+                    won: viewModel.state.phase == .cashedOut,
+                    answer: viewModel.state.answerPayload(),
+                    context: modelContext
+                )
+            }
         }
     }
 }

@@ -329,7 +329,27 @@ struct LastManStandingQuestionCard: View {
     }
 }
 
+struct LMSStartResultDTO: Codable {
+    let token: String
+    let questionCount: Int
+}
+
 struct LMSCheckResultDTO: Codable {
     let correct: Bool
     let reveal: String?
+    let nextToken: String?
+    let status: String?
+    let questionsSurvived: Int?
+}
+
+struct OneMoreStartResultDTO: Codable {
+    let token: String
+    let roundCount: Int
+}
+
+struct OneMoreCheckResultDTO: Codable {
+    let correct: Bool
+    let values: [String: Int]
+    let nextToken: String?
+    let status: String?
 }

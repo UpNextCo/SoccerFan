@@ -7,6 +7,9 @@
  * client-reported score, so older clients that don't send answers keep working.
  */
 import { maxXpForMode } from './dailyService.js';
+import { matches as bingoMatches, type BingoCategory, type BingoPlayer } from './footballBingoGenerator.js';
+import { playerValuesForCategory } from './targetManCategories.js';
+import { clubChainLink } from './clubChainGenerator.js';
 
 export interface ServerScore {
   score: number;
@@ -15,13 +18,47 @@ export interface ServerScore {
 
 type PuzzleRow = { puzzleJson: unknown; answerJson: unknown };
 
+// ---- XP helpers (mirror ios DailyXP) ---------------------------------------------------------
+
+function golfHoleXp(relativeToPar: number): number {
+  if (relativeToPar <= -2) return 134;
+  if (relativeToPar === -1) return 110;
+  if (relativeToPar === 0) return 50;
+  if (relativeToPar === 1) return 20;
+  return 0;
+}
+
+function targetManXp(pctOff: number): number {
+  if (pctOff < 0.0001) return 900;
+  if (pctOff < 0.02) return 800;
+  if (pctOff < 0.05) return 650;
+  if (pctOff < 0.10) return 500;
+  if (pctOff < 0.15) return 350;
+  if (pctOff < 0.25) return 175;
+  return 0;
+}
+
+function bingoXp(completed: boolean, remaining: number, queueSize: number, tiles: number): number {
+  if (!completed) return 0;
+  if (queueSize <= tiles) return 1000;
+  const maxRemaining = queueSize - tiles;
+  const efficiency = Math.min(1, Math.max(0, remaining / maxRemaining));
+  return 400 + Math.round(600 * efficiency);
+}
+
+function clubChainXp(reached: boolean, moves: number, par: number): number {
+  if (!reached) return 0;
+  if (moves <= par) return 1000;
+  if (moves <= par + 2) return 750;
+  return 500;
+}
+
 // ---- Blind Rank -----------------------------------------------------------------------------
 // answer: { order: string[] } — the 10 player ids as the user arranged them (top → bottom).
 function scoreBlindRank(row: PuzzleRow, answer: unknown): ServerScore | null {
   const order = (answer as { order?: unknown })?.order;
   if (!Array.isArray(order) || order.some((x) => typeof x !== 'string')) return null;
 
-  // Ground-truth ranking: prefer the server-only answer_json, else derive from the presentation stats.
   let correct = (row.answerJson as { answer?: { correctRanking?: unknown } })?.answer?.correctRanking;
   if (!Array.isArray(correct)) {
     const po = (row.puzzleJson as { presentationOrder?: Array<{ id?: string; statValue?: number }> })?.presentationOrder;
@@ -30,7 +67,6 @@ function scoreBlindRank(row: PuzzleRow, answer: unknown): ServerScore | null {
   }
   const idx = new Map((correct as string[]).map((id, i) => [id, i]));
 
-  // Per-slot XP by distance from the true spot (exact 100 / off-1 60 / off-2 30 / else 0).
   const slotXp = (d: number): number => (d === 0 ? 100 : d === 1 ? 60 : d === 2 ? 30 : 0);
   let score = 0;
   (order as string[]).forEach((id, i) => {
@@ -42,7 +78,6 @@ function scoreBlindRank(row: PuzzleRow, answer: unknown): ServerScore | null {
 }
 
 // ---- World Cup XI ---------------------------------------------------------------------------
-// answer: { picks: [{ slotId, name }] } — the player NAME the user placed in each slot.
 function normName(v: string): string {
   return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
 }
@@ -78,31 +113,40 @@ function scoreWorldCupXi(row: PuzzleRow, answer: unknown): ServerScore | null {
 }
 
 // ---- One More -------------------------------------------------------------------------------
-// answer: { picks: string[]; cashedOut: boolean } — the option id chosen each round, in order.
+// answer: { picks: string[]; cashedOut: boolean }
+// Values may live in puzzleJson (legacy) or answerJson.valuesByRound (stripped bundles).
 function scoreOneMore(row: PuzzleRow, answer: unknown): ServerScore | null {
   const picks = (answer as { picks?: unknown })?.picks;
   const cashedOut = (answer as { cashedOut?: unknown })?.cashedOut === true;
-  const puzzle = row.puzzleJson as { minimum?: number; rounds?: Array<{ options?: Array<{ id: string; value: number }> }> };
+  const puzzle = row.puzzleJson as {
+    minimum?: number;
+    rounds?: Array<{ options?: Array<{ id: string; value?: number }> }>;
+  };
   if (!Array.isArray(picks) || !Array.isArray(puzzle?.rounds) || typeof puzzle.minimum !== 'number') return null;
 
+  const answerValues = (row.answerJson as { valuesByRound?: Array<Record<string, number>> } | null)?.valuesByRound;
   const minimum = puzzle.minimum;
   const rounds = puzzle.rounds.length;
   let streak = 0;
   let busted = false;
   for (let i = 0; i < picks.length; i += 1) {
-    const opt = puzzle.rounds[i]?.options?.find((o) => o.id === picks[i]);
-    if (!opt || opt.value < minimum) { busted = true; break; }
+    const pickId = picks[i] as string;
+    const opt = puzzle.rounds[i]?.options?.find((o) => o.id === pickId);
+    if (!opt) { busted = true; break; }
+    const value =
+      typeof opt.value === 'number'
+        ? opt.value
+        : answerValues?.[i]?.[pickId];
+    if (typeof value !== 'number' || value < minimum) { busted = true; break; }
     streak += 1;
   }
   if (busted) return { score: 0, won: false };
-  // Each correct answer is a flat, clean share of the 900 max (clearing all rounds banks 900).
   const perPick = rounds > 0 ? Math.round(900 / rounds) : 0;
   const score = Math.min(900, streak * perPick);
   return { score, won: cashedOut || streak >= rounds };
 }
 
 // ---- Last Man Standing -----------------------------------------------------------------------
-// answer: { picks: string[] } — chosen option id per question, in order; streak until first wrong.
 function scoreLastManStanding(row: PuzzleRow, answer: unknown): ServerScore | null {
   const picks = (answer as { picks?: unknown })?.picks;
   if (!Array.isArray(picks) || picks.some((x) => typeof x !== 'string')) return null;
@@ -130,8 +174,7 @@ function scoreLastManStanding(row: PuzzleRow, answer: unknown): ServerScore | nu
   return { score, won: streak >= expected.length };
 }
 
-// ---- Draft XI (async — needs the DB) --------------------------------------------------------
-// answer: { picks: [{ slotId, constraintId, playerId }] }
+// ---- Draft XI --------------------------------------------------------------------------------
 async function scoreDraft(row: PuzzleRow, answer: unknown): Promise<ServerScore | null> {
   const picks = (answer as { picks?: unknown })?.picks;
   if (!Array.isArray(picks)) return null;
@@ -141,6 +184,143 @@ async function scoreDraft(row: PuzzleRow, answer: unknown): Promise<ServerScore 
   );
   const { recomputeBattleScore } = await import('./battleGenerator.js');
   return recomputeBattleScore(row.puzzleJson as Parameters<typeof recomputeBattleScore>[0], clean);
+}
+
+// ---- Football Bingo --------------------------------------------------------------------------
+// answer: { placements: [{ playerId, categoryId }], remainingPlayers, queueSize, won }
+function scoreFootballBingo(row: PuzzleRow, answer: unknown): ServerScore | null {
+  const placements = (answer as { placements?: unknown })?.placements;
+  const remainingPlayers = (answer as { remainingPlayers?: unknown })?.remainingPlayers;
+  const queueSize = (answer as { queueSize?: unknown })?.queueSize;
+  const won = (answer as { won?: unknown })?.won === true;
+
+  if (!Array.isArray(placements)) return null;
+  if (typeof remainingPlayers !== 'number' || typeof queueSize !== 'number') return null;
+
+  const puzzle = row.puzzleJson as { categories?: BingoCategory[]; players?: BingoPlayer[] };
+  if (!Array.isArray(puzzle.categories) || !Array.isArray(puzzle.players)) return null;
+
+  const playersById = new Map(puzzle.players.map((p) => [p.id, p]));
+  const categoriesById = new Map(puzzle.categories.map((c) => [c.id, c]));
+  const completed = new Set<string>();
+
+  for (const raw of placements as Array<{ playerId?: string; categoryId?: string }>) {
+    if (typeof raw.playerId !== 'string' || typeof raw.categoryId !== 'string') return null;
+    const player = playersById.get(raw.playerId);
+    const category = categoriesById.get(raw.categoryId);
+    if (!player || !category) return null;
+    if (completed.has(raw.categoryId)) return null;
+    if (!bingoMatches(player, category)) return null;
+    completed.add(raw.categoryId);
+  }
+
+  const tiles = puzzle.categories.length;
+  const completedAll = won && completed.size === tiles;
+  const score = bingoXp(completedAll, remainingPlayers, queueSize, tiles);
+  return { score, won: completedAll };
+}
+
+// ---- Football Golf ---------------------------------------------------------------------------
+// answer: { holes: [{ holeId, matchedIds: string[], shots: number, skipped: boolean }] }
+function scoreFootballGolf(row: PuzzleRow, answer: unknown): ServerScore | null {
+  const holes = (answer as { holes?: unknown })?.holes;
+  if (!Array.isArray(holes)) return null;
+
+  const puzzle = row.puzzleJson as {
+    holes?: Array<{
+      id: string;
+      par: number;
+      answers?: Array<{ id: string; rarity?: string }>;
+    }>;
+  };
+  if (!Array.isArray(puzzle.holes) || puzzle.holes.length === 0) return null;
+
+  const byId = new Map(puzzle.holes.map((h) => [h.id, h]));
+  let total = 0;
+  let underOrEqualPar = true;
+
+  for (const raw of holes as Array<{
+    holeId?: string;
+    matchedIds?: unknown;
+    shots?: unknown;
+    skipped?: unknown;
+  }>) {
+    if (typeof raw.holeId !== 'string' || typeof raw.shots !== 'number') return null;
+    const hole = byId.get(raw.holeId);
+    if (!hole) return null;
+    const answerIds = new Set((hole.answers ?? []).map((a) => a.id));
+    const matchedIds = Array.isArray(raw.matchedIds) ? raw.matchedIds : [];
+    if (matchedIds.some((id) => typeof id !== 'string' || !answerIds.has(id as string))) return null;
+
+    const relative = raw.shots - hole.par;
+    if (relative > 0) underOrEqualPar = false;
+    total += golfHoleXp(relative);
+  }
+
+  return { score: Math.min(1200, total), won: underOrEqualPar };
+}
+
+// ---- Target Man ------------------------------------------------------------------------------
+// answer: { playerIds: string[] }
+async function scoreTargetMan(row: PuzzleRow, answer: unknown): Promise<ServerScore | null> {
+  const playerIds = (answer as { playerIds?: unknown })?.playerIds;
+  if (!Array.isArray(playerIds) || playerIds.length !== 5 || playerIds.some((x) => typeof x !== 'string')) {
+    return null;
+  }
+
+  const puzzle = row.puzzleJson as { categoryId?: string; target?: number };
+  const answerMeta = row.answerJson as { answer?: { categoryId?: string; target?: number } } | null;
+  const categoryId = puzzle.categoryId ?? answerMeta?.answer?.categoryId;
+  const target = puzzle.target ?? answerMeta?.answer?.target;
+  if (typeof categoryId !== 'string' || typeof target !== 'number' || target <= 0) return null;
+
+  const values = await playerValuesForCategory(categoryId, playerIds as string[]);
+  const combined = values.reduce((sum, v) => sum + v.value, 0);
+  const difference = combined - target;
+  const pctOff = Math.abs(difference) / Math.max(target, 1);
+  const score = targetManXp(pctOff);
+  return { score, won: score >= 350 };
+}
+
+// ---- Club Chain ------------------------------------------------------------------------------
+// answer: { steps: string[], won: boolean }
+async function scoreClubChain(row: PuzzleRow, answer: unknown): Promise<ServerScore | null> {
+  const steps = (answer as { steps?: unknown })?.steps;
+  const won = (answer as { won?: unknown })?.won === true;
+  if (!Array.isArray(steps) || steps.some((x) => typeof x !== 'string')) return null;
+
+  const puzzle = row.puzzleJson as {
+    start?: { id?: string };
+    target?: { id?: string };
+    shortestPathLength?: number;
+    maxMoves?: number;
+  };
+  const answerMeta = row.answerJson as { shortestPathLength?: number } | null;
+  const startId = puzzle.start?.id;
+  const targetId = puzzle.target?.id;
+  if (typeof startId !== 'string' || typeof targetId !== 'string') return null;
+
+  const parEdges = answerMeta?.shortestPathLength ?? puzzle.shortestPathLength;
+  if (typeof parEdges !== 'number' || parEdges < 1) return null;
+  const parMoves = Math.max(1, parEdges - 1);
+  const maxMoves = typeof puzzle.maxMoves === 'number' ? puzzle.maxMoves : parMoves + 4;
+
+  if (!won) {
+    return { score: 0, won: false };
+  }
+
+  const path = [startId, ...(steps as string[]), targetId];
+  if (steps.length > maxMoves) return { score: 0, won: false };
+
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const link = await clubChainLink(path[i]!, path[i + 1]!);
+    if (!link) return { score: 0, won: false };
+  }
+
+  return {
+    score: clubChainXp(true, steps.length, parMoves),
+    won: true,
+  };
 }
 
 /**
@@ -160,6 +340,10 @@ export async function computeServerScore(
       case 'one_more': return scoreOneMore(row, answer);
       case 'last_man_standing': return scoreLastManStanding(row, answer);
       case 'draft_master': return await scoreDraft(row, answer);
+      case 'football_bingo': return scoreFootballBingo(row, answer);
+      case 'football_golf': return scoreFootballGolf(row, answer);
+      case 'target_man': return await scoreTargetMan(row, answer);
+      case 'club_chain': return await scoreClubChain(row, answer);
       default: return null;
     }
   } catch {

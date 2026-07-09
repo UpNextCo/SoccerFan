@@ -46,6 +46,7 @@ enum FootballBingoSeed {
             playerQueue: players,
             currentPlayerIndex: 0,
             completedCategoryIds: [],
+            placements: [],
             remainingPlayers: players.count,
             status: .active
         )

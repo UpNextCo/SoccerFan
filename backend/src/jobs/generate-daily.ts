@@ -4,8 +4,8 @@ import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from '../services
 export { generateAllDailyPuzzles, generateDailyPuzzleForMode };
 
 /** @deprecated Use generateAllDailyPuzzles or generateDailyPuzzleForMode */
-export async function generateDailyPuzzle(date: string, modeId = 'guess_who'): Promise<void> {
-  await generateDailyPuzzleForMode(date, modeId as 'guess_who' | 'target_man' | 'blind_rank');
+export async function generateDailyPuzzle(date: string, modeId = 'target_man'): Promise<void> {
+  await generateDailyPuzzleForMode(date, modeId as 'target_man');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -13,7 +13,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const mode = process.argv[3];
 
   const run = mode
-    ? generateDailyPuzzleForMode(date, mode as 'guess_who' | 'target_man' | 'blind_rank')
+    ? generateDailyPuzzleForMode(date, mode as 'target_man')
     : generateAllDailyPuzzles(date);
 
   run
