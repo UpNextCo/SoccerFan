@@ -187,7 +187,7 @@ enum FootballGolfScoring {
                 .object([
                     "holeId": .string(r.id),
                     "matchedIds": .array(r.matched.map { .string($0.id) }),
-                    "shots": .number(Double(r.shots)),
+                    "shots": .int(r.shots),
                     "skipped": .bool(r.skipped),
                 ])
             }),

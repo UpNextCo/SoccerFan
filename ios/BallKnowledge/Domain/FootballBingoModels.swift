@@ -108,8 +108,8 @@ struct FootballBingoGame: Equatable, Codable {
                     "categoryId": .string($0.categoryId),
                 ])
             }),
-            "remainingPlayers": .number(Double(remainingPlayers)),
-            "queueSize": .number(Double(playerQueue.count)),
+            "remainingPlayers": .int(remainingPlayers),
+            "queueSize": .int(playerQueue.count),
             "won": .bool(status == .won),
         ])
     }
