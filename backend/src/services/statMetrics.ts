@@ -43,10 +43,14 @@ export const careerTrophiesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS va
   WHERE lower(placement) = 'winner' AND competition IN (${sql.join(TROPHY_COMPETITIONS.map((c) => sql`${c}`), sql`, `)})
   GROUP BY player_id)`;
 
-/** TM's players.csv international_caps is sometimes club appearances or a merged-id artefact. */
+/** TM's players.csv international_caps is sometimes club appearances or a merged-id artefact.
+ *  Values in 1–29 are also often World Cup / tournament scraps (Lampard stored as 10, Beckham as 9)
+ *  rather than career caps — games that use this metric need a real career total, so we zero those. */
 export const INTL_CAPS_SANITY_MAX = 280;
+/** Minimum career caps we'll trust for scoring. Below this → treat as missing (0). */
+export const INTL_CAPS_TRUST_MIN = 30;
 
-/** International caps from player_extra_stats (Wikipedia + TM), with out-of-range values zeroed. */
+/** International caps from player_extra_stats (Wikipedia + TM), with out-of-range / tiny values zeroed. */
 export const intlCapsSub: SQL = sql`(SELECT player_id,
-  CASE WHEN intl_caps BETWEEN 1 AND ${INTL_CAPS_SANITY_MAX} THEN intl_caps ELSE 0 END::int AS value
+  CASE WHEN intl_caps BETWEEN ${INTL_CAPS_TRUST_MIN} AND ${INTL_CAPS_SANITY_MAX} THEN intl_caps ELSE 0 END::int AS value
   FROM player_extra_stats)`;

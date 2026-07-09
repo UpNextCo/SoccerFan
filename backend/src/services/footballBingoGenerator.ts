@@ -275,7 +275,8 @@ async function loadPool(): Promise<BingoPlayer[]> {
   for (const e of extraRows) {
     const s = statsById.get(e.player_id);
     if (!s) continue;
-    s.intl_caps = Math.max(s.intl_caps, e.intl_caps);
+    // Ignore tiny / tournament-scrap caps (<30) — same trust floor as intlCapsSub.
+    if (e.intl_caps >= 30) s.intl_caps = Math.max(s.intl_caps, e.intl_caps);
     s.intl_goals = Math.max(s.intl_goals, e.intl_goals);
   }
 

@@ -48,7 +48,7 @@ export async function buildHigherLower(ctx: LMSBuildContext): Promise<LMSBuilder
         COALESCE(SUM(s.goals)       FILTER (WHERE s.league_id = 2), 0)::int AS cl_goals,
         COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2), 0)::int AS cl_apps,
         COALESCE(p.peak_market_value_eur, 0)::bigint AS peak_value,
-        COALESCE(es.intl_caps, 0)::int AS intl_caps
+        CASE WHEN COALESCE(es.intl_caps, 0) BETWEEN 30 AND 280 THEN es.intl_caps ELSE 0 END::int AS intl_caps
       FROM players p
       LEFT JOIN player_stats s ON s.player_id = p.id
       LEFT JOIN player_extra_stats es ON es.player_id = p.id

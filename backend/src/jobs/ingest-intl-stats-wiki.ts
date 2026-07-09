@@ -226,17 +226,31 @@ async function main() {
 
   await db.execute(sql`ALTER TABLE player_extra_stats ADD COLUMN IF NOT EXISTS intl_goals integer NOT NULL DEFAULT 0`);
 
+  // Only trust career-scale caps (≥30). Tiny figures are almost always parse/match noise
+  // (or World Cup scraps) and must not overwrite a clean 0 via GREATEST.
+  const CAPS_TRUST_MIN = 30;
   let written = 0;
+  let skippedTinyCaps = 0;
   for (const u of updates) {
+    const caps = u.caps >= CAPS_TRUST_MIN ? u.caps : 0;
+    if (u.caps > 0 && u.caps < CAPS_TRUST_MIN) skippedTinyCaps += 1;
+    if (caps === 0 && u.goals === 0) continue;
     await db.execute(sql`
       INSERT INTO player_extra_stats (player_id, intl_goals, intl_caps)
-      VALUES (${u.id}::uuid, ${u.goals}, ${u.caps})
+      VALUES (${u.id}::uuid, ${u.goals}, ${caps})
       ON CONFLICT (player_id) DO UPDATE SET
         intl_goals = GREATEST(player_extra_stats.intl_goals, EXCLUDED.intl_goals),
-        intl_caps = GREATEST(player_extra_stats.intl_caps, EXCLUDED.intl_caps),
+        intl_caps = CASE
+          WHEN EXCLUDED.intl_caps >= ${CAPS_TRUST_MIN}
+            THEN GREATEST(player_extra_stats.intl_caps, EXCLUDED.intl_caps)
+          ELSE player_extra_stats.intl_caps
+        END,
         updated_at = now()
     `);
     written += 1;
+  }
+  if (skippedTinyCaps > 0) {
+    console.log(`Skipped ${skippedTinyCaps} rows with tiny caps (<${CAPS_TRUST_MIN}) — not trusted as career totals`);
   }
   console.log(`\nWrote ${written} player rows into player_extra_stats (intl_goals + intl_caps, merged by max).`);
   process.exit(0);

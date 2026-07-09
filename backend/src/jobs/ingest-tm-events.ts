@@ -17,7 +17,7 @@ import { readFileSync, createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { INTL_CAPS_SANITY_MAX } from '../services/statMetrics.js';
+import { INTL_CAPS_SANITY_MAX, INTL_CAPS_TRUST_MIN } from '../services/statMetrics.js';
 
 const DIR = process.argv[2] ?? process.env.TM_DIR ?? 'transferdata';
 const YEAR_MS = 365.25 * 86_400_000;
@@ -191,10 +191,12 @@ async function main() {
   const agg = new Map<string, Agg>();
   const get = (ourId: string): Agg => { let a = agg.get(ourId); if (!a) { a = blank(); agg.set(ourId, a); } return a; };
 
-  // Caps from players.csv — reject garbage (TM sometimes stores club apps or merged totals here).
+  // Caps from players.csv — reject garbage:
+  //  - > INTL_CAPS_SANITY_MAX: club apps / merged-id artefacts
+  //  - < INTL_CAPS_TRUST_MIN: World Cup / tournament scraps (Lampard=10, Beckham=9)
   for (const [tmId, t] of tmById) {
     const o = tmToOur.get(tmId);
-    if (o && t.caps > 0 && t.caps <= INTL_CAPS_SANITY_MAX) get(o).intlCaps = t.caps;
+    if (o && t.caps >= INTL_CAPS_TRUST_MIN && t.caps <= INTL_CAPS_SANITY_MAX) get(o).intlCaps = t.caps;
   }
 
   // ---- Stream appearances: debut, first goal, goals-before-21, hat-tricks ----
