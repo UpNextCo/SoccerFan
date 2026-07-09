@@ -91,6 +91,12 @@ struct HomeView: View {
         }
         .task {
             await reloadIfNeeded(force: true, context: modelContext)
+            #if DEBUG
+            if AppConfig.previewDailyCompleteCelebration {
+                try? await Task.sleep(for: .milliseconds(500))
+                presentCelebrationPreview()
+            }
+            #endif
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
@@ -199,6 +205,20 @@ struct HomeView: View {
             streak: streak
         )
     }
+
+    #if DEBUG
+    /// Skips the all-7 / once-per-day gates so the celebration can be previewed on launch.
+    private func presentCelebrationPreview() {
+        guard celebrationPayload == nil, !isPlayingGame, presentedMode == nil else { return }
+        let todayXp = max(auth.user?.todayXp ?? 0, 1840)
+        let streak = max(auth.user?.streak ?? 0, 4)
+        celebrationPayload = DailyCompleteCelebrationPayload(
+            date: viewModel.dailyBundle?.date ?? DailyDate.localToday(),
+            todayXp: todayXp,
+            streak: streak
+        )
+    }
+    #endif
 }
 
 struct HomeHeaderView: View {
