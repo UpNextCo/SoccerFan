@@ -311,6 +311,7 @@
 				EC63ACE647181C83F3D6CFE3 /* banner3.jpg */,
 				6C7A020B191EC97B4465D831 /* banner4.jpg */,
 				3F9338EE6BEC06EBB52F7C4B /* GameTiles */,
+				B7C8D9E0F1A203142536B7C9 /* WinPics */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -481,6 +482,7 @@
 			files = (
 				32B093D09D8FBEAC3648B7DB /* Assets.xcassets in Resources */,
 				25BC41EC32677FC16436E271 /* GameTiles in Resources */,
+				B7C8D9E0F1A203142536B7C8 /* WinPics in Resources */,
 				1DE6B38A67939B16E33B77F5 /* PhIcons.xcassets in Resources */,
 				09984436B31A312F4DE55728 /* banner3.jpg in Resources */,
 				3DCF4DF8ED3E77A7617D6E76 /* banner4.jpg in Resources */,

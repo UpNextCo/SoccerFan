@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Once-per-day gate for the "all 7 complete" homepage celebration.
 enum DailyCompleteCelebration {
@@ -8,6 +9,38 @@ enum DailyCompleteCelebration {
 
     static func markShown(for date: String) {
         UserDefaults.standard.set(date, forKey: UserDefaultsKeys.dailyCompleteCelebratedDate)
+    }
+
+    /// Drop `winN.png` into `Resources/WinPics/` — folder reference, same pattern as GameTiles.
+    static let winPicNames = (1...11).map { "win\($0)" }
+
+    static func randomWinImage() -> UIImage? {
+        let shuffled = winPicNames.shuffled()
+        for name in shuffled {
+            if let image = loadWinImage(named: name) { return image }
+        }
+        return nil
+    }
+
+    private static func loadWinImage(named name: String) -> UIImage? {
+        let extensions = ["png", "PNG", "jpg", "jpeg"]
+        for ext in extensions {
+            if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "WinPics"),
+               let image = UIImage(contentsOfFile: url.path) {
+                return image
+            }
+            if let path = Bundle.main.path(forResource: name, ofType: ext, inDirectory: "WinPics"),
+               let image = UIImage(contentsOfFile: path) {
+                return image
+            }
+        }
+        if let resourcePath = Bundle.main.resourcePath {
+            for ext in extensions {
+                let path = (resourcePath as NSString).appendingPathComponent("WinPics/\(name).\(ext)")
+                if let image = UIImage(contentsOfFile: path) { return image }
+            }
+        }
+        return nil
     }
 }
 
@@ -34,25 +67,18 @@ struct DailyCompleteCelebrationView: View {
     @State private var streakPulse: CGFloat = 1
     @State private var streakRevealed = false
     @State private var ctaRevealed = false
+    @State private var winImage: UIImage? = DailyCompleteCelebration.randomWinImage()
 
     var body: some View {
         ZStack {
             BKTheme.background.ignoresSafeArea()
 
-            // Soft green glow behind the hero numbers
-            RadialGradient(
-                colors: [BKTheme.accent.opacity(0.18), .clear],
-                center: .center,
-                startRadius: 20,
-                endRadius: 280
-            )
-            .offset(y: -40)
-            .allowsHitTesting(false)
+            winHeroBackground
 
             VStack(spacing: 0) {
-                Spacer(minLength: 48)
+                Spacer(minLength: 0)
 
-                VStack(spacing: 28) {
+                VStack(spacing: 20) {
                     headerBlock
                         .opacity(showChrome ? 1 : 0)
                         .offset(y: showChrome ? 0 : 16)
@@ -67,13 +93,11 @@ struct DailyCompleteCelebrationView: View {
                         .scaleEffect(streakRevealed ? 1 : 0.92)
                 }
                 .padding(.horizontal, 28)
+                .padding(.bottom, 16)
 
-                Spacer(minLength: 40)
-
-                if ctaRevealed {
-                    GameResultExitBar(title: "NICE", action: onDismiss)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                GameResultExitBar(title: "CONTINUE", action: onDismiss)
+                    .opacity(ctaRevealed ? 1 : 0)
+                    .allowsHitTesting(ctaRevealed)
             }
 
             FootballConfettiView(burstToken: confettiToken)
@@ -82,11 +106,67 @@ struct DailyCompleteCelebrationView: View {
         .task { await runSequence() }
     }
 
+    private var winHeroBackground: some View {
+        GeometryReader { geo in
+            let topPad = geo.safeAreaInsets.top + 88
+            Group {
+                if let winImage {
+                    Image(uiImage: winImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: geo.size.width * 0.8)
+                        .opacity(0.78)
+                        // Short, strong dissolve only at the bottom edge — image stays crisp above.
+                        .mask(
+                            VStack(spacing: 0) {
+                                Color.white
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .white, location: 0),
+                                        .init(color: .white.opacity(0.3), location: 0.4),
+                                        .init(color: .clear, location: 1),
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .frame(height: 64)
+                            }
+                        )
+                        .overlay(alignment: .bottom) {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0),
+                                    .init(color: BKTheme.background.opacity(0.5), location: 0.35),
+                                    .init(color: BKTheme.background, location: 1),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .frame(height: 72)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, topPad)
+                } else {
+                    RadialGradient(
+                        colors: [BKTheme.accent.opacity(0.18), .clear],
+                        center: .top,
+                        startRadius: 20,
+                        endRadius: 280
+                    )
+                    .padding(.top, topPad)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
     private var headerBlock: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Ph.checkCircle.fill
                 .color(BKTheme.accent)
-                .frame(width: 56, height: 56)
+                .frame(width: 48, height: 48)
 
             Text("DAILY COMPLETE")
                 .font(BKFont.title(28))
@@ -100,60 +180,23 @@ struct DailyCompleteCelebrationView: View {
     }
 
     private var xpBlock: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Ph.lightning.fill
-                    .color(BKTheme.accent)
-                    .frame(width: 28, height: 28)
+        HStack(alignment: .center, spacing: 16) {
+            Ph.lightning.fill
+                .color(BKTheme.accent)
+                .frame(width: 40, height: 40)
 
+            VStack(alignment: .center, spacing: 4) {
                 Text("")
                     .modifier(CelebrationCountingNumber(value: displayedXp))
-                    .font(BKFont.title(56))
+                    .font(BKFont.title(44))
                     .foregroundStyle(BKTheme.accent)
                     .monospacedDigit()
                     .scaleEffect(xpPulse)
-            }
 
-            Text("XP TODAY")
-                .font(BKFont.caption(12))
-                .tracking(1.4)
-                .foregroundStyle(BKTheme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 22)
-        .padding(.horizontal, 20)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(BKTheme.accent.opacity(0.22), lineWidth: 1)
-        )
-    }
-
-    private var streakBlock: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Ph.fire.fill
-                    .color(BKTheme.streak)
-                    .frame(width: 26, height: 26)
-
-                Text("")
-                    .modifier(CelebrationCountingNumber(value: displayedStreak))
-                    .font(BKFont.title(48))
-                    .foregroundStyle(BKTheme.streak)
-                    .monospacedDigit()
-                    .scaleEffect(streakPulse)
-            }
-
-            Text("DAY STREAK")
-                .font(BKFont.caption(12))
-                .tracking(1.4)
-                .foregroundStyle(BKTheme.textMuted)
-
-            if payload.streak > payload.streakFrom {
-                Text("+1")
-                    .font(BKFont.headline(14))
-                    .foregroundStyle(BKTheme.streak)
+                Text("XP TODAY")
+                    .font(BKFont.caption(12))
+                    .tracking(1.4)
+                    .foregroundStyle(BKTheme.textMuted)
             }
         }
         .frame(maxWidth: .infinity)
@@ -161,10 +204,33 @@ struct DailyCompleteCelebrationView: View {
         .padding(.horizontal, 20)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(BKTheme.streak.opacity(0.28), lineWidth: 1)
-        )
+    }
+
+    private var streakBlock: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Ph.fire.fill
+                .color(BKTheme.streak)
+                .frame(width: 40, height: 40)
+
+            VStack(alignment: .center, spacing: 4) {
+                Text("")
+                    .modifier(CelebrationCountingNumber(value: displayedStreak))
+                    .font(BKFont.title(44))
+                    .foregroundStyle(BKTheme.streak)
+                    .monospacedDigit()
+                    .scaleEffect(streakPulse)
+
+                Text("DAY STREAK")
+                    .font(BKFont.caption(12))
+                    .tracking(1.4)
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .padding(.horizontal, 20)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     @MainActor
@@ -215,7 +281,6 @@ struct DailyCompleteCelebrationView: View {
                 streakPulse = 1
             }
             HapticManager.success()
-            confettiToken += 1
         }
 
         // Beat 4 — CTA
