@@ -8,6 +8,7 @@ import {
   dailyLeaderboard,
   myCohortStandings,
   overallLeaderboard,
+  teamFans,
   teamLeaderboard,
   weeklyLeaderboard,
   weekStartFor,
@@ -50,6 +51,19 @@ leaguesRouter.get('/teams', requireAuth, async (_req, res) => {
     sendSuccess(res, { standings: await teamLeaderboard() });
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load team league', 500);
+  }
+});
+
+leaguesRouter.get('/teams/:teamId', requireAuth, async (req, res) => {
+  const teamId = Number(req.params.teamId);
+  if (!Number.isInteger(teamId) || teamId <= 0) {
+    sendError(res, 'Invalid team id', 400, 'VALIDATION_ERROR');
+    return;
+  }
+  try {
+    sendSuccess(res, { teamId, standings: await teamFans(teamId) });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to load team fans', 500);
   }
 });
 

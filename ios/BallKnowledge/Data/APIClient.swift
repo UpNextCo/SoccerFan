@@ -374,6 +374,10 @@ actor APIClient {
         try await request("leagues/teams")
     }
 
+    func leagueTeamFans(teamId: Int) async throws -> TeamFansDTO {
+        try await request("leagues/teams/\(teamId)")
+    }
+
     func searchTeams(query: String) async throws -> [TeamSearchResultDTO] {
         try await request("teams/search", queryItems: [URLQueryItem(name: "q", value: query)])
     }

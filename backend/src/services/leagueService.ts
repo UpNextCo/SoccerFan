@@ -177,6 +177,27 @@ export async function teamLeaderboard(_weekStart?: string, limit = 50): Promise<
   });
 }
 
+/** Fans of a club, ranked by all-time XP. */
+export async function teamFans(teamId: number, limit = 100): Promise<PlayerStanding[]> {
+  const rows = (await db.execute(sql`
+    SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
+           (u.avatar_jpeg IS NOT NULL) AS has_avatar,
+           COALESCE(p.xp, 0)::int AS xp
+    FROM users u
+    LEFT JOIN user_progress p ON p.user_id = u.id
+    WHERE u.favorite_team_id = ${teamId}
+    ORDER BY xp DESC, u.display_name ASC
+    LIMIT ${limit}
+  `)) as unknown as Array<{
+    user_id: string;
+    display_name: string;
+    favorite_team_id: number | null;
+    has_avatar: boolean;
+    xp: number;
+  }>;
+  return rankRows(rows);
+}
+
 /** Assign a user to a weekly cohort with room (creating one if needed). Idempotent. */
 export async function ensureWeeklyMembership(userId: string, weekStart: string): Promise<string> {
   const existing = await db

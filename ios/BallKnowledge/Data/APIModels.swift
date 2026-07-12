@@ -73,6 +73,11 @@ struct TeamStandingsDTO: Codable {
     let standings: [TeamStandingDTO]
 }
 
+struct TeamFansDTO: Codable {
+    let teamId: Int
+    let standings: [PlayerStandingDTO]
+}
+
 struct AuthAppleRequestDTO: Encodable {
     let identityToken: String
     let displayName: String?

@@ -25,8 +25,8 @@ struct OnboardingContainerView: View {
                 )
                 .tag(1)
                 ValuePropPage(
-                    title: "9 game modes",
-                    subtitle: "Wordle, Bingo, Grid, Career Path and more — all football, all interactive.",
+                    title: "7 daily games",
+                    subtitle: "Bingo, Draft XI, Club Chain, Last Man Standing and more — fresh every day.",
                     icon: {
                         Ph.gameController.fill
                             .color(BKTheme.accent)
@@ -502,12 +502,13 @@ struct ValuePropPage<Preview: View, Icon: View>: View {
 struct DailySharePreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Ball Knowledge — Jun 16")
+            Text("Ball Knowledge — Daily")
                 .font(BKFont.caption())
                 .foregroundStyle(BKTheme.textSecondary)
-            Text("🟩🟩🟥🟩🟨🟩🟩")
-                .font(.title2)
-            Text("4/8  ·  🔥 Streak: 12")
+            Text("7/7 games · 🔥 Streak: 12")
+                .font(BKFont.headline(16))
+                .foregroundStyle(BKTheme.textPrimary)
+            Text("2,840 XP today")
                 .font(BKFont.caption())
                 .foregroundStyle(BKTheme.accent)
         }
@@ -519,11 +520,8 @@ struct DailySharePreview: View {
 }
 
 struct GameModesPreview: View {
-    private let tiles = [
-        "guess_who", "football_bingo", "draft_master",
-        "blind_rank", "one_more", "football_golf",
-        "world_cup_xi", "target_man", "football_tower",
-    ]
+    /// Same order as the homepage daily list.
+    private let tiles = DailyPlayOrder.playableModes.map(\.rawValue)
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 

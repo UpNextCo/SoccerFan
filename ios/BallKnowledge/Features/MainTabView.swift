@@ -162,7 +162,12 @@ struct LeaguesTabView: View {
             } else {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 8) {
-                        ForEach(viewModel.teams) { TeamStandingRow(team: $0) }
+                        ForEach(viewModel.teams) { team in
+                            ExpandableTeamStandingRow(
+                                team: team,
+                                currentUserId: auth.user?.id
+                            )
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, BKTabBar.scrollClearance)
@@ -277,8 +282,80 @@ struct PlayerStandingRow: View {
     }
 }
 
+struct ExpandableTeamStandingRow: View {
+    let team: TeamStandingDTO
+    var currentUserId: String?
+
+    @State private var isExpanded = false
+    @State private var fans: [PlayerStandingDTO] = []
+    @State private var isLoadingFans = false
+    @State private var didLoadFans = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    isExpanded.toggle()
+                }
+                if isExpanded, !didLoadFans {
+                    Task { await loadFans() }
+                }
+            } label: {
+                TeamStandingRow(team: team, showsChevron: true, isExpanded: isExpanded)
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(spacing: 6) {
+                    if isLoadingFans && fans.isEmpty {
+                        ProgressView()
+                            .tint(BKTheme.accent)
+                            .padding(.vertical, 12)
+                    } else if fans.isEmpty {
+                        Text("No fans yet")
+                            .font(BKFont.caption(11))
+                            .foregroundStyle(BKTheme.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                    } else {
+                        ForEach(fans) { player in
+                            TeamFanRow(
+                                player: player,
+                                isCurrentUser: player.userId == currentUserId
+                            )
+                        }
+                    }
+                }
+                .padding(.top, 6)
+                .padding(.bottom, 4)
+                .padding(.leading, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(6)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func loadFans() async {
+        isLoadingFans = true
+        defer { isLoadingFans = false }
+        do {
+            let result = try await APIClient.shared.leagueTeamFans(teamId: team.teamId)
+            fans = result.standings
+            didLoadFans = true
+        } catch {
+            fans = []
+            didLoadFans = false
+        }
+    }
+}
+
 struct TeamStandingRow: View {
     let team: TeamStandingDTO
+    var showsChevron = false
+    var isExpanded = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -319,11 +396,75 @@ struct TeamStandingRow: View {
                     .font(BKFont.caption(9))
                     .foregroundStyle(BKTheme.textMuted)
             }
+
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(BKTheme.textMuted)
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .contentShape(Rectangle())
+    }
+}
+
+private struct TeamFanRow: View {
+    let player: PlayerStandingDTO
+    var isCurrentUser = false
+
+    private var displayName: String {
+        let base = isCurrentUser ? (LocalProfile.nameOverride ?? player.displayName) : player.displayName
+        return isCurrentUser ? "\(base) (You)" : base
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("\(player.rank)")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(BKTheme.textMuted)
+                .frame(width: 22, alignment: .center)
+
+            Group {
+                if isCurrentUser, let image = LocalProfile.loadAvatar() {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    PlayerAvatar(urlString: player.avatarUrl, size: 28) {
+                        BKTheme.cardElevated
+                            .overlay {
+                                Ph.userCircle.fill
+                                    .color(BKTheme.accent)
+                                    .frame(width: 16, height: 16)
+                            }
+                    }
+                }
+            }
+            .frame(width: 28, height: 28)
+            .clipShape(Circle())
+
+            Text(displayName)
+                .font(BKFont.headline(13))
+                .foregroundStyle(BKTheme.textPrimary)
+                .lineLimit(1)
+
+            Spacer(minLength: 6)
+
+            HStack(spacing: 3) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(BKTheme.accent)
+                Text("\(player.xp)")
+                    .font(BKFont.headline(13))
+                    .foregroundStyle(BKTheme.textPrimary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(isCurrentUser ? BKTheme.cardElevated : BKTheme.background.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
