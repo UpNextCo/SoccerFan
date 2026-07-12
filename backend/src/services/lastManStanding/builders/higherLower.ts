@@ -19,11 +19,13 @@ const COMPARISONS = [
   { id: 'peak_value', prompt: 'Higher peak transfer value?', col: 'peak_value', min: 30_000_000 },
 ] as const;
 
-/** One metric per daily puzzle; slot picks from its pool only. */
+/** One metric per daily puzzle; slot picks from its pool only. Avoid shared-only pools. */
 const SLOT_METRICS: Record<number, readonly string[]> = {
   1: ['pl_goals', 'cl_goals'],
   6: ['cl_apps', 'peak_value'],
-  8: ['intl_caps', 'cl_apps'],
+  // Slot 8 used to share cl_apps with slot 6 — when 6 took it, only intl_caps remained and
+  // composition often failed. Give non-overlapping fallbacks.
+  8: ['intl_caps', 'pl_goals', 'cl_goals', 'peak_value'],
 };
 
 export async function buildHigherLower(ctx: LMSBuildContext): Promise<LMSBuilderResult | null> {
@@ -35,7 +37,20 @@ export async function buildHigherLower(ctx: LMSBuildContext): Promise<LMSBuilder
   );
   if (available.length === 0) return null;
 
-  const metric = available[seededIndex(`${ctx.seed}:metric`, available.length)]!;
+  // Rotate which metric we try first, then walk the rest so a sparse metric can't kill the slot.
+  const startMetric = seededIndex(`${ctx.seed}:metric`, available.length);
+  for (let mi = 0; mi < available.length; mi += 1) {
+    const metric = available[(startMetric + mi) % available.length]!;
+    const built = await buildHigherLowerForMetric(ctx, metric);
+    if (built) return built;
+  }
+  return null;
+}
+
+async function buildHigherLowerForMetric(
+  ctx: LMSBuildContext,
+  metric: (typeof COMPARISONS)[number]
+): Promise<LMSBuilderResult | null> {
   const questionId = `${ctx.date}-lms-q${ctx.slot}`;
   const repeatKey = metricUsedKey(metric.id);
   const minGap = ctx.difficulty.hlMinGap;

@@ -26,7 +26,7 @@ enum AppConfig {
     /// DEBUG: auto-present the all-7 celebration on Home appear so you can iterate on it
     /// without clearing the daily set. Flip to `false` when done previewing.
     #if DEBUG
-    static let previewDailyCompleteCelebration = true
+    static let previewDailyCompleteCelebration = false
     #endif
 }
 

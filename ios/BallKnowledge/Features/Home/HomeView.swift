@@ -972,9 +972,32 @@ struct DailyGameHost: View {
                     )
                 } else {
                     DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                        .onAppear { Self.logLMSUnavailable(bundle: dailyBundle) }
                 }
             }
         }
+    }
+
+    private static func logLMSUnavailable(bundle: DailyBundleDTO?) {
+        #if DEBUG
+        guard let bundle else {
+            print("[LMS] unavailable — dailyBundle is nil")
+            return
+        }
+        let modeIds = bundle.games.map(\.modeId).joined(separator: ", ")
+        print("[LMS] unavailable — bundle date=\(bundle.date) games=[\(modeIds)]")
+        if let puzzle = bundle.lastManStandingPuzzle {
+            let mapped = puzzle.questions.filter { !$0.options.isEmpty }.count
+            print("[LMS] puzzle present puzzleId=\(puzzle.puzzleId) questions=\(puzzle.questions.count) mappable=\(mapped) (need \(LMSGameState.totalQuestions))")
+            for q in puzzle.questions {
+                print("[LMS]   q slot=\(q.slot) type=\(q.type) options=\(q.options.count) id=\(q.id) prompt=\(q.prompt.prefix(60))")
+            }
+        } else if bundle.games.contains(where: { GameModeCatalog.normalizedModeId($0.modeId) == GameModeID.lastManStanding.rawValue }) {
+            print("[LMS] game row present but lastManStandingPuzzle accessor returned nil (decode/case mismatch)")
+        } else {
+            print("[LMS] no last_man_standing game in bundle — missing from server OR decode dropped it (see [LMS decode] logs)")
+        }
+        #endif
     }
 }
 

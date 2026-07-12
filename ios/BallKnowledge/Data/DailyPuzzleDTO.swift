@@ -677,8 +677,23 @@ struct DailyBundleDTO: Codable, Equatable {
 private struct LossyDailyGame: Decodable {
     let game: DailyGameDTO?
     init(from decoder: Decoder) throws {
-        game = try? DailyGameDTO(from: decoder)
+        do {
+            game = try DailyGameDTO(from: decoder)
+        } catch {
+            game = nil
+            #if DEBUG
+            // Peek at modeId so we know which game silently vanished.
+            var modeHint = "?"
+            if let keyed = try? decoder.container(keyedBy: ModeIdKey.self),
+               let modeId = try? keyed.decode(String.self, forKey: .modeId) {
+                modeHint = modeId
+            }
+            print("[LMS decode] dropped game modeId=\(modeHint): \(error)")
+            #endif
+        }
     }
+
+    private enum ModeIdKey: String, CodingKey { case modeId }
 }
 
 extension DailyBundleDTO {
