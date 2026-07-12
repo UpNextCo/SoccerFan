@@ -69,7 +69,7 @@ struct PlayerStandingsDTO: Codable {
 }
 
 struct TeamStandingsDTO: Codable {
-    let weekStart: String
+    let weekStart: String?
     let standings: [TeamStandingDTO]
 }
 

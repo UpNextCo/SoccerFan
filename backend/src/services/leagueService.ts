@@ -4,10 +4,6 @@ import { leagueCohorts, leagueMemberships, xpLedger } from '../db/schema.js';
 import { avatarPublicUrl } from '../utils/avatarUrl.js';
 
 const COHORT_SIZE = 30;
-/** Min fans a club needs before it appears on the team league. */
-const TEAM_MIN_MEMBERS = 3;
-/** Bayesian pseudo-count: how strongly small clubs are pulled toward the global average. */
-const TEAM_SHRINKAGE = 8;
 
 export interface PlayerStanding {
   userId: string;
@@ -24,6 +20,7 @@ export interface TeamStanding {
   logoUrl: string | null;
   members: number;
   totalXp: number;
+  /** Same as totalXp — kept for older clients that read `score`. */
   score: number;
   rank: number;
 }
@@ -141,31 +138,22 @@ export async function overallLeaderboard(limit = 50): Promise<PlayerStanding[]> 
 }
 
 /**
- * Team league ranked by Bayesian-shrunk XP-per-fan, so big fanbases don't win on
- * volume and tiny ones don't spike from a single superfan.
+ * Team league: every club with ≥1 fan, ranked by combined all-time XP of supporters.
  */
-export async function teamLeaderboard(weekStart: string, limit = 50): Promise<TeamStanding[]> {
-  const weekEnd = weekEndFor(weekStart);
+export async function teamLeaderboard(_weekStart?: string, limit = 50): Promise<TeamStanding[]> {
   const rows = (await db.execute(sql`
-    WITH team_week AS (
-      SELECT u.favorite_team_id AS team_id,
-             COUNT(DISTINCT x.user_id)::int AS members,
-             SUM(x.xp_earned)::int AS total_xp
-      FROM users u
-      JOIN xp_ledger x ON x.user_id = u.id AND x.date BETWEEN ${weekStart} AND ${weekEnd}
-      WHERE u.favorite_team_id IS NOT NULL
-      GROUP BY u.favorite_team_id
-    ),
-    global AS (
-      SELECT COALESCE(AVG(total_xp::numeric / NULLIF(members, 0)), 0) AS global_avg FROM team_week
-    )
-    SELECT tw.team_id, t.name, t.logo_url, tw.members, tw.total_xp,
-           ROUND((tw.total_xp + ${TEAM_SHRINKAGE} * g.global_avg) / (tw.members + ${TEAM_SHRINKAGE}), 1)::float AS score
-    FROM team_week tw
-    CROSS JOIN global g
-    JOIN teams t ON t.id = tw.team_id
-    WHERE tw.members >= ${TEAM_MIN_MEMBERS}
-    ORDER BY score DESC, tw.members DESC
+    SELECT u.favorite_team_id AS team_id,
+           t.name,
+           t.logo_url,
+           COUNT(u.id)::int AS members,
+           COALESCE(SUM(p.xp), 0)::int AS total_xp
+    FROM users u
+    JOIN teams t ON t.id = u.favorite_team_id
+    LEFT JOIN user_progress p ON p.user_id = u.id
+    WHERE u.favorite_team_id IS NOT NULL
+    GROUP BY u.favorite_team_id, t.name, t.logo_url
+    HAVING COUNT(u.id) >= 1
+    ORDER BY total_xp DESC, members DESC, t.name ASC
     LIMIT ${limit}
   `)) as unknown as Array<{
     team_id: number;
@@ -173,18 +161,20 @@ export async function teamLeaderboard(weekStart: string, limit = 50): Promise<Te
     logo_url: string | null;
     members: number;
     total_xp: number;
-    score: number;
   }>;
 
-  return rows.map((row, index) => ({
-    teamId: row.team_id,
-    name: row.name,
-    logoUrl: row.logo_url,
-    members: Number(row.members),
-    totalXp: Number(row.total_xp),
-    score: Number(row.score),
-    rank: index + 1,
-  }));
+  return rows.map((row, index) => {
+    const totalXp = Number(row.total_xp);
+    return {
+      teamId: row.team_id,
+      name: row.name,
+      logoUrl: row.logo_url,
+      members: Number(row.members),
+      totalXp,
+      score: totalXp,
+      rank: index + 1,
+    };
+  });
 }
 
 /** Assign a user to a weekly cohort with room (creating one if needed). Idempotent. */

@@ -47,8 +47,7 @@ leaguesRouter.get('/overall', requireAuth, async (_req, res) => {
 
 leaguesRouter.get('/teams', requireAuth, async (_req, res) => {
   try {
-    const weekStart = weekStartFor(todayUTC());
-    sendSuccess(res, { weekStart, standings: await teamLeaderboard(weekStart) });
+    sendSuccess(res, { standings: await teamLeaderboard() });
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load team league', 500);
   }

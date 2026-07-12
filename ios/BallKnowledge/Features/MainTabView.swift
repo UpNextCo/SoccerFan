@@ -79,9 +79,8 @@ struct MainTabView: View {
 }
 
 enum LeagueScope: String, CaseIterable, Identifiable {
-    case me = "My League"
-    case teams = "Teams"
     case overall = "Overall"
+    case teams = "Teams"
     var id: String { rawValue }
 }
 
@@ -99,18 +98,16 @@ final class LeaguesViewModel {
         defer { isLoading = false }
         do {
             switch scope {
-            case .me:
-                let result = try await APIClient.shared.leaguesMe()
-                players = result.standings
-                caption = "Top 5 promote · bottom 5 drop · resets Monday"
-            case .teams:
-                let result = try await APIClient.shared.leaguesTeams()
-                teams = result.standings
-                caption = "Ranked by average XP per fan this week"
             case .overall:
                 let result = try await APIClient.shared.leaguesOverall()
                 players = result.standings
+                teams = []
                 caption = "All-time XP leaders"
+            case .teams:
+                let result = try await APIClient.shared.leaguesTeams()
+                teams = result.standings
+                players = []
+                caption = "Clubs ranked by combined XP of their fans"
             }
             loadedScope = scope
         } catch {
@@ -124,10 +121,8 @@ final class LeaguesViewModel {
 
 struct LeaguesTabView: View {
     @Environment(AuthManager.self) private var auth
-    @State private var scope: LeagueScope = .me
+    @State private var scope: LeagueScope = .overall
     @State private var viewModel = LeaguesViewModel()
-
-    private var cohortSize: Int { viewModel.players.count }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -178,7 +173,7 @@ struct LeaguesTabView: View {
                 emptyState(
                     icon: "trophy.fill",
                     title: "No standings yet",
-                    message: "Play today's games to join this week's league and climb the table."
+                    message: "Play today's games to earn XP and climb the leaderboard."
                 )
             } else {
                 ScrollView(showsIndicators: false) {
@@ -186,8 +181,7 @@ struct LeaguesTabView: View {
                         ForEach(viewModel.players) { player in
                             PlayerStandingRow(
                                 player: player,
-                                isCurrentUser: player.userId == auth.user?.id,
-                                zone: scope == .me ? zone(for: player.rank) : .none
+                                isCurrentUser: player.userId == auth.user?.id
                             )
                         }
                     }
@@ -196,13 +190,6 @@ struct LeaguesTabView: View {
                 }
             }
         }
-    }
-
-    private func zone(for rank: Int) -> StandingZone {
-        guard cohortSize >= 12 else { return .none }
-        if rank <= 5 { return .promotion }
-        if rank > cohortSize - 5 { return .relegation }
-        return .none
     }
 
     private func emptyState(icon: String, title: String, message: String) -> some View {
@@ -225,28 +212,15 @@ struct LeaguesTabView: View {
     }
 }
 
-enum StandingZone {
-    case promotion, relegation, none
-}
-
 struct PlayerStandingRow: View {
     let player: PlayerStandingDTO
     var isCurrentUser = false
-    var zone: StandingZone = .none
-
-    private var zoneColor: Color {
-        switch zone {
-        case .promotion: return BKTheme.accent
-        case .relegation: return BKTheme.wrong
-        case .none: return BKTheme.textMuted
-        }
-    }
 
     var body: some View {
         HStack(spacing: 12) {
             Text("\(player.rank)")
                 .font(.system(size: 15, weight: .black, design: .rounded))
-                .foregroundStyle(zoneColor)
+                .foregroundStyle(player.rank <= 3 ? BKTheme.accent : BKTheme.textMuted)
                 .frame(width: 28, alignment: .center)
 
             avatarView
@@ -333,10 +307,15 @@ struct TeamStandingRow: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text("\(Int(team.score))")
-                    .font(BKFont.headline(15))
-                    .foregroundStyle(BKTheme.textPrimary)
-                Text("avg XP")
+                HStack(spacing: 4) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(BKTheme.accent)
+                    Text("\(team.totalXp)")
+                        .font(BKFont.headline(15))
+                        .foregroundStyle(BKTheme.textPrimary)
+                }
+                Text("total XP")
                     .font(BKFont.caption(9))
                     .foregroundStyle(BKTheme.textMuted)
             }

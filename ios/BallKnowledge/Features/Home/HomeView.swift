@@ -387,7 +387,7 @@ enum HomeActivity {
             icon: "chart.bar.fill",
             tint: .yellow,
             title: "Leagues are coming",
-            message: "Weekly Bronze, Silver and Gold leagues launch soon.",
+            message: "Climb the overall XP leaderboard — weekly leagues come later.",
             unread: false
         ))
 
