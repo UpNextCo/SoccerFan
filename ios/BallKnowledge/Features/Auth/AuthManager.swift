@@ -27,6 +27,7 @@ final class AuthManager {
             user = try await APIClient.shared.me()
             isAuthenticated = true
             isDevAccount = UserDefaults.standard.bool(forKey: UserDefaultsKeys.isDevAccount)
+            await ProfileSync.pushLocalToServer(auth: self)
         } catch {
             await APIClient.shared.clearToken()
             isAuthenticated = false
@@ -62,6 +63,10 @@ final class AuthManager {
         } catch {
             // Keep cached profile on transient errors
         }
+    }
+
+    func applyProfile(_ profile: UserProfileDTO) {
+        user = profile
     }
 
     func signOut() async {

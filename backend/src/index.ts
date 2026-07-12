@@ -3,7 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { authRouter } from './routes/auth.js';
+import { authRouter, serveAvatar } from './routes/auth.js';
 import { dailyRouter } from './routes/daily.js';
 import { leaguesRouter } from './routes/leagues.js';
 import { gamesRouter, playersRouter } from './routes/players.js';
@@ -21,6 +21,11 @@ app.use(express.json({ limit: '4mb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ success: true, data: { status: 'ok', timestamp: new Date().toISOString() } });
+});
+
+// Public profile photos — no auth so clients can load via AsyncImage.
+app.get('/avatars/:userId', (req, res) => {
+  void serveAvatar(req, res);
 });
 
 app.use('/auth', authRouter);

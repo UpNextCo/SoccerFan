@@ -286,12 +286,14 @@ struct PlayerStandingRow: View {
                 .resizable()
                 .scaledToFill()
         } else {
-            BKTheme.cardElevated
-                .overlay {
-                    Ph.userCircle.fill
-                        .color(BKTheme.accent)
-                        .frame(width: 22, height: 22)
-                }
+            PlayerAvatar(urlString: player.avatarUrl, size: 36) {
+                BKTheme.cardElevated
+                    .overlay {
+                        Ph.userCircle.fill
+                            .color(BKTheme.accent)
+                            .frame(width: 22, height: 22)
+                    }
+            }
         }
     }
 
@@ -348,8 +350,8 @@ struct TeamStandingRow: View {
 
 // MARK: - Local profile (client-side avatar + name override + prefs)
 
-/// Avatar image, display-name override and reminder preference are stored on-device
-/// (no backend endpoint exists yet for profile edits / avatar upload).
+/// Avatar image, display-name override and reminder preference are stored on-device for snappy UI,
+/// and synced to the server so leagues can show real names/photos to other players.
 enum LocalProfile {
     private static let nameKey = "profile.displayNameOverride"
     private static let remindersKey = "profile.dailyRemindersOn"
@@ -365,11 +367,18 @@ enum LocalProfile {
     }
 
     static func saveAvatar(_ data: Data) {
-        try? data.write(to: avatarURL, options: .atomic)
+        let jpeg = compressAvatar(data) ?? data
+        try? jpeg.write(to: avatarURL, options: .atomic)
     }
 
     static func removeAvatar() {
         try? FileManager.default.removeItem(at: avatarURL)
+    }
+
+    /// JPEG bytes ready to upload (resized / re-compressed).
+    static func avatarUploadData() -> Data? {
+        guard let data = try? Data(contentsOf: avatarURL) else { return nil }
+        return compressAvatar(data) ?? data
     }
 
     static var nameOverride: String? {
@@ -389,6 +398,67 @@ enum LocalProfile {
     static func reset() {
         removeAvatar()
         UserDefaults.standard.removeObject(forKey: nameKey)
+    }
+
+    /// Downscale to ≤256px and JPEG-compress for upload / local storage.
+    private static func compressAvatar(_ data: Data, maxSide: CGFloat = 256, quality: CGFloat = 0.72) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let longest = max(image.size.width, image.size.height)
+        let scale = longest > maxSide ? maxSide / longest : 1
+        let size = CGSize(width: max(1, image.size.width * scale), height: max(1, image.size.height * scale))
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let resized = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+        return resized.jpegData(compressionQuality: quality)
+    }
+}
+
+/// Pushes local name/avatar up to the server when the device has newer profile data.
+enum ProfileSync {
+    @MainActor
+    static func pushLocalToServer(auth: AuthManager) async {
+        guard auth.isAuthenticated else { return }
+
+        if let localName = LocalProfile.nameOverride,
+           !localName.isEmpty,
+           localName != auth.user?.displayName {
+            if let updated = try? await APIClient.shared.updateDisplayName(localName) {
+                auth.applyProfile(updated)
+            }
+        }
+
+        if let jpeg = LocalProfile.avatarUploadData(), auth.user?.avatarUrl == nil {
+            if let updated = try? await APIClient.shared.uploadAvatar(jpegData: jpeg) {
+                auth.applyProfile(updated)
+            }
+        }
+    }
+
+    @MainActor
+    static func saveName(_ name: String, auth: AuthManager) async {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        LocalProfile.nameOverride = trimmed
+        if let updated = try? await APIClient.shared.updateDisplayName(trimmed) {
+            auth.applyProfile(updated)
+        }
+    }
+
+    @MainActor
+    static func saveAvatarImage(_ image: UIImage, auth: AuthManager) async {
+        guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+        LocalProfile.saveAvatar(data)
+        if let jpeg = LocalProfile.avatarUploadData(),
+           let updated = try? await APIClient.shared.uploadAvatar(jpegData: jpeg) {
+            auth.applyProfile(updated)
+        }
+    }
+
+    @MainActor
+    static func removeAvatar(auth: AuthManager) async {
+        LocalProfile.removeAvatar()
+        if let updated = try? await APIClient.shared.clearAvatar() {
+            auth.applyProfile(updated)
+        }
     }
 }
 
@@ -468,8 +538,8 @@ struct ProfileTabView: View {
             Task {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
-                    LocalProfile.saveAvatar(data)
-                    avatarImage = image
+                    await ProfileSync.saveAvatarImage(image, auth: auth)
+                    avatarImage = LocalProfile.loadAvatar()
                 }
             }
         }
@@ -477,8 +547,10 @@ struct ProfileTabView: View {
             Button("Choose Photo") { showPhotoPicker = true }
             if avatarImage != nil {
                 Button("Remove Photo", role: .destructive) {
-                    LocalProfile.removeAvatar()
-                    avatarImage = nil
+                    Task {
+                        await ProfileSync.removeAvatar(auth: auth)
+                        avatarImage = nil
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -486,8 +558,7 @@ struct ProfileTabView: View {
         .alert("Edit name", isPresented: $showEditName) {
             TextField("Display name", text: $draftName)
             Button("Save") {
-                let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
-                LocalProfile.nameOverride = trimmed.isEmpty ? nil : trimmed
+                Task { await ProfileSync.saveName(draftName, auth: auth) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {

@@ -100,6 +100,25 @@ actor APIClient {
         return try await request("auth/me", queryItems: [URLQueryItem(name: "date", value: date)])
     }
 
+    func updateDisplayName(_ displayName: String) async throws -> UserProfileDTO {
+        struct Body: Encodable { let displayName: String }
+        return try await request("auth/me", method: "PATCH", body: Body(displayName: displayName))
+    }
+
+    func uploadAvatar(jpegData: Data) async throws -> UserProfileDTO {
+        struct Body: Encodable { let jpegBase64: String }
+        return try await request(
+            "auth/me/avatar",
+            method: "PUT",
+            body: Body(jpegBase64: jpegData.base64EncodedString())
+        )
+    }
+
+    func clearAvatar() async throws -> UserProfileDTO {
+        struct Body: Encodable { let clear: Bool }
+        return try await request("auth/me/avatar", method: "PUT", body: Body(clear: true))
+    }
+
     func deleteAccount() async throws {
         struct DeleteResponse: Decodable { let deleted: Bool }
         let _: DeleteResponse = try await request("auth/me", method: "DELETE")

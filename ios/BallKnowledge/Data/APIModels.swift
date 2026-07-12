@@ -41,6 +41,7 @@ struct PlayerStandingDTO: Codable, Identifiable {
     let favoriteTeamId: Int?
     let xp: Int
     let rank: Int
+    var avatarUrl: String?
     var id: String { userId }
 }
 

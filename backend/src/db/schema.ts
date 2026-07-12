@@ -10,13 +10,22 @@ import {
   index,
   uniqueIndex,
   numeric,
+  customType,
 } from 'drizzle-orm/pg-core';
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   appleSub: text('apple_sub').notNull().unique(),
   displayName: text('display_name').notNull().default('Player'),
   favoriteTeamId: integer('favorite_team_id'),
+  /** Compressed JPEG bytes for the user's profile photo (served via GET /avatars/:userId). */
+  avatarJpeg: bytea('avatar_jpeg'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { leagueCohorts, leagueMemberships, xpLedger } from '../db/schema.js';
+import { avatarPublicUrl } from '../utils/avatarUrl.js';
 
 const COHORT_SIZE = 30;
 /** Min fans a club needs before it appears on the team league. */
@@ -12,6 +13,7 @@ export interface PlayerStanding {
   userId: string;
   displayName: string;
   favoriteTeamId: number | null;
+  avatarUrl?: string;
   xp: number;
   rank: number;
 }
@@ -58,12 +60,19 @@ export async function recordXp(
 }
 
 function rankRows(
-  rows: Array<{ user_id: string; display_name: string; favorite_team_id: number | null; xp: number }>
+  rows: Array<{
+    user_id: string;
+    display_name: string;
+    favorite_team_id: number | null;
+    has_avatar: boolean | number | null;
+    xp: number;
+  }>
 ): PlayerStanding[] {
   return rows.map((row, index) => ({
     userId: row.user_id,
     displayName: row.display_name,
     favoriteTeamId: row.favorite_team_id,
+    avatarUrl: avatarPublicUrl(row.user_id, Boolean(row.has_avatar)),
     xp: Number(row.xp),
     rank: index + 1,
   }));
@@ -71,39 +80,63 @@ function rankRows(
 
 export async function dailyLeaderboard(date: string, limit = 50): Promise<PlayerStanding[]> {
   const rows = (await db.execute(sql`
-    SELECT u.id AS user_id, u.display_name, u.favorite_team_id, COALESCE(SUM(x.xp_earned), 0)::int AS xp
+    SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
+           (u.avatar_jpeg IS NOT NULL) AS has_avatar,
+           COALESCE(SUM(x.xp_earned), 0)::int AS xp
     FROM xp_ledger x
     JOIN users u ON u.id = x.user_id
     WHERE x.date = ${date}
-    GROUP BY u.id, u.display_name, u.favorite_team_id
+    GROUP BY u.id, u.display_name, u.favorite_team_id, u.avatar_jpeg
     ORDER BY xp DESC, u.display_name ASC
     LIMIT ${limit}
-  `)) as unknown as Array<{ user_id: string; display_name: string; favorite_team_id: number | null; xp: number }>;
+  `)) as unknown as Array<{
+    user_id: string;
+    display_name: string;
+    favorite_team_id: number | null;
+    has_avatar: boolean;
+    xp: number;
+  }>;
   return rankRows(rows);
 }
 
 export async function weeklyLeaderboard(weekStart: string, limit = 50): Promise<PlayerStanding[]> {
   const weekEnd = weekEndFor(weekStart);
   const rows = (await db.execute(sql`
-    SELECT u.id AS user_id, u.display_name, u.favorite_team_id, COALESCE(SUM(x.xp_earned), 0)::int AS xp
+    SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
+           (u.avatar_jpeg IS NOT NULL) AS has_avatar,
+           COALESCE(SUM(x.xp_earned), 0)::int AS xp
     FROM xp_ledger x
     JOIN users u ON u.id = x.user_id
     WHERE x.date BETWEEN ${weekStart} AND ${weekEnd}
-    GROUP BY u.id, u.display_name, u.favorite_team_id
+    GROUP BY u.id, u.display_name, u.favorite_team_id, u.avatar_jpeg
     ORDER BY xp DESC, u.display_name ASC
     LIMIT ${limit}
-  `)) as unknown as Array<{ user_id: string; display_name: string; favorite_team_id: number | null; xp: number }>;
+  `)) as unknown as Array<{
+    user_id: string;
+    display_name: string;
+    favorite_team_id: number | null;
+    has_avatar: boolean;
+    xp: number;
+  }>;
   return rankRows(rows);
 }
 
 export async function overallLeaderboard(limit = 50): Promise<PlayerStanding[]> {
   const rows = (await db.execute(sql`
-    SELECT u.id AS user_id, u.display_name, u.favorite_team_id, COALESCE(p.xp, 0)::int AS xp
+    SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
+           (u.avatar_jpeg IS NOT NULL) AS has_avatar,
+           COALESCE(p.xp, 0)::int AS xp
     FROM user_progress p
     JOIN users u ON u.id = p.user_id
     ORDER BY xp DESC, u.display_name ASC
     LIMIT ${limit}
-  `)) as unknown as Array<{ user_id: string; display_name: string; favorite_team_id: number | null; xp: number }>;
+  `)) as unknown as Array<{
+    user_id: string;
+    display_name: string;
+    favorite_team_id: number | null;
+    has_avatar: boolean;
+    xp: number;
+  }>;
   return rankRows(rows);
 }
 
@@ -202,14 +235,21 @@ export async function myCohortStandings(
 
   const rows = (await db.execute(sql`
     SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
+           (u.avatar_jpeg IS NOT NULL) AS has_avatar,
            COALESCE(SUM(x.xp_earned) FILTER (WHERE x.date BETWEEN ${weekStart} AND ${weekEnd}), 0)::int AS xp
     FROM league_memberships m
     JOIN users u ON u.id = m.user_id
     LEFT JOIN xp_ledger x ON x.user_id = u.id
     WHERE m.cohort_id = ${cohortId}
-    GROUP BY u.id, u.display_name, u.favorite_team_id
+    GROUP BY u.id, u.display_name, u.favorite_team_id, u.avatar_jpeg
     ORDER BY xp DESC, u.display_name ASC
-  `)) as unknown as Array<{ user_id: string; display_name: string; favorite_team_id: number | null; xp: number }>;
+  `)) as unknown as Array<{
+    user_id: string;
+    display_name: string;
+    favorite_team_id: number | null;
+    has_avatar: boolean;
+    xp: number;
+  }>;
 
   return { cohortId, standings: rankRows(rows) };
 }

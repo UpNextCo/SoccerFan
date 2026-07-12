@@ -322,8 +322,8 @@ struct ProfileSetupStep: View {
             Task {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
-                    LocalProfile.saveAvatar(data)
-                    avatarImage = image
+                    await ProfileSync.saveAvatarImage(image, auth: auth)
+                    avatarImage = LocalProfile.loadAvatar()
                 }
             }
         }
@@ -331,10 +331,12 @@ struct ProfileSetupStep: View {
 
     private func save() {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty, trimmed != auth.user?.displayName {
-            LocalProfile.nameOverride = trimmed
+        Task {
+            if !trimmed.isEmpty {
+                await ProfileSync.saveName(trimmed, auth: auth)
+            }
+            await MainActor.run { onContinue() }
         }
-        onContinue()
     }
 }
 
