@@ -140,6 +140,7 @@ export function OneMoreEditor({
                   kind="player"
                   valueLabel={o.name}
                   imageUrl={o.headshotUrl}
+                  nationality={o.nationality}
                   disabled={locked}
                   onPickPlayer={(hit) => pickPlayer(ri, o, hit)}
                 />

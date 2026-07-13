@@ -324,7 +324,15 @@ button.danger {
 }
 
 .entity-selected-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-weight: 600;
+}
+
+.entity-inline-flag {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .entity-search-wrap {
@@ -393,6 +401,15 @@ button.danger {
 
 .entity-thumb.placeholder {
   display: inline-block;
+}
+
+.entity-thumb.flag {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 0;
+  background: transparent;
+  font-size: 1.35rem;
+  line-height: 1;
 }
 
 .option-row .entity-picker {

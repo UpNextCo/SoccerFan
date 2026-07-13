@@ -363,6 +363,7 @@ export function LmsEditor({
                       kind="player"
                       valueLabel={o.label}
                       imageUrl={o.headshotUrl}
+                      nationality={o.nationality}
                       disabled={locked}
                       onPickPlayer={(hit) => pickPlayer(q, o, hit)}
                     />

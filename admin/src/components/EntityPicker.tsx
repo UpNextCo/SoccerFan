@@ -6,6 +6,7 @@ import {
   type AdminPlayerHit,
   type AdminTeamHit,
 } from '../api'
+import { nationalityFlag } from '../countryFlags'
 
 export type EntityKind = 'player' | 'team' | 'league' | 'nationality'
 
@@ -14,6 +15,7 @@ type Props = {
   label?: string
   valueLabel?: string
   imageUrl?: string | null
+  nationality?: string | null
   disabled?: boolean
   placeholder?: string
   onPickPlayer?: (player: AdminPlayerHit) => void | Promise<void>
@@ -42,7 +44,10 @@ function hitTitle(h: Hit): string {
 
 function hitSub(h: Hit): string {
   if (h.kind === 'player') {
-    return [h.item.club, h.item.nationality, h.item.position].filter(Boolean).join(' · ')
+    const nationality = h.item.nationality
+      ? `${nationalityFlag(h.item.nationality)} ${h.item.nationality}`
+      : null
+    return [h.item.club, nationality, h.item.position].filter(Boolean).join(' · ')
   }
   if (h.kind === 'team') {
     return [h.item.country, h.item.leagueId != null ? `league ${h.item.leagueId}` : null]
@@ -64,6 +69,7 @@ export function EntityPicker({
   label,
   valueLabel,
   imageUrl,
+  nationality,
   disabled,
   placeholder,
   onPickPlayer,
@@ -160,6 +166,8 @@ export function EntityPicker({
         : kind === 'league'
           ? 'Search league…'
           : 'Search nationality…')
+  const selectedFlag =
+    kind === 'nationality' && valueLabel ? nationalityFlag(valueLabel) : undefined
 
   return (
     <div className="entity-picker" ref={rootRef}>
@@ -168,10 +176,26 @@ export function EntityPicker({
         <div className="entity-selected">
           {imageUrl ? (
             <img key={imageUrl} src={imageUrl} alt="" className="entity-thumb" />
+          ) : selectedFlag ? (
+            <span className="entity-thumb flag" role="img" aria-label={`${valueLabel} flag`}>
+              {selectedFlag}
+            </span>
           ) : (
             <span className="entity-thumb placeholder" />
           )}
-          <span className="entity-selected-name">{valueLabel || '—'}</span>
+          <span className="entity-selected-name">
+            {valueLabel || '—'}
+            {kind === 'player' && nationality && (
+              <span
+                className="entity-inline-flag"
+                role="img"
+                aria-label={`${nationality} flag`}
+                title={nationality}
+              >
+                {nationalityFlag(nationality)}
+              </span>
+            )}
+          </span>
         </div>
       )}
       <div className="entity-search-wrap">
@@ -196,11 +220,21 @@ export function EntityPicker({
         <ul className="entity-results" id={listId} role="listbox">
           {hits.map((hit) => {
             const img = hitImage(hit)
+            const flag =
+              hit.kind === 'nationality' ? nationalityFlag(hit.item.name) : undefined
             return (
               <li key={hitKey(hit)}>
                 <button type="button" className="entity-result" onClick={() => void select(hit)}>
                   {img ? (
                     <img src={img} alt="" className="entity-thumb" />
+                  ) : flag ? (
+                    <span
+                      className="entity-thumb flag"
+                      role="img"
+                      aria-label={`${hit.item.name} flag`}
+                    >
+                      {flag}
+                    </span>
                   ) : (
                     <span className="entity-thumb placeholder" />
                   )}

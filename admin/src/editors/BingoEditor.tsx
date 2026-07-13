@@ -270,6 +270,7 @@ export function BingoEditor({
               kind="player"
               valueLabel={(pl.name as string) ?? (pl.displayName as string) ?? undefined}
               imageUrl={pl.headshotUrl}
+              nationality={pl.nationality}
               disabled={locked}
               onPickPlayer={(hit) => pickPoolPlayer(idx, hit)}
             />

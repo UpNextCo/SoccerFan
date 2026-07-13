@@ -106,6 +106,7 @@ export function ClubChainEditor({
             label="Start player"
             valueLabel={p.start?.name}
             imageUrl={p.start?.headshotUrl}
+            nationality={p.start?.nationality}
             disabled={locked}
             onPickPlayer={(hit) => pickEndpoint('start', hit)}
           />
@@ -115,6 +116,7 @@ export function ClubChainEditor({
             label="Target player"
             valueLabel={p.target?.name}
             imageUrl={p.target?.headshotUrl}
+            nationality={p.target?.nationality}
             disabled={locked}
             onPickPlayer={(hit) => pickEndpoint('target', hit)}
           />
