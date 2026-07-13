@@ -62,8 +62,18 @@ const INTEGER_RULE_FIELDS: Array<{
   { key: 'minRecordFeeEur', label: 'Minimum record transfer fee', max: 2_000_000_000, prefix: '€' },
 ]
 
+function hasRuleSelector(rule: GolfTowerRule | undefined): rule is GolfTowerRule {
+  return Boolean(rule && Object.keys(rule).some((key) => key !== 'label'))
+}
+
 function normalizeHoles(holes: Hole[]): Hole[] {
-  return holes.map((hole, index) => ({ ...hole, holeNumber: index + 1 }))
+  return holes.map((hole, index) => {
+    if (hole.rule && !hasRuleSelector(hole.rule)) {
+      const { rule: _rule, templateId: _templateId, ...rest } = hole
+      return { ...rest, holeNumber: index + 1 }
+    }
+    return { ...hole, holeNumber: index + 1 }
+  })
 }
 
 function holeKey(hole: Hole): string {
@@ -109,7 +119,7 @@ function toAuthoredHole(hole: Hole): AuthoredGolfHole | null {
     category: hole.category,
     answers,
     hints: hole.hints ?? [],
-    ...(hole.rule ? { rule: hole.rule } : {}),
+    ...(hasRuleSelector(hole.rule) ? { rule: hole.rule } : {}),
     ...(hole.templateId ? { templateId: hole.templateId } : {}),
   }
 }
@@ -559,7 +569,10 @@ export function GolfEditor({
             <div className="golf-section-heading">
               <div>
                 <h3 id="golf-rule-heading">Question &amp; answer rule</h3>
-                <p className="muted tiny">Attach a verified database rule, then preview or regenerate its complete answer set.</p>
+                <p className="muted tiny">
+                  Choose a verified question below. Its full answer set, hints and suggested
+                  par are filled in automatically.
+                </p>
               </div>
               <span className={`golf-rule-status ${activeHole.rule ? 'structured' : 'legacy'}`}>
                 {activeHole.rule ? 'Rule-backed' : 'Legacy / manual'}
@@ -568,42 +581,46 @@ export function GolfEditor({
 
             {!activeHole.rule && (
               <p className="warning-box">
-                This legacy hole cannot be database-verified. Attach an active template or build a custom rule before approval.
+                This older hole has no verified question attached. Choose one below before
+                approving the course.
               </p>
             )}
 
-            <div className="golf-template-picker">
+            <div className="golf-template-picker simple">
               <label className="field">
-                Search active prompt templates
+                Find a question
                 <input
                   value={templateQuery}
                   disabled={locked}
-                  placeholder="Search template wording…"
+                  placeholder="Search questions…"
                   maxLength={120}
                   onChange={(event) => setTemplateQuery(event.target.value)}
                 />
               </label>
-              <div className="golf-template-results" aria-busy={templatesBusy}>
-                {templatesBusy && <span className="muted tiny">Searching templates…</span>}
-                {!templatesBusy && templates.length === 0 && (
-                  <span className="muted tiny">No active player templates match.</span>
-                )}
-                {templates.map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    className={`golf-template-option${activeHole.templateId === template.id ? ' selected' : ''}`}
-                    disabled={mutationsDisabled}
-                    onClick={() => void applyTemplate(template)}
-                  >
-                    <strong>{template.prompt}</strong>
-                    <span>
-                      {template.validAnswers} indexed answers · difficulty {template.difficulty} · {template.tier}
-                    </span>
-                    <span>{template.sampleAnswers.slice(0, 4).join(', ') || 'No stored samples'}</span>
-                  </button>
-                ))}
-              </div>
+              <label className="field">
+                Verified template
+                <select
+                  value=""
+                  disabled={mutationsDisabled || templatesBusy || templates.length === 0}
+                  onChange={(event) => {
+                    const template = templates.find((item) => item.id === event.target.value)
+                    if (template) void applyTemplate(template)
+                  }}
+                >
+                  <option value="">
+                    {templatesBusy
+                      ? 'Loading questions…'
+                      : templates.length === 0
+                        ? 'No matching questions'
+                        : 'Choose a question…'}
+                  </option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.prompt} ({template.validAnswers} answers)
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             {activeHole.templateId && (
@@ -619,8 +636,10 @@ export function GolfEditor({
               </div>
             )}
 
-            {activeHole.rule ? (
-              <div className="golf-rule-builder">
+            <details className="advanced-panel golf-custom-rule">
+              <summary>Advanced: build or customise the database rule</summary>
+              {activeHole.rule ? (
+                <div className="golf-rule-builder">
                 {activeHole.rule.validIds ? (
                   <div className="warning-box">
                     This template uses a closed set of {activeHole.rule.validIds.length} player ids.
@@ -804,20 +823,27 @@ export function GolfEditor({
                     </div>
                   </>
                 )}
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="ghost"
-                disabled={mutationsDisabled}
-                onClick={() => {
-                  updateHole(activeHole.holeNumber, { rule: {} })
-                  markAnswersStale(activeHole)
-                }}
-              >
-                + Build custom structured rule
-              </button>
-            )}
+                </div>
+              ) : (
+                <div className="golf-custom-start">
+                  <p className="muted tiny">
+                    Only use this when no verified template fits. Start broad, then add the
+                    nationality, club, league or stat filters you need.
+                  </p>
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={mutationsDisabled}
+                    onClick={() => {
+                      updateHole(activeHole.holeNumber, { rule: { minPlApps: 1 }, templateId: undefined })
+                      markAnswersStale(activeHole)
+                    }}
+                  >
+                    Start a custom rule
+                  </button>
+                </div>
+              )}
+            </details>
 
             <div className="golf-rule-actions">
               <button type="button" className="ghost" disabled={!activeHole.rule || busyAction !== null} onClick={() => void previewRule()}>

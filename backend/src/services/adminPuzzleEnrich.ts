@@ -292,6 +292,26 @@ export async function enrichAdminPuzzleForSave(
       return { puzzleJson: await enrichAdminClubChainPuzzle(puzzleJson), answerJson };
     case 'football_bingo':
       return { puzzleJson: await enrichAdminBingoPuzzle(puzzleJson), answerJson };
+    case 'football_golf': {
+      const puzzle = structuredClone(puzzleJson) as {
+        holes?: Array<Record<string, unknown>>;
+        [key: string]: unknown;
+      };
+      puzzle.holes = (puzzle.holes ?? []).map((hole) => {
+        const rule = hole.rule;
+        if (
+          rule &&
+          typeof rule === 'object' &&
+          !Array.isArray(rule) &&
+          Object.keys(rule).length === 0
+        ) {
+          const { rule: _rule, templateId: _templateId, ...rest } = hole;
+          return rest;
+        }
+        return hole;
+      });
+      return { puzzleJson: puzzle, answerJson };
+    }
     default:
       return { puzzleJson, answerJson };
   }

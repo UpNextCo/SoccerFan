@@ -55,6 +55,14 @@
   align-items: start;
 }
 
+.golf-template-picker.simple {
+  grid-template-columns: minmax(220px, 0.8fr) minmax(300px, 1.2fr);
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
 .golf-template-results {
   max-height: 260px;
   overflow-y: auto;
@@ -100,6 +108,16 @@
   margin-top: 0.8rem;
   padding-top: 0.8rem;
   border-top: 1px solid var(--line);
+}
+
+.golf-custom-rule {
+  margin-top: 0.75rem;
+}
+
+.golf-custom-start {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 0.75rem;
 }
 
 .golf-rule-grid,

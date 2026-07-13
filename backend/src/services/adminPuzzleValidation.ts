@@ -43,13 +43,20 @@ const golfAnswer = z.object({
   aliases: z.array(text).optional(),
   rarity: z.enum(['common', 'uncommon', 'rare', 'ultraRare']).optional(),
 }).passthrough();
+const optionalTowerRule = z.preprocess(
+  (value) =>
+    value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0
+      ? undefined
+      : value,
+  towerRuleSchema.optional()
+);
 const golfHole = z.object({
   holeNumber: z.number().int().positive(),
   prompt: text,
   par: z.number().int().min(1).max(5),
   target: z.number().int().min(1).max(10).optional(),
   answers: z.array(golfAnswer).min(1),
-  rule: towerRuleSchema.optional(),
+  rule: optionalTowerRule,
   templateId: z.string().uuid().optional(),
 }).passthrough();
 const golfPuzzle = z.object({

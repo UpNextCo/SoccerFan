@@ -59,10 +59,17 @@ const clubChainShape = z.object({
 const clubChainAnswerShape = z.object({
   shortestPathPlayerIds: z.array(uuid).min(2),
 }).passthrough();
+const optionalTowerRule = z.preprocess(
+  (value) =>
+    value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0
+      ? undefined
+      : value,
+  towerRuleSchema.optional()
+);
 const golfShape = z.object({
   holes: z.array(z.object({
     prompt: z.string().min(1),
-    rule: towerRuleSchema.optional(),
+    rule: optionalTowerRule,
     answers: z.array(z.object({ id: z.string().optional() }).passthrough()),
   }).passthrough()),
 }).passthrough();

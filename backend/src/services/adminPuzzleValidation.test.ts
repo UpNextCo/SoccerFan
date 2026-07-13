@@ -161,6 +161,14 @@ test('checks Golf numbering, answer sufficiency, and total par', () => {
     ],
   }));
   assert.equal(validatePuzzleReport('football_golf', { totalPar: 18, holes }, null).ok, true);
+  assert.equal(
+    validatePuzzleReport(
+      'football_golf',
+      { totalPar: 18, holes: holes.map((hole) => ({ ...hole, rule: {} })) },
+      null
+    ).ok,
+    true
+  );
   assert.equal(validatePuzzleReport('football_golf', { totalPar: 20, holes }, null).ok, false);
 });
 
