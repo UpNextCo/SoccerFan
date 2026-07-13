@@ -34,6 +34,9 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
   const answers: LastManStandingAnswer['questions'] = [];
   const recentKeys = await loadRecentLMSUsedKeys(date);
   const usedKeys = new Set<string>(recentKeys);
+  // Cross-day repetition is a preference, not an availability requirement. Keep a separate
+  // set for content already used in this puzzle so an exhausted lookback can be relaxed safely.
+  const puzzleUsedKeys = new Set<string>();
   const pool = await famousPlayers(4, 250);
   resetPlayerClubIndex();
   resetLMSEnrichCache();
@@ -89,12 +92,45 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
       fromLive += 1;
     }
 
+    // A finite content pool can be exhausted by the 21-day lookback, especially for which_club.
+    // Retry without historical keys while still preventing duplicates inside today's puzzle.
+    if (!built && recentKeys.size > 0) {
+      for (let attempt = 0; attempt < 16 && !built; attempt += 1) {
+        const ctx: LMSBuildContext = {
+          date,
+          slot: slotDef.slot,
+          signature: slotDef.signature ?? false,
+          seed: `${date}:lms:q${slotDef.slot}:repeat-fallback:a${attempt}`,
+          usedKeys: puzzleUsedKeys,
+          difficulty,
+          famousPool: pool,
+          clubIndex,
+        };
+        let candidate = await builder(ctx);
+        if (!candidate || puzzleUsedKeys.has(candidate.repeatKey)) continue;
+        candidate = await enrichLMSBuilderResult(candidate);
+        if (candidate.extraUsedKeys?.some((k) => puzzleUsedKeys.has(k))) continue;
+        if (!validateLMSQuestion(candidate, ctx)) continue;
+        built = candidate;
+        fromLive += 1;
+        console.warn(
+          `LMS slot ${slotDef.slot} (${slotDef.type}) relaxed cross-day repeat lookback`
+        );
+      }
+    }
+
     if (!built) {
-      console.warn(`LMS compose failed at slot ${slotDef.slot} (${slotDef.type}) after bank+16 attempts`);
+      console.warn(
+        `LMS compose failed at slot ${slotDef.slot} (${slotDef.type}) after bank+32 attempts`
+      );
       return null;
     }
     usedKeys.add(built.repeatKey);
-    built.extraUsedKeys?.forEach((k) => usedKeys.add(k));
+    puzzleUsedKeys.add(built.repeatKey);
+    built.extraUsedKeys?.forEach((k) => {
+      usedKeys.add(k);
+      puzzleUsedKeys.add(k);
+    });
     questions.push(built.question);
     answers.push(built.answer);
   }

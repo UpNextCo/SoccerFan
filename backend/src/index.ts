@@ -11,6 +11,7 @@ import { statsRouter } from './routes/stats.js';
 import { teamsRouter } from './routes/teams.js';
 import { adminRouter } from './routes/admin.js';
 import { bootstrapDatabase } from './db/seed.js';
+import { startDailyPreGeneration } from './services/dailyPreGeneration.js';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -57,7 +58,11 @@ app.use((_req, res) => {
 
 app.listen(port, () => {
   console.log(`Ball Knowledge API listening on port ${port}`);
-  bootstrapDatabase().catch((err) => {
-    console.error('Bootstrap failed:', err);
-  });
+  bootstrapDatabase()
+    .then(() => {
+      startDailyPreGeneration();
+    })
+    .catch((err) => {
+      console.error('Bootstrap failed:', err);
+    });
 });

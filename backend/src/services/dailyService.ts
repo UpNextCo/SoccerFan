@@ -251,8 +251,10 @@ async function ensureClubChainPuzzle(date: string): Promise<void> {
   }
 }
 
-/** Generate + store today's Last Man Standing quiz if not present. Best-effort. */
-const lmsRegenerationInFlight = new Set<string>();
+/** One shared generation promise per date so concurrent bundle requests wait for the same work. */
+const lmsRegenerationInFlight = new Map<string, Promise<void>>();
+const LMS_GENERATION_ATTEMPTS = 3;
+const LMS_RETRY_DELAYS_MS = [1_000, 3_000] as const;
 
 function isStaleLastManStanding(puzzleJson: unknown, answerJson: unknown): boolean {
   const puzzle = puzzleJson as
@@ -308,25 +310,58 @@ async function storeLastManStandingPuzzle(date: string): Promise<void> {
   console.log(`Generated last_man_standing puzzle for ${date}`);
 }
 
-/** Generate + store today's Last Man Standing quiz if not present. Best-effort. */
-async function ensureLastManStandingPuzzle(date: string): Promise<void> {
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function storeLastManStandingPuzzleWithRetry(date: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= LMS_GENERATION_ATTEMPTS; attempt += 1) {
+    try {
+      await storeLastManStandingPuzzle(date);
+      return;
+    } catch (error) {
+      lastError = error;
+      const detail = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `Last Man Standing generation attempt ${attempt}/${LMS_GENERATION_ATTEMPTS} failed for ${date}: ${detail}`
+      );
+      const retryDelay = LMS_RETRY_DELAYS_MS[attempt - 1];
+      if (retryDelay != null) await delay(retryDelay);
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Could not generate Last Man Standing for ${date}`);
+}
+
+/** Generate + store LMS if missing. Concurrent callers await one retrying generation run. */
+export async function ensureLastManStandingPuzzle(date: string): Promise<void> {
   const existing = await db
     .select({ modeId: dailyPuzzles.modeId })
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'last_man_standing')))
     .limit(1);
   if (existing.length > 0) return;
-  if (lmsRegenerationInFlight.has(date)) return;
+  const activeGeneration = lmsRegenerationInFlight.get(date);
+  if (activeGeneration) {
+    await activeGeneration;
+    return;
+  }
 
-  // Composition can take several minutes — don't block the daily bundle HTTP request.
-  lmsRegenerationInFlight.add(date);
-  void storeLastManStandingPuzzle(date)
-    .catch((error) => {
-      console.warn(`Skipped last_man_standing for ${date}: ${error instanceof Error ? error.message : String(error)}`);
-    })
-    .finally(() => {
-      lmsRegenerationInFlight.delete(date);
-    });
+  const generation = storeLastManStandingPuzzleWithRetry(date);
+  lmsRegenerationInFlight.set(date, generation);
+  try {
+    await generation;
+  } catch (error) {
+    console.warn(
+      `Skipped last_man_standing for ${date} after retries: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  } finally {
+    lmsRegenerationInFlight.delete(date);
+  }
 }
 
 /**
