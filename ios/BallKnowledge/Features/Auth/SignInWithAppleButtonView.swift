@@ -25,7 +25,7 @@ struct SignInWithAppleButtonView: View {
             }
         }
         .signInWithAppleButtonStyle(.white)
-        .frame(height: 52)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .frame(height: 54)
+        .clipShape(Capsule())
     }
 }
