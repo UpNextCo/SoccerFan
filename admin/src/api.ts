@@ -157,6 +157,102 @@ export type PuzzleValidationReport = {
   issues: PuzzleValidationIssue[]
 }
 
+export type GolfRarity = 'common' | 'uncommon' | 'rare' | 'ultraRare'
+
+export type GolfTowerRule = {
+  validIds?: string[]
+  label?: string
+  nationality?: string
+  nonEuropean?: true
+  position?: 'Goalkeeper' | 'Defender'
+  leaguePlayed?: string
+  playedFor?: string[]
+  minPlApps?: number
+  minPlAssists?: number
+  minPlGoals?: number
+  minPlYellowCards?: number
+  minPlCleanSheets?: number
+  uclWinner?: true
+  minUclGoals?: number
+  minUclApps?: number
+  minPeakValueEur?: number
+  minRecordFeeEur?: number
+}
+
+export type GolfAnswer = {
+  id: string
+  name: string
+  aliases: string[]
+  rarity: GolfRarity
+}
+
+export type AuthoredGolfHole = {
+  id: string
+  holeNumber: number
+  par: 2 | 3 | 4
+  target: number
+  prompt: string
+  category: string
+  answers: GolfAnswer[]
+  hints: string[]
+  rule?: GolfTowerRule
+  templateId?: string
+}
+
+export type AdminGolfTemplate = {
+  id: string
+  prompt: string
+  rule: GolfTowerRule
+  tier: string
+  difficulty: number
+  validAnswers: number
+  sampleAnswers: string[]
+  usedCount: number
+  lastUsedDate: string | null
+}
+
+export type GolfRuleCounts = {
+  total: number
+  nameable: number
+  duplicateNamesRemoved: number
+  rarity: Record<GolfRarity, number>
+}
+
+export type GolfRuleEvaluation = {
+  prompt: string
+  rule: GolfTowerRule
+  category: string
+  answers: GolfAnswer[]
+  hints: string[]
+  counts: GolfRuleCounts
+  qualityWarnings: string[]
+  suggestedPar: 2 | 3 | 4
+  suggestedTarget: number
+}
+
+export type GeneratedGolfHole = {
+  hole: AuthoredGolfHole
+  evaluation: GolfRuleEvaluation
+}
+
+export type GeneratedGolfHoleFromTemplate = GeneratedGolfHole & {
+  template: AdminGolfTemplate
+}
+
+export type GolfAnswerSetValidation =
+  | {
+      valid: true
+      warning: string
+    }
+  | {
+      valid: boolean
+      expectedCount: number
+      storedCount: number
+      missingAnswerIds: string[]
+      staleAnswerIds: string[]
+      evaluation: GolfRuleEvaluation
+    }
+
 type ApiOk<T> = { success: true; data: T }
 type ApiErr = { success: false; error: { message: string; code?: string } }
 
@@ -308,6 +404,39 @@ export const api = {
     request<PuzzleValidationReport>('/validation/validate', {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+  listGolfTemplates: (q = '', limit = 30) =>
+    request<AdminGolfTemplate[]>(
+      `/validation/golf/templates?q=${encodeURIComponent(q)}&limit=${encodeURIComponent(String(limit))}`
+    ),
+  previewGolfRule: (body: { prompt: string; rule: GolfTowerRule }) =>
+    request<GolfRuleEvaluation>('/validation/golf/preview', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  generateGolfHole: (body: {
+    prompt: string
+    rule: GolfTowerRule
+    holeNumber: number
+    holeId?: string
+  }) =>
+    request<GeneratedGolfHole>('/validation/golf/generate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  generateGolfHoleFromTemplate: (body: {
+    templateId: string
+    holeNumber: number
+    promptOverride?: string
+  }) =>
+    request<GeneratedGolfHoleFromTemplate>('/validation/golf/from-template', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  validateGolfHole: (hole: AuthoredGolfHole) =>
+    request<GolfAnswerSetValidation>('/validation/golf/validate-hole', {
+      method: 'POST',
+      body: JSON.stringify({ hole }),
     }),
 
   searchPlayers: (q: string) =>

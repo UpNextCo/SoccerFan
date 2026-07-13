@@ -1,0 +1,191 @@
+.golf-rule-composer {
+  margin: 0.9rem 0 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #faf7f0;
+}
+
+.golf-section-heading,
+.golf-rule-actions,
+.golf-counts,
+.golf-rule-toggles {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.golf-section-heading {
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+
+.golf-section-heading h3,
+.golf-section-heading p,
+.golf-template-meta p,
+.golf-evaluation p,
+.golf-validation p {
+  margin: 0;
+}
+
+.golf-rule-status {
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.golf-rule-status.structured {
+  color: #245832;
+  background: #dff2e3;
+}
+
+.golf-rule-status.legacy {
+  color: #72520c;
+  background: #fff0b8;
+}
+
+.golf-template-picker {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(280px, 1.3fr);
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.golf-template-results {
+  max-height: 260px;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.15rem;
+}
+
+.golf-template-option {
+  display: grid;
+  gap: 0.18rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: inherit;
+  background: #fff;
+  text-align: left;
+}
+
+.golf-template-option:hover:not(:disabled),
+.golf-template-option.selected {
+  border-color: #556b59;
+  background: #eef2e9;
+}
+
+.golf-template-option span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.golf-template-meta,
+.golf-evaluation,
+.golf-validation {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.golf-rule-builder {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+
+.golf-rule-grid,
+.golf-threshold-grid {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.golf-rule-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.golf-threshold-grid {
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+  margin-top: 0.8rem;
+}
+
+.golf-rule-grid .entity-picker {
+  min-width: 0;
+}
+
+.golf-rule-toggles {
+  margin-top: 0.8rem;
+}
+
+.golf-rule-toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.golf-number-input {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.golf-number-input input {
+  min-width: 0;
+  width: 100%;
+}
+
+.golf-rule-actions {
+  margin-top: 0.9rem;
+}
+
+.golf-counts {
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.golf-counts span {
+  font-size: 0.78rem;
+}
+
+.golf-stale-warning {
+  margin: 0.7rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #d69e32;
+  border-left-width: 4px;
+  border-radius: 8px;
+  color: #72520c;
+  background: #fff8df;
+  font-weight: 700;
+}
+
+.golf-validation.valid {
+  border-color: #8bc59a;
+  color: #245832;
+  background: #f0faf2;
+}
+
+.golf-validation.invalid {
+  border-color: #e1a0a0;
+  color: #8b2525;
+  background: #fff0f0;
+}
+
+@media (max-width: 850px) {
+  .golf-template-picker,
+  .golf-rule-grid,
+  .golf-threshold-grid {
+    grid-template-columns: 1fr;
+  }
+}

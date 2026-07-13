@@ -24,6 +24,11 @@ import {
   recomputeBattleScore,
   type BattlePuzzleJson,
 } from './battleGenerator.js';
+import {
+  compareGolfAnswerIds,
+} from './adminGolfAuthoring.js';
+import { evaluateGolfRule } from './footballGolfGenerator.js';
+import { towerRuleSchema } from './towerRuleSchema.js';
 
 const uuid = z.string().uuid();
 const issue = (
@@ -56,6 +61,8 @@ const clubChainAnswerShape = z.object({
 }).passthrough();
 const golfShape = z.object({
   holes: z.array(z.object({
+    prompt: z.string().min(1),
+    rule: towerRuleSchema.optional(),
     answers: z.array(z.object({ id: z.string().optional() }).passthrough()),
   }).passthrough()),
 }).passthrough();
@@ -137,6 +144,63 @@ async function validateClubChain(
       'puzzleJson.shortestPathLength',
       `Stored shortest path is ${puzzle.data.shortestPathLength}; database graph shortest path is ${recomputed.shortestPathLength}.`
     );
+  }
+}
+
+async function validateGolf(
+  puzzleJson: unknown,
+  issues: AdminPuzzleValidationIssue[]
+): Promise<void> {
+  const puzzle = golfShape.safeParse(puzzleJson);
+  if (!puzzle.success) return;
+  for (let holeIndex = 0; holeIndex < puzzle.data.holes.length; holeIndex += 1) {
+    const hole = puzzle.data.holes[holeIndex]!;
+    if (!hole.rule) continue;
+    const storedIds: string[] = [];
+    let idsValid = true;
+    hole.answers.forEach((answer, answerIndex) => {
+      if (!answer.id || !uuid.safeParse(answer.id).success) {
+        issue(
+          issues,
+          `puzzleJson.holes.${holeIndex}.answers.${answerIndex}.id`,
+          'Rule-backed Golf answers must have UUID player ids.'
+        );
+        idsValid = false;
+      } else {
+        storedIds.push(answer.id);
+      }
+    });
+    if (!idsValid) continue;
+    try {
+      const evaluation = await evaluateGolfRule(hole.prompt, hole.rule);
+      const comparison = compareGolfAnswerIds(
+        evaluation.answers.map((answer) => answer.id),
+        storedIds
+      );
+      if (comparison.missingAnswerIds.length > 0) {
+        issue(
+          issues,
+          `puzzleJson.holes.${holeIndex}.answers`,
+          `Missing ${comparison.missingAnswerIds.length} current rule answer(s): ${comparison.missingAnswerIds.join(', ')}.`
+        );
+      }
+      if (comparison.staleAnswerIds.length > 0) {
+        issue(
+          issues,
+          `puzzleJson.holes.${holeIndex}.answers`,
+          `Contains ${comparison.staleAnswerIds.length} stale/non-matching answer(s): ${comparison.staleAnswerIds.join(', ')}.`
+        );
+      }
+      evaluation.qualityWarnings.forEach((message) => {
+        issue(issues, `puzzleJson.holes.${holeIndex}.rule`, message, 'warning');
+      });
+    } catch (error) {
+      issue(
+        issues,
+        `puzzleJson.holes.${holeIndex}.rule`,
+        `Could not evaluate Golf rule: ${error instanceof Error ? error.message : String(error)}.`
+      );
+    }
   }
 }
 
@@ -224,7 +288,10 @@ export async function validateAdminPuzzleDraft(
   if (modeId === 'football_bingo') await validateBingo(puzzleJson, issues);
   else if (modeId === 'one_more') await validateOneMore(puzzleJson, answerJson, issues);
   else if (modeId === 'club_chain') await validateClubChain(puzzleJson, answerJson, issues);
-  else await validateReferencedPlayers(modeId, puzzleJson, issues);
+  else if (modeId === 'football_golf') {
+    await validateGolf(puzzleJson, issues);
+    await validateReferencedPlayers(modeId, puzzleJson, issues);
+  } else await validateReferencedPlayers(modeId, puzzleJson, issues);
 
   return { ok: !issues.some((entry) => entry.severity === 'error'), issues };
 }

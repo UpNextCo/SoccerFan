@@ -8,30 +8,9 @@
  */
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import type { TowerRule } from './towerRuleSchema.js';
 
-export interface TowerRule {
-  /** Closed-set relationship prompts (teammates / managers / finals / World Cup):
-   *  the valid player ids are precomputed at build time (reusing verified helpers),
-   *  so validation is a membership test and counting is the set size. `label` is a
-   *  short human tag for debugging/curation. */
-  validIds?: string[];
-  label?: string;
-  nationality?: string;
-  nonEuropean?: boolean;
-  position?: 'Goalkeeper' | 'Defender';
-  leaguePlayed?: string;
-  playedFor?: string[];
-  minPlApps?: number;
-  minPlAssists?: number;
-  minPlGoals?: number;
-  minPlYellowCards?: number;
-  minPlCleanSheets?: number;
-  uclWinner?: boolean;
-  minUclGoals?: number;
-  minUclApps?: number;
-  minPeakValueEur?: number; // career-peak market value in euros
-  minRecordFeeEur?: number; // biggest transfer fee in euros
-}
+export type { TowerRule } from './towerRuleSchema.js';
 
 /** Canonical European nationalities (for the "non-European" elite rule). */
 const EUROPE = new Set(

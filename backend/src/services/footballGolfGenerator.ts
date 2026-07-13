@@ -37,6 +37,10 @@ export interface GolfHole {
   category: string;
   answers: GolfAnswer[];
   hints: string[];
+  /** Declarative source used to regenerate and verify the complete answer set. */
+  rule?: TowerRule;
+  /** tower_prompts row used to author this hole, when applicable. */
+  templateId?: string;
 }
 export interface FootballGolfPuzzle {
   modeId: 'football_golf';
@@ -54,7 +58,7 @@ const MAX_TARGET = 4;
 const PAR_SEQUENCE: Array<2 | 3 | 4> = [2, 2, 3, 3, 3, 3, 4, 4, 4];
 
 /** Points needed to clear — always equals par (birdies come from picking rarer names). */
-function targetForPar(par: 2 | 3 | 4): number {
+export function targetForPar(par: 2 | 3 | 4): number {
   return Math.min(MAX_TARGET, par);
 }
 
@@ -95,7 +99,7 @@ function isHouseholdCommon(p: AnswerPlayer, rec: number, ach: number): boolean {
 
 /** Inverse of fame for scoring: household → common, deep cut → ultraRare. Uses recognition
  *  (tier + CL/PL/BIG5 + finals/awards), not market tier or raw apps alone. */
-function rarityFor(p: AnswerPlayer): Rarity {
+export function rarityFor(p: AnswerPlayer): Rarity {
   const rec = recognitionScore(p);
   const ach = achievementPrestige(p);
   if (isHouseholdCommon(p, rec, ach)) return 'common';
@@ -112,7 +116,7 @@ function isNameable(p: AnswerPlayer): boolean {
 }
 
 /** Count of answers the audience can actually name. Par is clamped below this. */
-function nameableCount(players: AnswerPlayer[]): number {
+export function nameableCount(players: AnswerPlayer[]): number {
   return players.filter(isNameable).length;
 }
 
@@ -125,7 +129,7 @@ function hashStr(s: string): number {
   return Math.abs(h);
 }
 
-function categoryFor(rule: TowerRule, prompt: string): string {
+export function categoryFor(rule: TowerRule, prompt: string): string {
   if (rule.validIds) {
     if (/\bplayed under\b/i.test(prompt)) return 'Managers';
     if (/\bplayed with\b/i.test(prompt)) return 'Teammates';
@@ -141,6 +145,7 @@ function categoryFor(rule: TowerRule, prompt: string): string {
 }
 
 interface Candidate {
+  templateId: string;
   prompt: string;
   rule: TowerRule;
   answers: GolfAnswer[];
@@ -156,7 +161,7 @@ async function aliasesByIds(ids: string[]): Promise<Map<string, string[]>> {
   return m;
 }
 
-function hintsFor(answers: GolfAnswer[]): string[] {
+export function hintsFor(answers: GolfAnswer[]): string[] {
   const surnameInitial = (name: string) => {
     const parts = name.trim().split(/\s+/);
     return (parts[parts.length - 1] ?? name)[0]?.toUpperCase() ?? '?';
@@ -167,6 +172,137 @@ function hintsFor(answers: GolfAnswer[]): string[] {
   if (uncommon) out.push(`A valid answer's surname starts with "${surnameInitial(uncommon.name)}".`);
   if (rare) out.push(`A rarer answer's surname starts with "${surnameInitial(rare.name)}".`);
   return out;
+}
+
+export interface GolfRuleCounts {
+  total: number;
+  nameable: number;
+  duplicateNamesRemoved: number;
+  rarity: Record<Rarity, number>;
+}
+
+export interface GolfRuleEvaluation {
+  prompt: string;
+  rule: TowerRule;
+  category: string;
+  answers: GolfAnswer[];
+  hints: string[];
+  counts: GolfRuleCounts;
+  qualityWarnings: string[];
+  suggestedPar: 2 | 3 | 4;
+  suggestedTarget: number;
+}
+
+/** Dedupe display names exactly as daily generation does, retaining the strongest record. */
+export function dedupeGolfPlayers(players: AnswerPlayer[]): {
+  players: AnswerPlayer[];
+  removed: number;
+} {
+  const byName = new Map<string, AnswerPlayer>();
+  for (const player of players) {
+    const key = normalizeSearchText(player.name);
+    const previous = byName.get(key);
+    if (!previous || player.total > previous.total) byName.set(key, player);
+  }
+  return { players: [...byName.values()], removed: players.length - byName.size };
+}
+
+export function suggestGolfPar(nameable: number): 2 | 3 | 4 {
+  if (nameable >= 12) return 4;
+  if (nameable >= 9) return 3;
+  return 2;
+}
+
+export function golfQualityWarnings(
+  prompt: string,
+  category: string,
+  counts: Pick<GolfRuleCounts, 'total' | 'nameable' | 'duplicateNamesRemoved'>
+): string[] {
+  const warnings: string[] = [];
+  const minimumNameable = category === 'Managers' && /\bboth\b/i.test(prompt) ? 12 : 8;
+  if (counts.total === 0) warnings.push('Rule currently matches no players.');
+  if (counts.nameable < minimumNameable) {
+    warnings.push(`Only ${counts.nameable} nameable answers; this prompt should have at least ${minimumNameable}.`);
+  }
+  if (counts.total > 200) warnings.push(`Rule matches ${counts.total} players; daily Golf holes should ship at most 200 answers.`);
+  if (counts.duplicateNamesRemoved > 0) {
+    warnings.push(`${counts.duplicateNamesRemoved} duplicate display-name answer(s) were removed.`);
+  }
+  return warnings;
+}
+
+/** Enumerate and enrich the complete DB-backed answer set for a structured rule. */
+export async function evaluateGolfRule(prompt: string, rule: TowerRule): Promise<GolfRuleEvaluation> {
+  const enumerated = await enumeratePlayers(rule);
+  const deduped = dedupeGolfPlayers(enumerated);
+  const aliasMap = await aliasesByIds(deduped.players.map((player) => player.id));
+  const answers = deduped.players.map((player) => ({
+    id: player.id,
+    name: player.name,
+    aliases: aliasMap.get(player.id) ?? [],
+    rarity: rarityFor(player),
+  }));
+  const category = categoryFor(rule, prompt);
+  const nameable = nameableCount(deduped.players);
+  const counts: GolfRuleCounts = {
+    total: answers.length,
+    nameable,
+    duplicateNamesRemoved: deduped.removed,
+    rarity: {
+      common: answers.filter((answer) => answer.rarity === 'common').length,
+      uncommon: answers.filter((answer) => answer.rarity === 'uncommon').length,
+      rare: answers.filter((answer) => answer.rarity === 'rare').length,
+      ultraRare: answers.filter((answer) => answer.rarity === 'ultraRare').length,
+    },
+  };
+  const suggestedPar = suggestGolfPar(nameable);
+  return {
+    prompt,
+    rule,
+    category,
+    answers,
+    hints: hintsFor(answers),
+    counts,
+    qualityWarnings: golfQualityWarnings(prompt, category, counts),
+    suggestedPar,
+    suggestedTarget: targetForPar(suggestedPar),
+  };
+}
+
+export function buildGolfHoleFromEvaluation(
+  evaluation: GolfRuleEvaluation,
+  input: {
+    holeNumber: number;
+    holeId?: string;
+    templateId?: string;
+    par?: 2 | 3 | 4;
+  }
+): GolfHole {
+  const par = input.par ?? evaluation.suggestedPar;
+  return {
+    id: input.holeId ?? `hole-${input.holeNumber}`,
+    holeNumber: input.holeNumber,
+    par,
+    target: targetForPar(par),
+    prompt: evaluation.prompt,
+    category: evaluation.category,
+    answers: evaluation.answers,
+    hints: evaluation.hints,
+    rule: evaluation.rule,
+    ...(input.templateId ? { templateId: input.templateId } : {}),
+  };
+}
+
+export async function buildGolfHole(input: {
+  prompt: string;
+  rule: TowerRule;
+  holeNumber: number;
+  holeId?: string;
+  templateId?: string;
+  par?: 2 | 3 | 4;
+}): Promise<{ hole: GolfHole; evaluation: GolfRuleEvaluation }> {
+  const evaluation = await evaluateGolfRule(input.prompt, input.rule);
+  return { hole: buildGolfHoleFromEvaluation(evaluation, input), evaluation };
 }
 
 /** Recent golf prompts to avoid repeats within a window. */
@@ -186,8 +322,8 @@ export async function generateFootballGolfCourse(
 ): Promise<FootballGolfPuzzle> {
   // Source prompts: active player prompts from the bank (closed-set + rule-based).
   const prompts = (await db.execute(sql`
-    SELECT prompt, rule FROM tower_prompts WHERE status = 'active' AND answer_type = 'player'
-  `)) as unknown as Array<{ prompt: string; rule: TowerRule }>;
+    SELECT id, prompt, rule FROM tower_prompts WHERE status = 'active' AND answer_type = 'player'
+  `)) as unknown as Array<{ id: string; prompt: string; rule: TowerRule }>;
 
   // Repeat suppression: prompts used in the last 28 days are excluded; if the bank can't fill a
   // course under that window (too many prompts also fail the quality thresholds), shrink it
@@ -227,15 +363,17 @@ export async function generateFootballGolfCourse(
   // Re-order holes for the round (deterministic), so pars aren't monotonic.
   withPar.sort((a, b) => hashStr(`${seed}:order:${a.prompt}`) - hashStr(`${seed}:order:${b.prompt}`));
 
-  const holes: GolfHole[] = withPar.map((c, i) => ({
-    id: `${date}-h${i + 1}`,
-    holeNumber: i + 1,
-    par: c.par,
-    target: c.target,
-    prompt: c.prompt,
-    category: categoryFor(c.rule, c.prompt),
-    answers: c.answers,
-    hints: hintsFor(c.answers),
+  const holes: GolfHole[] = withPar.map((candidate, index) => ({
+    id: `${date}-h${index + 1}`,
+    holeNumber: index + 1,
+    par: candidate.par,
+    target: candidate.target,
+    prompt: candidate.prompt,
+    category: categoryFor(candidate.rule, candidate.prompt),
+    answers: candidate.answers,
+    hints: hintsFor(candidate.answers),
+    rule: candidate.rule,
+    templateId: candidate.templateId,
   }));
 
   const totalPar = holes.reduce((s, h) => s + h.par, 0);
@@ -244,14 +382,14 @@ export async function generateFootballGolfCourse(
 
 /** Scan the day's shuffled prompt order, enumerating answers until 9 quality holes are found. */
 async function scanCandidates(
-  ordered: Array<{ prompt: string; rule: TowerRule }>,
+  ordered: Array<{ id: string; prompt: string; rule: TowerRule }>,
   avoid: Set<string>
 ): Promise<Candidate[]> {
   const candidates: Candidate[] = [];
   const usedClubs = new Set<string>();
   const catCount = new Map<string, number>();
   const MAX_PER_CATEGORY = 2; // keep a course varied (clubs / nationality / managers / …)
-  for (const { prompt, rule } of ordered) {
+  for (const { id, prompt, rule } of ordered) {
     if (candidates.length >= HOLES) break;
     if (avoid.has(prompt.toLowerCase())) continue;
     // club diversity: no two holes sharing a club
@@ -266,37 +404,21 @@ async function scanCandidates(
     const cat = categoryFor(rule, prompt);
     if ((catCount.get(cat) ?? 0) >= MAX_PER_CATEGORY) continue;
 
-    let players: AnswerPlayer[] = [];
+    let evaluation: GolfRuleEvaluation;
     try {
-      players = await enumeratePlayers(rule);
+      evaluation = await evaluateGolfRule(prompt, rule);
     } catch {
       continue;
     }
-    // Dedupe same-display-name answers (keep the most prominent) so a hole never lists
-    // "José Reyes" twice.
-    const byName = new Map<string, AnswerPlayer>();
-    for (const p of players) {
-      const k = normalizeSearchText(p.name);
-      const prev = byName.get(k);
-      if (!prev || p.total > prev.total) byName.set(k, p);
-    }
-    players = [...byName.values()];
-    const famous = nameableCount(players);
+    const famous = evaluation.counts.nameable;
     // A fair golf hole must be genuinely BROAD for THIS audience — ≥8 answers they could
     // name (megastars / PL / UCL), so any par (2–4) is reachable and there's depth for
     // birdies. Excludes niche foreign-league prompts. Bounded total so it ships.
     // Manager pair links need a higher bar — knowing who played under both X and Y is harder.
     const minFamous = cat === 'Managers' && /\bboth\b/i.test(prompt) ? 12 : 8;
-    if (famous < minFamous || players.length > 200) continue;
+    if (famous < minFamous || evaluation.answers.length > 200) continue;
 
-    const aliasMap = await aliasesByIds(players.map((p) => p.id));
-    const answers: GolfAnswer[] = players.map((p) => ({
-      id: p.id,
-      name: p.name,
-      aliases: aliasMap.get(p.id) ?? [],
-      rarity: rarityFor(p),
-    }));
-    candidates.push({ prompt, rule, answers, famous });
+    candidates.push({ templateId: id, prompt, rule, answers: evaluation.answers, famous });
     for (const c of clubs) usedClubs.add(c);
     catCount.set(cat, (catCount.get(cat) ?? 0) + 1);
   }

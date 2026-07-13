@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { towerRuleSchema } from './towerRuleSchema.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 export interface AdminPuzzleValidationIssue {
@@ -48,6 +49,8 @@ const golfHole = z.object({
   par: z.number().int().min(1).max(5),
   target: z.number().int().min(1).max(10).optional(),
   answers: z.array(golfAnswer).min(1),
+  rule: towerRuleSchema.optional(),
+  templateId: z.string().uuid().optional(),
 }).passthrough();
 const golfPuzzle = z.object({
   totalPar: z.number().int().positive().optional(),
@@ -192,6 +195,14 @@ function validateGolf(puzzleJson: unknown, issues: AdminPuzzleValidationIssue[])
   const expected = Array.from({ length: puzzle.holes.length }, (_, index) => index + 1);
   if ([...numbers].sort((a, b) => a - b).join(',') !== expected.join(',')) issue(issues, 'puzzleJson.holes', 'Hole numbers must be consecutive from 1.');
   puzzle.holes.forEach((hole, index) => {
+    if (!hole.rule) {
+      issue(
+        issues,
+        `puzzleJson.holes.${index}.rule`,
+        'Legacy Golf hole has no structured rule; answers cannot be database-verified.',
+        'warning'
+      );
+    }
     const target = hole.target ?? hole.par;
     if (target > 5) issue(issues, `puzzleJson.holes.${index}.target`, 'Target must be a sensible golf score (1–5).');
     if (hole.answers.length < Math.max(hole.par, target)) issue(issues, `puzzleJson.holes.${index}.answers`, 'Not enough answers to satisfy par/target.');

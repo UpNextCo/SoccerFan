@@ -4,6 +4,15 @@ import { validatePuzzleReport } from './adminPuzzleValidation.js';
 import { monthLockStatusError, workflowTransitionError } from './adminWorkflow.js';
 import { oneMoreEligibilityErrors } from './oneMoreEligibility.js';
 import { validateQuestionTemplateActivation } from './questionTemplateValidation.js';
+import { towerRuleSchema } from './towerRuleSchema.js';
+import {
+  buildGolfHoleFromEvaluation,
+  dedupeGolfPlayers,
+  golfQualityWarnings,
+  suggestGolfPar,
+  type GolfRuleEvaluation,
+} from './footballGolfGenerator.js';
+import { compareGolfAnswerIds } from './adminGolfAuthoring.js';
 
 test('requires the persisted 4x4 Bingo contract', () => {
   const categories = Array.from({ length: 16 }, (_, index) => ({
@@ -153,6 +162,80 @@ test('checks Golf numbering, answer sufficiency, and total par', () => {
   }));
   assert.equal(validatePuzzleReport('football_golf', { totalPar: 18, holes }, null).ok, true);
   assert.equal(validatePuzzleReport('football_golf', { totalPar: 20, holes }, null).ok, false);
+});
+
+test('accepts only declarative closed Tower rule fields', () => {
+  assert.equal(towerRuleSchema.safeParse({ playedFor: ['Arsenal', 'Chelsea'] }).success, true);
+  assert.equal(towerRuleSchema.safeParse({ sql: 'SELECT * FROM players' }).success, false);
+  assert.equal(towerRuleSchema.safeParse({}).success, false);
+  assert.equal(towerRuleSchema.safeParse({
+    validIds: ['00000000-0000-4000-8000-000000000001'],
+    minPlApps: 1,
+  }).success, false);
+  assert.equal(towerRuleSchema.safeParse({
+    validIds: ['not-a-uuid'],
+  }).success, false);
+});
+
+test('dedupes Golf names and derives bounded authoring output', () => {
+  const players = [
+    { id: 'a', name: 'José Reyes', mvt: 4, pl: 30, big5: 80, ucl: 5, total: 100, finals: 0, awards: 0 },
+    { id: 'b', name: 'Jose Reyes', mvt: 2, pl: 5, big5: 20, ucl: 0, total: 40, finals: 0, awards: 0 },
+  ];
+  const deduped = dedupeGolfPlayers(players);
+  assert.equal(deduped.players.length, 1);
+  assert.equal(deduped.players[0]!.id, 'a');
+  assert.equal(deduped.removed, 1);
+  assert.equal(suggestGolfPar(8), 2);
+  assert.equal(suggestGolfPar(9), 3);
+  assert.equal(suggestGolfPar(12), 4);
+  assert.ok(golfQualityWarnings('Played for both clubs', 'Clubs', {
+    total: 2,
+    nameable: 2,
+    duplicateNamesRemoved: 1,
+  }).length >= 2);
+
+  const evaluation: GolfRuleEvaluation = {
+    prompt: 'Played for both Arsenal and Chelsea',
+    rule: { playedFor: ['Arsenal', 'Chelsea'] },
+    category: 'Clubs',
+    answers: [{ id: 'a', name: 'Player A', aliases: [], rarity: 'common' }],
+    hints: [],
+    counts: {
+      total: 1,
+      nameable: 1,
+      duplicateNamesRemoved: 0,
+      rarity: { common: 1, uncommon: 0, rare: 0, ultraRare: 0 },
+    },
+    qualityWarnings: [],
+    suggestedPar: 2,
+    suggestedTarget: 2,
+  };
+  const hole = buildGolfHoleFromEvaluation(evaluation, {
+    holeNumber: 3,
+    holeId: 'custom-hole',
+    templateId: '00000000-0000-4000-8000-000000000001',
+  });
+  assert.equal(hole.id, 'custom-hole');
+  assert.deepEqual(hole.rule, evaluation.rule);
+  assert.equal(hole.templateId, '00000000-0000-4000-8000-000000000001');
+});
+
+test('compares stored Golf answer ids exactly', () => {
+  assert.deepEqual(compareGolfAnswerIds(['a', 'b'], ['b', 'a']), {
+    valid: true,
+    expectedCount: 2,
+    storedCount: 2,
+    missingAnswerIds: [],
+    staleAnswerIds: [],
+  });
+  assert.deepEqual(compareGolfAnswerIds(['a', 'b'], ['a', 'c']), {
+    valid: false,
+    expectedCount: 2,
+    storedCount: 2,
+    missingAnswerIds: ['b'],
+    staleAnswerIds: ['c'],
+  });
 });
 
 test('checks Club Chain endpoint and length synchronization', () => {

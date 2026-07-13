@@ -54,8 +54,10 @@ current draft, and **Discard** restores the last server copy.
   career clubs.
 - **Draft XI** — edit category, formation and constraints, then review the optimal
   lineup and score in the pitch-style QA section.
-- **Football Golf** — navigate holes individually, edit prompt/par/target/hints,
-  and manage accepted answers, aliases and rarity.
+- **Football Golf** — navigate holes individually, attach a verified prompt
+  template or build a structured rule, preview its database coverage, then
+  regenerate accepted answers, aliases, rarity, hints and suggested par. Display
+  wording stays editable without becoming the source of truth for football facts.
 - **Club Chain** — edit endpoints and inspect the answer path. Validation checks
   every teammate link and compares the stored path with the database graph.
 - **Target Man** — edit category and target through structured fields; puzzle and

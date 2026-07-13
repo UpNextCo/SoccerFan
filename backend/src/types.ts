@@ -1,3 +1,5 @@
+import type { TowerRule } from './services/towerRuleSchema.js';
+
 export interface UserProfile {
   id: string;
   displayName: string;
@@ -114,6 +116,9 @@ export interface FootballGolfPuzzlePublic {
     category: string;
     answers: Array<{ id: string; name: string; aliases: string[]; rarity: string }>;
     hints: string[];
+    /** Present on newly generated holes; legacy persisted holes may omit it. */
+    rule?: TowerRule;
+    templateId?: string;
   }>;
 }
 
