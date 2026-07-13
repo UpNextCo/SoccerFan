@@ -84,6 +84,7 @@ export function EntityPicker({
   const [busy, setBusy] = useState(false)
   const [picking, setPicking] = useState(false)
   const [hits, setHits] = useState<Hit[]>([])
+  const [activeIndex, setActiveIndex] = useState(-1)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -100,6 +101,7 @@ export function EntityPicker({
     const minLen = kind === 'league' ? 0 : 2
     if (trimmed.length < minLen) {
       setHits([])
+      setActiveIndex(-1)
       setBusy(false)
       return
     }
@@ -124,7 +126,10 @@ export function EntityPicker({
             const rows = await api.searchNationalities(trimmed)
             next = rows.map((item) => ({ kind: 'nationality', item }))
           }
-          if (!cancelled) setHits(next)
+          if (!cancelled) {
+            setHits(next)
+            setActiveIndex(next.length > 0 ? 0 : -1)
+          }
         } catch (err) {
           if (!cancelled) setError(err instanceof Error ? err.message : 'Search failed')
         } finally {
@@ -149,6 +154,7 @@ export function EntityPicker({
       if (hit.kind === 'nationality') await onPickNationality?.(hit.item)
       setQ('')
       setHits([])
+      setActiveIndex(-1)
       setOpen(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to apply selection')
@@ -209,22 +215,58 @@ export function EntityPicker({
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setOpen(false)
+              setActiveIndex(-1)
+              return
+            }
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              if (hits.length === 0) return
+              setOpen(true)
+              setActiveIndex((current) => {
+                if (event.key === 'ArrowDown') return current < hits.length - 1 ? current + 1 : 0
+                return current > 0 ? current - 1 : hits.length - 1
+              })
+              return
+            }
+            if (event.key === 'Enter' && open && activeIndex >= 0 && hits[activeIndex]) {
+              event.preventDefault()
+              void select(hits[activeIndex])
+            }
+          }}
           autoComplete="off"
+          role="combobox"
           aria-autocomplete="list"
           aria-controls={listId}
+          aria-expanded={open && hits.length > 0}
+          aria-activedescendant={
+            open && activeIndex >= 0 ? `${listId}-option-${activeIndex}` : undefined
+          }
         />
         {(busy || picking) && <span className="entity-busy">{picking ? 'Applying…' : '…'}</span>}
       </div>
       {error && <p className="error tiny">{error}</p>}
       {open && hits.length > 0 && (
         <ul className="entity-results" id={listId} role="listbox">
-          {hits.map((hit) => {
+          {hits.map((hit, index) => {
             const img = hitImage(hit)
             const flag =
               hit.kind === 'nationality' ? nationalityFlag(hit.item.name) : undefined
             return (
-              <li key={hitKey(hit)}>
-                <button type="button" className="entity-result" onClick={() => void select(hit)}>
+              <li
+                key={hitKey(hit)}
+                id={`${listId}-option-${index}`}
+                role="option"
+                aria-selected={index === activeIndex}
+                onMouseMove={() => setActiveIndex(index)}
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  void select(hit)
+                }}
+              >
+                <div className="entity-result">
                   {img ? (
                     <img src={img} alt="" className="entity-thumb" />
                   ) : flag ? (
@@ -242,7 +284,7 @@ export function EntityPicker({
                     <strong>{hitTitle(hit)}</strong>
                     <span className="muted tiny">{hitSub(hit)}</span>
                   </span>
-                </button>
+                </div>
               </li>
             )
           })}

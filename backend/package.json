@@ -11,6 +11,7 @@
     "build": "npm run build:admin && tsc",
     "build:admin": "npm --prefix ../admin ci && npm --prefix ../admin run build",
     "build:api": "tsc",
+    "test:validation": "node --import tsx --test src/services/adminPuzzleValidation.test.ts",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",

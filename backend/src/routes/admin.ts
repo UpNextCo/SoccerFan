@@ -29,8 +29,12 @@ import {
   resolveAdminPlayer,
   resolveAdminTeam,
 } from '../services/adminEntitySearch.js';
+import { adminQuestionEngineRouter } from './adminQuestionEngine.js';
+import { adminPuzzleValidationRouter } from './adminPuzzleValidation.js';
 
 export const adminRouter = Router();
+adminRouter.use('/question-engine', adminQuestionEngineRouter);
+adminRouter.use('/validation', adminPuzzleValidationRouter);
 
 adminRouter.post('/login', (req, res) => {
   const body = z
@@ -119,6 +123,10 @@ adminRouter.post('/month/lock', requireAdmin, async (req, res) => {
     return;
   }
   const result = await setMonthStatus(body.data.yearMonth, 'locked', body.data.note);
+  if (result.error) {
+    sendError(res, result.error, 400, 'VALIDATION', { issues: result.issues ?? [], invalid: result.invalid ?? [] });
+    return;
+  }
   sendSuccess(res, result);
 });
 

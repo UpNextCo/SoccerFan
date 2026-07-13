@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
+import './game-editors.css'
 
 type PlayerRef = {
   id: string
@@ -26,6 +28,8 @@ type Answer = {
   [k: string]: unknown
 }
 
+const EMPTY_ANSWER: Answer = {}
+
 export function ClubChainEditor({
   puzzle,
   answer,
@@ -38,8 +42,53 @@ export function ClubChainEditor({
   onChange: (puzzle: Puzzle, answer: Answer) => void
 }) {
   const p = puzzle as Puzzle
-  const a = (answer as Answer) ?? {}
+  const a = (answer as Answer | null) ?? EMPTY_ANSWER
   const pathIds = a.shortestPathPlayerIds ?? []
+  const pathKey = pathIds.join('|')
+  const [pathNames, setPathNames] = useState<Record<string, string>>({})
+  const latestRef = useRef({ p, a })
+
+  useEffect(() => {
+    latestRef.current = { p, a }
+  }, [p, a])
+
+  function commit(nextPuzzle: Puzzle, nextAnswer: Answer) {
+    latestRef.current = { p: nextPuzzle, a: nextAnswer }
+    onChange(nextPuzzle, nextAnswer)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    const idsToResolve = pathKey ? pathKey.split('|') : []
+    const unresolvedIds = idsToResolve.filter(
+      (id) => id && id !== p.start?.id && id !== p.target?.id
+    )
+    if (unresolvedIds.length === 0) return
+    void Promise.all(
+      unresolvedIds.map(async (id) => {
+        try {
+          const player = (await api.resolvePlayer(id, 'card')) as { id?: string; name?: string }
+          return [id, player.name || id] as const
+        } catch {
+          return [id, id] as const
+        }
+      })
+    ).then((entries) => {
+      if (!cancelled) setPathNames((current) => ({ ...current, ...Object.fromEntries(entries) }))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [pathKey, p.start?.id, p.target?.id])
+
+  function commitPath(nextPath: string[]) {
+    const { p: currentPuzzle, a: currentAnswer } = latestRef.current
+    const length = Math.max(0, nextPath.length - 1)
+    commit(
+      { ...currentPuzzle, shortestPathLength: length },
+      { ...currentAnswer, shortestPathPlayerIds: nextPath, shortestPathLength: length }
+    )
+  }
 
   async function pickEndpoint(
     which: 'start' | 'target',
@@ -74,32 +123,88 @@ export function ClubChainEditor({
       position: resolved.position,
       headshotUrl: resolved.headshotUrl,
     }
-    const nextPuzzle = { ...p, [which]: nextCard }
+    const { p: currentPuzzle, a: currentAnswer } = latestRef.current
+    const currentPath = currentAnswer.shortestPathPlayerIds ?? []
+    const nextPuzzle = { ...currentPuzzle, [which]: nextCard }
     // Keep answer path endpoints in sync when start/target change.
-    let nextAns = a
-    if (pathIds.length >= 2) {
-      const nextPath = [...pathIds]
+    let nextAns = currentAnswer
+    if (currentPath.length >= 2) {
+      const nextPath = [...currentPath]
       if (which === 'start') nextPath[0] = resolved.id
       if (which === 'target') nextPath[nextPath.length - 1] = resolved.id
-      nextAns = { ...a, shortestPathPlayerIds: nextPath }
+      nextAns = {
+        ...currentAnswer,
+        shortestPathPlayerIds: nextPath,
+        shortestPathLength: nextPath.length - 1,
+      }
     }
-    onChange(nextPuzzle, nextAns)
+    commit(
+      currentPath.length >= 2
+        ? { ...nextPuzzle, shortestPathLength: currentPath.length - 1 }
+        : nextPuzzle,
+      nextAns
+    )
   }
 
-  async function pickPathPlayer(idx: number, playerId: string) {
-    const resolved = (await api.resolvePlayer(playerId, 'card')) as { id: string; name: string }
-    const nextPath = pathIds.map((id, i) => (i === idx ? resolved.id : id))
-    onChange(p, {
-      ...a,
-      shortestPathPlayerIds: nextPath,
-      shortestPathLength: nextPath.length > 0 ? nextPath.length - 1 : a.shortestPathLength,
-    })
+  async function pickPathPlayer(idx: number, hit: { id: string; name: string }) {
+    let resolved = hit
+    try {
+      resolved = (await api.resolvePlayer(hit.id, 'card')) as { id: string; name: string }
+    } catch {
+      // Search result still provides a valid local reference.
+    }
+    const currentPath = latestRef.current.a.shortestPathPlayerIds ?? []
+    const nextPath = currentPath.map((id, i) => (i === idx ? resolved.id : id))
+    setPathNames((current) => ({ ...current, [resolved.id]: resolved.name }))
+    commitPath(nextPath)
+  }
+
+  function addPathStep() {
+    if (!p.start?.id || !p.target?.id) return
+    const basePath = pathIds.length >= 2 ? pathIds : [p.start.id, p.target.id]
+    commitPath([...basePath.slice(0, -1), '', basePath[basePath.length - 1]!])
+  }
+
+  function removePathStep(idx: number) {
+    if (idx <= 0 || idx >= pathIds.length - 1) return
+    commitPath(pathIds.filter((_, index) => index !== idx))
+  }
+
+  function movePathStep(idx: number, offset: -1 | 1) {
+    const target = idx + offset
+    if (idx <= 0 || idx >= pathIds.length - 1 || target <= 0 || target >= pathIds.length - 1) {
+      return
+    }
+    const nextPath = [...pathIds]
+    ;[nextPath[idx], nextPath[target]] = [nextPath[target]!, nextPath[idx]!]
+    commitPath(nextPath)
+  }
+
+  const warnings: string[] = []
+  if (pathIds.length < 2) warnings.push('The stored path needs a start and target endpoint.')
+  if (pathIds.some((id) => !id)) warnings.push('One or more path steps has no player selected.')
+  if (pathIds.length >= 1 && p.start?.id && pathIds[0] !== p.start.id) {
+    warnings.push('The first path player does not match the selected start player.')
+  }
+  if (pathIds.length >= 2 && p.target?.id && pathIds[pathIds.length - 1] !== p.target.id) {
+    warnings.push('The last path player does not match the selected target player.')
+  }
+  if (p.shortestPathLength !== Math.max(0, pathIds.length - 1)) {
+    warnings.push('Puzzle path length is out of sync; editing the path will synchronize it.')
+  }
+  if (a.shortestPathLength !== Math.max(0, pathIds.length - 1)) {
+    warnings.push('Answer path length is out of sync; editing the path will synchronize it.')
   }
 
   return (
     <div className="mode-editor">
       <div className="q-card">
-        <div className="row">
+        <header>
+          <strong>Chain endpoints</strong>
+          <span className="muted tiny">Choose the fixed start and target players</span>
+        </header>
+        <div className="chain-flow">
+          <div className="chain-node endpoint">
           <EntityPicker
             key={`start-${p.start?.id}-${p.start?.headshotUrl ?? ''}`}
             kind="player"
@@ -110,6 +215,12 @@ export function ClubChainEditor({
             disabled={locked}
             onPickPlayer={(hit) => pickEndpoint('start', hit)}
           />
+            <p className="muted tiny">
+              {[p.start?.club, p.start?.nationality, p.start?.position].filter(Boolean).join(' · ') || 'No player details'}
+            </p>
+          </div>
+          <span className="chain-arrow" aria-hidden="true">→</span>
+          <div className="chain-node endpoint">
           <EntityPicker
             key={`target-${p.target?.id}-${p.target?.headshotUrl ?? ''}`}
             kind="player"
@@ -120,6 +231,10 @@ export function ClubChainEditor({
             disabled={locked}
             onPickPlayer={(hit) => pickEndpoint('target', hit)}
           />
+            <p className="muted tiny">
+              {[p.target?.club, p.target?.nationality, p.target?.position].filter(Boolean).join(' · ') || 'No player details'}
+            </p>
+          </div>
         </div>
         <div className="row">
           <label className="field">
@@ -132,31 +247,68 @@ export function ClubChainEditor({
             />
           </label>
           <p className="muted">
-            Difficulty {p.difficulty ?? '?'} · par {p.shortestPathLength ?? '?'}
+            Difficulty {p.difficulty ?? '?'} · path length {p.shortestPathLength ?? '?'}
           </p>
         </div>
       </div>
 
       <section className="q-card">
         <header>
-          <strong>Shortest path (answer_json)</strong>
+          <strong>Start → path → target</strong>
+          <span className="muted tiny">{Math.max(0, pathIds.length - 1)} links</span>
         </header>
+        {warnings.map((warning) => (
+          <p className="warning-box" key={warning}>{warning}</p>
+        ))}
         {pathIds.length === 0 ? (
-          <p className="muted">No path stored</p>
+          <p className="muted">No path stored. Adding a step will initialize it from the selected endpoints.</p>
         ) : (
-          <div className="stack-gap">
+          <div className="chain-flow">
             {pathIds.map((id, i) => (
-              <EntityPicker
-                key={`${i}-${id}`}
-                kind="player"
-                label={i === 0 ? 'Start' : i === pathIds.length - 1 ? 'Target' : `Step ${i}`}
-                valueLabel={id}
-                disabled={locked}
-                onPickPlayer={(hit) => pickPathPlayer(i, hit.id)}
-              />
+              <div key={`${i}-${id}`} className="chain-flow">
+                {i > 0 && <span className="chain-arrow" aria-hidden="true">→</span>}
+                <div className={`chain-node${i === 0 || i === pathIds.length - 1 ? ' endpoint' : ''}`}>
+                  <div className="card-heading">
+                    <strong>{i === 0 ? 'Start' : i === pathIds.length - 1 ? 'Target' : `Step ${i}`}</strong>
+                    {i > 0 && i < pathIds.length - 1 && (
+                      <div className="button-row">
+                        <button type="button" className="ghost tiny-btn" disabled={locked || i === 1} onClick={() => movePathStep(i, -1)}>←</button>
+                        <button type="button" className="ghost tiny-btn" disabled={locked || i === pathIds.length - 2} onClick={() => movePathStep(i, 1)}>→</button>
+                        <button type="button" className="ghost tiny-btn" disabled={locked} onClick={() => removePathStep(i)}>×</button>
+                      </div>
+                    )}
+                  </div>
+                  <EntityPicker
+                    key={`${i}-${id}-${pathNames[id] ?? ''}`}
+                    kind="player"
+                    valueLabel={
+                      id === p.start?.id
+                        ? p.start.name
+                        : id === p.target?.id
+                          ? p.target.name
+                          : pathNames[id] || id || undefined
+                    }
+                    disabled={locked || i === 0 || i === pathIds.length - 1}
+                    placeholder={i === 0 || i === pathIds.length - 1 ? undefined : 'Search path player…'}
+                    onPickPlayer={(hit) => pickPathPlayer(i, hit)}
+                  />
+                  {id && <span className="muted tiny">{id}</span>}
+                </div>
+              </div>
             ))}
           </div>
         )}
+        <div className="editor-toolbar">
+          <span className="muted tiny">This checks local JSON consistency only, not database path validity.</span>
+          <button
+            type="button"
+            className="ghost"
+            disabled={locked || !p.start?.id || !p.target?.id}
+            onClick={addPathStep}
+          >
+            + Add path step
+          </button>
+        </div>
       </section>
     </div>
   )

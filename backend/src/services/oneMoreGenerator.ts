@@ -15,6 +15,7 @@ import { resolveHeadshot } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
 import { oneMorePairKey, recentOneMorePairs } from './puzzleHistory.js';
+import { oneMoreEligibilityErrors } from './oneMoreEligibility.js';
 
 // Always exactly 10 rounds, so each correct answer is a clean +90 XP toward the 900 max.
 const ROUND_TARGET = 10;
@@ -34,7 +35,7 @@ function hashStr(s: string): number {
 const BIG6 = ['Manchester United', 'Manchester City', 'Chelsea', 'Arsenal', 'Liverpool', 'Tottenham'];
 const big6Sql = sql.join(BIG6.map((t) => sql`${t}`), sql`, `);
 
-interface Metric {
+export interface OneMoreMetricDefinition {
   id: string;
   title: string;   // shown as "WHO HAS {min}+ {title}?"
   noun: string;    // reveal unit, e.g. "goals", "pens", "caps"
@@ -45,7 +46,7 @@ interface Metric {
   eventBased?: boolean; // Transfermarkt-event metric (only complete ~2010+) → see gating below
 }
 
-const METRICS: Metric[] = [
+const METRICS: OneMoreMetricDefinition[] = [
   { id: 'pl_goals', title: 'Premier League goals', noun: 'goals', col: 'pl_goals', part: 'pl_apps', ladder: [20, 30, 40, 50, 60, 75], goalLike: true },
   { id: 'pl_assists', title: 'Premier League assists', noun: 'assists', col: 'pl_assists', part: 'pl_apps', ladder: [15, 20, 30, 40, 50], goalLike: false },
   { id: 'laliga_goals', title: 'La Liga goals', noun: 'goals', col: 'liga_goals', part: 'liga_apps', ladder: [20, 30, 40, 50, 75], goalLike: true },
@@ -81,6 +82,7 @@ export interface OneMorePuzzle {
   modeId: 'one_more';
   puzzleId: string;
   date: string;
+  metricId?: string;
   title: string;
   valueNoun: string;
   minimum: number;
@@ -135,7 +137,96 @@ const AGG = sql`
     GROUP BY p.id, p.name, p.position, p.api_football_id, p.nationality, p.market_value_tier, p.birth_date, fa.finals, aw.awards
   )`;
 
-interface Candidate { id: string; name: string; position: string; nationality: string; prestige: number; value: number; birth_year: number | null; api_football_id: number | null; }
+export interface OneMoreMetricCandidate {
+  id: string;
+  name: string;
+  position: string;
+  nationality: string;
+  prestige: number;
+  value: number;
+  birth_year: number | null;
+  api_football_id: number | null;
+}
+
+type Candidate = OneMoreMetricCandidate;
+
+export interface OneMoreMetricCatalogItem {
+  id: string;
+  title: string;
+  noun: string;
+  ladder: number[];
+  goalLike: boolean;
+  eventBased: boolean;
+}
+
+export interface OneMoreMetricPreview {
+  metric: OneMoreMetricCatalogItem;
+  threshold: number;
+  suggestedThreshold: number;
+  counts: {
+    participating: number;
+    qualifying: number;
+    distractors: number;
+    nearQualifying: number;
+    nearDistractors: number;
+    verifiedPairs: number;
+  };
+  samples: {
+    qualifying: OneMoreMetricCandidate[];
+    distractors: OneMoreMetricCandidate[];
+  };
+  warnings: string[];
+}
+
+function catalogItem(metric: OneMoreMetricDefinition): OneMoreMetricCatalogItem {
+  return {
+    id: metric.id,
+    title: metric.title,
+    noun: metric.noun,
+    ladder: [...metric.ladder],
+    goalLike: metric.goalLike,
+    eventBased: metric.eventBased ?? false,
+  };
+}
+
+function metricById(metricId: string): OneMoreMetricDefinition | undefined {
+  return METRICS.find((metric) => metric.id === metricId);
+}
+
+export function listOneMoreMetrics(): OneMoreMetricCatalogItem[] {
+  return METRICS.map(catalogItem);
+}
+
+async function loadMetricCandidates(metric: OneMoreMetricDefinition): Promise<Candidate[]> {
+  return (await db.execute(sql`
+    ${AGG}
+    SELECT id, name, position, nationality, birth_year, api_football_id, prestige, ${sql.raw(metric.col)} AS value
+    FROM agg WHERE ${sql.raw(metric.part)} > 0
+  `)) as unknown as Candidate[];
+}
+
+interface OneMoreMetricVerificationFact {
+  id: string;
+  value: number;
+  participation: number;
+  position: string;
+  birth_year: number | null;
+}
+
+async function loadMetricVerificationFacts(
+  metric: OneMoreMetricDefinition,
+  playerIds: string[]
+): Promise<Map<string, OneMoreMetricVerificationFact>> {
+  if (playerIds.length === 0) return new Map();
+  const ids = sql.join(playerIds.map((playerId) => sql`${playerId}::uuid`), sql`, `);
+  const rows = (await db.execute(sql`
+    ${AGG}
+    SELECT id, ${sql.raw(metric.col)} AS value, ${sql.raw(metric.part)} AS participation,
+      position, birth_year
+    FROM agg WHERE id IN (${ids})
+  `)) as unknown as OneMoreMetricVerificationFact[];
+  return new Map(rows.map((row) => [row.id, row]));
+}
 
 async function clubsByPlayer(ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
@@ -180,7 +271,7 @@ export async function generateOneMorePuzzle(
  * "pick the famous one" or "pick the megastar". Bands widen / fame floor drops only if a tight
  * pairing can't fill the round.
  */
-function nearPools(rows: Candidate[], min: number, above: number, below: number, floor: number, metric: Metric) {
+function nearPools(rows: Candidate[], min: number, above: number, below: number, floor: number, metric: OneMoreMetricDefinition) {
   const ok = (r: Candidate) => r.prestige >= floor && (!metric.goalLike || r.position !== 'Goalkeeper');
   const Q = rows.filter((r) => r.value >= min && r.value <= min + above && ok(r));
   // Distractors on event-based metrics must be in the covered era (born >= 1990): we never want to
@@ -190,84 +281,279 @@ function nearPools(rows: Candidate[], min: number, above: number, below: number,
   return { Q, D };
 }
 
+function metricBand(minimum: number): number {
+  return Math.max(Math.round(minimum * 0.45), 8);
+}
+
+function suggestedThreshold(metric: OneMoreMetricDefinition, rows: Candidate[]): number {
+  let selected = metric.ladder[0] ?? 1;
+  let best = -1;
+  for (const minimum of metric.ladder) {
+    const width = metricBand(minimum);
+    const { Q, D } = nearPools(rows, minimum, width, width, 44, metric);
+    const pairs = Math.min(Q.length, D.length);
+    if (pairs > best) {
+      best = pairs;
+      selected = minimum;
+    }
+  }
+  return selected;
+}
+
+function requireMetric(metricId: string): OneMoreMetricDefinition {
+  const metric = metricById(metricId);
+  if (!metric) throw new Error(`Unknown One More metric: ${metricId}`);
+  return metric;
+}
+
+export async function previewOneMoreMetric(
+  metricId: string,
+  requestedThreshold?: number
+): Promise<OneMoreMetricPreview> {
+  const metric = requireMetric(metricId);
+  const rows = await loadMetricCandidates(metric);
+  const suggested = suggestedThreshold(metric, rows);
+  const threshold = requestedThreshold ?? suggested;
+  const width = metricBand(threshold);
+  const near = nearPools(rows, threshold, width, width, 44, metric);
+  const eligible = rows.filter((row) => !metric.goalLike || row.position !== 'Goalkeeper');
+  const coveredDistractors = eligible.filter(
+    (row) => !metric.eventBased || (row.birth_year ?? 0) >= 1990
+  );
+  const qualifying = eligible.filter((row) => row.value >= threshold);
+  const distractors = coveredDistractors.filter((row) => row.value < threshold);
+  const verifiedPairs = Math.min(near.Q.length, near.D.length);
+  const warnings: string[] = [];
+  if (metric.eventBased) {
+    warnings.push('Event-derived coverage is incomplete before roughly 2010; distractors are limited to players born in 1990 or later.');
+  }
+  if (verifiedPairs < MIN_ROUNDS) {
+    warnings.push(`Only ${verifiedPairs} close, recognisable pairs are available at this threshold.`);
+  }
+  if (qualifying.length < ROUND_TARGET) warnings.push(`Only ${qualifying.length} players qualify.`);
+  if (distractors.length < ROUND_TARGET) warnings.push(`Only ${distractors.length} covered distractors are available.`);
+  const sample = (candidates: Candidate[]) =>
+    [...candidates].sort((a, b) => b.prestige - a.prestige || Math.abs(a.value - threshold) - Math.abs(b.value - threshold)).slice(0, 8);
+  return {
+    metric: catalogItem(metric),
+    threshold,
+    suggestedThreshold: suggested,
+    counts: {
+      participating: rows.length,
+      qualifying: qualifying.length,
+      distractors: distractors.length,
+      nearQualifying: near.Q.length,
+      nearDistractors: near.D.length,
+      verifiedPairs,
+    },
+    samples: { qualifying: sample(near.Q), distractors: sample(near.D) },
+    warnings,
+  };
+}
+
+export interface OneMoreVerifiedCandidatePair {
+  options: [OneMoreMetricCandidate, OneMoreMetricCandidate];
+  qualifierId: string;
+  verified: true;
+}
+
+interface SelectedCandidatePair {
+  q: Candidate;
+  d: Candidate;
+}
+
+function selectCandidatePairs(input: {
+  metric: OneMoreMetricDefinition;
+  rows: Candidate[];
+  minimum: number;
+  seed: string;
+  target: number;
+  recentPairs: Set<string>;
+}): SelectedCandidatePair[] {
+  let above = metricBand(input.minimum);
+  let below = metricBand(input.minimum);
+  let floor = 44;
+  let { Q, D } = nearPools(input.rows, input.minimum, above, below, floor, input.metric);
+  for (let guard = 0; (Q.length < input.target || D.length < input.target) && guard < 6; guard += 1) {
+    above = Math.round(above * 1.5);
+    below = Math.round(below * 1.5);
+    if (guard >= 2) floor = Math.max(floor - 6, 30);
+    ({ Q, D } = nearPools(input.rows, input.minimum, above, below, floor, input.metric));
+  }
+  const target = Math.min(input.target, Q.length, D.length);
+  Q.sort((a, b) => b.prestige - a.prestige);
+  D.sort((a, b) => b.prestige - a.prestige);
+  const jitterKey = (side: string, id: string, index: number) =>
+    index + (hashStr(`${input.seed}:${input.metric.id}:${side}:${id}`) % 500) / 100;
+  const qualifiers = Q
+    .map((candidate, index) => ({ candidate, order: jitterKey('q', candidate.id, index) }))
+    .sort((a, b) => a.order - b.order)
+    .map(({ candidate }) => candidate);
+  const distractors = D
+    .map((candidate, index) => ({ candidate, order: jitterKey('d', candidate.id, index) }))
+    .sort((a, b) => a.order - b.order)
+    .map(({ candidate }) => candidate);
+  const usedDistractors = new Set<number>();
+  const pickDistractor = (qualifierIndex: number, allowRecent: boolean): number => {
+    for (let span = 0; span < distractors.length; span += 1) {
+      for (const distractorIndex of [qualifierIndex - span, qualifierIndex + span]) {
+        if (distractorIndex < 0 || distractorIndex >= distractors.length || usedDistractors.has(distractorIndex)) continue;
+        if (!allowRecent && input.recentPairs.has(oneMorePairKey(
+          input.metric.title,
+          qualifiers[qualifierIndex]!.id,
+          distractors[distractorIndex]!.id
+        ))) continue;
+        return distractorIndex;
+      }
+    }
+    return -1;
+  };
+  const pairs: SelectedCandidatePair[] = [];
+  for (let qualifierIndex = 0; qualifierIndex < qualifiers.length && pairs.length < target; qualifierIndex += 1) {
+    let distractorIndex = pickDistractor(qualifierIndex, false);
+    if (distractorIndex < 0) distractorIndex = pickDistractor(qualifierIndex, true);
+    if (distractorIndex < 0) continue;
+    usedDistractors.add(distractorIndex);
+    pairs.push({ q: qualifiers[qualifierIndex]!, d: distractors[distractorIndex]! });
+  }
+  return pairs.sort((a, b) =>
+    (b.q.prestige + b.d.prestige) - (a.q.prestige + a.d.prestige)
+    || (b.q.value - b.d.value) - (a.q.value - a.d.value));
+}
+
+export async function generateOneMoreCandidatePairs(input: {
+  metricId: string;
+  threshold: number;
+  count?: number;
+  seed?: string;
+}): Promise<{
+  metric: OneMoreMetricCatalogItem;
+  threshold: number;
+  pairs: OneMoreVerifiedCandidatePair[];
+  warnings: string[];
+}> {
+  const metric = requireMetric(input.metricId);
+  const rows = await loadMetricCandidates(metric);
+  const count = Math.min(Math.max(input.count ?? ROUND_TARGET, 1), 50);
+  const seed = input.seed ?? `${input.metricId}:${input.threshold}`;
+  const selected = selectCandidatePairs({
+    metric,
+    rows,
+    minimum: input.threshold,
+    seed,
+    target: count,
+    recentPairs: new Set(),
+  });
+  const pairs: OneMoreVerifiedCandidatePair[] = selected.map(({ q: qualifier, d: distractor }, index) => {
+    const qualifierFirst = hashStr(`${seed}:side:${index}`) % 2 === 0;
+    return {
+      options: (qualifierFirst ? [qualifier, distractor] : [distractor, qualifier]) as [Candidate, Candidate],
+      qualifierId: qualifier.id,
+      verified: true,
+    };
+  });
+  const warnings = pairs.length < count ? [`Requested ${count} pairs but only ${pairs.length} verified pairs were available.`] : [];
+  if (metric.eventBased) warnings.push('Event-based distractors are coverage-gated to players born in 1990 or later.');
+  return { metric: catalogItem(metric), threshold: input.threshold, pairs, warnings };
+}
+
+export async function lookupOneMorePlayerMetricValue(
+  metricId: string,
+  playerId: string
+): Promise<{ playerId: string; metricId: string; value: number } | null> {
+  const metric = requireMetric(metricId);
+  const facts = await loadMetricVerificationFacts(metric, [playerId]);
+  const fact = facts.get(playerId);
+  return fact === undefined ? null : { playerId, metricId, value: fact.value };
+}
+
+export interface OneMoreCandidateValueInput {
+  playerId: string;
+  expectedValue?: number;
+}
+
+export interface OneMoreCandidatePairVerification {
+  valid: boolean;
+  options: Array<{
+    playerId: string;
+    expectedValue?: number;
+    actualValue: number | null;
+    qualifies: boolean | null;
+    valueMatches: boolean;
+  }>;
+  errors: string[];
+}
+
+/** Semantic validation for Ops saves: DB values must match and each pair needs exactly one qualifier. */
+export async function verifyOneMoreCandidateValues(
+  metricId: string,
+  threshold: number,
+  pairs: Array<[OneMoreCandidateValueInput, OneMoreCandidateValueInput]>
+): Promise<OneMoreCandidatePairVerification[]> {
+  const metric = requireMetric(metricId);
+  const uniqueIds = [...new Set(pairs.flatMap((pair) => pair.map((option) => option.playerId)))];
+  const facts = await loadMetricVerificationFacts(metric, uniqueIds);
+  return pairs.map((pair) => {
+    const options = pair.map((option) => {
+      const fact = facts.get(option.playerId);
+      const actualValue = fact?.value ?? null;
+      return {
+        playerId: option.playerId,
+        expectedValue: option.expectedValue,
+        actualValue,
+        qualifies: actualValue === null ? null : actualValue >= threshold,
+        valueMatches: actualValue !== null && (option.expectedValue === undefined || option.expectedValue === actualValue),
+      };
+    });
+    const errors: string[] = [];
+    if (options.some((option) => option.actualValue === null)) errors.push('A player was not found.');
+    if (options.some((option) => !option.valueMatches)) errors.push('A supplied value does not match the database.');
+    pair.forEach((option, index) => {
+      const fact = facts.get(option.playerId);
+      if (!fact) return;
+      for (const message of oneMoreEligibilityErrors(metric, {
+        participation: fact.participation,
+        position: fact.position,
+        birthYear: fact.birth_year,
+        value: fact.value,
+      }, threshold)) {
+        errors.push(`Option ${index + 1}: ${message}`);
+      }
+    });
+    if (options.filter((option) => option.qualifies).length !== 1) errors.push('Pair must contain exactly one qualifying player.');
+    return { valid: errors.length === 0, options, errors };
+  });
+}
+
 async function assembleMetric(
-  metric: Metric,
+  metric: OneMoreMetricDefinition,
   date: string,
   recentPairs: Set<string>
 ): Promise<{ puzzle: OneMorePuzzle; pool: number } | null> {
-  const rows = (await db.execute(sql`
-    ${AGG}
-    SELECT id, name, position, nationality, birth_year, api_football_id, prestige, ${sql.raw(metric.col)} AS value
-    FROM agg WHERE ${sql.raw(metric.part)} > 0
-  `)) as unknown as Candidate[];
+  const rows = await loadMetricCandidates(metric);
 
   // Pick the threshold that yields the most CLOSE, recognisable pairs (one just over, one just
   // under), using a tight band around the line — that's what makes each round genuinely hard.
-  const band = (min: number) => Math.max(Math.round(min * 0.45), 8);
   let minimum = 0;
   let best = -1;
   for (const min of metric.ladder) {
-    const { Q, D } = nearPools(rows, min, band(min), band(min), 44, metric);
+    const { Q, D } = nearPools(rows, min, metricBand(min), metricBand(min), 44, metric);
     const pairs = Math.min(Q.length, D.length);
     if (pairs > best) { best = pairs; minimum = min; }
   }
   if (minimum === 0) return null;
 
-  // Build the tight near-line pools, widening bands / lowering the fame floor only if needed.
-  let above = band(minimum);
-  let below = band(minimum);
-  let floor = 44;
-  let { Q, D } = nearPools(rows, minimum, above, below, floor, metric);
-  for (let guard = 0; (Q.length < ROUND_TARGET || D.length < ROUND_TARGET) && guard < 6; guard += 1) {
-    above = Math.round(above * 1.5);
-    below = Math.round(below * 1.5);
-    if (guard >= 2) floor = Math.max(floor - 6, 30);
-    ({ Q, D } = nearPools(rows, minimum, above, below, floor, metric));
-  }
-
-  const n = Math.min(ROUND_TARGET, Q.length, D.length);
-  if (n < MIN_ROUNDS) return null;
-
-  // Pair by fame rank → each round has two similarly-famous players (so fame can't give it away;
-  // sometimes the famous one is the WRONG one). Order rounds by FAME, most recognisable first:
-  // you open with household names (Giroud-tier) and only meet the deep cuts (Gameiro, Pjanić,
-  // Salvio…) deeper into the run, where the stakes are higher anyway.
-  Q.sort((a, b) => b.prestige - a.prestige);
-  D.sort((a, b) => b.prestige - a.prestige);
-
-  // Day-to-day variety: jitter each fame ranking by a few seeded positions so different players
-  // surface (and pairings differ) every time this metric comes round — each round still pairs
-  // two similarly-famous names.
-  const jitterKey = (salt: string, id: string, i: number) =>
-    i + (hashStr(`${date}:${metric.id}:${salt}:${id}`) % 500) / 100; // shifts of 0–5 places
-  const Qs = Q.map((c, i) => ({ c, k: jitterKey('q', c.id, i) })).sort((a, b) => a.k - b.k).map((x) => x.c);
-  const Ds = D.map((c, i) => ({ c, k: jitterKey('d', c.id, i) })).sort((a, b) => a.k - b.k).map((x) => x.c);
-
-  // Pair each qualifier with the nearest-fame unused distractor whose exact pairing hasn't
-  // shipped inside the repeat window; only if every option is exhausted accept a recent pair.
-  const usedD = new Set<number>();
-  const pickDistractor = (qi: number, allowRecent: boolean): number => {
-    for (let span = 0; span < Ds.length; span += 1) {
-      for (const di of [qi - span, qi + span]) {
-        if (di < 0 || di >= Ds.length || usedD.has(di)) continue;
-        if (!allowRecent && recentPairs.has(oneMorePairKey(metric.title, Qs[qi]!.id, Ds[di]!.id))) continue;
-        return di;
-      }
-    }
-    return -1;
-  };
-  const pairs: Array<{ q: Candidate; d: Candidate }> = [];
-  for (let qi = 0; qi < Qs.length && pairs.length < n; qi += 1) {
-    let di = pickDistractor(qi, false);
-    if (di < 0) di = pickDistractor(qi, true);
-    if (di < 0) continue;
-    usedD.add(di);
-    pairs.push({ q: Qs[qi]!, d: Ds[di]! });
-  }
+  // Shared with Ops candidate generation so previews and daily output use identical pool,
+  // fame matching, coverage gating, and deterministic jitter rules.
+  const pairs = selectCandidatePairs({
+    metric,
+    rows,
+    minimum,
+    seed: date,
+    target: ROUND_TARGET,
+    recentPairs,
+  });
   if (pairs.length < MIN_ROUNDS) return null;
-  pairs.sort((a, b) =>
-    (b.q.prestige + b.d.prestige) - (a.q.prestige + a.d.prestige)
-    || (b.q.value - b.d.value) - (a.q.value - a.d.value));
 
   const ids = pairs.flatMap((p) => [p.q.id, p.d.id]);
   const clubs = await clubsByPlayer(ids);
@@ -309,7 +595,16 @@ async function assembleMetric(
     ({ options: (qualifierFirst[i] ? [toOption(q), toOption(d)] : [toOption(d), toOption(q)]) as [OneMoreOption, OneMoreOption] }));
 
   return {
-    puzzle: { modeId: 'one_more', puzzleId: `${date}-one_more`, date, title: metric.title, valueNoun: metric.noun, minimum, rounds },
+    puzzle: {
+      modeId: 'one_more',
+      puzzleId: `${date}-one_more`,
+      date,
+      metricId: metric.id,
+      title: metric.title,
+      valueNoun: metric.noun,
+      minimum,
+      rounds,
+    },
     pool: pairs.length,
   };
 }

@@ -39,6 +39,124 @@ export type PuzzleRow = {
   createdAt: string
 }
 
+export type OneMoreMetricCatalogItem = {
+  id: string
+  title: string
+  noun: string
+  ladder: number[]
+  goalLike: boolean
+  eventBased: boolean
+}
+
+export type OneMoreMetricCandidate = {
+  id: string
+  name: string
+  position: string
+  nationality: string
+  prestige: number
+  value: number
+  birth_year: number | null
+  api_football_id: number | null
+}
+
+export type OneMoreMetricPreview = {
+  metric: OneMoreMetricCatalogItem
+  threshold: number
+  suggestedThreshold: number
+  counts: {
+    participating: number
+    qualifying: number
+    distractors: number
+    nearQualifying: number
+    nearDistractors: number
+    verifiedPairs: number
+  }
+  samples: {
+    qualifying: OneMoreMetricCandidate[]
+    distractors: OneMoreMetricCandidate[]
+  }
+  warnings: string[]
+}
+
+export type OneMoreCandidatePair = {
+  options: [OneMoreMetricCandidate, OneMoreMetricCandidate]
+  qualifierId: string
+  verified: true
+}
+
+export type OneMoreCandidateResponse = {
+  metric: OneMoreMetricCatalogItem
+  threshold: number
+  pairs: OneMoreCandidatePair[]
+  warnings: string[]
+}
+
+export type OneMorePlayerMetricValue = {
+  playerId: string
+  metricId: string
+  value: number
+}
+
+export type OneMorePairVerification = {
+  valid: boolean
+  options: Array<{
+    playerId: string
+    expectedValue?: number
+    actualValue: number | null
+    qualifies: boolean | null
+    valueMatches: boolean
+  }>
+  errors: string[]
+}
+
+export type OneMoreVerificationResponse = {
+  valid: boolean
+  pairs: OneMorePairVerification[]
+}
+
+export type QuestionTemplateStatus = 'draft' | 'active' | 'archived'
+
+export type QuestionTemplate = {
+  id: string
+  mode: string
+  name: string
+  prompt: string
+  config: Record<string, unknown>
+  status: QuestionTemplateStatus
+  validationPassCount: number
+  validationFailCount: number
+  usedCount: number
+  lastUsedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type QuestionTemplateCreate = {
+  mode: string
+  name: string
+  prompt: string
+  config: Record<string, unknown>
+  status?: QuestionTemplateStatus
+  validationPassCount?: number
+  validationFailCount?: number
+}
+
+export type QuestionTemplateUpdate = Partial<QuestionTemplateCreate> & {
+  usedCount?: number
+  lastUsedAt?: string | null
+}
+
+export type PuzzleValidationIssue = {
+  severity: 'error' | 'warning'
+  path: string
+  message: string
+}
+
+export type PuzzleValidationReport = {
+  ok: boolean
+  issues: PuzzleValidationIssue[]
+}
+
 type ApiOk<T> = { success: true; data: T }
 type ApiErr = { success: false; error: { message: string; code?: string } }
 
@@ -124,6 +242,72 @@ export const api = {
     request<{ ok: boolean; puzzle: PuzzleRow | null }>('/puzzle/regenerate', {
       method: 'POST',
       body: JSON.stringify({ date, modeId, force }),
+    }),
+
+  oneMoreMetrics: () =>
+    request<OneMoreMetricCatalogItem[]>('/question-engine/metrics'),
+  previewOneMoreMetric: (metricId: string, threshold?: number) =>
+    request<OneMoreMetricPreview>('/question-engine/metrics/preview', {
+      method: 'POST',
+      body: JSON.stringify({ metricId, threshold }),
+    }),
+  generateOneMoreCandidates: (body: {
+    metricId: string
+    threshold: number
+    count?: number
+    seed?: string
+  }) =>
+    request<OneMoreCandidateResponse>('/question-engine/metrics/candidates', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  lookupOneMorePlayerValue: (metricId: string, playerId: string) =>
+    request<OneMorePlayerMetricValue>(
+      `/question-engine/metrics/${encodeURIComponent(metricId)}/players/${encodeURIComponent(playerId)}`
+    ),
+  verifyOneMorePairs: (body: {
+    metricId: string
+    threshold: number
+    pairs: Array<[
+      { playerId: string; expectedValue?: number },
+      { playerId: string; expectedValue?: number },
+    ]>
+  }) =>
+    request<OneMoreVerificationResponse>('/question-engine/metrics/verify', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  listQuestionTemplates: (filters?: { mode?: string; status?: QuestionTemplateStatus }) => {
+    const params = new URLSearchParams()
+    if (filters?.mode) params.set('mode', filters.mode)
+    if (filters?.status) params.set('status', filters.status)
+    const query = params.size > 0 ? `?${params.toString()}` : ''
+    return request<QuestionTemplate[]>(`/question-engine/templates${query}`)
+  },
+  getQuestionTemplate: (id: string) =>
+    request<QuestionTemplate>(`/question-engine/templates/${encodeURIComponent(id)}`),
+  createQuestionTemplate: (body: QuestionTemplateCreate) =>
+    request<QuestionTemplate>('/question-engine/templates', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateQuestionTemplate: (id: string, body: QuestionTemplateUpdate) =>
+    request<QuestionTemplate>(`/question-engine/templates/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteQuestionTemplate: (id: string) =>
+    request<{ deleted: true }>(`/question-engine/templates/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  validatePuzzleDraft: (body: {
+    modeId: string
+    puzzleJson: unknown
+    answerJson: unknown
+  }) =>
+    request<PuzzleValidationReport>('/validation/validate', {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
 
   searchPlayers: (q: string) =>

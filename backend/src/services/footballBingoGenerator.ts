@@ -583,7 +583,8 @@ export async function generateFootballBingoPuzzle(
 }
 
 /**
- * Solvable = a full 16-tile grid where every tile has at least one matcher in the shipped queue.
+ * Solvable = a full supported grid where every tile has at least one matcher in the shipped queue.
+ * Daily generation remains 4x4; Ops also uses this checker for the current 3x3 editor contract.
  * Matching uses the server clubKey() logic, which — now that player.clubs and the club
  * matchingRules ship one unified label per key — matches the iOS literal-string matcher, so this
  * gate accurately reflects on-device solvability. `fair` additionally flags whether every tile

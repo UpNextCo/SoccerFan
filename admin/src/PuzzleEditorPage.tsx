@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import { api, MODE_LABELS } from './api'
+import { Link, useBlocker, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { api, MODE_LABELS, type PuzzleValidationReport } from './api'
+import {
+  ConfirmDialog,
+  SectionCard,
+  StatusBadge,
+  ValidationPanel,
+} from './components/AdminUi'
 import { LmsEditor } from './editors/LmsEditor'
 import { GolfEditor } from './editors/GolfEditor'
 import { BingoEditor } from './editors/BingoEditor'
@@ -11,13 +17,45 @@ import { ClubChainEditor } from './editors/ClubChainEditor'
 import { TargetManEditor } from './editors/TargetManEditor'
 import { JsonFallbackEditor } from './editors/JsonFallbackEditor'
 
+type EditorSnapshot = {
+  puzzleJson: unknown
+  answerJson: unknown
+  note: string
+}
+
+type Notice = {
+  tone: 'success' | 'error' | 'info'
+  title: string
+  detail?: string
+}
+
+type Confirmation = 'discard' | 'regenerate' | 'lock' | null
+
+class PartialApprovalError extends Error {
+  row: Awaited<ReturnType<typeof api.getPuzzle>> | null
+
+  constructor(message: string, row: Awaited<ReturnType<typeof api.getPuzzle>> | null) {
+    super(message)
+    this.name = 'PartialApprovalError'
+    this.row = row
+  }
+}
+
+function snapshotKey(snapshot: EditorSnapshot): string {
+  return JSON.stringify([snapshot.puzzleJson, snapshot.answerJson, snapshot.note])
+}
+
 export function PuzzleEditorPage() {
   const { date = '', modeId = '' } = useParams()
   const qc = useQueryClient()
   const [puzzleJson, setPuzzleJson] = useState<unknown>(null)
   const [answerJson, setAnswerJson] = useState<unknown>(null)
   const [note, setNote] = useState('')
-  const [msg, setMsg] = useState<string | null>(null)
+  const [loadedSnapshot, setLoadedSnapshot] = useState<EditorSnapshot | null>(null)
+  const [loadedPuzzleKey, setLoadedPuzzleKey] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [confirmation, setConfirmation] = useState<Confirmation>(null)
+  const [validationReport, setValidationReport] = useState<PuzzleValidationReport | null>(null)
 
   const query = useQuery({
     queryKey: ['puzzle', date, modeId],
@@ -25,119 +63,358 @@ export function PuzzleEditorPage() {
     enabled: Boolean(date && modeId),
   })
 
-  useEffect(() => {
-    if (query.data) {
-      setPuzzleJson(structuredClone(query.data.puzzleJson))
-      setAnswerJson(structuredClone(query.data.answerJson))
-      setNote(query.data.reviewNote ?? '')
+  const puzzleKey = `${date}:${modeId}`
+
+  function applyServerRow(row: Awaited<ReturnType<typeof api.getPuzzle>>) {
+    const loaded = {
+      puzzleJson: structuredClone(row.puzzleJson),
+      answerJson: structuredClone(row.answerJson),
+      note: row.reviewNote ?? '',
     }
-  }, [query.data])
+    setPuzzleJson(loaded.puzzleJson)
+    setAnswerJson(loaded.answerJson)
+    setNote(loaded.note)
+    setLoadedSnapshot(structuredClone(loaded))
+    setLoadedPuzzleKey(puzzleKey)
+    qc.setQueryData(['puzzle', date, modeId], row)
+  }
+
+  useEffect(() => {
+    // Background refetches update status metadata, but never replace an editor
+    // that has already been initialized (and may contain local changes).
+    if (query.data && loadedPuzzleKey !== puzzleKey) {
+      const loaded = {
+        puzzleJson: structuredClone(query.data.puzzleJson),
+        answerJson: structuredClone(query.data.answerJson),
+        note: query.data.reviewNote ?? '',
+      }
+      setPuzzleJson(loaded.puzzleJson)
+      setAnswerJson(loaded.answerJson)
+      setNote(loaded.note)
+      setLoadedSnapshot(structuredClone(loaded))
+      setLoadedPuzzleKey(puzzleKey)
+    }
+  }, [loadedPuzzleKey, puzzleKey, query.data])
+
+  const currentSnapshot = useMemo(
+    () => ({ puzzleJson, answerJson, note }),
+    [answerJson, note, puzzleJson]
+  )
+  const dirty = loadedSnapshot !== null && snapshotKey(currentSnapshot) !== snapshotKey(loadedSnapshot)
 
   const saveMut = useMutation({
-    mutationFn: () =>
-      api.savePuzzle({
+    mutationFn: async (snapshot: EditorSnapshot) => {
+      await api.savePuzzle({
         date,
         modeId,
-        puzzleJson,
-        answerJson,
-        reviewNote: note || undefined,
-        keepApproved: query.data?.status === 'approved',
-      }),
-    onSuccess: (data) => {
-      if (data.puzzleJson !== undefined) setPuzzleJson(structuredClone(data.puzzleJson))
-      if (data.answerJson !== undefined) setAnswerJson(structuredClone(data.answerJson))
-      setMsg('Saved')
-      void qc.invalidateQueries({ queryKey: ['puzzle', date, modeId] })
+        puzzleJson: snapshot.puzzleJson,
+        answerJson: snapshot.answerJson,
+        reviewNote: snapshot.note || undefined,
+        // Any edit returns the puzzle to generated; it must pass validation and approval again.
+        keepApproved: false,
+      })
+      return api.getPuzzle(date, modeId)
     },
-    onError: (err) => setMsg(err instanceof Error ? err.message : 'Save failed'),
+    onSuccess: (row) => {
+      applyServerRow(row)
+      setNotice({ tone: 'success', title: 'Changes saved', detail: 'The server copy is up to date.' })
+    },
+    onError: (err) =>
+      setNotice({
+        tone: 'error',
+        title: 'Save failed',
+        detail: err instanceof Error ? err.message : 'Please try again.',
+      }),
   })
 
   const approveMut = useMutation({
-    mutationFn: async () => {
-      const saved = await api.savePuzzle({
-        date,
-        modeId,
-        puzzleJson,
-        answerJson,
-        reviewNote: note || undefined,
+    mutationFn: async (snapshot: EditorSnapshot) => {
+      let saved = false
+      try {
+        await api.savePuzzle({
+          date,
+          modeId,
+          puzzleJson: snapshot.puzzleJson,
+          answerJson: snapshot.answerJson,
+          reviewNote: snapshot.note || undefined,
+          keepApproved: false,
+        })
+        saved = true
+        await api.approvePuzzle(date, modeId, snapshot.note || undefined)
+        return await api.getPuzzle(date, modeId)
+      } catch (error) {
+        if (!saved) throw error
+        let row: Awaited<ReturnType<typeof api.getPuzzle>> | null = null
+        try {
+          row = await api.getPuzzle(date, modeId)
+        } catch {
+          // The message below tells the editor a manual refresh is required.
+        }
+        const reason = error instanceof Error ? error.message : 'Approval request failed'
+        throw new PartialApprovalError(reason, row)
+      }
+    },
+    onSuccess: (row) => {
+      applyServerRow(row)
+      setNotice({
+        tone: 'success',
+        title: 'Puzzle approved',
+        detail: 'Changes were saved before approval.',
       })
-      if (saved.puzzleJson !== undefined) setPuzzleJson(structuredClone(saved.puzzleJson))
-      if (saved.answerJson !== undefined) setAnswerJson(structuredClone(saved.answerJson))
-      await api.approvePuzzle(date, modeId, note || undefined)
     },
-    onSuccess: () => {
-      setMsg('Approved')
-      void qc.invalidateQueries({ queryKey: ['puzzle', date, modeId] })
+    onError: (err) => {
+      if (err instanceof PartialApprovalError) {
+        if (err.row) applyServerRow(err.row)
+        const serverApproved = err.row?.status === 'approved'
+        setNotice({
+          tone: serverApproved ? 'info' : 'error',
+          title: serverApproved
+            ? 'Approval response failed, but server is approved'
+            : 'Changes saved, but approval failed',
+          detail: err.row
+            ? `${err.message}. The editor has been reconciled with the server copy (status: ${err.row.status}).`
+            : `${err.message}. The saved server state could not be reloaded; refresh before making more changes.`,
+        })
+        return
+      }
+      setNotice({
+        tone: 'error',
+        title: 'Approval failed',
+        detail: err instanceof Error ? err.message : 'Please try again.',
+      })
     },
-    onError: (err) => setMsg(err instanceof Error ? err.message : 'Approve failed'),
   })
 
   const lockMut = useMutation({
     mutationFn: () => api.lockPuzzle(date, modeId, note || undefined),
     onSuccess: () => {
-      setMsg('Locked')
+      setNotice({ tone: 'success', title: 'Puzzle locked', detail: 'Regeneration is now blocked.' })
       void qc.invalidateQueries({ queryKey: ['puzzle', date, modeId] })
     },
-    onError: (err) => setMsg(err instanceof Error ? err.message : 'Lock failed'),
+    onError: (err) =>
+      setNotice({
+        tone: 'error',
+        title: 'Lock failed',
+        detail: err instanceof Error ? err.message : 'Please try again.',
+      }),
   })
 
   const unlockMut = useMutation({
     mutationFn: () => api.unlockPuzzle(date, modeId),
     onSuccess: () => {
-      setMsg('Unlocked')
+      setNotice({ tone: 'success', title: 'Puzzle unlocked', detail: 'Editing is available again.' })
       void qc.invalidateQueries({ queryKey: ['puzzle', date, modeId] })
     },
-    onError: (err) => setMsg(err instanceof Error ? err.message : 'Unlock failed'),
+    onError: (err) =>
+      setNotice({
+        tone: 'error',
+        title: 'Unlock failed',
+        detail: err instanceof Error ? err.message : 'Please try again.',
+      }),
   })
 
   const regenMut = useMutation({
     mutationFn: () => api.regeneratePuzzle(date, modeId, true),
     onSuccess: (data) => {
       if (data.puzzle) {
-        setPuzzleJson(structuredClone(data.puzzle.puzzleJson))
-        setAnswerJson(structuredClone(data.puzzle.answerJson))
+        const regenerated = {
+          puzzleJson: structuredClone(data.puzzle.puzzleJson),
+          answerJson: structuredClone(data.puzzle.answerJson),
+          note: data.puzzle.reviewNote ?? '',
+        }
+        setPuzzleJson(regenerated.puzzleJson)
+        setAnswerJson(regenerated.answerJson)
+        setNote(regenerated.note)
+        setLoadedSnapshot(structuredClone(regenerated))
       }
-      setMsg('Regenerated')
+      setNotice({
+        tone: 'success',
+        title: 'Puzzle regenerated',
+        detail: 'The editor now shows the new server copy.',
+      })
       void qc.invalidateQueries({ queryKey: ['puzzle', date, modeId] })
     },
-    onError: (err) => setMsg(err instanceof Error ? err.message : 'Regen failed'),
+    onError: (err) =>
+      setNotice({
+        tone: 'error',
+        title: 'Regeneration failed',
+        detail: err instanceof Error ? err.message : 'Please try again.',
+      }),
+  })
+
+  const validationMut = useMutation({
+    mutationFn: (snapshot: EditorSnapshot) =>
+      api.validatePuzzleDraft({
+        modeId,
+        puzzleJson: snapshot.puzzleJson,
+        answerJson: snapshot.answerJson,
+      }),
+    onSuccess: (report) => setValidationReport(report),
+    onError: (error) => {
+      setValidationReport(null)
+      setNotice({
+        tone: 'error',
+        title: 'Validation failed to run',
+        detail: error instanceof Error ? error.message : 'Please try again.',
+      })
+    },
   })
 
   const locked = query.data?.status === 'locked'
+  const approved = query.data?.status === 'approved'
   const yearMonth = date.slice(0, 7)
+  const working = saveMut.isPending || approveMut.isPending || lockMut.isPending || unlockMut.isPending
+  const editorReadOnly = locked || saveMut.isPending || approveMut.isPending
+  const blocker = useBlocker(dirty)
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirty) return
+      event.preventDefault()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [dirty])
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    if (window.confirm('Leave this editor and discard unsaved changes?')) blocker.proceed()
+    else blocker.reset()
+  }, [blocker])
+
+  useEffect(() => {
+    if (dirty) setValidationReport(null)
+  }, [dirty, puzzleJson, answerJson])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return
+      event.preventDefault()
+      if (!editorReadOnly && dirty) saveMut.mutate(currentSnapshot)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [currentSnapshot, dirty, editorReadOnly, saveMut])
+
+  const discardChanges = () => {
+    if (!loadedSnapshot) return
+    const restored = structuredClone(loadedSnapshot)
+    setPuzzleJson(restored.puzzleJson)
+    setAnswerJson(restored.answerJson)
+    setNote(restored.note)
+    setNotice({ tone: 'info', title: 'Changes discarded', detail: 'Restored the last server copy.' })
+  }
+
+  const confirmationContent =
+    confirmation === 'discard'
+      ? {
+          title: 'Discard unsaved changes?',
+          description: 'The editor will return to the last version loaded from the server.',
+          label: 'Discard changes',
+        }
+      : confirmation === 'regenerate'
+        ? {
+            title: 'Regenerate this puzzle?',
+            description: dirty
+              ? 'Regeneration will replace your unsaved edits with a newly generated puzzle.'
+              : 'The current puzzle will be replaced with a newly generated version.',
+            label: 'Regenerate',
+          }
+        : {
+            title: 'Lock this puzzle?',
+            description: 'Locked puzzles cannot be edited or regenerated until they are unlocked.',
+            label: 'Lock puzzle',
+          }
+
+  const confirmAction = () => {
+    const action = confirmation
+    setConfirmation(null)
+    if (action === 'discard') discardChanges()
+    if (action === 'regenerate') regenMut.mutate()
+    if (action === 'lock') lockMut.mutate()
+  }
 
   return (
     <div className="page editor-page">
-      <header className="topbar">
-        <div>
+      <header className="editor-heading">
+        <div className="editor-heading-main">
           <Link to="/" className="back">
-            ← {yearMonth}
+            <span aria-hidden="true">←</span> Back to {yearMonth}
           </Link>
-          <h1>
-            {MODE_LABELS[modeId] ?? modeId} · {date}
-          </h1>
-          <p className="muted">
-            Status: <strong>{query.data?.status ?? '…'}</strong>
-            {query.data?.contentHash ? ` · hash ${query.data.contentHash.slice(0, 8)}` : ''}
-          </p>
+          <div className="editor-title-row">
+            <h1>{MODE_LABELS[modeId] ?? modeId}</h1>
+            <StatusBadge status={query.data?.status ?? 'loading'} />
+            {dirty && <span className="dirty-indicator">Unsaved changes</span>}
+          </div>
+          <p className="muted">Puzzle scheduled for {date}</p>
         </div>
-        <div className="actions">
-          <button type="button" disabled={locked || saveMut.isPending} onClick={() => saveMut.mutate()}>
-            Save
+        <dl className="editor-meta">
+          <div>
+            <dt>Version</dt>
+            <dd>{query.data ? 'Current' : '—'}</dd>
+          </div>
+          <div>
+            <dt>Content hash</dt>
+            <dd>{query.data?.contentHash?.slice(0, 8) ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Reviewed</dt>
+            <dd>{query.data?.reviewedAt ? new Date(query.data.reviewedAt).toLocaleDateString() : 'Not yet'}</dd>
+          </div>
+        </dl>
+      </header>
+
+      <div className="workflow-bar">
+        <div className="workflow-primary">
+          <button
+            type="button"
+            disabled={editorReadOnly || !dirty}
+            onClick={() => saveMut.mutate(currentSnapshot)}
+          >
+            {saveMut.isPending ? 'Saving…' : 'Save changes'}
+            <span className="key-hint">⌘S</span>
           </button>
           <button
             type="button"
-            disabled={locked || approveMut.isPending}
-            onClick={() => approveMut.mutate()}
+            className="ghost"
+            disabled={!dirty || working}
+            onClick={() => setConfirmation('discard')}
           >
-            Approve
+            Discard
+          </button>
+        </div>
+        <div className="workflow-actions">
+          <button
+            type="button"
+            className="approve-button"
+            disabled={editorReadOnly}
+            onClick={() => approveMut.mutate(currentSnapshot)}
+          >
+            {approveMut.isPending ? 'Approving…' : 'Save & approve'}
           </button>
           {locked ? (
-            <button type="button" className="ghost" onClick={() => unlockMut.mutate()}>
-              Unlock
+            <button
+              type="button"
+              className="ghost"
+              disabled={unlockMut.isPending}
+              onClick={() => unlockMut.mutate()}
+            >
+              {unlockMut.isPending ? 'Unlocking…' : 'Unlock'}
             </button>
           ) : (
-            <button type="button" className="danger" onClick={() => lockMut.mutate()}>
+            <button
+              type="button"
+              className="danger-outline"
+              disabled={!approved || dirty || working}
+              title={
+                !approved
+                  ? 'Approve the puzzle before locking'
+                  : dirty
+                    ? 'Save or discard changes before locking'
+                    : undefined
+              }
+              onClick={() => setConfirmation('lock')}
+            >
               Lock
             </button>
           )}
@@ -145,37 +422,115 @@ export function PuzzleEditorPage() {
             type="button"
             className="ghost"
             disabled={locked || regenMut.isPending}
-            onClick={() => {
-              if (!confirm('Regenerate this puzzle? Unsaved edits will be lost.')) return
-              regenMut.mutate()
-            }}
+            onClick={() => setConfirmation('regenerate')}
           >
-            {regenMut.isPending ? 'Regen…' : 'Regenerate'}
+            {regenMut.isPending ? 'Regenerating…' : 'Regenerate'}
           </button>
         </div>
-      </header>
+      </div>
 
-      <label className="note-field">
-        Review note
-        <input value={note} onChange={(e) => setNote(e.target.value)} disabled={locked} />
-      </label>
-
-      {msg && <p className="log">{msg}</p>}
-      {query.isLoading && <p className="muted">Loading puzzle…</p>}
+      {notice && (
+        <ValidationPanel
+          tone={notice.tone}
+          title={notice.title}
+          onDismiss={() => setNotice(null)}
+        >
+          {notice.detail}
+        </ValidationPanel>
+      )}
+      {query.isLoading && <div className="editor-loading">Loading puzzle editor…</div>}
       {query.error && (
-        <p className="error">{query.error instanceof Error ? query.error.message : 'Load failed'}</p>
+        <ValidationPanel tone="error" title="Puzzle could not be loaded">
+          {query.error instanceof Error ? query.error.message : 'Load failed'}
+        </ValidationPanel>
       )}
 
       {puzzleJson != null && (
-        <EditorBody
-          modeId={modeId}
-          puzzleJson={puzzleJson}
-          answerJson={answerJson}
-          locked={locked}
-          onPuzzle={setPuzzleJson}
-          onAnswer={setAnswerJson}
-        />
+        <div className="editor-layout">
+          <main className="editor-canvas">
+            <EditorBody
+              modeId={modeId}
+              puzzleJson={puzzleJson}
+              answerJson={answerJson}
+              locked={editorReadOnly}
+              onPuzzle={setPuzzleJson}
+              onAnswer={setAnswerJson}
+            />
+          </main>
+          <aside className="editor-sidebar">
+            <SectionCard
+              title="Validation"
+              description="Checks structure, database facts and whether this puzzle is safe to approve."
+              actions={
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={validationMut.isPending || puzzleJson == null}
+                  onClick={() => validationMut.mutate(currentSnapshot)}
+                >
+                  {validationMut.isPending ? 'Checking…' : 'Run checks'}
+                </button>
+              }
+            >
+              {validationReport == null ? (
+                <p className="muted tiny">Run checks after editing and before approval.</p>
+              ) : validationReport.issues.length === 0 ? (
+                <ValidationPanel tone="success" title="All checks passed" />
+              ) : (
+                <div className="validation-issue-list">
+                  <ValidationPanel
+                    tone={validationReport.ok ? 'info' : 'error'}
+                    title={
+                      validationReport.ok
+                        ? `${validationReport.issues.length} warning${validationReport.issues.length === 1 ? '' : 's'}`
+                        : `${validationReport.issues.filter((issue) => issue.severity === 'error').length} issue${validationReport.issues.filter((issue) => issue.severity === 'error').length === 1 ? '' : 's'} to fix`
+                    }
+                  />
+                  <ul>
+                    {validationReport.issues.map((issue, index) => (
+                      <li key={`${issue.path}-${index}`} className={`validation-issue issue-${issue.severity}`}>
+                        <strong>{issue.path}</strong>
+                        <span>{issue.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </SectionCard>
+            <SectionCard
+              title="Review note"
+              description="Context for other editors and approvers."
+            >
+              <label className="sr-only" htmlFor="review-note">
+                Review note
+              </label>
+              <textarea
+                id="review-note"
+                rows={5}
+                placeholder="Add review context…"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                disabled={editorReadOnly}
+              />
+            </SectionCard>
+            {locked && (
+              <ValidationPanel tone="info" title="Read-only">
+                Unlock this puzzle to make changes.
+              </ValidationPanel>
+            )}
+          </aside>
+        </div>
       )}
+
+      <ConfirmDialog
+        open={confirmation !== null}
+        title={confirmationContent.title}
+        description={confirmationContent.description}
+        confirmLabel={confirmationContent.label}
+        danger
+        onConfirm={confirmAction}
+        onCancel={() => setConfirmation(null)}
+      />
     </div>
   )
 }

@@ -592,10 +592,10 @@ private struct OnboardingLeaguePreview: View {
     @State private var startedAt = Date()
 
     private let players = [
-        OnboardingLeaguePlayer(id: "jordan", name: "Jordan", initials: "JR", xp: 3_520),
-        OnboardingLeaguePlayer(id: "maya", name: "Maya", initials: "MA", xp: 3_050),
-        OnboardingLeaguePlayer(id: "lewis", name: "Lewis", initials: "LW", xp: 2_510),
-        OnboardingLeaguePlayer(id: "you", name: "Your name", initials: "YO", xp: 1_860),
+        OnboardingLeaguePlayer(id: "jordan", name: "Jordan", initials: "JR", imageName: "league1", xp: 3_520),
+        OnboardingLeaguePlayer(id: "theo", name: "Theo", initials: "TH", imageName: "league3", xp: 3_050),
+        OnboardingLeaguePlayer(id: "lewis", name: "Lewis", initials: "LW", imageName: "league4", xp: 2_510),
+        OnboardingLeaguePlayer(id: "you", name: "You", initials: "YOU", imageName: nil, xp: 1_860),
     ]
     private let youXP = [1_860, 2_280, 2_740, 3_260, 3_890, 3_890]
 
@@ -645,6 +645,7 @@ private struct OnboardingLeaguePreview: View {
                     id: player.id,
                     name: player.name,
                     initials: player.initials,
+                    imageName: player.imageName,
                     xp: youXP[stage]
                 )
             }
@@ -656,6 +657,7 @@ private struct OnboardingLeaguePlayer: Identifiable {
     let id: String
     let name: String
     let initials: String
+    let imageName: String?
     let xp: Int
 }
 
@@ -671,29 +673,26 @@ private struct OnboardingLeagueRow: View {
                 .foregroundStyle(rank <= 3 ? BKTheme.accent : BKTheme.textMuted)
                 .frame(width: 24)
 
-            Circle()
-                .fill(isYou ? BKTheme.accent.opacity(0.16) : BKTheme.cardElevated)
-                .frame(width: 34, height: 34)
-                .overlay {
-                    Text(player.initials)
-                        .font(BKFont.caption(9))
-                        .foregroundStyle(isYou ? BKTheme.accent : BKTheme.textSecondary)
+            Group {
+                if let imageName = player.imageName {
+                    BundleResourceImage(name: imageName, subdirectory: "leaguepics")
+                        .scaledToFill()
+                } else {
+                    Circle()
+                        .fill(BKTheme.accent.opacity(0.16))
+                        .overlay {
+                            Text(player.initials)
+                                .font(BKFont.caption(9))
+                                .foregroundStyle(BKTheme.accent)
+                        }
                 }
+            }
+            .frame(width: 34, height: 34)
+            .clipShape(Circle())
 
             Text(player.name)
                 .font(BKFont.headline(14))
                 .foregroundStyle(BKTheme.textPrimary)
-
-            if isYou {
-                Text("YOU")
-                    .font(BKFont.caption(8))
-                    .tracking(0.8)
-                    .foregroundStyle(BKTheme.background)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(BKTheme.accent)
-                    .clipShape(Capsule())
-            }
 
             Spacer(minLength: 8)
 

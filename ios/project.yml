@@ -28,7 +28,11 @@ targets:
           - Resources/tenaball.png
           - Resources/GameTiles
           - Resources/Rive
+          - Resources/leaguepics
       - path: BallKnowledge/Resources/GameTiles
+        type: folder
+        buildPhase: resources
+      - path: BallKnowledge/Resources/leaguepics
         type: folder
         buildPhase: resources
     settings:

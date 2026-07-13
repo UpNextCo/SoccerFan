@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import {
+  Navigate,
+  Outlet,
+  Route,
+  RouterProvider,
+  createBrowserRouter,
+  createRoutesFromElements,
+  useOutletContext,
+} from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { api } from './api'
 import { LoginPage } from './LoginPage'
@@ -32,31 +40,41 @@ function AppShell() {
     return <LoginPage onLoggedIn={setAdminName} />
   }
 
+  return <Outlet context={{ adminName, setAdminName }} />
+}
+
+function AdminHome() {
+  const { adminName, setAdminName } = useOutletContext<{
+    adminName: string
+    setAdminName: (name: string | null) => void
+  }>()
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          <MonthBoard
-            adminName={adminName}
-            onLogout={() => {
-              void api.logout().finally(() => setAdminName(null))
-            }}
-          />
-        }
-      />
-      <Route path="/d/:date/:modeId" element={<PuzzleEditorPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <MonthBoard
+      adminName={adminName}
+      onLogout={() => {
+        void api.logout().finally(() => setAdminName(null))
+      }}
+    />
   )
 }
+
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <>
+      <Route element={<AppShell />}>
+        <Route path="/" element={<AdminHome />} />
+        <Route path="/d/:date/:modeId" element={<PuzzleEditorPage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </>
+  ),
+  { basename: '/admin' }
+)
 
 export default function App() {
   return (
     <QueryClientProvider client={qc}>
-      <BrowserRouter basename="/admin">
-        <AppShell />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   )
 }

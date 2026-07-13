@@ -11,7 +11,9 @@ import {
   uniqueIndex,
   numeric,
   customType,
+  check,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() {
@@ -225,6 +227,53 @@ export const dailyPuzzles = pgTable(
     index('daily_puzzles_date_mode_idx').on(table.date, table.modeId),
     uniqueIndex('daily_puzzles_date_mode_unique').on(table.date, table.modeId),
     index('daily_puzzles_status_idx').on(table.status),
+  ]
+);
+
+/**
+ * Reusable Ops-authored question definitions. `config` is structured, mode-specific JSON;
+ * execution code must interpret known keys and must never treat it as SQL.
+ */
+export const questionTemplates = pgTable(
+  'question_templates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    mode: text('mode').notNull(),
+    name: text('name').notNull(),
+    prompt: text('prompt').notNull(),
+    config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+    status: text('status').notNull().default('draft'), // draft | active | archived
+    validationPassCount: integer('validation_pass_count').notNull().default(0),
+    validationFailCount: integer('validation_fail_count').notNull().default(0),
+    usedCount: integer('used_count').notNull().default(0),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('question_templates_mode_name_unique').on(table.mode, table.name),
+    index('question_templates_mode_status_idx').on(table.mode, table.status),
+    check('question_templates_status_check', sql`${table.status} IN ('draft', 'active', 'archived')`),
+    check('question_templates_validation_pass_count_check', sql`${table.validationPassCount} >= 0`),
+    check('question_templates_validation_fail_count_check', sql`${table.validationFailCount} >= 0`),
+    check('question_templates_used_count_check', sql`${table.usedCount} >= 0`),
+    check('question_templates_active_config_check', sql`
+      ${table.status} <> 'active' OR (
+        ${table.mode} = 'one_more'
+        AND jsonb_typeof(${table.config}) = 'object'
+        AND jsonb_typeof(${table.config}->'metricId') = 'string'
+        AND ${table.config}->>'metricId' IN (
+          'pl_goals', 'pl_assists', 'laliga_goals', 'seriea_goals', 'cl_goals',
+          'cl_knockout_goals', 'pl_penalties', 'laliga_penalties', 'seriea_penalties',
+          'hattricks', 'intl_caps', 'goals_before_21', 'weak_foot_goals',
+          'non_big6_pl_goals', 'seriea_ligue1_goals'
+        )
+        AND jsonb_typeof(${table.config}->'threshold') = 'number'
+        AND (${table.config}->>'threshold')::numeric >= 0
+        AND jsonb_typeof(${table.config}->'valueNoun') = 'string'
+        AND length(trim(${table.config}->>'valueNoun')) > 0
+      )
+    `),
   ]
 );
 
@@ -567,6 +616,8 @@ export type PlayerHonour = typeof playerHonours.$inferSelect;
 export type PlayerCareerEntry = typeof playerCareer.$inferSelect;
 export type Team = typeof teams.$inferSelect;
 export type DailyPuzzle = typeof dailyPuzzles.$inferSelect;
+export type QuestionTemplate = typeof questionTemplates.$inferSelect;
+export type NewQuestionTemplate = typeof questionTemplates.$inferInsert;
 export type ManagerTenure = typeof managerTenures.$inferSelect;
 export type FinalAppearance = typeof finalAppearances.$inferSelect;
 export type PlayerAward = typeof playerAwards.$inferSelect;

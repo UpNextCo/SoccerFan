@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, type AdminPlayerHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
+import './bingo-lms.css'
 
 type Opt = {
   id: string
@@ -46,6 +47,36 @@ type Puzzle = {
 }
 
 type Answer = { questions: Ans[] }
+const EMPTY_LMS_ANSWER: Answer = { questions: [] }
+
+const QUESTION_TYPES = [
+  'higher_lower',
+  'career_path',
+  'odd_one_out',
+  'which_club',
+  'image_badge',
+] as const
+type QuestionType = (typeof QUESTION_TYPES)[number]
+
+const FRIENDLY_TYPES: Record<QuestionType, string> = {
+  higher_lower: 'Higher or lower',
+  career_path: 'Career path',
+  odd_one_out: 'Odd one out',
+  which_club: 'Which club?',
+  image_badge: 'Image badge',
+}
+
+function isQuestionType(value: string): value is QuestionType {
+  return QUESTION_TYPES.some((type) => type === value)
+}
+
+function friendlyType(type: string): string {
+  return isQuestionType(type) ? FRIENDLY_TYPES[type] : type.replaceAll('_', ' ')
+}
+
+function expectedOptionCount(type: string): number {
+  return type === 'higher_lower' ? 2 : 4
+}
 
 function makeOptionId(questionId: string, key: string): string {
   return `${questionId}-${key}`
@@ -74,8 +105,10 @@ export function LmsEditor({
   onChange: (puzzle: Puzzle, answer: Answer) => void
 }) {
   const p = puzzle as Puzzle
-  const a = (answer as Answer) ?? { questions: [] }
+  const a = (answer as Answer | null) ?? EMPTY_LMS_ANSWER
   const questions = sortedQuestions(p)
+  const [activeSlot, setActiveSlot] = useState(() => questions[0]?.slot ?? 1)
+  const activeQuestion = questions.find((question) => question.slot === activeSlot) ?? questions[0]
 
   // Keep latest puzzle/answer for async pick handlers (avoid stale closures wiping media).
   const latestRef = useRef({ p, a })
@@ -92,6 +125,49 @@ export function LmsEditor({
     const { p: curP, a: curA } = latestRef.current
     const nextQs = sortedQuestions(curP).map((q) => (q.slot === slot ? { ...q, ...patch } : q))
     commit({ ...curP, questions: nextQs }, curA)
+  }
+
+  function setQuestionType(question: Q, type: QuestionType) {
+    const defaultLayout: Record<QuestionType, string> = {
+      higher_lower: 'two_up',
+      career_path: 'stack',
+      odd_one_out: 'grid',
+      which_club: 'grid',
+      image_badge: 'image_header',
+    }
+    updateQuestion(question.slot, {
+      type,
+      presentation: { ...(question.presentation ?? {}), layout: defaultLayout[type] },
+    })
+  }
+
+  function addOption(question: Q) {
+    const nextNumber = question.options.length + 1
+    updateQuestion(question.slot, {
+      options: [
+        ...question.options,
+        { id: makeOptionId(question.id, `option-${Date.now()}`), label: `Option ${nextNumber}` },
+      ],
+    })
+  }
+
+  function removeOption(question: Q, optionId: string) {
+    if (question.options.length <= 2) return
+    const { p: curP, a: curA } = latestRef.current
+    const nextOptions = question.options.filter((option) => option.id !== optionId)
+    const nextQuestions = sortedQuestions(curP).map((item) =>
+      item.id === question.id ? { ...item, options: nextOptions } : item
+    )
+    const nextAnswers = curA.questions.map((item) =>
+      item.questionId === question.id && item.correctOptionId === optionId
+        ? {
+            ...item,
+            correctOptionId: nextOptions[0]?.id ?? '',
+            reveal: nextOptions[0]?.label ?? item.reveal,
+          }
+        : item
+    )
+    commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
   }
 
   function replaceOption(
@@ -129,16 +205,16 @@ export function LmsEditor({
   function setCorrectOption(question: Q, optionId: string) {
     const { p: curP, a: curA } = latestRef.current
     const opt = question.options.find((o) => o.id === optionId)
+    const existing = curA.questions.find((ans) => ans.questionId === question.id)
+    const nextRow: Ans = {
+      ...(existing ?? { questionId: question.id }),
+      correctOptionId: optionId,
+      reveal: opt?.label ?? existing?.reveal,
+    }
     const nextAns: Answer = {
-      questions: curA.questions.map((ans) =>
-        ans.questionId === question.id
-          ? {
-              ...ans,
-              correctOptionId: optionId,
-              reveal: opt?.label ?? ans.reveal,
-            }
-          : ans
-      ),
+      questions: existing
+        ? curA.questions.map((ans) => (ans.questionId === question.id ? nextRow : ans))
+        : [...curA.questions, nextRow],
     }
 
     // image_badge blurred header must track the correct club.
@@ -164,10 +240,20 @@ export function LmsEditor({
 
   function updateAnswer(questionId: string, patch: Partial<Ans>) {
     const { p: curP, a: curA } = latestRef.current
+    const existing = curA.questions.find((ans) => ans.questionId === questionId)
+    const question = curP.questions.find((item) => item.id === questionId)
+    const nextRow: Ans = {
+      ...(existing ?? {
+        questionId,
+        correctOptionId: question?.options[0]?.id ?? '',
+      }),
+      ...patch,
+      questionId,
+    }
     commit(curP, {
-      questions: curA.questions.map((ans) =>
-        ans.questionId === questionId ? { ...ans, ...patch } : ans
-      ),
+      questions: existing
+        ? curA.questions.map((ans) => (ans.questionId === questionId ? nextRow : ans))
+        : [...curA.questions, nextRow],
     })
   }
 
@@ -261,28 +347,87 @@ export function LmsEditor({
 
   return (
     <div className="lms-editor">
-      <label className="field">
-        Title
-        <input
-          value={p.title ?? ''}
-          disabled={locked}
-          onChange={(e) => commit({ ...p, title: e.target.value }, a)}
-        />
-      </label>
-      <p className="muted">Version {p.version ?? '?'} · {questions.length} questions</p>
+      <section className="q-card lms-overview">
+        <label className="field">
+          Title
+          <input
+            value={p.title ?? ''}
+            disabled={locked}
+            onChange={(e) => commit({ ...latestRef.current.p, title: e.target.value }, latestRef.current.a)}
+          />
+        </label>
+        <p className="muted">Version {p.version ?? '?'} · {questions.length} questions</p>
+      </section>
 
-      {questions.map((q) => {
+      <nav className="lms-question-nav" aria-label="Question navigator">
+        {questions.map((question) => {
+          const answerRow = correctFor(question)
+          const hasCorrect = Boolean(
+            answerRow && question.options.some((option) => option.id === answerRow.correctOptionId)
+          )
+          const complete = Boolean(question.prompt.trim() && hasCorrect)
+          return (
+            <button
+              key={question.id}
+              type="button"
+              className={`lms-nav-button${question.slot === activeQuestion?.slot ? ' active' : ''}`}
+              onClick={() => setActiveSlot(question.slot)}
+              aria-current={question.slot === activeQuestion?.slot ? 'step' : undefined}
+            >
+              <span>Q{question.slot}</span>
+              <span className={`lms-status-dot ${complete ? 'complete' : 'warning'}`} aria-label={complete ? 'Complete' : 'Needs attention'} />
+            </button>
+          )
+        })}
+      </nav>
+
+      {activeQuestion ? (() => {
+        const q = activeQuestion
         const ans = correctFor(q)
         const clubMode = isClubQuestion(q)
+        const hasCorrect = Boolean(ans && q.options.some((option) => option.id === ans.correctOptionId))
+        const expectedOptions = expectedOptionCount(q.type)
+        const optionCountValid = q.options.length === expectedOptions
+        const complete = Boolean(q.prompt.trim() && hasCorrect && optionCountValid)
         return (
-          <article key={q.id} className="q-card">
-            <header>
-              <strong>
-                Q{q.slot} · {q.type}
-                {q.signature ? ' · signature' : ''}
-              </strong>
-              <span className="muted">{q.id}</span>
+          <article key={q.id} className="q-card lms-question-card">
+            <header className="lms-question-header">
+              <div>
+                <div className="lms-question-title">
+                  <strong>Question {q.slot}</strong>
+                  <span className="editor-badge">{friendlyType(q.type)}</span>
+                  {q.signature && <span className="editor-badge signature">Signature</span>}
+                </div>
+                <div className="lms-question-statuses">
+                  <span className={complete ? 'status-good' : 'status-warning'}>{complete ? 'Complete' : 'Needs attention'}</span>
+                  <span className={hasCorrect ? 'status-good' : 'status-warning'}>{hasCorrect ? 'Correct answer set' : 'Correct answer missing'}</span>
+                </div>
+              </div>
+              <div className="editor-icon-actions">
+                <button type="button" className="ghost tiny-btn" disabled={q.slot === questions[0]?.slot} onClick={() => setActiveSlot(questions[Math.max(0, questions.findIndex((item) => item.slot === q.slot) - 1)]?.slot ?? q.slot)}>← Previous</button>
+                <button type="button" className="ghost tiny-btn" disabled={q.slot === questions.at(-1)?.slot} onClick={() => setActiveSlot(questions[Math.min(questions.length - 1, questions.findIndex((item) => item.slot === q.slot) + 1)]?.slot ?? q.slot)}>Next →</button>
+              </div>
             </header>
+
+            <div className="lms-question-controls">
+              <label className="field">
+                Question type
+                <select
+                  value={q.type}
+                  disabled={locked}
+                  onChange={(event) => {
+                    if (isQuestionType(event.target.value)) setQuestionType(q, event.target.value)
+                  }}
+                >
+                  {!isQuestionType(q.type) && <option value={q.type}>{friendlyType(q.type)}</option>}
+                  {QUESTION_TYPES.map((type) => <option key={type} value={type}>{FRIENDLY_TYPES[type]}</option>)}
+                </select>
+              </label>
+              <label className="lms-signature-control">
+                <input type="checkbox" checked={q.signature ?? false} disabled={locked} onChange={(event) => updateQuestion(q.slot, { signature: event.target.checked })} />
+                Signature question
+              </label>
+            </div>
 
             <label className="field">
               Prompt
@@ -304,7 +449,10 @@ export function LmsEditor({
 
             {q.type === 'image_badge' && (
               <div className="badge-preview">
-                <div className="muted tiny">Blurred badge shown in-game (correct club)</div>
+                <div className="badge-preview-heading">
+                  <div className="muted tiny">Blurred badge shown in-game (correct club)</div>
+                  <strong>{q.presentation?.imageBlur ?? 6}px blur</strong>
+                </div>
                 {q.presentation?.imageUrl ? (
                   <img
                     key={q.presentation.imageUrl}
@@ -316,6 +464,30 @@ export function LmsEditor({
                 ) : (
                   <p className="error tiny">No presentation.imageUrl — pick/mark the correct club</p>
                 )}
+                <label className="field lms-blur-control">
+                  Image blur
+                  <input
+                    type="range"
+                    min="0"
+                    max="20"
+                    step="1"
+                    value={q.presentation?.imageBlur ?? 6}
+                    disabled={locked}
+                    onChange={(event) => updateQuestion(q.slot, {
+                      presentation: { ...(q.presentation ?? {}), imageBlur: Number(event.target.value) },
+                    })}
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="20"
+                    value={q.presentation?.imageBlur ?? 6}
+                    disabled={locked}
+                    onChange={(event) => updateQuestion(q.slot, {
+                      presentation: { ...(q.presentation ?? {}), imageBlur: Number(event.target.value) },
+                    })}
+                  />
+                </label>
               </div>
             )}
 
@@ -337,7 +509,12 @@ export function LmsEditor({
             )}
 
             <fieldset disabled={locked} className="options">
-              <legend>Options (pick correct · search to replace)</legend>
+              <legend>Options ({q.options.length}/{expectedOptions}) · pick correct or search to replace</legend>
+              {!optionCountValid && (
+                <p className="editor-inline-warning">
+                  {friendlyType(q.type)} requires exactly {expectedOptions} options. Add or remove options before saving.
+                </p>
+              )}
               {q.options.map((o) => (
                 <div key={`${q.id}-${o.id}`} className="option-with-picker">
                   <div className="radio-col">
@@ -368,8 +545,18 @@ export function LmsEditor({
                       onPickPlayer={(hit) => pickPlayer(q, o, hit)}
                     />
                   )}
+                  <button
+                    type="button"
+                    className="danger tiny-btn lms-remove-option"
+                    disabled={locked || q.options.length <= 2}
+                    onClick={() => removeOption(q, o.id)}
+                    aria-label={`Remove ${o.label}`}
+                  >
+                    Remove
+                  </button>
                 </div>
               ))}
+              <button type="button" className="ghost" disabled={locked} onClick={() => addOption(q)}>+ Add option</button>
             </fieldset>
 
             <label className="field">
@@ -381,9 +568,19 @@ export function LmsEditor({
                 onChange={(e) => updateAnswer(q.id, { reveal: e.target.value })}
               />
             </label>
+            <details className="editor-advanced">
+              <summary>Advanced</summary>
+              <div className="advanced-grid">
+                <label className="field">Question ID<input value={q.id} disabled readOnly /></label>
+                <label className="field">Slot<input value={q.slot} disabled readOnly /></label>
+                <label className="field">Presentation layout<input value={q.presentation?.layout ?? ''} disabled={locked} onChange={(event) => updateQuestion(q.slot, { presentation: { ...(q.presentation ?? {}), layout: event.target.value } })} /></label>
+                {q.presentation?.imageUrl && <label className="field">Image URL<input value={q.presentation.imageUrl} disabled={locked} onChange={(event) => updateQuestion(q.slot, { presentation: { ...(q.presentation ?? {}), imageUrl: event.target.value } })} /></label>}
+                <div className="muted tiny">Correct option ID: <code>{ans?.correctOptionId ?? 'not set'}</code></div>
+              </div>
+            </details>
           </article>
         )
-      })}
+      })() : <p className="editor-inline-warning">No questions available.</p>}
     </div>
   )
 }

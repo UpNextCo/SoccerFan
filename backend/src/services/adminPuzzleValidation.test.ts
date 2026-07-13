@@ -1,0 +1,191 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { validatePuzzleReport } from './adminPuzzleValidation.js';
+import { monthLockStatusError, workflowTransitionError } from './adminWorkflow.js';
+import { oneMoreEligibilityErrors } from './oneMoreEligibility.js';
+import { validateQuestionTemplateActivation } from './questionTemplateValidation.js';
+
+test('requires the persisted 4x4 Bingo contract', () => {
+  const categories = Array.from({ length: 16 }, (_, index) => ({
+    id: `category-${index}`,
+    title: `Category ${index}`,
+    type: 'nationality',
+    matchingRule: `Nation ${index}`,
+  }));
+  const players = Array.from({ length: 16 }, (_, index) => ({
+    id: `player-${index}`,
+    name: `Player ${index}`,
+    nationality: `Nation ${index}`,
+    position: 'Forward',
+    clubs: [],
+    leagues: [],
+    trophies: [],
+    awards: [],
+    stats: {},
+  }));
+  assert.equal(validatePuzzleReport('football_bingo', { categories, players }, null).ok, true);
+  assert.equal(validatePuzzleReport(
+    'football_bingo',
+    { categories: categories.slice(0, 9), players: players.slice(0, 9) },
+    null
+  ).ok, false);
+});
+
+test('enforces generated -> approved -> locked while preserving unlocks', () => {
+  assert.equal(workflowTransitionError('generated', 'approved'), null);
+  assert.equal(workflowTransitionError('approved', 'locked'), null);
+  assert.match(workflowTransitionError('generated', 'locked') ?? '', /Invalid workflow transition/);
+  assert.equal(workflowTransitionError('locked', 'generated'), null);
+  assert.equal(workflowTransitionError('approved', 'generated'), null);
+  assert.match(monthLockStatusError('generated') ?? '', /must be approved/);
+  assert.equal(monthLockStatusError('approved'), null);
+  assert.equal(monthLockStatusError('locked'), null);
+});
+
+test('applies One More participation, goalkeeper, and event coverage gates', () => {
+  assert.deepEqual(oneMoreEligibilityErrors(
+    { goalLike: false },
+    { participation: 0, position: 'Forward', birthYear: 1995, value: 10 },
+    20
+  ), ['Player has no participation for this metric.']);
+  assert.deepEqual(oneMoreEligibilityErrors(
+    { goalLike: true },
+    { participation: 1, position: 'Goalkeeper', birthYear: 1995, value: 30 },
+    20
+  ), ['Goalkeepers are not eligible for this goal-like metric.']);
+  assert.deepEqual(oneMoreEligibilityErrors(
+    { goalLike: true, eventBased: true },
+    { participation: 1, position: 'Forward', birthYear: 1989, value: 10 },
+    20
+  ), ['Distractor is outside the covered era for this event-based metric.']);
+  assert.deepEqual(oneMoreEligibilityErrors(
+    { goalLike: true, eventBased: true },
+    { participation: 1, position: 'Forward', birthYear: 1989, value: 20 },
+    20
+  ), []);
+});
+
+test('validates active One More template configuration', () => {
+  const metrics = new Set(['pl_goals']);
+  assert.deepEqual(validateQuestionTemplateActivation({
+    mode: 'one_more',
+    config: { metricId: 'pl_goals', threshold: 20, valueNoun: 'goals' },
+  }, metrics), { ok: true });
+  assert.equal(validateQuestionTemplateActivation({
+    mode: 'one_more',
+    config: { metricId: 'unknown', threshold: 20, valueNoun: 'goals' },
+  }, metrics).ok, false);
+  assert.equal(validateQuestionTemplateActivation({
+    mode: 'one_more',
+    config: { metricId: 'pl_goals', threshold: 20 },
+  }, metrics).ok, false);
+  assert.equal(validateQuestionTemplateActivation({
+    mode: 'football_bingo',
+    config: {},
+  }, metrics).ok, false);
+});
+
+test('validates a complete aligned LMS payload', () => {
+  const questions = Array.from({ length: 10 }, (_, index) => {
+    const questionId = `q-${index + 1}`;
+    const type = index === 0 ? 'higher_lower' : 'odd_one_out';
+    const count = type === 'higher_lower' ? 2 : 4;
+    return {
+      id: questionId,
+      type,
+      slot: index + 1,
+      prompt: `Question ${index + 1}`,
+      options: Array.from({ length: count }, (__, optionIndex) => ({
+        id: `${questionId}-o${optionIndex + 1}`,
+        label: `Option ${optionIndex + 1}`,
+      })),
+    };
+  });
+  const answer = {
+    questions: questions.map((question) => ({
+      questionId: question.id,
+      correctOptionId: question.options[0]!.id,
+    })),
+  };
+  assert.equal(validatePuzzleReport('last_man_standing', { questions }, answer).ok, true);
+
+  questions[1]!.options.pop();
+  const report = validatePuzzleReport('last_man_standing', { questions }, answer);
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some((entry) => entry.path === 'puzzleJson.questions.1.options'));
+});
+
+test('requires One More threshold sides and aligned hidden values', () => {
+  const rounds = Array.from({ length: 10 }, (_, index) => ({
+    options: [
+      { id: `above-${index}`, name: 'Above', value: 11 },
+      { id: `below-${index}`, name: 'Below', value: 9 },
+    ],
+  }));
+  const valuesByRound = rounds.map((round) => Object.fromEntries(
+    round.options.map((option) => [option.id, option.value])
+  ));
+  const puzzle = {
+    metricId: 'metric',
+    minimum: 10,
+    title: 'Test metric',
+    valueNoun: 'goals',
+    rounds,
+  };
+  assert.equal(validatePuzzleReport('one_more', puzzle, { valuesByRound }).ok, true);
+
+  valuesByRound[3]![`below-3`] = 12;
+  const report = validatePuzzleReport('one_more', puzzle, { valuesByRound });
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some((entry) => entry.path === 'puzzleJson.rounds.3'));
+});
+
+test('checks Golf numbering, answer sufficiency, and total par', () => {
+  const holes = Array.from({ length: 9 }, (_, index) => ({
+    holeNumber: index + 1,
+    prompt: `Hole ${index + 1}`,
+    par: 2,
+    target: 2,
+    answers: [
+      { id: `p-${index}-1`, name: 'Player A' },
+      { id: `p-${index}-2`, name: 'Player B' },
+    ],
+  }));
+  assert.equal(validatePuzzleReport('football_golf', { totalPar: 18, holes }, null).ok, true);
+  assert.equal(validatePuzzleReport('football_golf', { totalPar: 20, holes }, null).ok, false);
+});
+
+test('checks Club Chain endpoint and length synchronization', () => {
+  const puzzle = {
+    start: { id: 'start', name: 'Start' },
+    target: { id: 'target', name: 'Target' },
+    shortestPathLength: 2,
+    maxMoves: 6,
+  };
+  const answer = {
+    shortestPathPlayerIds: ['start', 'middle', 'target'],
+    shortestPathLength: 2,
+  };
+  assert.equal(validatePuzzleReport('club_chain', puzzle, answer).ok, true);
+  answer.shortestPathPlayerIds[2] = 'other';
+  assert.equal(validatePuzzleReport('club_chain', puzzle, answer).ok, false);
+});
+
+test('checks Target Man answer synchronization', () => {
+  const puzzle = {
+    categoryId: 'pl-goals',
+    categoryLabel: 'Premier League goals',
+    title: 'Premier League goals',
+    target: 500,
+    valueNoun: 'goals',
+    offNoun: 'goals',
+    unit: null,
+  };
+  const answer = {
+    modeId: 'target_man',
+    answer: { categoryId: 'pl-goals', target: 500 },
+  };
+  assert.equal(validatePuzzleReport('target_man', puzzle, answer).ok, true);
+  answer.answer.target = 501;
+  assert.equal(validatePuzzleReport('target_man', puzzle, answer).ok, false);
+});

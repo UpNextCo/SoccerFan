@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react'
 import { api, type AdminLeagueHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
+import './game-editors.css'
 
 type Constraint = {
   id?: string
@@ -34,6 +36,21 @@ type Puzzle = {
   [k: string]: unknown
 }
 
+const CONSTRAINT_TYPES = ['club', 'league', 'nationality', 'natLeague', 'natClub'] as const
+type ConstraintType = (typeof CONSTRAINT_TYPES)[number]
+
+const TYPE_LABELS: Record<ConstraintType, string> = {
+  club: 'Club',
+  league: 'League',
+  nationality: 'Nationality',
+  natLeague: 'Nationality + league',
+  natClub: 'Nationality + club',
+}
+
+function isConstraintType(value: string): value is ConstraintType {
+  return CONSTRAINT_TYPES.some((type) => type === value)
+}
+
 function rebuildLabel(c: Constraint): string {
   const type = c.type ?? ''
   if (type === 'club') return c.club ? `Played for ${c.club}` : c.label ?? 'Club'
@@ -60,32 +77,76 @@ export function DraftEditor({
   const p = puzzle as Puzzle
   const constraints = p.constraints ?? []
   const lineup = p.optimalLineup ?? []
+  const puzzleRef = useRef(p)
+
+  useEffect(() => {
+    puzzleRef.current = p
+  }, [p])
+
+  function commit(next: Puzzle) {
+    puzzleRef.current = next
+    onChange(next)
+  }
 
   function updateConstraint(idx: number, patch: Partial<Constraint>) {
-    const next = constraints.map((x, i) => {
+    const current = puzzleRef.current
+    const currentConstraints = current.constraints ?? []
+    const currentLineup = current.optimalLineup ?? []
+    const next = currentConstraints.map((x, i) => {
       if (i !== idx) return x
       const merged = { ...x, ...patch }
       return { ...merged, label: rebuildLabel(merged) }
     })
     // Keep optimal lineup constraint labels in sync when possible.
     const updated = next[idx]!
-    const nextLineup = lineup.map((pick) =>
+    const nextLineup = currentLineup.map((pick) =>
       pick.constraintId === updated.id
         ? { ...pick, constraintLabel: updated.label }
         : pick
     )
-    onChange({ ...p, constraints: next, optimalLineup: nextLineup })
+    commit({ ...current, constraints: next, optimalLineup: nextLineup })
+  }
+
+  function setConstraints(next: Constraint[]) {
+    const current = puzzleRef.current
+    const labels = new Map(next.map((constraint) => [constraint.id, constraint.label]))
+    commit({
+      ...current,
+      constraints: next,
+      optimalLineup: (current.optimalLineup ?? []).map((pick) => ({
+        ...pick,
+        constraintLabel: pick.constraintId
+          ? labels.get(pick.constraintId) ?? pick.constraintLabel
+          : pick.constraintLabel,
+      })),
+    })
+  }
+
+  function moveConstraint(idx: number, offset: -1 | 1) {
+    const currentConstraints = puzzleRef.current.constraints ?? []
+    const target = idx + offset
+    if (target < 0 || target >= currentConstraints.length) return
+    const next = [...currentConstraints]
+    ;[next[idx], next[target]] = [next[target]!, next[idx]!]
+    setConstraints(next)
   }
 
   async function pickClub(idx: number, hit: AdminTeamHit) {
+    const constraintId = puzzleRef.current.constraints?.[idx]?.id
     const team = await api.resolveTeam(hit.id)
-    updateConstraint(idx, {
+    const currentConstraints = puzzleRef.current.constraints ?? []
+    const currentIndex = constraintId
+      ? currentConstraints.findIndex((constraint) => constraint.id === constraintId)
+      : idx
+    if (currentIndex < 0) return
+    const currentType = currentConstraints[currentIndex]?.type
+    updateConstraint(currentIndex, {
       club: team.name,
       teamId: team.id,
       logoUrl: team.logoUrl,
-      leagueId: constraints[idx]?.type === 'club' ? team.leagueId : constraints[idx]?.leagueId,
+      leagueId: currentType === 'club' ? team.leagueId : currentConstraints[currentIndex]?.leagueId,
       leagueName:
-        constraints[idx]?.type === 'club' ? team.leagueName : constraints[idx]?.leagueName,
+        currentType === 'club' ? team.leagueName : currentConstraints[currentIndex]?.leagueName,
     })
   }
 
@@ -104,6 +165,7 @@ export function DraftEditor({
     idx: number,
     hit: { id: string; name: string }
   ) {
+    const slotId = puzzleRef.current.optimalLineup?.[idx]?.slotId
     let resolved = { id: hit.id, name: hit.name }
     try {
       const full = (await api.resolvePlayer(hit.id, 'card')) as typeof resolved
@@ -111,15 +173,41 @@ export function DraftEditor({
     } catch {
       // search hit is enough
     }
-    const nextLineup = lineup.map((pick, i) =>
-      i === idx ? { ...pick, playerId: resolved.id, playerName: resolved.name } : pick
+    const current = puzzleRef.current
+    const nextLineup = (current.optimalLineup ?? []).map((pick, i) =>
+      (slotId ? pick.slotId === slotId : i === idx)
+        ? { ...pick, playerId: resolved.id, playerName: resolved.name }
+        : pick
     )
-    onChange({ ...p, optimalLineup: nextLineup })
+    commit({ ...current, optimalLineup: nextLineup })
   }
 
   return (
     <div className="mode-editor">
+      <div className="editor-summary">
+        <div>
+          <span className="muted tiny">Draft overview</span>
+          <strong>{p.category?.title || 'Untitled category'}</strong>
+        </div>
+        <div>
+          <span className="muted tiny">Formation</span>
+          <strong>{p.formationId || 'Not set'}</strong>
+        </div>
+        <div>
+          <span className="muted tiny">Constraints</span>
+          <strong>{constraints.length}</strong>
+        </div>
+        <div>
+          <span className="muted tiny">Optimal score</span>
+          <strong>{p.optimalScore ?? '—'}</strong>
+        </div>
+      </div>
+
       <div className="q-card">
+        <header>
+          <strong>Draft setup</strong>
+          <span className="muted tiny">Category, shape and QA benchmark</span>
+        </header>
         <label className="field">
           Category title
           <input
@@ -157,6 +245,7 @@ export function DraftEditor({
       <section className="q-card">
         <header>
           <strong>Constraints ({constraints.length})</strong>
+          <span className="muted tiny">Order is used by the draft board</span>
         </header>
         {constraints.map((c, idx) => {
           const type = c.type ?? ''
@@ -164,11 +253,61 @@ export function DraftEditor({
           const needsLeague = type === 'league' || type === 'natLeague'
           const needsNat = type === 'nationality' || type === 'natLeague' || type === 'natClub'
           return (
-            <div key={c.id ?? idx} className="bingo-cat">
-              <p>
-                <strong>{c.label}</strong>{' '}
-                <span className="muted tiny">{type}</span>
-              </p>
+            <article key={c.id ?? idx} className="q-card numbered-card">
+              <span className="card-number">{idx + 1}</span>
+              <div className="card-heading">
+                <div>
+                  <strong>{c.label || 'Untitled constraint'}</strong>{' '}
+                  <span className="type-badge">{isConstraintType(type) ? TYPE_LABELS[type] : type}</span>
+                </div>
+                <div className="button-row">
+                  <button
+                    type="button"
+                    className="ghost tiny-btn"
+                    disabled={locked || idx === 0}
+                    onClick={() => moveConstraint(idx, -1)}
+                    aria-label={`Move constraint ${idx + 1} up`}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost tiny-btn"
+                    disabled={locked || idx === constraints.length - 1}
+                    onClick={() => moveConstraint(idx, 1)}
+                    aria-label={`Move constraint ${idx + 1} down`}
+                  >
+                    ↓
+                  </button>
+                </div>
+              </div>
+              <label className="field compact">
+                Constraint type
+                <select
+                  value={isConstraintType(type) ? type : 'club'}
+                  disabled={locked}
+                  onChange={(e) => {
+                    const nextType = e.target.value
+                    if (!isConstraintType(nextType)) return
+                    updateConstraint(idx, {
+                      type: nextType,
+                      label: TYPE_LABELS[nextType],
+                      club: null,
+                      teamId: null,
+                      logoUrl: null,
+                      leagueId: null,
+                      leagueName: null,
+                      nationality: null,
+                    })
+                  }}
+                >
+                  {CONSTRAINT_TYPES.map((constraintType) => (
+                    <option key={constraintType} value={constraintType}>
+                      {TYPE_LABELS[constraintType]}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {needsNat && (
                 <EntityPicker
                   kind="nationality"
@@ -212,29 +351,41 @@ export function DraftEditor({
                   />
                 </label>
               )}
-            </div>
+            </article>
           )
         })}
+        <p className="muted tiny">
+          Constraint count is fixed because it must match formation slots and the optimal lineup.
+        </p>
       </section>
 
       <section className="q-card">
         <header>
           <strong>Optimal lineup (QA)</strong>
         </header>
-        {lineup.map((pick, i) => (
-          <div key={pick.slotId ?? i} className="option-row stack">
-            <p className="muted tiny">
-              {pick.position} · {pick.constraintLabel} · score {pick.statValue}
-            </p>
-            <EntityPicker
-              key={`${pick.slotId ?? i}-${pick.playerId ?? ''}-${pick.playerName ?? ''}`}
-              kind="player"
-              valueLabel={pick.playerName}
-              disabled={locked}
-              onPickPlayer={(hit) => pickLineupPlayer(i, hit)}
-            />
+        {lineup.length === 0 ? (
+          <p className="muted">No optimal lineup is stored for QA.</p>
+        ) : (
+          <div className="lineup-pitch">
+            {lineup.map((pick, i) => (
+              <div key={pick.slotId ?? i} className="lineup-slot">
+                <div className="card-heading">
+                  <span className="position-badge">{pick.position || `Slot ${i + 1}`}</span>
+                  <strong>{pick.statValue ?? '—'} pts</strong>
+                </div>
+                <p className="muted tiny">{pick.constraintLabel || 'No constraint label'}</p>
+                <EntityPicker
+                  key={`${pick.slotId ?? i}-${pick.playerId ?? ''}-${pick.playerName ?? ''}`}
+                  kind="player"
+                  label="QA player"
+                  valueLabel={pick.playerName}
+                  disabled={locked}
+                  onPickPlayer={(hit) => pickLineupPlayer(i, hit)}
+                />
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </section>
     </div>
   )

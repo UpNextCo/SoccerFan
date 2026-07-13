@@ -418,6 +418,30 @@ function reconstructPath(parent: Map<string, string>, start: string, target: str
   return path.reverse();
 }
 
+export interface ClubChainShortestPath {
+  shortestPathPlayerIds: string[];
+  shortestPathLength: number;
+}
+
+/**
+ * Recompute an honest shortest path using the same teammate graph as puzzle generation.
+ * Endpoints outside the recognisable connector pool return null rather than a fabricated path.
+ */
+export async function recomputeClubChainShortestPath(
+  startPlayerId: string,
+  targetPlayerId: string
+): Promise<ClubChainShortestPath | null> {
+  if (startPlayerId === targetPlayerId) return null;
+  const graph = await buildGraph();
+  if (!graph.players.has(startPlayerId) || !graph.players.has(targetPlayerId)) return null;
+  const { dist, parent } = bfs(graph, startPlayerId);
+  const shortestPathLength = dist.get(targetPlayerId);
+  if (shortestPathLength === undefined) return null;
+  const shortestPathPlayerIds = reconstructPath(parent, startPlayerId, targetPlayerId);
+  if (shortestPathPlayerIds.length !== shortestPathLength + 1) return null;
+  return { shortestPathPlayerIds, shortestPathLength };
+}
+
 function toCard(p: PoolPlayer, headshot: string | undefined): ClubChainPlayerCard {
   return {
     id: p.id,

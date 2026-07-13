@@ -133,6 +133,8 @@ export interface OneMorePuzzlePublic {
   modeId: 'one_more';
   puzzleId: string;
   date: string;
+  /** Present on newly generated rows; omitted by legacy persisted puzzles. */
+  metricId?: string;
   title: string;
   valueNoun: string;
   minimum: number;

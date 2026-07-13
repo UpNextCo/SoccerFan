@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, eq, gte, inArray, lte, ne } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { dailyPuzzles } from '../db/schema.js';
 import { validatePuzzlePayload } from './adminPuzzleValidation.js';
@@ -11,8 +11,18 @@ import { generateClubChainPuzzle } from './clubChainGenerator.js';
 import { generateLastManStandingPuzzle } from './lastManStandingGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
+import { validateAdminPuzzleDraft } from './adminDraftValidation.js';
+import { monthLockStatusError, workflowTransitionError } from './adminWorkflow.js';
 
 export type PuzzleOpsStatus = 'generated' | 'approved' | 'locked';
+type DraftValidationIssues = Awaited<ReturnType<typeof validateAdminPuzzleDraft>>['issues'];
+export interface MonthStatusIssue {
+  date: string;
+  modeId: string;
+  kind: 'missing' | 'status' | 'validation' | 'conflict';
+  message: string;
+  validationIssues?: DraftValidationIssues;
+}
 
 /** Keep in sync with DAILY_PLAYABLE_MODES in dailyService.ts */
 export const OPS_PLAYABLE_MODES = [
@@ -280,46 +290,125 @@ export async function setMonthStatus(
   yearMonth: string,
   status: PuzzleOpsStatus,
   note?: string
-): Promise<{ updated: number }> {
+): Promise<{
+  updated: number;
+  error?: string;
+  invalid?: Array<{ date: string; modeId: string; issues: DraftValidationIssues }>;
+  issues?: MonthStatusIssue[];
+}> {
   const dates = daysInMonth(yearMonth);
   const start = dates[0]!;
   const end = dates[dates.length - 1]!;
   const modes = [...OPS_PLAYABLE_MODES];
 
-  // Unlock / set generated|approved: only touch non-locked unless locking.
-  const conditions = [
-    gte(dailyPuzzles.date, start),
-    lte(dailyPuzzles.date, end),
-    inArray(dailyPuzzles.modeId, modes),
-  ];
-  if (status !== 'locked') {
-    // When unlocking to generated, allow locked rows; when approving, skip locked.
-    if (status === 'approved') {
-      conditions.push(ne(dailyPuzzles.status, 'locked'));
+  const candidates = await db
+      .select({
+        id: dailyPuzzles.id,
+        date: dailyPuzzles.date,
+        modeId: dailyPuzzles.modeId,
+        status: dailyPuzzles.status,
+        puzzleJson: dailyPuzzles.puzzleJson,
+        answerJson: dailyPuzzles.answerJson,
+        contentHash: dailyPuzzles.contentHash,
+      })
+      .from(dailyPuzzles)
+      .where(and(
+        gte(dailyPuzzles.date, start),
+        lte(dailyPuzzles.date, end),
+        inArray(dailyPuzzles.modeId, modes)
+      ));
+
+  if (status === 'locked' || status === 'approved') {
+    const issues: MonthStatusIssue[] = [];
+    const byKey = new Map(candidates.map((row) => [`${row.date}|${row.modeId}`, row]));
+    if (status === 'locked') {
+      for (const date of dates) {
+        for (const modeId of modes) {
+          const row = byKey.get(`${date}|${modeId}`);
+          if (!row) {
+            issues.push({ date, modeId, kind: 'missing', message: 'Expected puzzle row is missing.' });
+            continue;
+          }
+          const statusError = monthLockStatusError(row.status as PuzzleOpsStatus);
+          if (statusError) issues.push({ date, modeId, kind: 'status', message: statusError });
+        }
+      }
+    }
+    const reports = await Promise.all(candidates.map(async (row) => ({
+      date: row.date,
+      modeId: row.modeId,
+      report: await validateAdminPuzzleDraft(row.modeId, row.puzzleJson, row.answerJson),
+    })));
+    const invalid = reports
+      .filter((entry) => !entry.report.ok)
+      .map((entry) => ({ date: entry.date, modeId: entry.modeId, issues: entry.report.issues }));
+    issues.push(...invalid.map((entry) => ({
+      date: entry.date,
+      modeId: entry.modeId,
+      kind: 'validation' as const,
+      message: 'Puzzle failed semantic validation.',
+      validationIssues: entry.issues,
+    })));
+    if (issues.length > 0) {
+      const missing = issues.filter((entry) => entry.kind === 'missing').length;
+      const unapproved = issues.filter((entry) => entry.kind === 'status').length;
+      const invalidCount = issues.filter((entry) => entry.kind === 'validation').length;
+      return {
+        updated: 0,
+        error: `Month lock blocked: ${missing} missing, ${unapproved} unapproved, ${invalidCount} invalid puzzle(s).`,
+        invalid,
+        issues,
+      };
     }
   }
 
-  await db
-    .update(dailyPuzzles)
-    .set({
-      status,
-      reviewedAt: new Date(),
-      ...(note != null ? { reviewNote: note } : {}),
-    })
-    .where(and(...conditions));
-
-  const rows = await db
-    .select({ id: dailyPuzzles.id })
-    .from(dailyPuzzles)
-    .where(
-      and(
-        gte(dailyPuzzles.date, start),
-        lte(dailyPuzzles.date, end),
-        inArray(dailyPuzzles.modeId, modes),
-        eq(dailyPuzzles.status, status)
-      )
-    );
-  return { updated: rows.length };
+  try {
+    const updated = await db.transaction(async (tx) => {
+      let count = 0;
+      for (const row of candidates) {
+        const currentStatus = row.status as PuzzleOpsStatus;
+        const transitionError = workflowTransitionError(currentStatus, status);
+        if (transitionError) {
+          if (status === 'approved' && currentStatus === 'locked') continue;
+          throw new Error(`${row.date}/${row.modeId}: ${transitionError}`);
+        }
+        const sameHash = row.contentHash == null
+          ? isNull(dailyPuzzles.contentHash)
+          : eq(dailyPuzzles.contentHash, row.contentHash);
+        const changed = await tx
+          .update(dailyPuzzles)
+          .set({
+            status,
+            reviewedAt: new Date(),
+            ...(note != null ? { reviewNote: note } : {}),
+          })
+          .where(and(
+            eq(dailyPuzzles.id, row.id),
+            eq(dailyPuzzles.status, currentStatus),
+            sameHash
+          ))
+          .returning({ id: dailyPuzzles.id });
+        if (changed.length !== 1) {
+          throw new Error(`${row.date}/${row.modeId}: puzzle changed during validation`);
+        }
+        count += 1;
+      }
+      return count;
+    });
+    return { updated };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      updated: 0,
+      error: `Month status update aborted: ${message}`,
+      issues: [{
+        date: yearMonth,
+        modeId: '*',
+        kind: 'conflict',
+        message,
+      }],
+    };
+  }
 }
 
 export async function getPuzzleForAdmin(date: string, modeId: string) {
@@ -354,10 +443,13 @@ export async function savePuzzleForAdmin(args: {
   }
 
   const hash = contentHash(enriched.puzzleJson, enriched.answerJson);
-  const nextStatus: PuzzleOpsStatus =
-    args.keepApproved && existing.status === 'approved' ? 'approved' : 'generated';
+  // Editing always invalidates prior review. Approval must be earned again against the saved hash.
+  const nextStatus: PuzzleOpsStatus = 'generated';
 
-  await db
+  const sameHash = existing.contentHash == null
+    ? isNull(dailyPuzzles.contentHash)
+    : eq(dailyPuzzles.contentHash, existing.contentHash);
+  const changed = await db
     .update(dailyPuzzles)
     .set({
       puzzleJson: enriched.puzzleJson,
@@ -365,9 +457,15 @@ export async function savePuzzleForAdmin(args: {
       contentHash: hash,
       status: nextStatus,
       reviewNote: args.reviewNote ?? existing.reviewNote,
-      reviewedAt: nextStatus === 'approved' ? new Date() : existing.reviewedAt,
+      reviewedAt: null,
     })
-    .where(and(eq(dailyPuzzles.date, args.date), eq(dailyPuzzles.modeId, args.modeId)));
+    .where(and(
+      eq(dailyPuzzles.id, existing.id),
+      eq(dailyPuzzles.status, existing.status),
+      sameHash
+    ))
+    .returning({ id: dailyPuzzles.id });
+  if (changed.length !== 1) return { ok: false, error: 'conflict: puzzle changed while saving' };
 
   return { ok: true, puzzleJson: enriched.puzzleJson, answerJson: enriched.answerJson };
 }
@@ -380,20 +478,39 @@ export async function setPuzzleStatus(
 ): Promise<{ ok: boolean; error?: string }> {
   const existing = await getPuzzleForAdmin(date, modeId);
   if (!existing) return { ok: false, error: 'not found' };
-  if (existing.status === 'locked' && status !== 'locked' && status !== 'generated') {
-    // unlock goes via unlock path
+  const currentStatus = existing.status as PuzzleOpsStatus;
+  const transitionError = workflowTransitionError(currentStatus, status);
+  if (transitionError) return { ok: false, error: transitionError };
+  if (status === 'approved' || status === 'locked') {
+    const validation = await validateAdminPuzzleDraft(
+      existing.modeId,
+      existing.puzzleJson,
+      existing.answerJson
+    );
+    if (!validation.ok) {
+      const errors = validation.issues
+        .filter((entry) => entry.severity === 'error')
+        .map((entry) => `${entry.path}: ${entry.message}`)
+        .join('; ');
+      return { ok: false, error: errors || 'validation failed' };
+    }
   }
-  if (existing.status === 'locked' && status !== 'locked') {
-    // allow unlock to approved/generated
-  }
-
-  await db
+  const sameHash = existing.contentHash == null
+    ? isNull(dailyPuzzles.contentHash)
+    : eq(dailyPuzzles.contentHash, existing.contentHash);
+  const changed = await db
     .update(dailyPuzzles)
     .set({
       status,
       reviewedAt: new Date(),
       reviewNote: note ?? existing.reviewNote,
     })
-    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, modeId)));
+    .where(and(
+      eq(dailyPuzzles.id, existing.id),
+      eq(dailyPuzzles.status, currentStatus),
+      sameHash
+    ))
+    .returning({ id: dailyPuzzles.id });
+  if (changed.length !== 1) return { ok: false, error: 'conflict: puzzle changed during validation' };
   return { ok: true };
 }
