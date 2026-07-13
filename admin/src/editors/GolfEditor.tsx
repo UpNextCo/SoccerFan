@@ -128,8 +128,8 @@ function EvaluationSummary({ evaluation }: { evaluation: GolfRuleEvaluation }) {
   return (
     <div className="golf-evaluation">
       <div className="golf-counts">
-        <span><strong>{evaluation.counts.total}</strong> valid</span>
-        <span><strong>{evaluation.counts.nameable}</strong> nameable</span>
+        <span><strong>{evaluation.counts.total}</strong> possible answers</span>
+        <span><strong>{evaluation.counts.nameable}</strong> well-known answers</span>
         <span><strong>{evaluation.suggestedPar}</strong> suggested par</span>
         <span><strong>{evaluation.suggestedTarget}</strong> target</span>
       </div>
@@ -138,8 +138,8 @@ function EvaluationSummary({ evaluation }: { evaluation: GolfRuleEvaluation }) {
         {' · '}{evaluation.counts.rarity.rare} rare · {evaluation.counts.rarity.ultraRare} ultra rare
       </p>
       <p className="tiny">
-        <strong>Sample answers:</strong>{' '}
-        {evaluation.answers.slice(0, 8).map((answer) => answer.name).join(', ') || 'No matches'}
+        <strong>For example:</strong>{' '}
+        {evaluation.answers.slice(0, 8).map((answer) => answer.name).join(', ') || 'No matching players'}
       </p>
       {evaluation.qualityWarnings.map((warning) => (
         <p className="warning-box tiny" key={warning}>{warning}</p>
@@ -189,6 +189,13 @@ export function GolfEditor({
     ? templateDetails[activeHole.templateId] ??
       templates.find((template) => template.id === activeHole.templateId)
     : undefined
+  const usedTemplateIds = new Set(
+    holes
+      .filter((hole) => hole.holeNumber !== activeHole?.holeNumber)
+      .map((hole) => hole.templateId)
+      .filter((id): id is string => Boolean(id))
+  )
+  const availableTemplates = templates.filter((template) => !usedTemplateIds.has(template.id))
   const answersStale = activeKey ? staleHoleKeys.has(activeKey) : false
   const mutationsDisabled = locked || busyAction !== null
 
@@ -470,7 +477,7 @@ export function GolfEditor({
     const authored = toAuthoredHole(activeHole)
     if (!authored) {
       setActionError(
-        'Validation requires an id, category, par 2–4, integer target, and answers with database ids and supported rarities.'
+        'This hole is missing required details. Check its category, par, target and accepted answers.'
       )
       return
     }
@@ -568,14 +575,14 @@ export function GolfEditor({
           <section className="golf-rule-composer" aria-labelledby="golf-rule-heading">
             <div className="golf-section-heading">
               <div>
-                <h3 id="golf-rule-heading">Question &amp; answer rule</h3>
+                <h3 id="golf-rule-heading">Choose the question</h3>
                 <p className="muted tiny">
                   Choose a verified question below. Its full answer set, hints and suggested
                   par are filled in automatically.
                 </p>
               </div>
               <span className={`golf-rule-status ${activeHole.rule ? 'structured' : 'legacy'}`}>
-                {activeHole.rule ? 'Rule-backed' : 'Legacy / manual'}
+                {activeHole.rule ? 'Verified question' : 'Needs a verified question'}
               </span>
             </div>
 
@@ -601,7 +608,7 @@ export function GolfEditor({
                 Verified template
                 <select
                   value=""
-                  disabled={mutationsDisabled || templatesBusy || templates.length === 0}
+                  disabled={mutationsDisabled || templatesBusy || availableTemplates.length === 0}
                   onChange={(event) => {
                     const template = templates.find((item) => item.id === event.target.value)
                     if (template) void applyTemplate(template)
@@ -610,11 +617,11 @@ export function GolfEditor({
                   <option value="">
                     {templatesBusy
                       ? 'Loading questions…'
-                      : templates.length === 0
+                      : availableTemplates.length === 0
                         ? 'No matching questions'
                         : 'Choose a question…'}
                   </option>
-                  {templates.map((template) => (
+                  {availableTemplates.map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.prompt} ({template.validAnswers} answers)
                     </option>
@@ -625,25 +632,26 @@ export function GolfEditor({
 
             {activeHole.templateId && (
               <div className="golf-template-meta">
-                <strong>Template:</strong> {activeTemplate?.prompt ?? 'Attached template'}{' '}
-                <span className="muted tiny">({activeHole.templateId})</span>
+                <strong>Selected question:</strong>{' '}
+                {activeTemplate?.prompt ?? activeHole.prompt}
                 {activeTemplate && (
                   <p className="tiny">
-                    {activeTemplate.validAnswers} indexed answers · samples:{' '}
-                    {activeTemplate.sampleAnswers.slice(0, 6).join(', ') || 'none'}
+                    {activeTemplate.validAnswers} possible answers
+                    {activeTemplate.sampleAnswers.length > 0
+                      ? ` (${activeTemplate.sampleAnswers.slice(0, 6).join(', ')}${activeTemplate.sampleAnswers.length > 6 ? ', etc.' : ''})`
+                      : ''}
                   </p>
                 )}
               </div>
             )}
 
             <details className="advanced-panel golf-custom-rule">
-              <summary>Advanced: build or customise the database rule</summary>
+              <summary>Advanced: create a custom question</summary>
               {activeHole.rule ? (
                 <div className="golf-rule-builder">
                 {activeHole.rule.validIds ? (
                   <div className="warning-box">
-                    This template uses a closed set of {activeHole.rule.validIds.length} player ids.
-                    It can be previewed and generated, but cannot be mixed with dynamic selectors.
+                    This question has a fixed list of {activeHole.rule.validIds.length} possible answers.
                     <div className="editor-toolbar">
                       <button
                         type="button"
@@ -654,14 +662,14 @@ export function GolfEditor({
                           return dynamicRule
                         })}
                       >
-                        Convert to dynamic rule
+                        Turn this into an editable question
                       </button>
                     </div>
                   </div>
                 ) : (
                   <>
                     <label className="field">
-                      Internal rule label (optional)
+                      Short label (optional)
                       <input
                         value={activeHole.rule.label ?? ''}
                         disabled={mutationsDisabled}
@@ -847,13 +855,13 @@ export function GolfEditor({
 
             <div className="golf-rule-actions">
               <button type="button" className="ghost" disabled={!activeHole.rule || busyAction !== null} onClick={() => void previewRule()}>
-                {busyAction === 'preview' ? 'Previewing…' : 'Preview rule'}
+                {busyAction === 'preview' ? 'Checking…' : 'Check possible answers'}
               </button>
               <button type="button" disabled={mutationsDisabled || !activeHole.rule} onClick={() => void generateAnswers()}>
-                {busyAction === 'generate' ? 'Generating…' : 'Generate verified answers'}
+                {busyAction === 'generate' ? 'Refreshing…' : 'Refresh answers'}
               </button>
               <button type="button" className="ghost" disabled={busyAction !== null} onClick={() => void validateHole()}>
-                {busyAction === 'validate' ? 'Validating…' : 'Validate current hole'}
+                {busyAction === 'validate' ? 'Checking…' : 'Check this hole'}
               </button>
             </div>
             {actionError && <p className="error-box">{actionError}</p>}
@@ -877,7 +885,7 @@ export function GolfEditor({
                       <p className="tiny">
                         <strong>Missing:</strong>{' '}
                         {activeValidation.missingAnswerIds.map((id) =>
-                          activeValidation.evaluation.answers.find((answer) => answer.id === id)?.name ?? id
+                          activeValidation.evaluation.answers.find((answer) => answer.id === id)?.name ?? 'Unknown player'
                         ).join(', ')}
                       </p>
                     )}
@@ -885,7 +893,7 @@ export function GolfEditor({
                       <p className="tiny">
                         <strong>Not matched by rule:</strong>{' '}
                         {activeValidation.staleAnswerIds.map((id) =>
-                          activeHole.answers.find((answer) => answer.id === id)?.name ?? id
+                          activeHole.answers.find((answer) => answer.id === id)?.name ?? 'Unknown player'
                         ).join(', ')}
                       </p>
                     )}
@@ -1036,7 +1044,6 @@ export function GolfEditor({
                     })
                   }
                 />
-                {ans.id && <span className="muted tiny">{ans.id}</span>}
               </div>
             ))}
             <button type="button" className="ghost" disabled={mutationsDisabled} onClick={() => addAnswer(activeHole.holeNumber)}>

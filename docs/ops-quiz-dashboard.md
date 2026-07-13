@@ -109,6 +109,8 @@ Root scripts:
 - `npm run build` — installs backend + admin deps, builds admin SPA, compiles API
 - `npm start` — migrates DB, starts API (serves `/admin`)
 - `cd backend && npm run test:validation` — runs pure semantic validator tests
+- `cd backend && npm run job:build-golf-templates` — expands the Golf question
+  bank with narrower, database-verified questions (8–100 possible answers)
 - `cd admin && npm run lint` — checks editor hooks and TypeScript-facing lint rules
 
 Share the `/admin` URL + password in Slack; no per-user accounts in v1.

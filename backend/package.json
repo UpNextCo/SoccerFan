@@ -66,6 +66,7 @@
     "job:build-relationships": "tsx src/jobs/build-relationship-prompts.ts",
     "job:build-milestones": "tsx src/jobs/build-milestone-prompts.ts",
     "job:gen-golf": "tsx src/services/footballGolfGenerator.ts",
+    "job:build-golf-templates": "tsx src/jobs/build-golf-templates.ts",
     "job:prune-tower-bank": "tsx src/jobs/prune-tower-bank.ts",
     "job:dedupe-tower-bank": "tsx src/jobs/dedupe-tower-bank.ts",
     "job:import-finals": "tsx src/jobs/import-finals.ts",

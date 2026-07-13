@@ -129,6 +129,29 @@ function hashStr(s: string): number {
   return Math.abs(h);
 }
 
+/** Golf always expects multiple answers, so player-facing prompts use plural wording. */
+export function golfPromptCopy(prompt: string): string {
+  let copy = prompt.trim()
+    .replace(/^Name a footballer who\b/i, 'Name players who')
+    .replace(/^Name a player who\b/i, 'Name players who')
+    .replace(/^Name a player with\b/i, 'Name players with')
+    .replace(/^Name a player from\b/i, 'Name players from')
+    .replace(/^Name an? (.+?) player who\b/i, 'Name $1 players who')
+    .replace(/^Name an? (.+?) who has\b/i, 'Name $1 players who have')
+    .replace(
+      /^Name an? (.+?) who (played|scored|won|started|finished)\b/i,
+      'Name $1 players who $2'
+    )
+    .replace(/^Name players who has\b/i, 'Name players who have');
+
+  if (/^Name a Champions League winner\.?$/i.test(copy)) {
+    copy = 'Name Champions League winners.';
+  } else if (/^Name a Premier League goalkeeper\.?$/i.test(copy)) {
+    copy = 'Name Premier League goalkeepers.';
+  }
+  return copy;
+}
+
 export function categoryFor(rule: TowerRule, prompt: string): string {
   if (rule.validIds) {
     if (/\bplayed under\b/i.test(prompt)) return 'Managers';
@@ -224,7 +247,7 @@ export function golfQualityWarnings(
   if (counts.nameable < minimumNameable) {
     warnings.push(`Only ${counts.nameable} nameable answers; this prompt should have at least ${minimumNameable}.`);
   }
-  if (counts.total > 200) warnings.push(`Rule matches ${counts.total} players; daily Golf holes should ship at most 200 answers.`);
+  if (counts.total > 100) warnings.push(`Rule matches ${counts.total} players; use another filter to keep the answer set at 100 or fewer.`);
   if (counts.duplicateNamesRemoved > 0) {
     warnings.push(`${counts.duplicateNamesRemoved} duplicate display-name answer(s) were removed.`);
   }
@@ -312,7 +335,11 @@ async function recentPrompts(days: number): Promise<Set<string>> {
     WHERE mode_id = 'football_golf' AND date >= (CURRENT_DATE - ${`${days} days`}::interval)
   `)) as unknown as Array<{ pj: { holes?: Array<{ prompt: string }> } }>;
   const out = new Set<string>();
-  for (const r of rows) for (const h of r.pj?.holes ?? []) if (h.prompt) out.add(h.prompt.toLowerCase());
+  for (const r of rows) {
+    for (const h of r.pj?.holes ?? []) {
+      if (h.prompt) out.add(golfPromptCopy(h.prompt).toLowerCase());
+    }
+  }
   return out;
 }
 
@@ -334,7 +361,10 @@ export async function generateFootballGolfCourse(
   // Deterministic daily shuffle.
   const seed = hashStr(`${date}:golf`);
   const ordered = prompts
-    .map((p, i) => ({ p, k: hashStr(`${seed}:${i}:${p.prompt}`) }))
+    .map((p, i) => {
+      const normalized = { ...p, prompt: golfPromptCopy(p.prompt) };
+      return { p: normalized, k: hashStr(`${seed}:${i}:${normalized.prompt}`) };
+    })
     .sort((a, b) => a.k - b.k)
     .map((x) => x.p);
 
@@ -416,7 +446,7 @@ async function scanCandidates(
     // birdies. Excludes niche foreign-league prompts. Bounded total so it ships.
     // Manager pair links need a higher bar — knowing who played under both X and Y is harder.
     const minFamous = cat === 'Managers' && /\bboth\b/i.test(prompt) ? 12 : 8;
-    if (famous < minFamous || evaluation.answers.length > 200) continue;
+    if (famous < minFamous || evaluation.answers.length > 100) continue;
 
     candidates.push({ templateId: id, prompt, rule, answers: evaluation.answers, famous });
     for (const c of clubs) usedClubs.add(c);

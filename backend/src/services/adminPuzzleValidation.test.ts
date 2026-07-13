@@ -8,6 +8,7 @@ import { towerRuleSchema } from './towerRuleSchema.js';
 import {
   buildGolfHoleFromEvaluation,
   dedupeGolfPlayers,
+  golfPromptCopy,
   golfQualityWarnings,
   suggestGolfPar,
   type GolfRuleEvaluation,
@@ -169,6 +170,21 @@ test('checks Golf numbering, answer sufficiency, and total par', () => {
     ).ok,
     true
   );
+  const duplicateTemplate = '00000000-0000-4000-8000-000000000001';
+  assert.equal(
+    validatePuzzleReport(
+      'football_golf',
+      {
+        totalPar: 18,
+        holes: holes.map((hole, index) => ({
+          ...hole,
+          ...(index < 2 ? { templateId: duplicateTemplate } : {}),
+        })),
+      },
+      null
+    ).ok,
+    false
+  );
   assert.equal(validatePuzzleReport('football_golf', { totalPar: 20, holes }, null).ok, false);
 });
 
@@ -183,6 +199,21 @@ test('accepts only declarative closed Tower rule fields', () => {
   assert.equal(towerRuleSchema.safeParse({
     validIds: ['not-a-uuid'],
   }).success, false);
+});
+
+test('uses plural player-facing Golf prompt copy', () => {
+  assert.equal(
+    golfPromptCopy('Name a player who scored in a Champions League final.'),
+    'Name players who scored in a Champions League final.'
+  );
+  assert.equal(
+    golfPromptCopy('Name a Brazilian who has played in the Premier League.'),
+    'Name Brazilian players who have played in the Premier League.'
+  );
+  assert.equal(
+    golfPromptCopy('Name a Champions League winner.'),
+    'Name Champions League winners.'
+  );
 });
 
 test('dedupes Golf names and derives bounded authoring output', () => {

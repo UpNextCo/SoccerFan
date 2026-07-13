@@ -199,6 +199,12 @@ function validateGolf(puzzleJson: unknown, issues: AdminPuzzleValidationIssue[])
   if (!puzzle) return;
   const numbers = puzzle.holes.map((hole) => hole.holeNumber);
   if (!unique(numbers.map(String))) issue(issues, 'puzzleJson.holes', 'Hole numbers must be unique.');
+  const templateIds = puzzle.holes
+    .map((hole) => hole.templateId)
+    .filter((templateId): templateId is string => Boolean(templateId));
+  if (!unique(templateIds)) {
+    issue(issues, 'puzzleJson.holes', 'Each Golf question can only be used once in a course.');
+  }
   const expected = Array.from({ length: puzzle.holes.length }, (_, index) => index + 1);
   if ([...numbers].sort((a, b) => a - b).join(',') !== expected.join(',')) issue(issues, 'puzzleJson.holes', 'Hole numbers must be consecutive from 1.');
   puzzle.holes.forEach((hole, index) => {

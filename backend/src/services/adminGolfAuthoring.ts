@@ -3,6 +3,7 @@ import { db } from '../db/index.js';
 import {
   buildGolfHole,
   evaluateGolfRule,
+  golfPromptCopy,
   type GolfHole,
   type GolfRuleEvaluation,
 } from './footballGolfGenerator.js';
@@ -40,8 +41,13 @@ export async function listAdminGolfTemplates(query = '', limit = 30): Promise<Ad
     FROM tower_prompts
     WHERE status = 'active'
       AND answer_type = 'player'
+      AND valid_answers BETWEEN 6 AND 100
       AND (${normalizedQuery} = '' OR position(${normalizedQuery} in lower(prompt)) > 0)
-    ORDER BY used_count ASC, difficulty ASC, prompt ASC
+    ORDER BY
+      CASE WHEN valid_answers BETWEEN 10 AND 60 THEN 0 ELSE 1 END,
+      used_count ASC,
+      difficulty ASC,
+      prompt ASC
     LIMIT ${limit}
   `)) as unknown as GolfTemplateRow[];
 
@@ -50,7 +56,7 @@ export async function listAdminGolfTemplates(query = '', limit = 30): Promise<Ad
     if (!rule.success) return [];
     return [{
       id: row.id,
-      prompt: row.prompt,
+      prompt: golfPromptCopy(row.prompt),
       rule: rule.data,
       tier: row.tier,
       difficulty: row.difficulty,
@@ -78,7 +84,7 @@ async function getAdminGolfTemplate(templateId: string): Promise<AdminGolfTempla
   }
   return {
     id: row.id,
-    prompt: row.prompt,
+    prompt: golfPromptCopy(row.prompt),
     rule: rule.data,
     tier: row.tier,
     difficulty: row.difficulty,
