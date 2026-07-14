@@ -26,6 +26,65 @@ export type MonthMatrix = {
   }
 }
 
+export const PLAYABLE_MODES = [
+  'football_bingo',
+  'one_more',
+  'draft_master',
+  'football_golf',
+  'club_chain',
+  'target_man',
+  'last_man_standing',
+] as const
+
+export type PlayableMode = (typeof PLAYABLE_MODES)[number]
+export type GenerationRunStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'completed_with_failures'
+export type GenerationItemStatus = 'queued' | 'running' | 'succeeded' | 'skipped' | 'failed'
+
+export type MonthGenerationRun = {
+  id: string
+  yearMonth: string
+  requestedModes: PlayableMode[]
+  modeScope: string
+  status: GenerationRunStatus
+  totalCount: number
+  completedCount: number
+  failedCount: number
+  skippedCount: number
+  succeededCount: number
+  requestedBy: string
+  createdAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  updatedAt: string
+}
+
+export type MonthGenerationItem = {
+  id: string
+  runId: string
+  date: string
+  modeId: PlayableMode
+  status: GenerationItemStatus
+  attempts: number
+  error: string | null
+  nextAttemptAt: string
+  createdAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  updatedAt: string
+}
+
+export type MonthGenerationRunDetail = MonthGenerationRun & {
+  items: MonthGenerationItem[]
+}
+
+export type StartMonthGenerationResult = MonthGenerationRunDetail & {
+  created: boolean
+}
+
 export type PuzzleRow = {
   id: string
   date: string
@@ -286,13 +345,24 @@ export const api = {
   me: () => request<{ name: string }>('/me'),
   month: (yearMonth: string) =>
     request<MonthMatrix>(`/month?yearMonth=${encodeURIComponent(yearMonth)}`),
-  generateMonth: (yearMonth: string, modes?: string[], force?: boolean) =>
-    request<{
-      results: Array<{ date: string; modeId: string; ok: boolean; skipped?: string; error?: string }>
-    }>('/month/generate', {
+  startMonthGeneration: (yearMonth: string, modes?: PlayableMode[]) =>
+    request<StartMonthGenerationResult>('/month-generation/runs', {
       method: 'POST',
-      body: JSON.stringify({ yearMonth, modes, force }),
+      body: JSON.stringify({ yearMonth, modes }),
     }),
+  listMonthGenerationRuns: (yearMonth: string) =>
+    request<MonthGenerationRun[]>(
+      `/month-generation/runs?yearMonth=${encodeURIComponent(yearMonth)}`
+    ),
+  getMonthGenerationRun: (runId: string) =>
+    request<MonthGenerationRunDetail>(
+      `/month-generation/runs/${encodeURIComponent(runId)}`
+    ),
+  retryFailedMonthGenerationItems: (runId: string) =>
+    request<MonthGenerationRunDetail>(
+      `/month-generation/runs/${encodeURIComponent(runId)}/retry-failed`,
+      { method: 'POST' }
+    ),
   lockMonth: (yearMonth: string, note?: string) =>
     request<{ updated: number }>('/month/lock', {
       method: 'POST',

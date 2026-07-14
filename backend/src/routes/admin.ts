@@ -9,7 +9,6 @@ import {
 } from '../middleware/adminAuth.js';
 import { sendError, sendSuccess } from '../middleware/auth.js';
 import {
-  generateMonthMissing,
   generateOnePuzzle,
   getMonthMatrix,
   getPuzzleForAdmin,
@@ -31,10 +30,12 @@ import {
 } from '../services/adminEntitySearch.js';
 import { adminQuestionEngineRouter } from './adminQuestionEngine.js';
 import { adminPuzzleValidationRouter } from './adminPuzzleValidation.js';
+import { adminMonthGenerationRouter } from './adminMonthGeneration.js';
 
 export const adminRouter = Router();
 adminRouter.use('/question-engine', adminQuestionEngineRouter);
 adminRouter.use('/validation', adminPuzzleValidationRouter);
+adminRouter.use('/month-generation', adminMonthGenerationRouter);
 
 adminRouter.post('/login', (req, res) => {
   const body = z
@@ -84,31 +85,12 @@ adminRouter.get('/month', requireAdmin, async (req, res) => {
 });
 
 adminRouter.post('/month/generate', requireAdmin, async (req, res) => {
-  const body = z
-    .object({
-      yearMonth: z.string().regex(/^\d{4}-\d{2}$/),
-      modes: z.array(z.string()).optional(),
-      force: z.boolean().optional(),
-    })
-    .safeParse(req.body);
-  if (!body.success) {
-    sendError(res, 'Invalid body', 400);
-    return;
-  }
-  const modes = body.data.modes?.filter((m) =>
-    (OPS_PLAYABLE_MODES as readonly string[]).includes(m)
+  sendError(
+    res,
+    'This unsafe bulk generation endpoint has been removed. Use POST /admin/api/month-generation/runs.',
+    410,
+    'MONTH_GENERATION_ENDPOINT_REMOVED'
   );
-  try {
-    // Long-running — client should expect minutes for a full month (esp. LMS).
-    res.setTimeout(0);
-    const result = await generateMonthMissing(body.data.yearMonth, {
-      modes,
-      force: body.data.force,
-    });
-    sendSuccess(res, result);
-  } catch (err) {
-    sendError(res, err instanceof Error ? err.message : String(err), 500);
-  }
 });
 
 adminRouter.post('/month/lock', requireAdmin, async (req, res) => {

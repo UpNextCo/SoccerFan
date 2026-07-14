@@ -1,0 +1,243 @@
+.generation-card {
+  scroll-margin-top: 1rem;
+  overflow: hidden;
+}
+
+.generation-overview {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.generation-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.58rem;
+  color: #355b76;
+  background: #e8f3fb;
+  border: 1px solid #c5ddeb;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.generation-status::before {
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--info);
+  border-radius: 50%;
+  content: '';
+}
+
+.generation-status-running::before {
+  animation: generation-pulse 1.5s ease-in-out infinite;
+}
+
+.generation-status-completed {
+  color: #21623c;
+  background: #e1f3e6;
+  border-color: #bedfc8;
+}
+
+.generation-status-completed::before {
+  background: var(--success);
+}
+
+.generation-status-completed_with_failures {
+  color: #7b2525;
+  background: #fff0f0;
+  border-color: #edc1c1;
+}
+
+.generation-status-completed_with_failures::before {
+  background: var(--danger);
+}
+
+.generation-completed {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  margin: 0.65rem 0 0;
+}
+
+.generation-completed strong {
+  font-size: 1.65rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.generation-completed span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.generation-times {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 1.5rem;
+  margin: 0;
+  text-align: right;
+}
+
+.generation-times dt,
+.generation-counts dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.generation-times dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.generation-progress {
+  display: block;
+  width: 100%;
+  height: 0.75rem;
+  margin: 1rem 0;
+  overflow: hidden;
+  appearance: none;
+  background: #e5e0d7;
+  border: 0;
+  border-radius: 999px;
+}
+
+.generation-progress::-webkit-progress-bar {
+  background: #e5e0d7;
+  border-radius: 999px;
+}
+
+.generation-progress::-webkit-progress-value {
+  background: linear-gradient(90deg, var(--accent), #35a277);
+  border-radius: 999px;
+  transition: width 300ms ease;
+}
+
+.generation-progress::-moz-progress-bar {
+  background: linear-gradient(90deg, var(--accent), #35a277);
+  border-radius: 999px;
+}
+
+.generation-counts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.generation-count {
+  padding: 0.65rem 0.75rem;
+  background: #f8f5ee;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.generation-count dd {
+  margin: 0.12rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.generation-count-failed dd {
+  color: var(--danger);
+}
+
+.generation-count-running dd {
+  color: var(--info);
+}
+
+.generation-failures {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.generation-failures h3 {
+  margin: 0 0 0.15rem;
+  font-size: 0.95rem;
+}
+
+.failure-date-list {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.failure-date-group {
+  padding: 0.7rem 0.8rem;
+  background: #fff6f6;
+  border: 1px solid #edcccc;
+  border-radius: 10px;
+}
+
+.failure-date-group h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+}
+
+.failure-date-group ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.failure-date-group li {
+  display: grid;
+  grid-template-columns: minmax(100px, 150px) 1fr;
+  gap: 0.65rem;
+  font-size: 0.78rem;
+}
+
+.failure-date-group li span {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+@keyframes generation-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-status-running::before {
+    animation: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .generation-card .section-card-header,
+  .generation-overview {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .generation-card .section-card-actions button {
+    width: 100%;
+  }
+
+  .generation-times {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .generation-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .failure-date-group li {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+}

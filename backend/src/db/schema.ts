@@ -230,6 +230,83 @@ export const dailyPuzzles = pgTable(
   ]
 );
 
+export const opsGenerationRuns = pgTable(
+  'ops_generation_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    yearMonth: text('year_month').notNull(),
+    requestedModes: text('requested_modes').array().notNull(),
+    modeScope: text('mode_scope').notNull(),
+    status: text('status').notNull().default('queued'),
+    totalCount: integer('total_count').notNull(),
+    completedCount: integer('completed_count').notNull().default(0),
+    failedCount: integer('failed_count').notNull().default(0),
+    skippedCount: integer('skipped_count').notNull().default(0),
+    requestedBy: text('requested_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('ops_generation_runs_active_month_unique')
+      .on(table.yearMonth)
+      .where(sql`${table.status} IN ('queued', 'running')`),
+    index('ops_generation_runs_month_created_idx').on(table.yearMonth, table.createdAt),
+    index('ops_generation_runs_status_updated_idx').on(table.status, table.updatedAt),
+    check('ops_generation_runs_year_month_check', sql`${table.yearMonth} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+    check(
+      'ops_generation_runs_status_check',
+      sql`${table.status} IN ('queued', 'running', 'completed', 'completed_with_failures')`
+    ),
+    check('ops_generation_runs_total_count_check', sql`${table.totalCount} >= 0`),
+    check('ops_generation_runs_completed_count_check', sql`${table.completedCount} >= 0`),
+    check('ops_generation_runs_failed_count_check', sql`${table.failedCount} >= 0`),
+    check('ops_generation_runs_skipped_count_check', sql`${table.skippedCount} >= 0`),
+    check(
+      'ops_generation_runs_counter_bounds_check',
+      sql`${table.completedCount} <= ${table.totalCount}
+        AND ${table.failedCount} <= ${table.completedCount}
+        AND ${table.skippedCount} <= ${table.completedCount}
+        AND ${table.failedCount} + ${table.skippedCount} <= ${table.completedCount}`
+    ),
+  ]
+);
+
+export const opsGenerationItems = pgTable(
+  'ops_generation_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => opsGenerationRuns.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    modeId: text('mode_id').notNull(),
+    status: text('status').notNull().default('queued'),
+    attempts: integer('attempts').notNull().default(0),
+    error: text('error'),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('ops_generation_items_run_date_mode_unique').on(
+      table.runId,
+      table.date,
+      table.modeId
+    ),
+    index('ops_generation_items_claim_idx').on(table.status, table.nextAttemptAt),
+    index('ops_generation_items_run_status_idx').on(table.runId, table.status),
+    check(
+      'ops_generation_items_status_check',
+      sql`${table.status} IN ('queued', 'running', 'succeeded', 'skipped', 'failed')`
+    ),
+    check('ops_generation_items_attempts_check', sql`${table.attempts} >= 0 AND ${table.attempts} <= 3`),
+  ]
+);
+
 /**
  * Reusable Ops-authored question definitions. `config` is structured, mode-specific JSON;
  * execution code must interpret known keys and must never treat it as SQL.
@@ -616,6 +693,8 @@ export type PlayerHonour = typeof playerHonours.$inferSelect;
 export type PlayerCareerEntry = typeof playerCareer.$inferSelect;
 export type Team = typeof teams.$inferSelect;
 export type DailyPuzzle = typeof dailyPuzzles.$inferSelect;
+export type OpsGenerationRun = typeof opsGenerationRuns.$inferSelect;
+export type OpsGenerationItem = typeof opsGenerationItems.$inferSelect;
 export type QuestionTemplate = typeof questionTemplates.$inferSelect;
 export type NewQuestionTemplate = typeof questionTemplates.$inferInsert;
 export type ManagerTenure = typeof managerTenures.$inferSelect;

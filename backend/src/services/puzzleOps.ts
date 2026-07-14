@@ -269,23 +269,6 @@ export async function generateOnePuzzle(
   }
 }
 
-export async function generateMonthMissing(
-  yearMonth: string,
-  opts?: { modes?: string[]; force?: boolean }
-): Promise<{ results: Array<{ date: string; modeId: string; ok: boolean; skipped?: string; error?: string }> }> {
-  const dates = daysInMonth(yearMonth);
-  const modes = opts?.modes?.length ? opts.modes : [...OPS_PLAYABLE_MODES];
-  const results: Array<{ date: string; modeId: string; ok: boolean; skipped?: string; error?: string }> = [];
-
-  for (const date of dates) {
-    for (const modeId of modes) {
-      const r = await generateOnePuzzle(date, modeId, { force: opts?.force });
-      results.push({ date, modeId, ...r });
-    }
-  }
-  return { results };
-}
-
 export async function setMonthStatus(
   yearMonth: string,
   status: PuzzleOpsStatus,

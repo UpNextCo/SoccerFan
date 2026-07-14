@@ -12,6 +12,10 @@ import { teamsRouter } from './routes/teams.js';
 import { adminRouter } from './routes/admin.js';
 import { bootstrapDatabase } from './db/seed.js';
 import { startDailyPreGeneration } from './services/dailyPreGeneration.js';
+import {
+  startMonthGenerationWorker,
+  stopMonthGenerationWorker,
+} from './services/adminMonthGeneration.js';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -56,8 +60,9 @@ app.use((_req, res) => {
   res.status(404).json({ success: false, error: { message: 'Not found' } });
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Ball Knowledge API listening on port ${port}`);
+  startMonthGenerationWorker();
   bootstrapDatabase()
     .then(() => {
       startDailyPreGeneration();
@@ -65,4 +70,35 @@ app.listen(port, () => {
     .catch((err) => {
       console.error('Bootstrap failed:', err);
     });
+});
+
+let shuttingDown = false;
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received; stopping month generation worker`);
+  const serverStopped = new Promise<void>((resolve) => {
+    server.close((error) => {
+      if (error) {
+        console.error('HTTP server shutdown failed:', error);
+        process.exitCode = 1;
+      }
+      resolve();
+    });
+  });
+  try {
+    await stopMonthGenerationWorker();
+  } catch (error) {
+    console.error('Month generation worker shutdown failed:', error);
+    process.exitCode = 1;
+  }
+  await serverStopped;
+  process.exit(process.exitCode ?? 0);
+}
+
+process.once('SIGTERM', () => {
+  void shutdown('SIGTERM');
+});
+process.once('SIGINT', () => {
+  void shutdown('SIGINT');
 });

@@ -31,7 +31,10 @@ cd admin && npm run dev
 ## Ops day workflow
 
 1. Pick the month on the board.
-2. Filter by mode or status, then use **Generate missing**.
+2. Filter by mode if needed, then use **Generate full month**. Generation
+   continues in the background and survives closing or refreshing the dashboard.
+   The progress panel shows completed, skipped and failed puzzles; failed items can
+   be retried without touching successful, approved or locked content.
 3. Open a puzzle and make changes in its structured editor.
 4. Use **Run checks** to validate structure, database facts and solvability.
 5. **Save changes**, then **Save & approve** once validation is clean.
