@@ -396,6 +396,7 @@ export const lmsBank = pgTable(
     difficulty: integer('difficulty').notNull().default(50), // 0-100 from Claude review
     repeatKey: text('repeat_key').notNull(),
     repeatNorm: text('repeat_norm').notNull(),
+    contentSignature: text('content_signature'),
     questionJson: jsonb('question_json').notNull(),
     answerJson: jsonb('answer_json').notNull(),
     extraKeys: jsonb('extra_keys').$type<string[]>().notNull().default([]),
@@ -406,7 +407,10 @@ export const lmsBank = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('lms_bank_repeat_norm_unique').on(table.repeatNorm),
+    index('lms_bank_repeat_norm_idx').on(table.repeatNorm),
+    uniqueIndex('lms_bank_content_signature_unique')
+      .on(table.contentSignature)
+      .where(sql`${table.contentSignature} IS NOT NULL`),
     index('lms_bank_type_tier_status_idx').on(table.type, table.tier, table.status),
   ]
 );

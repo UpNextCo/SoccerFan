@@ -5,6 +5,8 @@
  */
 import 'dotenv/config';
 import { composeLastManStandingPuzzle } from './lastManStanding/composer.js';
+import { markLMSBankRowsUsed } from './lastManStanding/bank.js';
+import type { LMSGeneratedPuzzle } from './lastManStanding/types.js';
 
 export type {
   LastManStandingAnswer,
@@ -13,12 +15,51 @@ export type {
   LMSQuestionType,
 } from './lastManStanding/types.js';
 
-export async function generateLastManStandingPuzzle(date: string) {
-  const composed = await composeLastManStandingPuzzle(date);
-  if (!composed) {
-    throw new Error('Could not compose Last Man Standing puzzle');
+let lmsGenerationTail: Promise<void> = Promise.resolve();
+
+/** Serializes LMS composition across dates inside this API process. */
+async function withLMSGenerationGuard<T>(work: () => Promise<T>): Promise<T> {
+  const previous = lmsGenerationTail;
+  let release!: () => void;
+  lmsGenerationTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
   }
+}
+
+export async function generateLastManStandingPuzzle(date: string) {
+  return withLMSGenerationGuard(async () => {
+    return composeRequiredLastManStandingPuzzle(date);
+  });
+}
+
+async function composeRequiredLastManStandingPuzzle(date: string): Promise<LMSGeneratedPuzzle> {
+  const composed = await composeLastManStandingPuzzle(date);
+  if (!composed) throw new Error('Could not compose Last Man Standing puzzle');
   return composed;
+}
+
+/**
+ * Holds the process-wide guard through persistence, then accounts for bank usage only when the
+ * caller confirms its daily_puzzles insert succeeded.
+ */
+export async function generateAndPersistLastManStandingPuzzle(
+  date: string,
+  persist: (generated: LMSGeneratedPuzzle) => Promise<boolean>
+): Promise<{ generated: LMSGeneratedPuzzle; persisted: boolean }> {
+  return withLMSGenerationGuard(async () => {
+    const generated = await composeRequiredLastManStandingPuzzle(date);
+    const persisted = await persist(generated);
+    if (persisted) {
+      await markLMSBankRowsUsed(generated.metadata.acceptedBankRowIds, date);
+    }
+    return { generated, persisted };
+  });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -8,8 +8,8 @@
  *
  * Usage:
  *   DATABASE_URL=... ANTHROPIC_API_KEY=... npm run job:build-lms-bank
- *   DATABASE_URL=... ANTHROPIC_API_KEY=... npm run job:build-lms-bank -- 80
- *   DATABASE_URL=... ANTHROPIC_API_KEY=... npm run job:build-lms-bank -- 40 --dry
+ *   DATABASE_URL=... ANTHROPIC_API_KEY=... npm run job:build-lms-bank -- --total 450
+ *   DATABASE_URL=... ANTHROPIC_API_KEY=... npm run job:build-lms-bank -- --new 40 --dry
  *
  * Env:
  *   LMS_BANK_SKIP_REVIEW=1  — store without Claude (dev only; not for production quality)
@@ -28,8 +28,21 @@ import { enrichLMSBuilderResult, resetLMSEnrichCache } from '../services/lastMan
 import { buildPlayerClubIndex, resetPlayerClubIndex } from '../services/lastManStanding/plausibility.js';
 import { famousPlayers } from '../services/lastManStanding/shared.js';
 import { LMS_DAILY_SLOTS } from '../services/lastManStanding/slots.js';
-import type { LMSBuildContext, LMSBuilderResult, LMSQuestionType } from '../services/lastManStanding/types.js';
+import type {
+  LMSBuildContext,
+  LMSBuilderResult,
+  LMSQuestionAnswer,
+  LMSQuestionPublic,
+  LMSQuestionType,
+} from '../services/lastManStanding/types.js';
 import { validateLMSQuestion } from '../services/lastManStanding/validate.js';
+import { backfillLMSBankContentSignatures } from '../services/lastManStanding/bank.js';
+import {
+  LMS_COOLDOWN_MINIMUM_BY_TYPE,
+  LMS_COOLDOWN_MINIMUM_TOTAL,
+  lmsContentSignature,
+  summarizeLMSBankInventory,
+} from '../services/lastManStanding/freshness.js';
 
 const BUILDERS: Record<
   LMSQuestionType,
@@ -105,6 +118,7 @@ async function ensureTable(): Promise<void> {
       difficulty integer DEFAULT 50 NOT NULL,
       repeat_key text NOT NULL,
       repeat_norm text NOT NULL,
+      content_signature text,
       question_json jsonb NOT NULL,
       answer_json jsonb NOT NULL,
       extra_keys jsonb DEFAULT '[]'::jsonb NOT NULL,
@@ -115,52 +129,171 @@ async function ensureTable(): Promise<void> {
       created_at timestamptz DEFAULT now() NOT NULL
     )
   `);
+  await db.execute(sql`ALTER TABLE lms_bank ADD COLUMN IF NOT EXISTS content_signature text`);
+  await db.execute(sql`DROP INDEX IF EXISTS lms_bank_repeat_norm_unique`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS lms_bank_repeat_norm_idx ON lms_bank (repeat_norm)`);
   await db.execute(sql`
-    CREATE UNIQUE INDEX IF NOT EXISTS lms_bank_repeat_norm_unique ON lms_bank (repeat_norm)
+    CREATE UNIQUE INDEX IF NOT EXISTS lms_bank_content_signature_unique
+    ON lms_bank (content_signature) WHERE content_signature IS NOT NULL
   `);
   await db.execute(sql`
     CREATE INDEX IF NOT EXISTS lms_bank_type_tier_status_idx ON lms_bank (type, tier, status)
   `);
 }
 
-async function existingNorms(): Promise<Set<string>> {
-  const rows = (await db.execute(sql`SELECT repeat_norm FROM lms_bank`)) as unknown as Array<{
-    repeat_norm: string;
+async function loadBankInventory() {
+  const rows = (await db.execute(sql`
+    SELECT type, status, content_signature, question_json, answer_json
+    FROM lms_bank
+  `)) as unknown as Array<{
+    type: LMSQuestionType;
+    status: string;
+    content_signature: string | null;
+    question_json: LMSQuestionPublic;
+    answer_json: LMSQuestionAnswer;
   }>;
-  return new Set(rows.map((r) => r.repeat_norm));
+  return summarizeLMSBankInventory(rows.map((row) => ({
+    type: row.type,
+    status: row.status,
+    contentSignature: row.content_signature,
+    question: row.question_json,
+    answer: row.answer_json,
+  })));
+}
+
+function numericArg(args: string[], name: string): number | null {
+  const direct = args.find((arg) => arg.startsWith(`${name}=`));
+  if (direct) return Number(direct.slice(name.length + 1));
+  const index = args.indexOf(name);
+  return index >= 0 ? Number(args[index + 1]) : null;
+}
+
+function stringArg(args: string[], name: string): string | null {
+  const direct = args.find((arg) => arg.startsWith(`${name}=`));
+  if (direct) return direct.slice(name.length + 1);
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] ?? null : null;
+}
+
+function printTypeInventory(counts: Record<LMSQuestionType, number>): void {
+  console.log(
+    `Distinct signed inventory by type (45-day exact-repeat minimum; broad resources cool down ` +
+    `${process.env.LMS_BROAD_COOLDOWN_DAYS ?? 3} days):`
+  );
+  for (const type of Object.keys(LMS_COOLDOWN_MINIMUM_BY_TYPE) as LMSQuestionType[]) {
+    const minimum = LMS_COOLDOWN_MINIMUM_BY_TYPE[type];
+    const count = counts[type];
+    console.log(`  ${type.padEnd(14)} ${String(count).padStart(4)} / ${minimum}`);
+  }
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  console.log(`  ${'TOTAL'.padEnd(14)} ${String(total).padStart(4)} / ${LMS_COOLDOWN_MINIMUM_TOTAL}`);
 }
 
 async function main() {
   const args = process.argv.slice(2).filter((a) => a !== '--');
   const dry = args.includes('--dry');
   const skipReview = process.env.LMS_BANK_SKIP_REVIEW === '1' || args.includes('--skip-review');
-  const target = Math.max(10, Number(args.find((a) => /^\d+$/.test(a)) ?? 60));
+  const positional = args.find(
+    (arg, index) =>
+      /^\d+$/.test(arg) &&
+      args[index - 1] !== '--new' &&
+      args[index - 1] !== '--total'
+  );
+  const newArg = numericArg(args, '--new') ?? (positional ? Number(positional) : null);
+  const totalArg = numericArg(args, '--total');
+  const typeArg = stringArg(args, '--type') as LMSQuestionType | null;
+  if (typeArg && !(typeArg in BUILDERS)) {
+    throw new Error(`Unknown LMS type: ${typeArg}`);
+  }
+  if (newArg != null && totalArg != null) throw new Error('Choose either --new N or --total N, not both');
+  if (newArg != null && (!Number.isFinite(newArg) || newArg < 0)) {
+    throw new Error('--new must be a non-negative number');
+  }
+  if (totalArg != null && (!Number.isFinite(totalArg) || totalArg < 0)) {
+    throw new Error('--total must be a non-negative number');
+  }
 
-  await ensureTable();
-  const known = await existingNorms();
-  console.log(`LMS bank build — target ${target} new keepers · known ${known.size} · dry=${dry} skipReview=${skipReview}`);
+  let backfill = { signed: 0, duplicatesRejected: 0 };
+  if (!dry) {
+    await ensureTable();
+    backfill = await backfillLMSBankContentSignatures();
+  }
+  // Dry mode is strictly read-only. Nullable legacy rows are signed in memory for planning.
+  const inventory = await loadBankInventory();
+  const known = inventory.knownSignatures;
+  const typeCounts = inventory.activeDistinctByType;
+  const activeTotal = Object.values(typeCounts).reduce((sum, count) => sum + count, 0);
+  const requestedTotal = Math.max(0, totalArg ?? (newArg == null ? LMS_COOLDOWN_MINIMUM_TOTAL : 0));
+  const inventoryDeficit = (Object.keys(typeCounts) as LMSQuestionType[]).reduce(
+    (sum, type) => sum + Math.max(0, LMS_COOLDOWN_MINIMUM_BY_TYPE[type] - typeCounts[type]),
+    0
+  );
+  const totalDeficit = requestedTotal - activeTotal;
+  const target = Math.max(
+    0,
+    Math.floor(newArg ?? Math.max(totalDeficit, requestedTotal >= LMS_COOLDOWN_MINIMUM_TOTAL
+      ? inventoryDeficit
+      : 0))
+  );
+  const targetDescription = newArg != null
+    ? `${target} new keepers`
+    : `total ${requestedTotal} (${target} new needed)`;
+  console.log(
+    `LMS bank build — target ${targetDescription} · ${known.size} signatures · ` +
+    `backfilled ${backfill.signed}, rejected ${backfill.duplicatesRejected} duplicates · ` +
+    `dry=${dry} skipReview=${skipReview}`
+  );
+  printTypeInventory(typeCounts);
+  if (target === 0) {
+    console.log('\nDone — target already met');
+    process.exit(0);
+  }
 
   const pool = await famousPlayers(4, 250);
   resetPlayerClubIndex();
   resetLMSEnrichCache();
   const clubIndex = await buildPlayerClubIndex(pool);
+  const eligibleSlots = typeArg
+    ? LMS_DAILY_SLOTS.filter((slot) => slot.type === typeArg)
+    : LMS_DAILY_SLOTS;
+  if (eligibleSlots.length === 0) throw new Error(`No LMS slots for type ${typeArg}`);
 
   let kept = 0;
   let rejected = 0;
   let builtFail = 0;
   let batch = 0;
+  let slotCursor = 0;
 
   // Round-robin slots so the bank covers all types/tiers.
-  while (kept < target && batch < target * 4) {
+  while (kept < target && batch < Math.max(20, target * 8)) {
     batch += 1;
-    const slotDef = LMS_DAILY_SLOTS[(batch - 1) % LMS_DAILY_SLOTS.length]!;
+    const hasInventoryDeficit = (Object.keys(typeCounts) as LMSQuestionType[])
+      .some((type) => typeCounts[type] < LMS_COOLDOWN_MINIMUM_BY_TYPE[type]);
+    let slotDef = eligibleSlots[slotCursor % eligibleSlots.length]!;
+    for (let scan = 0; scan < eligibleSlots.length; scan += 1) {
+      const candidateSlot = eligibleSlots[(slotCursor + scan) % eligibleSlots.length]!;
+      if (!hasInventoryDeficit ||
+          typeCounts[candidateSlot.type] < LMS_COOLDOWN_MINIMUM_BY_TYPE[candidateSlot.type]) {
+        slotDef = candidateSlot;
+        slotCursor += scan + 1;
+        break;
+      }
+    }
     const builder = BUILDERS[slotDef.type];
     const difficulty = difficultyForSlot(slotDef.slot, slotDef.signature ?? false);
-    const usedKeys = new Set<string>();
 
+    const candidateTarget = Math.min(typeArg ? 8 : 6, target - kept);
     const candidates: Array<{ localId: string; built: LMSBuilderResult; tier: LMSTier }> = [];
+    const batchSignatures = new Set<string>();
 
-    for (let attempt = 0; attempt < 12 && candidates.length < 6; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < (typeArg ? 24 : 12) && candidates.length < candidateTarget;
+      attempt += 1
+    ) {
+      // Bank generation is not a daily puzzle: do not block fresh signatures merely because
+      // they share a player, club or repeatKey with another bank card.
+      const usedKeys = new Set<string>();
       const ctx: LMSBuildContext = {
         date: `bank-${batch}`,
         slot: slotDef.slot,
@@ -176,13 +309,13 @@ async function main() {
         builtFail += 1;
         continue;
       }
-      if (known.has(normKey(candidate.repeatKey)) || usedKeys.has(candidate.repeatKey)) continue;
       candidate = await enrichLMSBuilderResult(candidate);
       if (!validateLMSQuestion(candidate, ctx)) continue;
+      const contentSignature = lmsContentSignature(candidate.question, candidate.answer);
+      if (!contentSignature || known.has(contentSignature) || batchSignatures.has(contentSignature)) continue;
 
-      usedKeys.add(candidate.repeatKey);
-      candidate.extraUsedKeys?.forEach((k) => usedKeys.add(k));
-      const stored = stripIdsForStorage(candidate);
+      batchSignatures.add(contentSignature);
+      const stored = stripIdsForStorage({ ...candidate, contentSignature });
       candidates.push({
         localId: `b${batch}a${attempt}`,
         built: stored,
@@ -210,6 +343,7 @@ async function main() {
 
     const byId = new Map(verdicts.map((v) => [v.id, v]));
     for (const c of candidates) {
+      if (kept >= target) break;
       const v = byId.get(c.localId);
       if (!v) continue;
       if (!v.keep) {
@@ -220,18 +354,20 @@ async function main() {
 
       const tier = tierFromDifficulty(v.difficulty, c.tier);
       const repeatNorm = normKey(c.built.repeatKey);
-      if (known.has(repeatNorm)) continue;
+      const contentSignature = c.built.contentSignature;
+      if (!contentSignature || known.has(contentSignature)) continue;
 
       if (dry) {
         kept += 1;
-        known.add(repeatNorm);
+        known.add(contentSignature);
+        typeCounts[c.built.question.type] += 1;
         console.log(`  ✓ dry keep [${c.built.question.type}/${tier} d=${v.difficulty}] ${c.built.question.prompt.slice(0, 60)}…`);
         continue;
       }
 
-      await db.execute(sql`
+      const inserted = (await db.execute(sql`
         INSERT INTO lms_bank (
-          type, tier, difficulty, repeat_key, repeat_norm,
+          type, tier, difficulty, repeat_key, repeat_norm, content_signature,
           question_json, answer_json, extra_keys, review_reason, status
         ) VALUES (
           ${c.built.question.type},
@@ -239,27 +375,29 @@ async function main() {
           ${v.difficulty},
           ${c.built.repeatKey},
           ${repeatNorm},
+          ${contentSignature},
           ${JSON.stringify(c.built.question)}::jsonb,
           ${JSON.stringify(c.built.answer)}::jsonb,
           ${JSON.stringify(c.built.extraUsedKeys ?? [])}::jsonb,
           ${v.reason || null},
           'active'
         )
-        ON CONFLICT (repeat_norm) DO NOTHING
-      `);
-      known.add(repeatNorm);
+        ON CONFLICT (content_signature) WHERE content_signature IS NOT NULL DO NOTHING
+        RETURNING id
+      `)) as unknown as Array<{ id: string }>;
+      if (inserted.length === 0) continue;
+      known.add(contentSignature);
       kept += 1;
+      typeCounts[c.built.question.type] += 1;
       console.log(`  ✓ keep [${c.built.question.type}/${tier} d=${v.difficulty}] ${c.built.question.prompt.slice(0, 60)}…`);
     }
 
     console.log(`  progress ${kept}/${target} kept · ${rejected} rejected · batch ${batch}`);
   }
 
-  const counts = (await db.execute(sql`
-    SELECT type, tier, COUNT(*)::int AS n FROM lms_bank WHERE status = 'active' GROUP BY type, tier ORDER BY type, tier
-  `)) as unknown as Array<{ type: string; tier: string; n: number }>;
-  console.log('\nActive bank:');
-  for (const r of counts) console.log(`  ${r.type.padEnd(14)} ${r.tier.padEnd(10)} ${r.n}`);
+  const finalCounts = dry ? typeCounts : (await loadBankInventory()).activeDistinctByType;
+  console.log('');
+  printTypeInventory(finalCounts);
   console.log(`\nDone — kept ${kept}, rejected ${rejected}, builder misses ~${builtFail}`);
   process.exit(0);
 }

@@ -1,5 +1,10 @@
 import { loadRecentLMSUsedKeys } from './history.js';
-import type { LMSBuildContext, LMSBuilderResult, LMSQuestionType } from './types.js';
+import type {
+  LMSBuildContext,
+  LMSBuilderResult,
+  LMSGeneratedPuzzle,
+  LMSQuestionType,
+} from './types.js';
 import { LMS_DAILY_SLOTS } from './slots.js';
 import { buildCareerPath } from './builders/careerPath.js';
 import { buildHigherLower } from './builders/higherLower.js';
@@ -14,6 +19,11 @@ import { validateLMSQuestion } from './validate.js';
 import { buildPlayerClubIndex, resetPlayerClubIndex } from './plausibility.js';
 import { enrichLMSBuilderResult, resetLMSEnrichCache } from './enrich.js';
 import { drawLMSFromBank } from './bank.js';
+import {
+  createLMSGenerationMetadata,
+  lmsContentSignature,
+  lmsSignatureUsedKey,
+} from './freshness.js';
 
 const BUILDERS: Record<
   LMSQuestionType,
@@ -26,17 +36,12 @@ const BUILDERS: Record<
   image_badge: buildImageBadge,
 };
 
-export async function composeLastManStandingPuzzle(date: string): Promise<{
-  puzzle: LastManStandingPuzzle;
-  answer: LastManStandingAnswer;
-} | null> {
+export async function composeLastManStandingPuzzle(date: string): Promise<LMSGeneratedPuzzle | null> {
   const questions: LastManStandingPuzzle['questions'] = [];
   const answers: LastManStandingAnswer['questions'] = [];
   const recentKeys = await loadRecentLMSUsedKeys(date);
   const usedKeys = new Set<string>(recentKeys);
-  // Cross-day repetition is a preference, not an availability requirement. Keep a separate
-  // set for content already used in this puzzle so an exhausted lookback can be relaxed safely.
-  const puzzleUsedKeys = new Set<string>();
+  const acceptedBankRowIds: string[] = [];
   const pool = await famousPlayers(4, 250);
   resetPlayerClubIndex();
   resetLMSEnrichCache();
@@ -72,7 +77,7 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
       }
     }
 
-    for (let attempt = 0; attempt < 16 && !built; attempt += 1) {
+    for (let attempt = 0; attempt < 32 && !built; attempt += 1) {
       const ctx: LMSBuildContext = {
         date,
         slot: slotDef.slot,
@@ -86,51 +91,28 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
       let candidate = await builder(ctx);
       if (!candidate || usedKeys.has(candidate.repeatKey)) continue;
       candidate = await enrichLMSBuilderResult(candidate);
+      const contentSignature = lmsContentSignature(candidate.question, candidate.answer);
+      if (!contentSignature || usedKeys.has(lmsSignatureUsedKey(contentSignature))) continue;
       if (candidate.extraUsedKeys?.some((k) => usedKeys.has(k))) continue;
       if (!validateLMSQuestion(candidate, ctx)) continue;
-      built = candidate;
+      built = { ...candidate, contentSignature };
       fromLive += 1;
-    }
-
-    // A finite content pool can be exhausted by the 21-day lookback, especially for which_club.
-    // Retry without historical keys while still preventing duplicates inside today's puzzle.
-    if (!built && recentKeys.size > 0) {
-      for (let attempt = 0; attempt < 16 && !built; attempt += 1) {
-        const ctx: LMSBuildContext = {
-          date,
-          slot: slotDef.slot,
-          signature: slotDef.signature ?? false,
-          seed: `${date}:lms:q${slotDef.slot}:repeat-fallback:a${attempt}`,
-          usedKeys: puzzleUsedKeys,
-          difficulty,
-          famousPool: pool,
-          clubIndex,
-        };
-        let candidate = await builder(ctx);
-        if (!candidate || puzzleUsedKeys.has(candidate.repeatKey)) continue;
-        candidate = await enrichLMSBuilderResult(candidate);
-        if (candidate.extraUsedKeys?.some((k) => puzzleUsedKeys.has(k))) continue;
-        if (!validateLMSQuestion(candidate, ctx)) continue;
-        built = candidate;
-        fromLive += 1;
-        console.warn(
-          `LMS slot ${slotDef.slot} (${slotDef.type}) relaxed cross-day repeat lookback`
-        );
-      }
     }
 
     if (!built) {
       console.warn(
-        `LMS compose failed at slot ${slotDef.slot} (${slotDef.type}) after bank+32 attempts`
+        `LMS compose failed at slot ${slotDef.slot} (${slotDef.type}) after bank+32 fresh attempts`
       );
       return null;
     }
+    const signature = built.contentSignature ?? lmsContentSignature(built.question, built.answer);
+    if (!signature) return null;
     usedKeys.add(built.repeatKey);
-    puzzleUsedKeys.add(built.repeatKey);
+    usedKeys.add(lmsSignatureUsedKey(signature));
     built.extraUsedKeys?.forEach((k) => {
       usedKeys.add(k);
-      puzzleUsedKeys.add(k);
     });
+    if (built.bankRowId) acceptedBankRowIds.push(built.bankRowId);
     questions.push(built.question);
     answers.push(built.answer);
   }
@@ -148,5 +130,6 @@ export async function composeLastManStandingPuzzle(date: string): Promise<{
       questions,
     },
     answer: { questions: answers },
+    metadata: createLMSGenerationMetadata(acceptedBankRowIds),
   };
 }

@@ -114,6 +114,10 @@ Root scripts:
 - `cd backend && npm run test:validation` — runs pure semantic validator tests
 - `cd backend && npm run job:build-golf-templates` — expands the Golf question
   bank with narrower, database-verified questions (8–100 possible answers)
+- `cd backend && npm run job:build-lms-bank -- --total 450` — grows the
+  Claude-reviewed LMS bank toward the 45-day freshness target
+- `cd backend && npm run job:audit-lms-freshness` — reports exact LMS repeats
+  and distinct signed bank inventory by question type
 - `cd admin && npm run lint` — checks editor hooks and TypeScript-facing lint rules
 
 Share the `/admin` URL + password in Slack; no per-user accounts in v1.

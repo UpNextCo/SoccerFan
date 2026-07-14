@@ -12,17 +12,15 @@ function addDays(date: string, days: number): string {
 async function preGenerateLastManStanding(): Promise<void> {
   const today = todayUTC();
   const dates = [today, addDays(today, 1)];
-  const results = await Promise.allSettled(
-    dates.map((date) => ensureLastManStandingPuzzle(date))
-  );
-
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
+  for (const date of dates) {
+    try {
+      await ensureLastManStandingPuzzle(date);
+    } catch (reason) {
       const detail =
-        result.reason instanceof Error ? result.reason.message : String(result.reason);
-      console.warn(`LMS pre-generation failed for ${dates[index]}: ${detail}`);
+        reason instanceof Error ? reason.message : String(reason);
+      console.warn(`LMS pre-generation failed for ${date}: ${detail}`);
     }
-  });
+  }
 }
 
 /**

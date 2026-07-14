@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   attemptsAfterInterruptedClaim,
   attemptsAfterManualRetry,
+  canClaimGenerationMode,
   countGenerationItems,
   deriveGenerationRunStatus,
   finalGenerationStatus,
@@ -99,4 +100,17 @@ test('deployment interruption restores the consumed attempt', () => {
 
 test('manual retry resets the item attempt budget', () => {
   assert.equal(attemptsAfterManualRetry(), 0);
+});
+
+test('queue policy allows only one globally running LMS item', () => {
+  assert.equal(canClaimGenerationMode('last_man_standing', []), true);
+  assert.equal(canClaimGenerationMode('last_man_standing', ['football_bingo']), true);
+  assert.equal(
+    canClaimGenerationMode('last_man_standing', ['last_man_standing']),
+    false
+  );
+  assert.equal(
+    canClaimGenerationMode('football_bingo', ['last_man_standing']),
+    true
+  );
 });

@@ -59,10 +59,25 @@ export interface LastManStandingAnswer {
   questions: LMSQuestionAnswer[];
 }
 
+/** Server-only generation facts; never persist or expose this alongside the public puzzle. */
+export interface LMSGenerationMetadata {
+  acceptedBankRowIds: string[];
+}
+
+export interface LMSGeneratedPuzzle {
+  puzzle: LastManStandingPuzzle;
+  answer: LastManStandingAnswer;
+  metadata: LMSGenerationMetadata;
+}
+
 export interface LMSBuilderResult {
   question: LMSQuestionPublic;
   answer: LMSQuestionAnswer;
   repeatKey: string;
+  /** Canonical semantic signature, populated once the finished card is available. */
+  contentSignature?: string;
+  /** Deferred usage metadata; callers mark rows only after daily_puzzles persistence succeeds. */
+  bankRowId?: string;
   /** Extra dedupe keys reserved for this puzzle (clubs/players already used). */
   extraUsedKeys?: string[];
 }

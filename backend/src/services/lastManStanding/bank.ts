@@ -11,6 +11,11 @@ import type {
   LMSQuestionType,
 } from './types.js';
 import type { LMSDifficulty, LMSTier } from './difficulty.js';
+import {
+  groupLMSBankRowsBySignature,
+  lmsContentSignature,
+  lmsSignatureUsedKey,
+} from './freshness.js';
 
 export interface LmsBankDrawRow {
   id: string;
@@ -18,6 +23,7 @@ export interface LmsBankDrawRow {
   tier: string;
   difficulty: number;
   repeatKey: string;
+  contentSignature: string;
   questionJson: LMSQuestionPublic;
   answerJson: LMSQuestionAnswer;
   extraKeys: string[];
@@ -58,6 +64,8 @@ function remapBuilderResult(
       reveal: oldA.reveal,
     },
     repeatKey: row.repeatKey,
+    contentSignature: row.contentSignature,
+    bankRowId: row.id,
     extraUsedKeys: row.extraKeys ?? [],
   };
 }
@@ -85,19 +93,21 @@ export async function drawLMSFromBank(args: {
 }): Promise<LMSBuilderResult | null> {
   const tiers = acceptableTiers(args.difficulty.tier);
   const rows = (await db.execute(sql`
-    SELECT id, type, tier, difficulty, repeat_key, question_json, answer_json, extra_keys
+    SELECT id, type, tier, difficulty, repeat_key, content_signature,
+      question_json, answer_json, extra_keys
     FROM lms_bank
     WHERE status = 'active'
       AND type = ${args.type}
       AND tier IN (${sql.join(tiers.map((t) => sql`${t}`), sql`, `)})
-    ORDER BY used_count ASC, last_used_date ASC NULLS FIRST, random()
-    LIMIT 40
+    ORDER BY used_count ASC, last_used_date ASC NULLS FIRST, created_at ASC, id ASC
+    LIMIT 500
   `)) as unknown as Array<{
     id: string;
     type: string;
     tier: string;
     difficulty: number;
     repeat_key: string;
+    content_signature: string | null;
     question_json: LMSQuestionPublic;
     answer_json: LMSQuestionAnswer;
     extra_keys: string[] | null;
@@ -105,6 +115,9 @@ export async function drawLMSFromBank(args: {
 
   for (const r of rows) {
     const extra = Array.isArray(r.extra_keys) ? r.extra_keys : [];
+    const contentSignature =
+      r.content_signature ?? lmsContentSignature(r.question_json, r.answer_json);
+    if (!contentSignature || args.usedKeys.has(lmsSignatureUsedKey(contentSignature))) continue;
     if (args.usedKeys.has(r.repeat_key)) continue;
     if (extra.some((k) => args.usedKeys.has(k))) continue;
 
@@ -114,20 +127,75 @@ export async function drawLMSFromBank(args: {
       tier: r.tier,
       difficulty: r.difficulty,
       repeatKey: r.repeat_key,
+      contentSignature,
       questionJson: r.question_json,
       answerJson: r.answer_json,
       extraKeys: extra,
     };
-    const built = remapBuilderResult(draw, args.date, args.slot);
-
-    await db.execute(sql`
-      UPDATE lms_bank
-      SET used_count = used_count + 1, last_used_date = ${args.date}::date
-      WHERE id = ${r.id}::uuid
-    `);
-    return built;
+    return remapBuilderResult(draw, args.date, args.slot);
   }
   return null;
+}
+
+/** Marks accepted bank rows only after the complete puzzle has composed successfully. */
+export async function markLMSBankRowsUsed(rowIds: string[], date: string): Promise<void> {
+  const uniqueIds = [...new Set(rowIds)];
+  if (uniqueIds.length === 0) return;
+  await db.execute(sql`
+    UPDATE lms_bank
+    SET used_count = used_count + 1, last_used_date = ${date}::date
+    WHERE id IN (${sql.join(uniqueIds.map((id) => sql`${id}::uuid`), sql`, `)})
+  `);
+}
+
+/**
+ * Backfills legacy nullable signatures. Duplicate semantic cards retain one preferred row;
+ * the rest are rejected and left nullable so the unique partial index remains valid.
+ */
+export async function backfillLMSBankContentSignatures(): Promise<{
+  signed: number;
+  duplicatesRejected: number;
+}> {
+  const rows = (await db.execute(sql`
+    SELECT id, status, used_count, created_at, question_json, answer_json
+    FROM lms_bank
+  `)) as unknown as Array<{
+    id: string;
+    status: string;
+    used_count: number;
+    created_at: Date | string;
+    question_json: LMSQuestionPublic;
+    answer_json: LMSQuestionAnswer;
+  }>;
+  const groups = groupLMSBankRowsBySignature(rows.map((row) => ({
+    id: row.id,
+    status: row.status,
+    usedCount: row.used_count,
+    createdAt: row.created_at,
+    question: row.question_json,
+    answer: row.answer_json,
+  })));
+
+  let duplicateCount = 0;
+  await db.transaction(async (tx) => {
+    for (const group of groups) {
+      if (group.duplicateIds.length > 0) {
+        duplicateCount += group.duplicateIds.length;
+        await tx.execute(sql`
+          UPDATE lms_bank
+          SET status = 'rejected', content_signature = NULL,
+            review_reason = COALESCE(review_reason, 'duplicate semantic content')
+          WHERE id IN (${sql.join(group.duplicateIds.map((id) => sql`${id}::uuid`), sql`, `)})
+        `);
+      }
+      await tx.execute(sql`
+        UPDATE lms_bank
+        SET content_signature = ${group.signature}
+        WHERE id = ${group.keeperId}::uuid
+      `);
+    }
+  });
+  return { signed: groups.length, duplicatesRejected: duplicateCount };
 }
 
 export async function lmsBankCounts(): Promise<Record<string, number>> {

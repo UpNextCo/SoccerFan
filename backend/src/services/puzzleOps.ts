@@ -8,7 +8,7 @@ import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGen
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle } from './clubChainGenerator.js';
-import { generateLastManStandingPuzzle } from './lastManStandingGenerator.js';
+import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
 import { validateAdminPuzzleDraft } from './adminDraftValidation.js';
@@ -153,9 +153,9 @@ async function insertGenerated(
   modeId: string,
   puzzleJson: unknown,
   answerJson: unknown
-): Promise<void> {
+): Promise<boolean> {
   const hash = contentHash(puzzleJson, answerJson);
-  await db
+  const inserted = await db
     .insert(dailyPuzzles)
     .values({
       date,
@@ -166,7 +166,9 @@ async function insertGenerated(
       status: 'generated',
       contentHash: hash,
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ id: dailyPuzzles.id });
+  return inserted.length > 0;
 }
 
 /** Generate one mode/date if missing. Skips locked/approved unless force. */
@@ -255,9 +257,17 @@ export async function generateOnePuzzle(
         break;
       }
       case 'last_man_standing': {
-        const { puzzle, answer } = await generateLastManStandingPuzzle(date);
-        if (puzzle.questions.length < 10) return { ok: false, error: 'lms questions < 10' };
-        await insertGenerated(date, modeId, puzzle, answer);
+        let questionCount = 0;
+        const { persisted: inserted } = await generateAndPersistLastManStandingPuzzle(
+          date,
+          async ({ puzzle, answer }) => {
+            questionCount = puzzle.questions.length;
+            if (questionCount < 10) return false;
+            return insertGenerated(date, modeId, puzzle, answer);
+          }
+        );
+        if (questionCount < 10) return { ok: false, error: 'lms questions < 10' };
+        if (!inserted) return { ok: false, skipped: 'exists' };
         break;
       }
       default:

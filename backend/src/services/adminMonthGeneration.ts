@@ -246,8 +246,11 @@ async function reconcileActiveRuns(): Promise<void> {
 
 async function claimNextItem(): Promise<ClaimedItem | null> {
   if (stopping) return null;
-  const rows = (await db.execute(sql`
-    WITH candidate AS (
+  const rows = await db.transaction(async (tx) => {
+    // Serialize durable claims so two workers cannot both observe "no LMS running".
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('ops-generation-claim', 0))`);
+    return (await tx.execute(sql`
+      WITH candidate AS (
       SELECT item.id
       FROM ops_generation_items AS item
       INNER JOIN ops_generation_runs AS run ON run.id = item.run_id
@@ -256,6 +259,15 @@ async function claimNextItem(): Promise<ClaimedItem | null> {
         AND item.attempts < ${MAX_ATTEMPTS}
         AND item.next_attempt_at <= now()
         AND run.status IN ('queued', 'running')
+        AND (
+          item.mode_id <> 'last_man_standing'
+          OR NOT EXISTS (
+            SELECT 1
+            FROM ops_generation_items AS active_lms
+            WHERE active_lms.mode_id = 'last_man_standing'
+              AND active_lms.status = 'running'
+          )
+        )
       ORDER BY
         run.created_at,
         CASE WHEN item.mode_id = 'last_man_standing' THEN 1 ELSE 0 END,
@@ -281,15 +293,23 @@ async function claimNextItem(): Promise<ClaimedItem | null> {
       WHERE run.id IN (SELECT run_id FROM claimed)
       RETURNING run.id
     )
-    SELECT claimed.* FROM claimed LEFT JOIN touched ON touched.id = claimed.run_id
-  `)) as unknown as Array<{
+      SELECT claimed.* FROM claimed LEFT JOIN touched ON touched.id = claimed.run_id
+    `)) as unknown as Array<{
+      id: string;
+      run_id: string;
+      date: string;
+      mode_id: string;
+      attempts: number;
+    }>;
+  });
+  const typedRows = rows as Array<{
     id: string;
     run_id: string;
     date: string;
     mode_id: string;
     attempts: number;
   }>;
-  const row = rows[0];
+  const row = typedRows[0];
   return row
     ? {
         id: row.id,

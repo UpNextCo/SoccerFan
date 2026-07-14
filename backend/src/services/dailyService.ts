@@ -9,7 +9,7 @@ import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGen
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js';
-import { generateLastManStandingPuzzle } from './lastManStandingGenerator.js';
+import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenerator.js';
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 import { startLastManStandingRun, submitLastManStandingAnswer } from './lastManStandingCheck.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
@@ -298,15 +298,23 @@ async function migrateStaleLastManStanding(date: string): Promise<void> {
 }
 
 async function storeLastManStandingPuzzle(date: string): Promise<void> {
-  const { puzzle, answer } = await generateLastManStandingPuzzle(date);
-  if (puzzle.questions.length < 10) {
-    console.warn(`Skipped last_man_standing for ${date}: only ${puzzle.questions.length} questions`);
+  const { generated, persisted } = await generateAndPersistLastManStandingPuzzle(
+    date,
+    async ({ puzzle, answer }) => {
+      if (puzzle.questions.length < 10) return false;
+      const inserted = await db
+        .insert(dailyPuzzles)
+        .values({ date, modeId: 'last_man_standing', puzzleJson: puzzle, answerPlayerId: null, answerJson: answer })
+        .onConflictDoNothing()
+        .returning({ id: dailyPuzzles.id });
+      return inserted.length > 0;
+    }
+  );
+  if (generated.puzzle.questions.length < 10) {
+    console.warn(`Skipped last_man_standing for ${date}: only ${generated.puzzle.questions.length} questions`);
     return;
   }
-  await db
-    .insert(dailyPuzzles)
-    .values({ date, modeId: 'last_man_standing', puzzleJson: puzzle, answerPlayerId: null, answerJson: answer })
-    .onConflictDoNothing();
+  if (!persisted) return;
   console.log(`Generated last_man_standing puzzle for ${date}`);
 }
 
