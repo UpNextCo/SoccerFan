@@ -105,7 +105,17 @@ export async function enrichAdminLMSPuzzle(
 
   for (const q of puzzle.questions) {
     const ans = answer.questions?.find((x) => x.questionId === q.id);
-    if (q.type === 'custom_image') continue;
+    if (q.type === 'custom_image') {
+      q.options = await Promise.all(
+        (q.options ?? []).map(async (option) => ({
+          ...option,
+          teamLogoUrl:
+            (await lookupTeamLogo(option.label, ''))?.logoUrl ??
+            option.teamLogoUrl,
+        }))
+      );
+      continue;
+    }
 
     if (isClubQuestion(q)) {
       q.options = await Promise.all(

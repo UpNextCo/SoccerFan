@@ -217,7 +217,14 @@ export function LmsEditor({
     const previousLabel = question.options.find((option) => option.id === optionId)?.label
     const nextQuestions = sortedQuestions(curP).map((item) =>
       item.id === question.id
-        ? { ...item, options: item.options.map((option) => option.id === optionId ? { ...option, label } : option) }
+        ? {
+            ...item,
+            options: item.options.map((option) =>
+              option.id === optionId
+                ? { ...option, label, teamLogoUrl: undefined }
+                : option
+            ),
+          }
         : item
     )
     const nextAnswers = curA.questions.map((answerRow) =>
@@ -684,14 +691,19 @@ export function LmsEditor({
                     />
                   </div>
                   {q.type === 'custom_image' ? (
-                    <label className="field custom-option-input">
-                      Answer {q.options.indexOf(o) + 1}
-                      <input
-                        value={o.label}
-                        disabled={locked}
-                        onChange={(event) => updateCustomOption(q, o.id, event.target.value)}
-                      />
-                    </label>
+                    <div className="custom-option-row">
+                      {o.teamLogoUrl && (
+                        <img src={o.teamLogoUrl} alt="" className="custom-option-badge" />
+                      )}
+                      <label className="field custom-option-input">
+                        Answer {q.options.indexOf(o) + 1}
+                        <input
+                          value={o.label}
+                          disabled={locked}
+                          onChange={(event) => updateCustomOption(q, o.id, event.target.value)}
+                        />
+                      </label>
+                    </div>
                   ) : clubMode ? (
                     <EntityPicker
                       key={`team-${o.id}-${o.teamLogoUrl ?? ''}-${o.label}`}

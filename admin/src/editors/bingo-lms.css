@@ -367,6 +367,21 @@
   flex: 1;
 }
 
+.custom-option-row {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.custom-option-badge {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  object-fit: contain;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

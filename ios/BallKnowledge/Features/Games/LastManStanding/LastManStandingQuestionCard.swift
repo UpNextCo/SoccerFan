@@ -43,9 +43,9 @@ struct LastManStandingQuestionCard: View {
                 textClubOptionGrid
             }
         case .customImage:
-            VStack(spacing: Layout.blockSpacing) {
+            VStack(spacing: 12) {
                 customImageHeader
-                textClubOptionGrid
+                customImageOptionGrid
             }
         case .oddOneOut, .whichClub:
             if showsClubOptions {
@@ -203,11 +203,11 @@ struct LastManStandingQuestionCard: View {
                     image
                         .resizable()
                         .scaledToFit()
-                        .frame(maxHeight: 240)
+                        .frame(maxHeight: 110)
                 default:
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(BKTheme.card.opacity(0.5))
-                        .frame(height: 160)
+                        .frame(height: 90)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -246,6 +246,53 @@ struct LastManStandingQuestionCard: View {
             ForEach(question.options) { option in
                 Button { onSelect(option.id) } label: {
                     textClubOptionCard(option)
+                }
+                .buttonStyle(LMSOptionButtonStyle())
+                .disabled(!isInteractive)
+                .opacity(isInteractive ? 1 : 0.5)
+            }
+        }
+    }
+
+    private var customImageOptionGrid: some View {
+        LazyVGrid(
+            columns: [GridItem(.flexible()), GridItem(.flexible())],
+            spacing: 8
+        ) {
+            ForEach(question.options) { option in
+                Button { onSelect(option.id) } label: {
+                    HStack(spacing: 8) {
+                        TeamBadgeImage(
+                            club: option.label,
+                            league: "",
+                            logoURL: option.teamLogoUrl.flatMap(URL.init(string:)),
+                            size: 30
+                        ) {
+                            Text(GuessWhoDisplay.clubAbbrev(option.label))
+                                .font(BKFont.caption(9))
+                                .foregroundStyle(BKTheme.textMuted)
+                                .frame(width: 30, height: 30)
+                                .background(BKTheme.cardElevated)
+                                .clipShape(Circle())
+                        }
+                        Text(option.label)
+                            .font(BKFont.body(13))
+                            .foregroundStyle(BKTheme.textPrimary)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.82)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(BKTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        LMSVisualStyle.cardStroke(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                    )
                 }
                 .buttonStyle(LMSOptionButtonStyle())
                 .disabled(!isInteractive)
