@@ -96,7 +96,7 @@ struct GameIntroContent {
             )
         case .footballGolf:
             return GameIntroContent(
-                tagline: "Nine holes. Beat par.",
+                tagline: "Five holes. Beat par.",
                 steps: [
                     "Each hole has a prompt, a point target (max 4), and a stroke par.",
                     "Common names score 1 pt — clearing usually means a few household picks.",

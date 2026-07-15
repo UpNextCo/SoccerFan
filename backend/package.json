@@ -12,6 +12,7 @@
     "build:admin": "npm --prefix ../admin ci && npm --prefix ../admin run build",
     "build:api": "tsc",
     "test:validation": "node --import tsx --test src/services/adminPuzzleValidation.test.ts src/services/opsMediaValidation.test.ts",
+    "test:scoring": "node --import tsx --test src/services/dailyScoring.test.ts",
     "test:generation-queue": "node --import tsx --test src/services/adminMonthGenerationState.test.ts",
     "test:lms-freshness": "node --import tsx --test src/services/lastManStanding/freshness.test.ts src/services/lastManStanding/higherLower.test.ts",
     "test:bingo-freshness": "node --import tsx --test src/services/footballBingoFreshness.test.ts",

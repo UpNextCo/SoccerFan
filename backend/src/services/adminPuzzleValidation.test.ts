@@ -12,8 +12,13 @@ import {
   golfQualityWarnings,
   golfRuleCandidateAllowed,
   suggestGolfPar,
+  PAR_SEQUENCE,
   type GolfRuleEvaluation,
 } from './footballGolfGenerator.js';
+import {
+  FOOTBALL_GOLF_HOLE_COUNT,
+  FOOTBALL_GOLF_REQUIRED_RULE_INVENTORY,
+} from './footballGolfConstants.js';
 import {
   compareGolfAnswerIds,
   dedupeAdminGolfTemplates,
@@ -195,7 +200,7 @@ test('requires One More threshold sides and aligned hidden values', () => {
 });
 
 test('checks Golf numbering, answer sufficiency, and total par', () => {
-  const holes = Array.from({ length: 9 }, (_, index) => ({
+  const holes = Array.from({ length: FOOTBALL_GOLF_HOLE_COUNT }, (_, index) => ({
     holeNumber: index + 1,
     prompt: `Hole ${index + 1}`,
     par: 2,
@@ -205,11 +210,11 @@ test('checks Golf numbering, answer sufficiency, and total par', () => {
       { id: `p-${index}-2`, name: 'Player B' },
     ],
   }));
-  assert.equal(validatePuzzleReport('football_golf', { totalPar: 18, holes }, null).ok, true);
+  assert.equal(validatePuzzleReport('football_golf', { totalPar: 10, holes }, null).ok, true);
   assert.equal(
     validatePuzzleReport(
       'football_golf',
-      { totalPar: 18, holes: holes.map((hole) => ({ ...hole, rule: {} })) },
+      { totalPar: 10, holes: holes.map((hole) => ({ ...hole, rule: {} })) },
       null
     ).ok,
     true
@@ -219,7 +224,7 @@ test('checks Golf numbering, answer sufficiency, and total par', () => {
     validatePuzzleReport(
       'football_golf',
       {
-        totalPar: 18,
+        totalPar: 10,
         holes: holes.map((hole, index) => ({
           ...hole,
           ...(index < 2 ? { templateId: duplicateTemplate } : {}),
@@ -229,7 +234,16 @@ test('checks Golf numbering, answer sufficiency, and total par', () => {
     ).ok,
     false
   );
-  assert.equal(validatePuzzleReport('football_golf', { totalPar: 20, holes }, null).ok, false);
+  assert.equal(validatePuzzleReport('football_golf', { totalPar: 12, holes }, null).ok, false);
+  assert.equal(validatePuzzleReport('football_golf', { totalPar: 8, holes: holes.slice(0, 4) }, null).ok, false);
+  assert.equal(validatePuzzleReport(
+    'football_golf',
+    {
+      totalPar: 12,
+      holes: [...holes, { ...holes[0]!, holeNumber: 6, prompt: 'Sixth hole' }],
+    },
+    null
+  ).ok, false);
 });
 
 test('canonicalizes Golf rule signatures and keeps executable changes distinct', () => {
@@ -261,7 +275,7 @@ test('canonicalizes Golf rule signatures and keeps executable changes distinct',
 });
 
 test('rejects duplicate structured Golf rules across differently worded holes', () => {
-  const holes = Array.from({ length: 9 }, (_, index) => ({
+  const holes = Array.from({ length: FOOTBALL_GOLF_HOLE_COUNT }, (_, index) => ({
     holeNumber: index + 1,
     prompt: `Hole ${index + 1}`,
     par: 2,
@@ -276,7 +290,7 @@ test('rejects duplicate structured Golf rules across differently worded holes', 
         ? { label: 'Other wording', playedFor: ['Bayern München', 'Arsenal'] }
         : { minPlApps: index + 1 },
   }));
-  const report = validatePuzzleReport('football_golf', { totalPar: 18, holes }, null);
+  const report = validatePuzzleReport('football_golf', { totalPar: 10, holes }, null);
   assert.equal(report.ok, false);
   assert.ok(report.issues.some((entry) => /structured Golf rule/.test(entry.message)));
 });
@@ -287,6 +301,13 @@ test('filters Golf candidate rules against recent and same-course signatures', (
   assert.equal(golfRuleCandidateAllowed(rule, new Set(), new Set()), true);
   assert.equal(golfRuleCandidateAllowed(rule, new Set([signature]), new Set()), false);
   assert.equal(golfRuleCandidateAllowed(rule, new Set(), new Set([signature])), false);
+});
+
+test('uses the canonical five-hole par sequence and 28-day rule inventory', () => {
+  assert.equal(FOOTBALL_GOLF_HOLE_COUNT, 5);
+  assert.deepEqual(PAR_SEQUENCE, [2, 3, 3, 4, 4]);
+  assert.equal(PAR_SEQUENCE.reduce((sum, par) => sum + par, 0), 16);
+  assert.equal(FOOTBALL_GOLF_REQUIRED_RULE_INVENTORY, 145);
 });
 
 test('dedupes Golf templates by rule and chooses the deterministic best representative', () => {

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { towerRuleSchema } from './towerRuleSchema.js';
 import { golfRuleSignature } from './golfRuleSignature.js';
 import { isConfiguredOpsMediaUrl } from './opsMediaValidation.js';
+import { FOOTBALL_GOLF_HOLE_COUNT } from './footballGolfConstants.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 export interface AdminPuzzleValidationIssue {
@@ -75,7 +76,12 @@ const golfHole = z.object({
 }).passthrough();
 const golfPuzzle = z.object({
   totalPar: z.number().int().positive().optional(),
-  holes: z.array(golfHole).min(9),
+  holes: z
+    .array(golfHole)
+    .length(
+      FOOTBALL_GOLF_HOLE_COUNT,
+      `Football Golf must contain exactly ${FOOTBALL_GOLF_HOLE_COUNT} holes.`
+    ),
 }).passthrough();
 
 const bingoCategory = z.object({
@@ -243,8 +249,14 @@ function validateGolf(puzzleJson: unknown, issues: AdminPuzzleValidationIssue[])
       'Each structured Golf rule can only be used once in a course.'
     );
   }
-  const expected = Array.from({ length: puzzle.holes.length }, (_, index) => index + 1);
-  if ([...numbers].sort((a, b) => a - b).join(',') !== expected.join(',')) issue(issues, 'puzzleJson.holes', 'Hole numbers must be consecutive from 1.');
+  const expected = Array.from({ length: FOOTBALL_GOLF_HOLE_COUNT }, (_, index) => index + 1);
+  if ([...numbers].sort((a, b) => a - b).join(',') !== expected.join(',')) {
+    issue(
+      issues,
+      'puzzleJson.holes',
+      `Hole numbers must be consecutive from 1 to ${FOOTBALL_GOLF_HOLE_COUNT}.`
+    );
+  }
   puzzle.holes.forEach((hole, index) => {
     if (!hole.rule) {
       issue(

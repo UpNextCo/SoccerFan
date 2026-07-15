@@ -7,13 +7,17 @@ import { ensureWeeklyMembership, recordXp, weekStartFor } from './leagueService.
 import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
+import {
+  FOOTBALL_GOLF_HOLE_COUNT,
+  FOOTBALL_GOLF_MAX_XP,
+} from './footballGolfConstants.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js';
 import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenerator.js';
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 import { startLastManStandingRun, submitLastManStandingAnswer } from './lastManStandingCheck.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
-import { computeServerScore, clampClientScore } from './dailyScoring.js';
+import { resolveCompletionScore } from './dailyScoring.js';
 import { isAcceptableCompletionDate, previousDay, resolveClientDailyDate, todayUTC } from '../utils/dailyDate.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
@@ -22,7 +26,7 @@ const GAME_MODES = [
   { id: 'football_bingo', title: 'FOOTBALL BINGO', subtitle: 'Fill the grid', playerCount: 12400, isAvailable: true },
   { id: 'one_more', title: 'ONE MORE', subtitle: 'Risk it for points', playerCount: 6400, isAvailable: true },
   { id: 'draft_master', title: 'DRAFT XI', subtitle: 'Build the highest-scoring XI', playerCount: 11300, isAvailable: true },
-  { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '9 holes, name the answers', playerCount: 7600, isAvailable: true },
+  { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '5 holes, name the answers', playerCount: 7600, isAvailable: true },
   { id: 'club_chain', title: 'CLUB CHAIN', subtitle: 'Link them by shared clubs', playerCount: 9200, isAvailable: true },
   { id: 'target_man', title: 'TARGET MAN', subtitle: 'Hit the stat target', playerCount: 15200, isAvailable: true },
   { id: 'last_man_standing', title: 'LAST MAN STANDING', subtitle: 'Survive the field', playerCount: 10100, isAvailable: true },
@@ -96,7 +100,7 @@ export const MAX_XP: Record<string, number> = {
   world_cup_xi: 1100,
   draft_master: 1100,
   football_tower: 900,
-  football_golf: 1200,
+  football_golf: FOOTBALL_GOLF_MAX_XP,
   last_man_standing: 900,
 };
 
@@ -150,8 +154,10 @@ async function ensureGolfPuzzle(date: string): Promise<void> {
 
   try {
     const puzzle = await generateFootballGolfCourse(date);
-    if (puzzle.holes.length < 9) {
-      console.warn(`Skipped football_golf for ${date}: only ${puzzle.holes.length} holes`);
+    if (puzzle.holes.length !== FOOTBALL_GOLF_HOLE_COUNT) {
+      console.warn(
+        `Skipped football_golf for ${date}: generated ${puzzle.holes.length} holes, expected exactly ${FOOTBALL_GOLF_HOLE_COUNT}`
+      );
       return;
     }
     await db
@@ -654,9 +660,9 @@ export async function completeDaily(
   // Server-authoritative scoring: when the client sends its answer inputs, recompute the score/won
   // from the stored puzzle so XP can't be fabricated. Otherwise clamp the client's reported score
   // to a plausible bound. XP, the stored completion and the league ledger all use these values.
-  const server = await computeServerScore(input.modeId, puzzle[0], input.answer);
-  const effectiveScore = server ? server.score : clampClientScore(input.modeId, input.score);
-  const effectiveWon = server ? server.won : input.won;
+  const effective = await resolveCompletionScore(input.modeId, puzzle[0], input);
+  const effectiveScore = effective.score;
+  const effectiveWon = effective.won;
 
   const xpEarned = computeXp(input.modeId, effectiveScore, input.guesses, effectiveWon);
 

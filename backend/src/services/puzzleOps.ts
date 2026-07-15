@@ -6,6 +6,7 @@ import { validatePuzzlePayload } from './adminPuzzleValidation.js';
 import { enrichAdminPuzzleForSave } from './adminPuzzleEnrich.js';
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
+import { FOOTBALL_GOLF_HOLE_COUNT } from './footballGolfConstants.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle } from './clubChainGenerator.js';
 import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenerator.js';
@@ -181,6 +182,7 @@ export async function generateOnePuzzle(
     .select({
       status: dailyPuzzles.status,
       id: dailyPuzzles.id,
+      contentHash: dailyPuzzles.contentHash,
     })
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, modeId)))
@@ -191,9 +193,11 @@ export async function generateOnePuzzle(
     if (st === 'locked') return { ok: false, skipped: 'locked' };
     if (st === 'approved' && !opts?.force) return { ok: false, skipped: 'approved' };
     if (!opts?.force) return { ok: false, skipped: 'exists' };
-    await db
-      .delete(dailyPuzzles)
-      .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, modeId)));
+    if (modeId !== 'football_golf') {
+      await db
+        .delete(dailyPuzzles)
+        .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, modeId)));
+    }
   }
 
   try {
@@ -207,8 +211,50 @@ export async function generateOnePuzzle(
       }
       case 'football_golf': {
         const puzzle = await generateFootballGolfCourse(date);
-        if (puzzle.holes.length < 9) return { ok: false, error: 'golf holes < 9' };
-        await insertGenerated(date, modeId, puzzle, null);
+        if (puzzle.holes.length !== FOOTBALL_GOLF_HOLE_COUNT) {
+          return {
+            ok: false,
+            error: `golf must contain exactly ${FOOTBALL_GOLF_HOLE_COUNT} holes; generated ${puzzle.holes.length}`,
+          };
+        }
+        const validation = validatePuzzlePayload(modeId, puzzle, null);
+        if (!validation.ok) {
+          return { ok: false, error: `golf validation failed: ${validation.error}` };
+        }
+
+        const hash = contentHash(puzzle, null);
+        if (!existing[0]) {
+          const inserted = await insertGenerated(date, modeId, puzzle, null);
+          if (!inserted) return { ok: false, skipped: 'exists' };
+          break;
+        }
+
+        const expectedHash = existing[0].contentHash;
+        const replaced = await db
+          .update(dailyPuzzles)
+          .set({
+            puzzleJson: puzzle,
+            answerPlayerId: null,
+            answerJson: null,
+            status: 'generated',
+            contentHash: hash,
+            reviewedAt: null,
+            reviewNote: null,
+          })
+          .where(and(
+            eq(dailyPuzzles.id, existing[0].id),
+            eq(dailyPuzzles.status, existing[0].status),
+            expectedHash === null
+              ? isNull(dailyPuzzles.contentHash)
+              : eq(dailyPuzzles.contentHash, expectedHash)
+          ))
+          .returning({ id: dailyPuzzles.id });
+        if (replaced.length === 0) {
+          return {
+            ok: false,
+            error: 'football_golf changed during generation; existing puzzle was preserved',
+          };
+        }
         break;
       }
       case 'one_more': {

@@ -3,29 +3,49 @@
  * when it submits its actual ANSWER inputs we recompute the score + won flag here from the stored
  * puzzle (and server-only answer_json) so a modified client can't fabricate leaderboard XP.
  *
- * Recompute is best-effort: any shape mismatch returns null and the caller falls back to the (clamped)
- * client-reported score, so older clients that don't send answers keep working.
+ * Recompute is best-effort for legacy clients that omit answers. Football Golf is stricter: once an
+ * answer payload is supplied, malformed input is rejected rather than falling back to client XP.
  */
 import { maxXpForMode } from './dailyService.js';
 import { matches as bingoMatches, type BingoCategory, type BingoPlayer } from './footballBingoGenerator.js';
 import { playerValuesForCategory } from './targetManCategories.js';
 import { clubChainLink } from './clubChainGenerator.js';
+import {
+  FOOTBALL_GOLF_HOLE_COUNT,
+  FOOTBALL_GOLF_MAX_XP,
+} from './footballGolfConstants.js';
 
 export interface ServerScore {
   score: number;
   won: boolean;
 }
 
-type PuzzleRow = { puzzleJson: unknown; answerJson: unknown };
+export class InvalidCompletionAnswerError extends Error {}
+
+export type PuzzleRow = { puzzleJson: unknown; answerJson: unknown };
 
 // ---- XP helpers (mirror ios DailyXP) ---------------------------------------------------------
 
-function golfHoleXp(relativeToPar: number): number {
-  if (relativeToPar <= -2) return 134;
-  if (relativeToPar === -1) return 110;
-  if (relativeToPar === 0) return 50;
-  if (relativeToPar === 1) return 20;
+export function golfHoleXp(relativeToPar: number): number {
+  if (relativeToPar <= -2) return 160;
+  if (relativeToPar === -1) return 130;
+  if (relativeToPar === 0) return 60;
+  if (relativeToPar === 1) return 25;
   return 0;
+}
+
+function golfRarityPoints(rarity: string | undefined): number {
+  switch (rarity) {
+    case 'ultraRare':
+    case 'ultra_rare':
+      return 4;
+    case 'rare':
+      return 3;
+    case 'uncommon':
+      return 2;
+    default:
+      return 1;
+  }
 }
 
 function targetManXp(pctOff: number): number {
@@ -237,7 +257,7 @@ function scoreFootballBingo(row: PuzzleRow, answer: unknown): ServerScore | null
 
 // ---- Football Golf ---------------------------------------------------------------------------
 // answer: { holes: [{ holeId, matchedIds: string[], shots: number, skipped: boolean }] }
-function scoreFootballGolf(row: PuzzleRow, answer: unknown): ServerScore | null {
+export function scoreFootballGolf(row: PuzzleRow, answer: unknown): ServerScore | null {
   const holes = (answer as { holes?: unknown })?.holes;
   if (!Array.isArray(holes)) return null;
 
@@ -245,14 +265,21 @@ function scoreFootballGolf(row: PuzzleRow, answer: unknown): ServerScore | null 
     holes?: Array<{
       id: string;
       par: number;
+      target?: number;
       answers?: Array<{ id: string; rarity?: string }>;
     }>;
   };
-  if (!Array.isArray(puzzle.holes) || puzzle.holes.length === 0) return null;
+  if (
+    !Array.isArray(puzzle.holes)
+    || puzzle.holes.length !== FOOTBALL_GOLF_HOLE_COUNT
+    || holes.length !== puzzle.holes.length
+  ) return null;
 
   const byId = new Map(puzzle.holes.map((h) => [h.id, h]));
-  let total = 0;
-  let underOrEqualPar = true;
+  if (byId.size !== puzzle.holes.length) return null;
+  const submittedHoleIds = new Set<string>();
+  let totalXp = 0;
+  let totalRelativeToPar = 0;
 
   for (const raw of holes as Array<{
     holeId?: string;
@@ -260,19 +287,45 @@ function scoreFootballGolf(row: PuzzleRow, answer: unknown): ServerScore | null 
     shots?: unknown;
     skipped?: unknown;
   }>) {
-    if (typeof raw.holeId !== 'string' || typeof raw.shots !== 'number') return null;
+    if (
+      typeof raw.holeId !== 'string'
+      || typeof raw.shots !== 'number'
+      || !Number.isInteger(raw.shots)
+      || raw.shots < 1
+      || typeof raw.skipped !== 'boolean'
+      || submittedHoleIds.has(raw.holeId)
+    ) return null;
     const hole = byId.get(raw.holeId);
     if (!hole) return null;
-    const answerIds = new Set((hole.answers ?? []).map((a) => a.id));
+    submittedHoleIds.add(raw.holeId);
+    const answersById = new Map((hole.answers ?? []).map((a) => [a.id, a]));
+    if (answersById.size !== (hole.answers ?? []).length) return null;
     const matchedIds = Array.isArray(raw.matchedIds) ? raw.matchedIds : [];
-    if (matchedIds.some((id) => typeof id !== 'string' || !answerIds.has(id as string))) return null;
+    if (
+      matchedIds.some((id) => typeof id !== 'string' || !answersById.has(id as string))
+      || new Set(matchedIds).size !== matchedIds.length
+      || raw.shots < matchedIds.length
+    ) return null;
+    const target = hole.target ?? hole.par;
+    const points = (matchedIds as string[]).reduce(
+      (sum, id) => sum + golfRarityPoints(answersById.get(id)?.rarity),
+      0
+    );
+    if (!raw.skipped && points < target) return null;
+    if (raw.skipped) {
+      const remaining = Math.max(0, target - points);
+      if (remaining === 0 || raw.shots < matchedIds.length + 2 * remaining) return null;
+    }
 
     const relative = raw.shots - hole.par;
-    if (relative > 0) underOrEqualPar = false;
-    total += golfHoleXp(relative);
+    totalRelativeToPar += relative;
+    totalXp += golfHoleXp(relative);
   }
 
-  return { score: Math.min(1200, total), won: underOrEqualPar };
+  return {
+    score: Math.min(FOOTBALL_GOLF_MAX_XP, totalXp),
+    won: totalRelativeToPar <= 0,
+  };
 }
 
 // ---- Target Man ------------------------------------------------------------------------------
@@ -372,4 +425,24 @@ export async function computeServerScore(
  */
 export function clampClientScore(modeId: string, score: number): number {
   return Math.max(0, Math.min(maxXpForMode(modeId), Math.round(score)));
+}
+
+/**
+ * Resolve the score persisted for a completion. Only a genuinely absent answer keeps the legacy
+ * Football Golf fallback; a supplied payload that cannot be verified must never earn client XP.
+ */
+export async function resolveCompletionScore(
+  modeId: string,
+  row: PuzzleRow,
+  input: { score: number; won: boolean; answer?: unknown }
+): Promise<ServerScore> {
+  const server = await computeServerScore(modeId, row, input.answer);
+  if (server) return server;
+  if (modeId === 'football_golf' && Object.prototype.hasOwnProperty.call(input, 'answer')) {
+    throw new InvalidCompletionAnswerError('Invalid Football Golf answer payload');
+  }
+  return {
+    score: clampClientScore(modeId, input.score),
+    won: input.won,
+  };
 }

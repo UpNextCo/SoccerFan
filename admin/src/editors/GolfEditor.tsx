@@ -42,6 +42,7 @@ type Puzzle = {
 }
 
 const RARITIES = ['common', 'uncommon', 'rare', 'ultraRare'] as const
+const REQUIRED_HOLE_COUNT = 5
 
 type BusyAction = 'template' | 'preview' | 'generate' | 'validate'
 
@@ -359,6 +360,7 @@ export function GolfEditor({
   }
 
   function addHole() {
+    if (holes.length >= REQUIRED_HOLE_COUNT) return
     commitHoles([
       ...holes,
       {
@@ -376,7 +378,7 @@ export function GolfEditor({
   }
 
   function removeHole() {
-    if (!activeHole || holes.length <= 1) return
+    if (!activeHole || holes.length <= REQUIRED_HOLE_COUNT) return
     commitHoles(holes.filter((hole) => hole.holeNumber !== activeHole.holeNumber))
     setActiveIndex((index) => Math.max(0, index - 1))
   }
@@ -535,8 +537,8 @@ export function GolfEditor({
     <div className="mode-editor">
       <div className="editor-summary">
         <div>
-          <span className="muted tiny">Course</span>
-          <strong>{holes.length} holes</strong>
+          <span className="muted tiny">Five-hole course</span>
+          <strong>{holes.length} / {REQUIRED_HOLE_COUNT} holes</strong>
         </div>
         <div>
           <span className="muted tiny">Total par</span>
@@ -547,6 +549,13 @@ export function GolfEditor({
           <strong>{p.totalPar ?? 'Not set'}</strong>
         </div>
       </div>
+
+      {holes.length !== REQUIRED_HOLE_COUNT && (
+        <p className="warning-box">
+          Football Golf must contain exactly {REQUIRED_HOLE_COUNT} consecutive holes
+          before it can be approved or published.
+        </p>
+      )}
 
       {holes.length === 0 ? (
         <div className="warning-box">
@@ -597,11 +606,13 @@ export function GolfEditor({
             <div className="button-row">
               <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled || activeIndex === 0} onClick={() => moveHole(-1)}>← Move</button>
               <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled || activeIndex === holes.length - 1} onClick={() => moveHole(1)}>Move →</button>
-              <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled || holes.length <= 1} onClick={removeHole}>Remove hole</button>
+              <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled || holes.length <= REQUIRED_HOLE_COUNT} onClick={removeHole}>Remove hole</button>
             </div>
           </header>
-          {holes.length <= 1 && (
-            <p className="warning-box">A course must keep at least one hole; removal is disabled.</p>
+          {holes.length <= REQUIRED_HOLE_COUNT && (
+            <p className="muted tiny">
+              A publishable course must keep exactly {REQUIRED_HOLE_COUNT} holes; removal is disabled.
+            </p>
           )}
           <section className="golf-rule-composer" aria-labelledby="golf-rule-heading">
             <div className="golf-section-heading">
@@ -1086,7 +1097,13 @@ export function GolfEditor({
           )}
           <div className="editor-toolbar">
             <span className="muted tiny">Hole order and numbering stay synchronized.</span>
-            <button type="button" disabled={mutationsDisabled} onClick={addHole}>+ Add hole</button>
+            <button
+              type="button"
+              disabled={mutationsDisabled || holes.length >= REQUIRED_HOLE_COUNT}
+              onClick={addHole}
+            >
+              + Add hole
+            </button>
           </div>
         </>
       )}

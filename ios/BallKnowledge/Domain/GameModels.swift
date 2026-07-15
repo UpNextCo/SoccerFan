@@ -271,7 +271,7 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1200). Live daily total 7000. A full loss
+    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1100). Live seven-game total 6600. A full loss
     /// earns 0 (no participation floor). Every game's on-screen score IS this XP.
     static let maxByMode: [String: Int] = [
         "guess_who": 800,
@@ -283,7 +283,7 @@ enum DailyXP {
         "world_cup_xi": 1100,
         "draft_master": 1100,
         "football_tower": 900,
-        "football_golf": 1200,
+        "football_golf": 800,
         "last_man_standing": 900,
     ]
     static let defaultMax = 1000
@@ -329,14 +329,13 @@ enum DailyXP {
         }
     }
 
-    /// Football Golf: per hole vs par — going under par matters a lot more than reaching par (par is
-    /// easy with common answers). Eagle+ 134 / birdie 110 / par 50 / bogey 20 / worse 0. Summed,
-    /// capped at 1200 (an all-birdie round ~990, all-eagle round hits the cap).
+    /// Football Golf: five-hole XP mirrored by the server. Eagle+ 160 / birdie 130 / par 60 /
+    /// bogey 25 / worse 0. Five eagles = 800, five birdies = 650, five pars = 300.
     static func golfHole(relativeToPar: Int) -> Int {
-        if relativeToPar <= -2 { return 134 }
-        if relativeToPar == -1 { return 110 }
-        if relativeToPar == 0 { return 50 }
-        if relativeToPar == 1 { return 20 }
+        if relativeToPar <= -2 { return 160 }
+        if relativeToPar == -1 { return 130 }
+        if relativeToPar == 0 { return 60 }
+        if relativeToPar == 1 { return 25 }
         return 0
     }
 

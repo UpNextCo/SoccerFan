@@ -17,11 +17,18 @@ import { enumeratePlayers, type AnswerPlayer, type TowerRule } from './towerRule
 import { normalizeSearchText } from '../utils/playerSearch.js';
 import { golfRuleSignature } from './golfRuleSignature.js';
 import { recentGolfPrompts, recentGolfRuleSignatures } from './puzzleHistory.js';
+import {
+  FOOTBALL_GOLF_HOLE_COUNT,
+  FOOTBALL_GOLF_PAR_SEQUENCE,
+  FOOTBALL_GOLF_RULE_COOLDOWN_DAYS,
+} from './footballGolfConstants.js';
+
+export { FOOTBALL_GOLF_HOLE_COUNT } from './footballGolfConstants.js';
 
 /** Prompts used within this window are excluded (shrunk adaptively if the bank runs thin). */
 const GOLF_PROMPT_REPEAT_WINDOW_DAYS = 28;
 /** Structured rule meaning is never reused inside this fixed window. */
-const GOLF_RULE_REPEAT_WINDOW_DAYS = 28;
+const GOLF_RULE_REPEAT_WINDOW_DAYS = FOOTBALL_GOLF_RULE_COOLDOWN_DAYS;
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'ultraRare';
 
@@ -55,11 +62,10 @@ export interface FootballGolfPuzzle {
   holes: GolfHole[];
 }
 
-const HOLES = 9;
 const MAX_PAR = 4;
 const MAX_TARGET = 4;
 // Stroke par per hole — capped at 4 so no hole asks for 5+ names on an all-common run.
-const PAR_SEQUENCE: Array<2 | 3 | 4> = [2, 2, 3, 3, 3, 3, 4, 4, 4];
+export const PAR_SEQUENCE: ReadonlyArray<2 | 3 | 4> = FOOTBALL_GOLF_PAR_SEQUENCE;
 
 /** Points needed to clear — always equals par (birdies come from picking rarer names). */
 export function targetForPar(par: 2 | 3 | 4): number {
@@ -433,7 +439,7 @@ export async function generateFootballGolfCourse(
     .map((x) => x.p);
 
   let candidates = await scanCandidates(ordered, fullAvoid, ruleAvoid);
-  if (candidates.length < HOLES) {
+  if (candidates.length < FOOTBALL_GOLF_HOLE_COUNT) {
     for (const window of [14, 7, 0]) {
       const avoid = shorterAvoid
         ?? (window > 0 ? await recentGolfPrompts(date, window) : new Set<string>());
@@ -442,18 +448,22 @@ export async function generateFootballGolfCourse(
         window > 0 ? avoid : new Set<string>(),
         ruleAvoid
       );
-      if (candidates.length >= HOLES) break;
+      if (candidates.length >= FOOTBALL_GOLF_HOLE_COUNT) break;
     }
   }
 
-  if (candidates.length < HOLES) {
-    throw new Error(`Only ${candidates.length} golf candidates for ${date} (need ${HOLES})`);
+  if (candidates.length < FOOTBALL_GOLF_HOLE_COUNT) {
+    throw new Error(
+      `Only ${candidates.length} golf candidates for ${date} (need exactly ${FOOTBALL_GOLF_HOLE_COUNT})`
+    );
   }
 
   // Assign pars: broadest prompts get the highest pars, and every par is CLAMPED to
   // (famous − 2) so the hole is always completable from common knowledge.
-  const chosen = candidates.slice(0, HOLES).sort((a, b) => b.famous - a.famous);
-  const parsDesc = [...PAR_SEQUENCE].sort((a, b) => b - a); // [4,4,4,3,3,3,3,2,2]
+  const chosen = candidates
+    .slice(0, FOOTBALL_GOLF_HOLE_COUNT)
+    .sort((a, b) => b.famous - a.famous);
+  const parsDesc = [...PAR_SEQUENCE].sort((a, b) => b - a); // [4,4,3,3,2]
   const withPar = chosen.map((c, i) => {
     const par = Math.max(2, Math.min(MAX_PAR, Math.min(parsDesc[i]!, c.famous - 2))) as 2 | 3 | 4;
     return { ...c, par, target: targetForPar(par) };
@@ -479,7 +489,7 @@ export async function generateFootballGolfCourse(
   return { modeId: 'football_golf', puzzleId: `${date}-football_golf`, date, title: 'Daily Football Golf', totalPar, holes };
 }
 
-/** Scan the day's shuffled prompt order, enumerating answers until 9 quality holes are found. */
+/** Scan the day's shuffled prompt order, enumerating answers until five quality holes are found. */
 async function scanCandidates(
   ordered: Array<{ id: string; prompt: string; rule: TowerRule }>,
   avoid: Set<string>,
@@ -491,7 +501,7 @@ async function scanCandidates(
   const catCount = new Map<string, number>();
   const MAX_PER_CATEGORY = 2; // keep a course varied (clubs / nationality / managers / …)
   for (const { id, prompt, rule } of ordered) {
-    if (candidates.length >= HOLES) break;
+    if (candidates.length >= FOOTBALL_GOLF_HOLE_COUNT) break;
     if (avoid.has(prompt.toLowerCase())) continue;
     if (!golfRuleCandidateAllowed(rule, recentRuleSignatures, usedRuleSignatures)) continue;
     const ruleSignature = golfRuleSignature(rule);

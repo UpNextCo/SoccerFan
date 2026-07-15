@@ -60,10 +60,15 @@ current draft, and **Discard** restores the last server copy.
   the stored image unblurred.
 - **Draft XI** — edit category, formation and constraints, then review the optimal
   lineup and score in the pitch-style QA section.
-- **Football Golf** — navigate holes individually, attach a verified prompt
+- **Football Golf** — build exactly five consecutively numbered holes, navigate them
+  individually, attach a verified prompt
   template or build a structured rule, preview its database coverage, then
   regenerate accepted answers, aliases, rarity, hints and suggested par. Display
   wording stays editable without becoming the source of truth for football facts.
+  Approval rejects any course that does not contain exactly five holes. Generated
+  courses use a balanced 2/3/3/4/4 par plan (subject to per-prompt safety clamping)
+  and structured rules retain a fixed 28-day semantic cooldown; five holes per day
+  require 145 distinct rules in the sustainable bank.
 - **Club Chain** — edit endpoints and inspect the answer path. Validation checks
   every teammate link and compares the stored path with the database graph.
 - **Target Man** — edit category and target through structured fields; puzzle and
@@ -105,7 +110,9 @@ Rows with `status = locked` are never deleted by `ensureDailyPuzzles` stale migr
 Statuses: `generated` → `approved` → `locked`.
 
 Regeneration replaces the current generated/approved puzzle and is blocked for a
-locked puzzle. Preview and validation endpoints are read-only; proposed candidates
+locked puzzle. Golf regeneration generates and validates the replacement before
+atomically swapping the stored row, so a failed generation leaves the current
+course intact. Preview and validation endpoints are read-only; proposed candidates
 are not written to `daily_puzzles` until **Save changes**.
 
 ## Deploy notes

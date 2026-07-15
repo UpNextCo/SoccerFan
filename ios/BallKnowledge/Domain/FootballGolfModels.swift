@@ -171,7 +171,7 @@ enum FootballGolfScoring {
         }
     }
 
-    /// XP for a single hole based on its result vs par (under 134 / par 90 / bogey 45 / worse 0).
+    /// XP for one hole: eagle+ 160 / birdie 130 / par 60 / bogey 25 / worse 0.
     static func holeXP(_ result: FootballGolfHoleResult) -> Int {
         DailyXP.golfHole(relativeToPar: result.relativeToPar)
     }

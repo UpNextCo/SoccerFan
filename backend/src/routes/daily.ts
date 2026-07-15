@@ -12,6 +12,7 @@ import {
   validateGuess,
   validateLastManStandingCheck,
 } from '../services/dailyService.js';
+import { InvalidCompletionAnswerError } from '../services/dailyScoring.js';
 
 export const dailyRouter = Router();
 
@@ -86,7 +87,11 @@ dailyRouter.post('/complete', requireAuth, async (req, res) => {
     const result = await completeDaily(req.auth!.userId, parsed.data);
     sendSuccess(res, result);
   } catch (err) {
-    sendError(res, err instanceof Error ? err.message : 'Failed to complete', 500);
+    sendError(
+      res,
+      err instanceof Error ? err.message : 'Failed to complete',
+      err instanceof InvalidCompletionAnswerError ? 400 : 500
+    );
   }
 });
 

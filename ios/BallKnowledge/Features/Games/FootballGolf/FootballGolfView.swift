@@ -30,7 +30,7 @@ private func golfRarityColor(_ rarity: FootballGolfRarity) -> Color {
 
 /// Persisted mid-round progress for resume (the course is rebuilt from the daily puzzle on open).
 struct FootballGolfProgress: Equatable, Codable {
-    static let progressVersion = 3
+    static let progressVersion = 4
     var currentHoleIndex: Int
     var results: [FootballGolfHoleResult]
     var matched: [FootballGolfAnswer]
