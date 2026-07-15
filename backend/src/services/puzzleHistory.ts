@@ -17,15 +17,15 @@ async function recentRows(
   modeId: string,
   date: string,
   days: number
-): Promise<Array<{ pj: Record<string, unknown>; apid: string | null }>> {
+): Promise<Array<{ date: string; pj: Record<string, unknown>; apid: string | null }>> {
   const window = Math.max(1, Math.floor(days));
   return (await db.execute(sql`
-    SELECT puzzle_json AS pj, answer_player_id AS apid
+    SELECT date::text AS date, puzzle_json AS pj, answer_player_id AS apid
     FROM daily_puzzles
     WHERE mode_id = ${modeId}
       AND date < ${date}
       AND date >= (${date}::date - ${window}::int)
-  `)) as unknown as Array<{ pj: Record<string, unknown>; apid: string | null }>;
+  `)) as unknown as Array<{ date: string; pj: Record<string, unknown>; apid: string | null }>;
 }
 
 /** Guess Who: answer player ids used in the window. */
@@ -112,19 +112,53 @@ export async function recentWcxiPlayerYears(date: string, days: number): Promise
   return out;
 }
 
-/** Football Bingo: tile (category) ids used in the window. */
-export async function recentBingoTileIds(date: string, days: number): Promise<Set<string>> {
+export interface BingoTileUsage {
+  frequency: number;
+  lastUsedDate: string;
+  daysSinceLastUse: number;
+  usedDates: string[];
+}
+
+function utcDay(date: string): number {
+  return Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
+}
+
+/** Football Bingo: frequency and recency for every tile used in the weighting window. */
+export async function recentBingoTileUsage(
+  date: string,
+  days: number
+): Promise<Map<string, BingoTileUsage>> {
   const rows = await recentRows('football_bingo', date, days);
-  const out = new Set<string>();
-  for (const { pj } of rows) {
+  const datesByTile = new Map<string, Set<string>>();
+  for (const { date: usedDate, pj } of rows) {
     const categories = pj['categories'];
     if (!Array.isArray(categories)) continue;
     for (const c of categories) {
       const id = (c as { id?: string }).id;
-      if (id) out.add(id);
+      if (!id) continue;
+      const dates = datesByTile.get(id) ?? new Set<string>();
+      dates.add(usedDate);
+      datesByTile.set(id, dates);
     }
   }
+  const targetDay = utcDay(date);
+  const out = new Map<string, BingoTileUsage>();
+  for (const [id, dateSet] of datesByTile) {
+    const usedDates = [...dateSet].sort();
+    const lastUsedDate = usedDates[usedDates.length - 1]!;
+    out.set(id, {
+      frequency: usedDates.length,
+      lastUsedDate,
+      daysSinceLastUse: targetDay - utcDay(lastUsedDate),
+      usedDates,
+    });
+  }
   return out;
+}
+
+/** Football Bingo compatibility helper: tile ids used in the window. */
+export async function recentBingoTileIds(date: string, days: number): Promise<Set<string>> {
+  return new Set((await recentBingoTileUsage(date, days)).keys());
 }
 
 /** Football Golf: prompts (lowercased) used in the window. */

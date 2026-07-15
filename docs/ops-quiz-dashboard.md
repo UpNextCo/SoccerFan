@@ -118,6 +118,8 @@ Root scripts:
   Claude-reviewed LMS bank toward the 45-day freshness target
 - `cd backend && npm run job:audit-lms-freshness` — reports exact LMS repeats
   and distinct signed bank inventory by question type
+- `cd backend && npm run job:audit-bingo-freshness -- START END` — reports
+  repeated Bingo boards, high-frequency tiles and type balance
 - `cd admin && npm run lint` — checks editor hooks and TypeScript-facing lint rules
 
 Share the `/admin` URL + password in Slack; no per-user accounts in v1.

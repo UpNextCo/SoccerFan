@@ -19,6 +19,7 @@ import { generateFootballGolfCourse } from '../services/footballGolfGenerator.js
 import { buildDailyFactPack } from '../services/dailyFactPack.js';
 import { getPlayerById } from '../services/playerService.js';
 import {
+  type BingoTileUsage,
   blindRankTenKey,
   oneMorePairKey,
   targetManQuestionKey,
@@ -34,7 +35,7 @@ const WINDOWS = {
   blindRank: 240,
   oneMore: 180,
   wcxi: 30,
-  bingo: 10,
+  bingo: 45,
   golf: 28,
 };
 
@@ -58,6 +59,29 @@ class RollingWindow {
       if (e.day < day && e.day >= day - this.days) for (const k of e.keys) s.add(k);
     }
     return s;
+  }
+  usage(day: number): Map<string, BingoTileUsage> {
+    const daysByKey = new Map<string, number[]>();
+    for (const entry of this.byDay) {
+      if (entry.day >= day || entry.day < day - this.days) continue;
+      for (const key of new Set(entry.keys)) {
+        daysByKey.set(key, [...(daysByKey.get(key) ?? []), entry.day]);
+      }
+    }
+    return new Map(
+      [...daysByKey].map(([key, days]) => {
+        const last = Math.max(...days);
+        return [
+          key,
+          {
+            frequency: days.length,
+            lastUsedDate: `simulation-day-${last}`,
+            daysSinceLastUse: day - last,
+            usedDates: days.map((value) => `simulation-day-${value}`),
+          },
+        ];
+      })
+    );
   }
   add(day: number, keys: string[]) {
     this.byDay.push({ day, keys });
@@ -217,7 +241,7 @@ async function main() {
     }
 
     try {
-      const p = await generateFootballBingoPuzzle(date, { recentTileIds: hBingo.visible(day) });
+      const p = await generateFootballBingoPuzzle(date, { recentTileUsage: hBingo.usage(day) });
       hBingo.add(day, p.categories.map((c) => c.id));
       for (const c of p.categories) record(bingoTile, c.title, day);
     } catch (err) {

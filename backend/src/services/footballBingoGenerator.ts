@@ -20,7 +20,10 @@ import { db } from '../db/index.js';
 import { resolveHeadshot } from '../constants/footballMedia.js';
 import { lookupTeamLogo } from './teamService.js';
 import { getPhotoOverrides } from './photoOverrides.js';
-import { recentBingoTileIds } from './puzzleHistory.js';
+import {
+  recentBingoTileUsage,
+  type BingoTileUsage,
+} from './puzzleHistory.js';
 import { buildClubDisplayMap, canonicalClubListWith, canonicalClubName, clubKey } from '../utils/clubCanonical.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
@@ -32,6 +35,8 @@ const MATCHERS_PER_CATEGORY = 5;
 const MAX_QUEUE = 55;
 /** Prefer tiles that haven't shipped within this many days. */
 const BINGO_TILE_REPEAT_WINDOW_DAYS = 10;
+/** Rank tile frequency across this longer window after enforcing the hard preference window. */
+export const BINGO_TILE_WEIGHTING_WINDOW_DAYS = 45;
 /** Every tile should keep at least this many matchers in the shipped queue (timer fairness). */
 const MIN_QUEUE_MATCHERS = 3;
 const TOP_CLUB_COUNT = 22; // marquee clubs = the most-represented clubs in the famous pool
@@ -109,7 +114,7 @@ function demonym(nation: string): string {
   return DEMONYM[nation] ?? `${nation}`;
 }
 
-type CatType =
+export type CatType =
   | 'nationality' | 'playedForClub' | 'nationClub' | 'clubCombo'
   | 'wonCompetition' | 'award' | 'statThreshold';
 type IconType = 'flag' | 'clubBadge' | 'trophy' | 'nationClub' | 'clubCombo' | 'award' | 'custom';
@@ -381,7 +386,9 @@ function topClubs(pool: BingoPlayer[]): Array<{ display: string; key: string }> 
     .map(([key, v]) => ({ display: v.display, key }));
 }
 
-function buildCandidates(pool: BingoPlayer[], clubLeagues: Map<string, string>, seed: number): Record<CatType, BingoCategory[]> {
+export type BingoCandidates = Record<CatType, BingoCategory[]>;
+
+function buildCandidates(pool: BingoPlayer[], clubLeagues: Map<string, string>, seed: number): BingoCandidates {
   const marquee = topClubs(pool);
   const marqueeKeys = new Set(marquee.map((c) => c.key));
 
@@ -467,9 +474,110 @@ function buildCandidates(pool: BingoPlayer[], clubLeagues: Map<string, string>, 
   };
 }
 
+export const BINGO_TYPE_TARGETS: Readonly<Record<CatType, number>> = {
+  nationality: 3,
+  playedForClub: 3,
+  nationClub: 4,
+  clubCombo: 2,
+  wonCompetition: 2,
+  award: 1,
+  statThreshold: 1,
+};
+
+export const BINGO_TYPE_CAPS: Readonly<Record<CatType, number>> = {
+  nationality: 4,
+  playedForClub: 4,
+  nationClub: 5,
+  clubCombo: 3,
+  wonCompetition: 3,
+  award: 1,
+  statThreshold: 2,
+};
+
+function frequencyOf(usage: ReadonlyMap<string, BingoTileUsage>, id: string): number {
+  return usage.get(id)?.frequency ?? 0;
+}
+
+function isHardRecent(usage: ReadonlyMap<string, BingoTileUsage>, id: string): boolean {
+  const days = usage.get(id)?.daysSinceLastUse;
+  return days !== undefined && days <= BINGO_TILE_REPEAT_WINDOW_DAYS;
+}
+
+/**
+ * Pure board selection. Fresh candidates satisfy preferred type targets first. Open slots are
+ * then filled by least-used candidates from under-represented types, subject to concentration
+ * caps. Hard-window tiles are considered only when the fresh pool cannot produce a full board.
+ */
+export function selectBingoCategories(
+  candidates: BingoCandidates,
+  usage: ReadonlyMap<string, BingoTileUsage>,
+  seed: number,
+  gridSize = GRID
+): BingoCategory[] {
+  const chosen: BingoCategory[] = [];
+  const chosenIds = new Set<string>();
+  const typeCounts = new Map<CatType, number>();
+  const tie = (category: BingoCategory) => hashStr(`${seed}:bingo-tile:${category.id}`);
+  const ranked = (items: BingoCategory[]) =>
+    [...items].sort(
+      (a, b) =>
+        frequencyOf(usage, a.id) - frequencyOf(usage, b.id) ||
+        tie(a) - tie(b) ||
+        a.id.localeCompare(b.id)
+    );
+  const add = (category: BingoCategory) => {
+    chosen.push(category);
+    chosenIds.add(category.id);
+    typeCounts.set(category.type, (typeCounts.get(category.type) ?? 0) + 1);
+  };
+
+  // Targets are preferences: never spend a recently-used tile merely to satisfy a thin type.
+  for (const type of Object.keys(BINGO_TYPE_TARGETS) as CatType[]) {
+    for (const category of ranked(candidates[type]).filter((c) => !isHardRecent(usage, c.id))) {
+      if ((typeCounts.get(type) ?? 0) >= BINGO_TYPE_TARGETS[type]) break;
+      if (!chosenIds.has(category.id)) add(category);
+    }
+  }
+
+  const topUp = (allowRecent: boolean, enforceCaps: boolean) => {
+    while (chosen.length < gridSize) {
+      const eligible = Object.values(candidates)
+        .flat()
+        .filter((c) => !chosenIds.has(c.id))
+        .filter((c) => allowRecent || !isHardRecent(usage, c.id))
+        // Awards are intentionally rare highlights; never recycle one inside the hard window.
+        .filter((c) => c.type !== 'award' || !isHardRecent(usage, c.id))
+        .filter((c) => !enforceCaps || (typeCounts.get(c.type) ?? 0) < BINGO_TYPE_CAPS[c.type])
+        // Award remains genuinely optional and never exceeds one, even in emergency fallback.
+        .filter((c) => c.type !== 'award' || (typeCounts.get('award') ?? 0) < BINGO_TYPE_CAPS.award);
+      if (eligible.length === 0) break;
+      eligible.sort((a, b) => {
+        const frequency = frequencyOf(usage, a.id) - frequencyOf(usage, b.id);
+        if (frequency !== 0) return frequency;
+        const aShare = (typeCounts.get(a.type) ?? 0) / BINGO_TYPE_CAPS[a.type];
+        const bShare = (typeCounts.get(b.type) ?? 0) / BINGO_TYPE_CAPS[b.type];
+        return aShare - bShare || tie(a) - tie(b) || a.id.localeCompare(b.id);
+      });
+      add(eligible[0]!);
+    }
+  };
+
+  topUp(false, true);
+  // A balanced recent tile is better than turning most of the board into one fresh type.
+  topUp(true, true);
+  // Only pathological inventories may relax caps, after every balanced option is exhausted.
+  topUp(false, false);
+  // A severely thin total inventory must still ship 16 solvable categories.
+  topUp(true, false);
+  return chosen.slice(0, gridSize);
+}
+
 export async function generateFootballBingoPuzzle(
   date: string,
-  opts?: { recentTileIds?: Set<string> }
+  opts?: {
+    recentTileIds?: Set<string>;
+    recentTileUsage?: ReadonlyMap<string, BingoTileUsage>;
+  }
 ): Promise<FootballBingoPuzzle> {
   const [pool, clubLeagues] = await Promise.all([loadPool(), loadClubLeagues()]);
   if (pool.length < 50) throw new Error('Not enough players in pool for Football Bingo');
@@ -477,44 +585,19 @@ export async function generateFootballBingoPuzzle(
   const seed = hashStr(`${date}:football_bingo`);
   const candidates = buildCandidates(pool, clubLeagues, seed);
 
-  // Repeat suppression: prefer tiles that haven't shipped in the last few days, so the same
-  // "France" / "Played for Liverpool" square doesn't anchor half the week's grids. Thin types
-  // (awards, stat milestones) fall back to recent tiles rather than dropping below the mix.
-  const recentTiles = opts?.recentTileIds ?? (await recentBingoTileIds(date, BINGO_TILE_REPEAT_WINDOW_DAYS));
-
-  // Target mix; tops up from leftovers if a type is short.
-  const target: Array<[CatType, number]> = [
-    ['nationality', 3],
-    ['playedForClub', 3],
-    ['nationClub', 4],
-    ['clubCombo', 2],
-    ['wonCompetition', 2],
-    ['award', 1],
-    ['statThreshold', 1],
-  ];
-
-  const chosen: BingoCategory[] = [];
-  const usedRules = new Set<string>();
-  const takeForType = (type: CatType, n: number, allowRecent: boolean) => {
-    for (const c of candidates[type]) {
-      if (chosen.filter((x) => x.type === type).length >= n) break;
-      if (usedRules.has(c.id)) continue;
-      if (!allowRecent && recentTiles.has(c.id)) continue;
-      usedRules.add(c.id);
-      chosen.push(c);
-    }
-  };
-  for (const [type, n] of target) {
-    takeForType(type, n, false);
-    takeForType(type, n, true); // fill any shortfall with recent tiles
-  }
+  const usage =
+    opts?.recentTileUsage ??
+    (opts?.recentTileIds
+      ? new Map(
+          [...opts.recentTileIds].map((id) => [
+            id,
+            { frequency: 1, lastUsedDate: date, daysSinceLastUse: 0, usedDates: [date] },
+          ])
+        )
+      : await recentBingoTileUsage(date, BINGO_TILE_WEIGHTING_WINDOW_DAYS));
+  const chosen = selectBingoCategories(candidates, usage, seed);
   if (chosen.length < GRID) {
-    const rest = seededShuffle(Object.values(candidates).flat().filter((c) => !usedRules.has(c.id)), seed);
-    for (const c of [...rest.filter((c) => !recentTiles.has(c.id)), ...rest.filter((c) => recentTiles.has(c.id))]) {
-      if (chosen.length >= GRID) break;
-      usedRules.add(c.id);
-      chosen.push(c);
-    }
+    throw new Error(`Not enough supported Football Bingo categories (${chosen.length}/${GRID})`);
   }
   const categories = seededShuffle(chosen.slice(0, GRID), seed ^ 0x5eed);
 
