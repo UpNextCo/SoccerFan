@@ -9,7 +9,7 @@ enum LastManStandingSeed {
 
     private static func mapQuestion(_ dto: LastManStandingQuestionDTO) -> LMSQuestion? {
         guard !dto.options.isEmpty else { return nil }
-        let type = LMSQuestionType(rawValue: dto.type) ?? .whichClub
+        guard let type = LMSQuestionType(rawValue: dto.type) else { return nil }
         let layout = dto.presentation?.layout.flatMap { LMSPresentationLayout(rawValue: $0) }
         let presentation = dto.presentation.map { pres in
             LMSPresentation(

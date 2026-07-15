@@ -307,6 +307,34 @@ export const opsGenerationItems = pgTable(
   ]
 );
 
+export const opsMedia = pgTable(
+  'ops_media',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    kind: text('kind').notNull(),
+    mimeType: text('mime_type').notNull(),
+    bytes: bytea('bytes').notNull(),
+    size: integer('size').notNull(),
+    originalFilename: text('original_filename'),
+    createdBy: text('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('ops_media_kind_created_idx').on(table.kind, table.createdAt),
+    check('ops_media_kind_check', sql`${table.kind} = 'lms_custom_image'`),
+    check(
+      'ops_media_mime_type_check',
+      sql`${table.mimeType} IN ('image/jpeg', 'image/png', 'image/webp')`
+    ),
+    check('ops_media_size_check', sql`${table.size} > 0 AND ${table.size} <= 2621440`),
+    check('ops_media_bytes_size_check', sql`octet_length(${table.bytes}) = ${table.size}`),
+    check(
+      'ops_media_original_filename_check',
+      sql`${table.originalFilename} IS NULL OR length(${table.originalFilename}) <= 255`
+    ),
+  ]
+);
+
 /**
  * Reusable Ops-authored question definitions. `config` is structured, mode-specific JSON;
  * execution code must interpret known keys and must never treat it as SQL.
@@ -699,6 +727,7 @@ export type Team = typeof teams.$inferSelect;
 export type DailyPuzzle = typeof dailyPuzzles.$inferSelect;
 export type OpsGenerationRun = typeof opsGenerationRuns.$inferSelect;
 export type OpsGenerationItem = typeof opsGenerationItems.$inferSelect;
+export type OpsMedia = typeof opsMedia.$inferSelect;
 export type QuestionTemplate = typeof questionTemplates.$inferSelect;
 export type NewQuestionTemplate = typeof questionTemplates.$inferInsert;
 export type ManagerTenure = typeof managerTenures.$inferSelect;

@@ -54,7 +54,10 @@ current draft, and **Discard** restores the last server copy.
   up the real metric value automatically; operators should not hand-enter stats.
 - **Last Man Standing** — use the question navigator to review one slot at a time,
   edit type-specific content, options, correct answers, reveals, badge blur and
-  career clubs.
+  career clubs. Any slot can be changed to **Custom image**: choose a JPEG, PNG or
+  WebP kit/stadium/photo, enter four text answers, select the correct answer, then
+  save and approve. The dashboard resizes large uploads and the iOS card displays
+  the stored image unblurred.
 - **Draft XI** — edit category, formation and constraints, then review the optimal
   lineup and score in the pitch-style QA section.
 - **Football Golf** — navigate holes individually, attach a verified prompt

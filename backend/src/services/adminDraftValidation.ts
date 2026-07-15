@@ -29,6 +29,8 @@ import {
 } from './adminGolfAuthoring.js';
 import { evaluateGolfRule } from './footballGolfGenerator.js';
 import { towerRuleSchema } from './towerRuleSchema.js';
+import { opsImageExists } from './opsMedia.js';
+import { opsMediaIdFromUrl } from './opsMediaValidation.js';
 
 const uuid = z.string().uuid();
 const issue = (
@@ -76,6 +78,30 @@ const golfShape = z.object({
 const draftShape = z.object({
   optimalLineup: z.array(z.object({ playerId: z.string().optional() }).passthrough()),
 }).passthrough();
+
+async function validateLmsCustomImages(
+  puzzleJson: unknown,
+  issues: AdminPuzzleValidationIssue[]
+): Promise<void> {
+  const puzzle = z.object({
+    questions: z.array(z.object({
+      type: z.string(),
+      presentation: z.object({ imageUrl: z.string().optional() }).passthrough().optional(),
+    }).passthrough()),
+  }).passthrough().safeParse(puzzleJson);
+  if (!puzzle.success) return;
+  await Promise.all(puzzle.data.questions.map(async (question, index) => {
+    if (question.type !== 'custom_image') return;
+    const mediaId = opsMediaIdFromUrl(question.presentation?.imageUrl);
+    if (!mediaId || !(await opsImageExists(mediaId))) {
+      issue(
+        issues,
+        `puzzleJson.questions.${index}.presentation.imageUrl`,
+        'Uploaded custom image no longer exists.'
+      );
+    }
+  }));
+}
 
 async function validateBingo(
   puzzleJson: unknown,
@@ -292,7 +318,8 @@ export async function validateAdminPuzzleDraft(
   const issues = [...report.issues];
   if (!report.ok) return { ok: false, issues };
 
-  if (modeId === 'football_bingo') await validateBingo(puzzleJson, issues);
+  if (modeId === 'last_man_standing') await validateLmsCustomImages(puzzleJson, issues);
+  else if (modeId === 'football_bingo') await validateBingo(puzzleJson, issues);
   else if (modeId === 'one_more') await validateOneMore(puzzleJson, answerJson, issues);
   else if (modeId === 'club_chain') await validateClubChain(puzzleJson, answerJson, issues);
   else if (modeId === 'football_golf') {

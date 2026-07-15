@@ -7,6 +7,7 @@ import {
 } from './plausibility.js';
 import { isHouseholdIndexed } from './recognition.js';
 import { MIN_NAME_PRESTIGE } from './fame.js';
+import { isConfiguredOpsMediaUrl } from '../opsMediaValidation.js';
 
 const PLACEHOLDER_RE = /placeholder|option [a-d]/i;
 const GK_TELEGRAPH_RE = /goalkeeper|three outfield/i;
@@ -47,7 +48,6 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
   if (PLACEHOLDER_RE.test(question.prompt)) return false;
   if (question.subPrompt && GK_TELEGRAPH_RE.test(question.subPrompt)) return false;
   if (question.subPrompt && TELEGRAPH_SUBPROMPT_RE.test(question.subPrompt)) return false;
-  if (!optionsHousehold(built, ctx)) return false;
 
   const optionCount = question.options.length;
   if (question.type === 'higher_lower') {
@@ -56,8 +56,20 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
     return false;
   }
 
-  const labels = new Set(question.options.map((o) => o.label));
+  if (question.options.some((option) => !option.label.trim())) return false;
+  const labels = new Set(question.options.map((o) => o.label.trim().toLocaleLowerCase()));
   if (labels.size !== optionCount) return false;
+  if (!question.options.some((option) => option.id === built.answer.correctOptionId)) return false;
+
+  if (question.type === 'custom_image') {
+    return (
+      question.presentation?.layout === 'image_header' &&
+      isConfiguredOpsMediaUrl(question.presentation.imageUrl) &&
+      (question.presentation.imageBlur === undefined || question.presentation.imageBlur === 0)
+    );
+  }
+
+  if (!optionsHousehold(built, ctx)) return false;
 
   if (!index) return question.type === 'higher_lower' || question.type === 'image_badge';
 

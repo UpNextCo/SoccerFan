@@ -35,6 +35,7 @@ enum LMSQuestionType: String, Codable {
     case oddOneOut = "odd_one_out"
     case whichClub = "which_club"
     case imageBadge = "image_badge"
+    case customImage = "custom_image"
 }
 
 struct LMSCareerClub: Equatable, Codable {

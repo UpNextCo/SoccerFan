@@ -3,7 +3,7 @@ import type {
   LMSBuildContext,
   LMSBuilderResult,
   LMSGeneratedPuzzle,
-  LMSQuestionType,
+  LMSGeneratedQuestionType,
 } from './types.js';
 import { LMS_DAILY_SLOTS } from './slots.js';
 import { buildCareerPath } from './builders/careerPath.js';
@@ -26,7 +26,7 @@ import {
 } from './freshness.js';
 
 const BUILDERS: Record<
-  LMSQuestionType,
+  LMSGeneratedQuestionType,
   (ctx: LMSBuildContext) => Promise<LMSBuilderResult | null>
 > = {
   higher_lower: buildHigherLower,

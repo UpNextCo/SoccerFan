@@ -16,6 +16,7 @@ import {
   startMonthGenerationWorker,
   stopMonthGenerationWorker,
 } from './services/adminMonthGeneration.js';
+import { getOpsImage } from './services/opsMedia.js';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -31,6 +32,26 @@ app.get('/health', (_req, res) => {
 // Public profile photos — no auth so clients can load via AsyncImage.
 app.get('/avatars/:userId', (req, res) => {
   void serveAvatar(req, res);
+});
+app.get('/media/:id', async (req, res) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(req.params.id)) {
+    res.status(404).end();
+    return;
+  }
+  try {
+    const media = await getOpsImage(req.params.id);
+    if (!media) {
+      res.status(404).end();
+      return;
+    }
+    res.setHeader('Content-Type', media.mimeType);
+    res.setHeader('Content-Length', String(media.bytes.length));
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(media.bytes);
+  } catch {
+    res.status(500).end();
+  }
 });
 
 app.use('/auth', authRouter);

@@ -216,6 +216,14 @@ export type PuzzleValidationReport = {
   issues: PuzzleValidationIssue[]
 }
 
+export type OpsMediaUpload = {
+  id: string
+  url: string
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp'
+  size: number
+  filename?: string
+}
+
 export type GolfRarity = 'common' | 'uncommon' | 'rare' | 'ultraRare'
 
 export type GolfTowerRule = {
@@ -473,6 +481,11 @@ export const api = {
     answerJson: unknown
   }) =>
     request<PuzzleValidationReport>('/validation/validate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  uploadLmsImage: (body: { fileBase64: string; mimeType: string; filename?: string }) =>
+    request<OpsMediaUpload>('/media', {
       method: 'POST',
       body: JSON.stringify(body),
     }),

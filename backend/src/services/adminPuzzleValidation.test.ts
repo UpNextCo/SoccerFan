@@ -131,6 +131,44 @@ test('validates a complete aligned LMS payload', () => {
   assert.ok(report.issues.some((entry) => entry.path === 'puzzleJson.questions.1.options'));
 });
 
+test('validates authored LMS custom images and aligned text options', () => {
+  const questions = Array.from({ length: 10 }, (_, index) => {
+    const questionId = `custom-q-${index + 1}`;
+    const custom = index === 2;
+    return {
+      id: questionId,
+      type: custom ? 'custom_image' : 'odd_one_out',
+      slot: index + 1,
+      prompt: `Question ${index + 1}`,
+      options: ['Alpha', 'Bravo', 'Charlie', 'Delta'].map((label, optionIndex) => ({
+        id: `${questionId}-o${optionIndex + 1}`,
+        label,
+      })),
+      ...(custom
+        ? {
+            presentation: {
+              layout: 'image_header',
+              imageUrl: 'https://ballknowledge-production.up.railway.app/media/00000000-0000-4000-8000-000000000001',
+              imageBlur: 0,
+            },
+          }
+        : {}),
+    };
+  });
+  const answer = {
+    questions: questions.map((question) => ({
+      questionId: question.id,
+      correctOptionId: question.options[0]!.id,
+    })),
+  };
+  assert.equal(validatePuzzleReport('last_man_standing', { questions }, answer).ok, true);
+  questions[2]!.presentation!.imageBlur = 4;
+  assert.equal(validatePuzzleReport('last_man_standing', { questions }, answer).ok, false);
+  questions[2]!.presentation!.imageBlur = 0;
+  questions[2]!.options[1]!.label = ' Alpha ';
+  assert.equal(validatePuzzleReport('last_man_standing', { questions }, answer).ok, false);
+});
+
 test('requires One More threshold sides and aligned hidden values', () => {
   const rounds = Array.from({ length: 10 }, (_, index) => ({
     options: [

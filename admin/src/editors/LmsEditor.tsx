@@ -55,6 +55,7 @@ const QUESTION_TYPES = [
   'odd_one_out',
   'which_club',
   'image_badge',
+  'custom_image',
 ] as const
 type QuestionType = (typeof QUESTION_TYPES)[number]
 
@@ -64,6 +65,7 @@ const FRIENDLY_TYPES: Record<QuestionType, string> = {
   odd_one_out: 'Odd one out',
   which_club: 'Which club?',
   image_badge: 'Image badge',
+  custom_image: 'Custom image',
 }
 
 function isQuestionType(value: string): value is QuestionType {
@@ -89,6 +91,40 @@ function isClubQuestion(q: Q): boolean {
   return sub.includes('club')
 }
 
+async function prepareImageUpload(file: File): Promise<{ fileBase64: string; mimeType: string }> {
+  const bitmap = await createImageBitmap(file)
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height))
+  let width = Math.max(1, Math.round(bitmap.width * scale))
+  let height = Math.max(1, Math.round(bitmap.height * scale))
+  let quality = 0.86
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('This browser cannot prepare images.')
+    context.drawImage(bitmap, 0, 0, width, height)
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
+    if (!blob) throw new Error('Could not prepare the image.')
+    if (blob.size <= 2.5 * 1024 * 1024) {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(new Error('Could not read the prepared image.'))
+        reader.readAsDataURL(blob)
+      })
+      bitmap.close()
+      return { fileBase64: dataUrl.split(',')[1] ?? '', mimeType: 'image/jpeg' }
+    }
+    quality = Math.max(0.65, quality - 0.06)
+    width = Math.max(1, Math.round(width * 0.85))
+    height = Math.max(1, Math.round(height * 0.85))
+  }
+  bitmap.close()
+  throw new Error('The image is still too large after resizing.')
+}
+
 function sortedQuestions(p: Puzzle): Q[] {
   return [...(p.questions ?? [])].sort((x, y) => x.slot - y.slot)
 }
@@ -108,6 +144,7 @@ export function LmsEditor({
   const a = (answer as Answer | null) ?? EMPTY_LMS_ANSWER
   const questions = sortedQuestions(p)
   const [activeSlot, setActiveSlot] = useState(() => questions[0]?.slot ?? 1)
+  const [imageUpload, setImageUpload] = useState<{ slot?: number; state: 'idle' | 'preparing' | 'uploading' | 'error'; error?: string }>({ state: 'idle' })
   const activeQuestion = questions.find((question) => question.slot === activeSlot) ?? questions[0]
 
   // Keep latest puzzle/answer for async pick handlers (avoid stale closures wiping media).
@@ -134,11 +171,90 @@ export function LmsEditor({
       odd_one_out: 'grid',
       which_club: 'grid',
       image_badge: 'image_header',
+      custom_image: 'image_header',
+    }
+    if (type === 'custom_image') {
+      const { p: curP, a: curA } = latestRef.current
+      const options = Array.from({ length: 4 }, (_, index) => ({
+        id: makeOptionId(question.id, `custom-${index + 1}`),
+        label: `Option ${index + 1}`,
+      }))
+      const nextQuestions = sortedQuestions(curP).map((item) =>
+        item.id === question.id
+          ? {
+              ...item,
+              type,
+              options,
+              presentation: {
+                layout: 'image_header',
+                imageUrl: item.type === 'custom_image' ? item.presentation?.imageUrl : undefined,
+                imageBlur: 0,
+              },
+            }
+          : item
+      )
+      const existing = curA.questions.find((item) => item.questionId === question.id)
+      const nextRow: Ans = {
+        ...(existing ?? { questionId: question.id }),
+        questionId: question.id,
+        correctOptionId: options[0]!.id,
+        reveal: options[0]!.label,
+      }
+      const nextAnswers = existing
+        ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+        : [...curA.questions, nextRow]
+      commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+      return
     }
     updateQuestion(question.slot, {
       type,
       presentation: { ...(question.presentation ?? {}), layout: defaultLayout[type] },
     })
+  }
+
+  function updateCustomOption(question: Q, optionId: string, label: string) {
+    const { p: curP, a: curA } = latestRef.current
+    const previousLabel = question.options.find((option) => option.id === optionId)?.label
+    const nextQuestions = sortedQuestions(curP).map((item) =>
+      item.id === question.id
+        ? { ...item, options: item.options.map((option) => option.id === optionId ? { ...option, label } : option) }
+        : item
+    )
+    const nextAnswers = curA.questions.map((answerRow) =>
+      answerRow.questionId === question.id &&
+      answerRow.correctOptionId === optionId &&
+      (!answerRow.reveal || answerRow.reveal === previousLabel)
+        ? { ...answerRow, reveal: label }
+        : answerRow
+    )
+    commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+  }
+
+  async function uploadCustomImage(question: Q, file: File) {
+    setImageUpload({ slot: question.slot, state: 'preparing' })
+    try {
+      const prepared = await prepareImageUpload(file)
+      setImageUpload({ slot: question.slot, state: 'uploading' })
+      const uploaded = await api.uploadLmsImage({
+        ...prepared,
+        filename: file.name,
+      })
+      updateQuestion(question.slot, {
+        presentation: {
+          ...(latestRef.current.p.questions.find((item) => item.id === question.id)?.presentation ?? {}),
+          layout: 'image_header',
+          imageUrl: uploaded.url,
+          imageBlur: 0,
+        },
+      })
+      setImageUpload({ slot: question.slot, state: 'idle' })
+    } catch (error) {
+      setImageUpload({
+        slot: question.slot,
+        state: 'error',
+        error: error instanceof Error ? error.message : 'Image upload failed.',
+      })
+    }
   }
 
   function addOption(question: Q) {
@@ -491,6 +607,48 @@ export function LmsEditor({
               </div>
             )}
 
+            {q.type === 'custom_image' && (
+              <div className="custom-image-panel">
+                <div className="muted tiny">Question image</div>
+                {q.presentation?.imageUrl ? (
+                  <img src={q.presentation.imageUrl} alt="Question preview" className="custom-image-preview" />
+                ) : (
+                  <div className="custom-image-empty">Choose a kit, stadium, or football photo.</div>
+                )}
+                <div className="editor-icon-actions">
+                  <label className={`ghost tiny-btn${locked ? ' disabled' : ''}`}>
+                    {q.presentation?.imageUrl ? 'Replace image' : 'Choose image'}
+                    <input
+                      className="visually-hidden"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={locked || (imageUpload.slot === q.slot && imageUpload.state !== 'idle' && imageUpload.state !== 'error')}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0]
+                        if (file) void uploadCustomImage(q, file)
+                        event.target.value = ''
+                      }}
+                    />
+                  </label>
+                  {q.presentation?.imageUrl && (
+                    <button
+                      type="button"
+                      className="ghost tiny-btn"
+                      disabled={locked}
+                      onClick={() => updateQuestion(q.slot, {
+                        presentation: { ...(q.presentation ?? {}), imageUrl: undefined, imageBlur: 0 },
+                      })}
+                    >
+                      Clear image
+                    </button>
+                  )}
+                </div>
+                {imageUpload.slot === q.slot && imageUpload.state === 'preparing' && <p className="muted tiny">Preparing image…</p>}
+                {imageUpload.slot === q.slot && imageUpload.state === 'uploading' && <p className="muted tiny">Uploading image…</p>}
+                {imageUpload.slot === q.slot && imageUpload.state === 'error' && <p className="error tiny">{imageUpload.error}</p>}
+              </div>
+            )}
+
             {Array.isArray(q.presentation?.careerClubs) && q.presentation!.careerClubs!.length > 0 && (
               <fieldset disabled={locked} className="options">
                 <legend>Career clubs</legend>
@@ -525,7 +683,16 @@ export function LmsEditor({
                       onChange={() => setCorrectOption(q, o.id)}
                     />
                   </div>
-                  {clubMode ? (
+                  {q.type === 'custom_image' ? (
+                    <label className="field custom-option-input">
+                      Answer {q.options.indexOf(o) + 1}
+                      <input
+                        value={o.label}
+                        disabled={locked}
+                        onChange={(event) => updateCustomOption(q, o.id, event.target.value)}
+                      />
+                    </label>
+                  ) : clubMode ? (
                     <EntityPicker
                       key={`team-${o.id}-${o.teamLogoUrl ?? ''}-${o.label}`}
                       kind="team"
@@ -545,7 +712,7 @@ export function LmsEditor({
                       onPickPlayer={(hit) => pickPlayer(q, o, hit)}
                     />
                   )}
-                  <button
+                  {q.type !== 'custom_image' && <button
                     type="button"
                     className="danger tiny-btn lms-remove-option"
                     disabled={locked || q.options.length <= 2}
@@ -553,10 +720,12 @@ export function LmsEditor({
                     aria-label={`Remove ${o.label}`}
                   >
                     Remove
-                  </button>
+                  </button>}
                 </div>
               ))}
-              <button type="button" className="ghost" disabled={locked} onClick={() => addOption(q)}>+ Add option</button>
+              {q.type !== 'custom_image' && (
+                <button type="button" className="ghost" disabled={locked} onClick={() => addOption(q)}>+ Add option</button>
+              )}
             </fieldset>
 
             <label className="field">

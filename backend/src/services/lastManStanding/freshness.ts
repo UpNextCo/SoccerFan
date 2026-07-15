@@ -3,6 +3,7 @@ import type {
   LMSQuestionAnswer,
   LMSQuestionPublic,
   LMSQuestionType,
+  LMSGeneratedQuestionType,
   LMSGenerationMetadata,
   LastManStandingAnswer,
   LastManStandingPuzzle,
@@ -19,7 +20,7 @@ export const LMS_BROAD_RESOURCE_LOOKBACK_DAYS = (() => {
     : 3;
 })();
 
-export const LMS_COOLDOWN_MINIMUM_BY_TYPE: Record<LMSQuestionType, number> = {
+export const LMS_COOLDOWN_MINIMUM_BY_TYPE: Record<LMSGeneratedQuestionType, number> = {
   higher_lower: 135,
   career_path: 135,
   odd_one_out: 90,
@@ -49,6 +50,7 @@ export interface LMSSemanticSignaturePayload {
   optionLabels: string[];
   correctLabel: string;
   careerClubPath: string[];
+  imageIdentity?: string;
 }
 
 /** Canonical content facts, deliberately excluding date, slot, IDs, option order and media enrichment. */
@@ -70,6 +72,9 @@ export function lmsSemanticSignaturePayload(
     correctLabel: normalizeSemanticText(correct.label),
     careerClubPath:
       question.presentation?.careerClubs?.map((club) => normalizeSemanticText(club.name)) ?? [],
+    ...(question.type === 'custom_image'
+      ? { imageIdentity: (question.presentation?.imageUrl ?? '').trim().toLowerCase() }
+      : {}),
   };
 }
 
@@ -137,6 +142,8 @@ export function extractLMSUsedKeys(
         if (correct) keys.push(clubUsedKey(correct.label));
         break;
       }
+      case 'custom_image':
+        break;
       case 'career_path': {
         const playerId = playerIdFromOption(question.id, questionAnswer.correctOptionId);
         if (playerId) keys.push(playerUsedKey(playerId));
@@ -193,7 +200,7 @@ export interface LMSBankSignatureGroup {
 }
 
 export interface LMSBankInventorySource {
-  type: LMSQuestionType;
+  type: LMSGeneratedQuestionType;
   status: string;
   contentSignature: string | null;
   question: LMSQuestionPublic;
@@ -202,11 +209,11 @@ export interface LMSBankInventorySource {
 
 export function summarizeLMSBankInventory(rows: LMSBankInventorySource[]): {
   knownSignatures: Set<string>;
-  activeDistinctByType: Record<LMSQuestionType, number>;
+  activeDistinctByType: Record<LMSGeneratedQuestionType, number>;
 } {
   const knownSignatures = new Set<string>();
-  const activeByType = new Map<LMSQuestionType, Set<string>>();
-  for (const type of Object.keys(LMS_COOLDOWN_MINIMUM_BY_TYPE) as LMSQuestionType[]) {
+  const activeByType = new Map<LMSGeneratedQuestionType, Set<string>>();
+  for (const type of Object.keys(LMS_COOLDOWN_MINIMUM_BY_TYPE) as LMSGeneratedQuestionType[]) {
     activeByType.set(type, new Set());
   }
   for (const row of rows) {
@@ -221,7 +228,7 @@ export function summarizeLMSBankInventory(rows: LMSBankInventorySource[]): {
     knownSignatures,
     activeDistinctByType: Object.fromEntries(
       [...activeByType].map(([type, signatures]) => [type, signatures.size])
-    ) as Record<LMSQuestionType, number>,
+    ) as Record<LMSGeneratedQuestionType, number>,
   };
 }
 

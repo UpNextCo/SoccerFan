@@ -168,7 +168,7 @@ export interface LastManStandingPresentationPublic {
 
 export interface LastManStandingQuestionPublic {
   id: string;
-  type: 'higher_lower' | 'career_path' | 'odd_one_out' | 'which_club' | 'image_badge';
+  type: 'higher_lower' | 'career_path' | 'odd_one_out' | 'which_club' | 'image_badge' | 'custom_image';
   slot: number;
   signature?: boolean;
   prompt: string;

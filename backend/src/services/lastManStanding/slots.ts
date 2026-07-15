@@ -1,8 +1,8 @@
-import type { LMSQuestionType } from './types.js';
+import type { LMSGeneratedQuestionType } from './types.js';
 
 export interface LMSSlotDefinition {
   slot: number;
-  type: LMSQuestionType;
+  type: LMSGeneratedQuestionType;
   signature?: boolean;
 }
 

@@ -9,6 +9,7 @@ import {
   lmsContentSignature,
   lmsSignatureUsedKey,
   summarizeLMSBankInventory,
+  LMS_COOLDOWN_MINIMUM_BY_TYPE,
 } from './freshness.js';
 import type {
   LMSQuestionAnswer,
@@ -16,6 +17,7 @@ import type {
   LastManStandingAnswer,
   LastManStandingPuzzle,
 } from './types.js';
+import { validateLMSQuestion } from './validate.js';
 
 function careerCard(
   id: string,
@@ -93,6 +95,97 @@ test('semantic signature ignores media URL, blur and layout enrichment', () => {
     lmsContentSignature(first.question, first.answer),
     lmsContentSignature(second.question, second.answer)
   );
+});
+
+test('custom image signature includes image identity', () => {
+  const make = (imageUrl: string): { question: LMSQuestionPublic; answer: LMSQuestionAnswer } => {
+    const question: LMSQuestionPublic = {
+      id: 'custom',
+      type: 'custom_image',
+      slot: 2,
+      prompt: 'Which ground is this?',
+      options: ['Anfield', 'Old Trafford', 'Villa Park', 'Goodison Park'].map((label, index) => ({
+        id: `custom-${index}`,
+        label,
+      })),
+      presentation: { layout: 'image_header', imageUrl, imageBlur: 0 },
+    };
+    return {
+      question,
+      answer: { questionId: question.id, correctOptionId: question.options[0]!.id },
+    };
+  };
+  const first = make('https://ballknowledge-production.up.railway.app/media/00000000-0000-4000-8000-000000000001');
+  const second = make('https://ballknowledge-production.up.railway.app/media/00000000-0000-4000-8000-000000000002');
+  assert.notEqual(
+    lmsContentSignature(first.question, first.answer),
+    lmsContentSignature(second.question, second.answer)
+  );
+});
+
+test('custom image validation accepts text-only options without a player index', () => {
+  const question: LMSQuestionPublic = {
+    id: 'custom-validation',
+    type: 'custom_image',
+    slot: 4,
+    prompt: 'Which stadium is shown?',
+    options: ['Anfield', 'Old Trafford', 'Villa Park', 'Goodison Park'].map((label, index) => ({
+      id: `custom-validation-${index}`,
+      label,
+    })),
+    presentation: {
+      layout: 'image_header',
+      imageUrl: 'https://ballknowledge-production.up.railway.app/media/00000000-0000-4000-8000-000000000001',
+      imageBlur: 0,
+    },
+  };
+  const answer = { questionId: question.id, correctOptionId: question.options[0]!.id };
+  assert.equal(validateLMSQuestion(
+    { question, answer, repeatKey: 'custom' },
+    {
+      date: '2026-07-15',
+      slot: 4,
+      signature: false,
+      seed: 'test',
+      usedKeys: new Set(),
+      difficulty: { tier: 'medium', hlMinGap: 0.1, imageBlur: 7 },
+    }
+  ), true);
+  assert.equal(validateLMSQuestion(
+    {
+      question: {
+        ...question,
+        options: question.options.map((option, index) => index === 1 ? { ...option, label: ' anfield ' } : option),
+      },
+      answer,
+      repeatKey: 'custom',
+    },
+    {
+      date: '2026-07-15',
+      slot: 4,
+      signature: false,
+      seed: 'test',
+      usedKeys: new Set(),
+      difficulty: { tier: 'medium', hlMinGap: 0.1, imageBlur: 7 },
+    }
+  ), false);
+});
+
+test('image badge signature remains invariant across media and blur changes', () => {
+  const question: LMSQuestionPublic = {
+    id: 'badge',
+    type: 'image_badge',
+    slot: 2,
+    prompt: 'Which badge is this?',
+    options: ['A', 'B', 'C', 'D'].map((label) => ({ id: `badge-${label}`, label })),
+    presentation: { layout: 'image_header', imageUrl: 'https://one.example/a.png', imageBlur: 4 },
+  };
+  const answer = { questionId: question.id, correctOptionId: question.options[0]!.id };
+  const changed: LMSQuestionPublic = {
+    ...question,
+    presentation: { layout: 'image_header', imageUrl: 'https://two.example/b.png', imageBlur: 20 },
+  };
+  assert.equal(lmsContentSignature(question, answer), lmsContentSignature(changed, answer));
 });
 
 test('exact signatures use the long window while broad resource keys use the short window', () => {
@@ -229,6 +322,7 @@ test('bank inventory counts distinct current non-null signatures only', () => {
   ]);
   assert.equal(inventory.activeDistinctByType.career_path, 1);
   assert.equal(inventory.knownSignatures.size, 1);
+  assert.equal('custom_image' in LMS_COOLDOWN_MINIMUM_BY_TYPE, false);
 });
 
 test('generation metadata carries deduplicated bank IDs without updating usage', () => {

@@ -76,6 +76,7 @@ export async function enrichAdminLMSPuzzle(
 
   const playerIds = new Set<string>();
   for (const q of puzzle.questions) {
+    if (q.type === 'custom_image') continue;
     if (isClubQuestion(q)) continue;
     for (const o of q.options ?? []) {
       const pid = playerIdFromOption(q.id, o.id);
@@ -104,6 +105,7 @@ export async function enrichAdminLMSPuzzle(
 
   for (const q of puzzle.questions) {
     const ans = answer.questions?.find((x) => x.questionId === q.id);
+    if (q.type === 'custom_image') continue;
 
     if (isClubQuestion(q)) {
       q.options = await Promise.all(

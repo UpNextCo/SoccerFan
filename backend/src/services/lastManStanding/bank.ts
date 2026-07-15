@@ -8,7 +8,7 @@ import type {
   LMSBuilderResult,
   LMSQuestionAnswer,
   LMSQuestionPublic,
-  LMSQuestionType,
+  LMSGeneratedQuestionType,
 } from './types.js';
 import type { LMSDifficulty, LMSTier } from './difficulty.js';
 import {
@@ -85,7 +85,7 @@ function acceptableTiers(target: LMSTier): string[] {
 }
 
 export async function drawLMSFromBank(args: {
-  type: LMSQuestionType;
+  type: LMSGeneratedQuestionType;
   difficulty: LMSDifficulty;
   usedKeys: Set<string>;
   date: string;

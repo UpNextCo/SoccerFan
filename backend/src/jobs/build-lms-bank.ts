@@ -33,7 +33,7 @@ import type {
   LMSBuilderResult,
   LMSQuestionAnswer,
   LMSQuestionPublic,
-  LMSQuestionType,
+  LMSGeneratedQuestionType,
 } from '../services/lastManStanding/types.js';
 import { validateLMSQuestion } from '../services/lastManStanding/validate.js';
 import { backfillLMSBankContentSignatures } from '../services/lastManStanding/bank.js';
@@ -45,7 +45,7 @@ import {
 } from '../services/lastManStanding/freshness.js';
 
 const BUILDERS: Record<
-  LMSQuestionType,
+  LMSGeneratedQuestionType,
   (ctx: LMSBuildContext) => Promise<LMSBuilderResult | null>
 > = {
   higher_lower: buildHigherLower,
@@ -54,6 +54,10 @@ const BUILDERS: Record<
   which_club: buildWhichClub,
   image_badge: buildImageBadge,
 };
+
+function isGeneratedQuestionType(type: LMSQuestionPublic['type']): type is LMSGeneratedQuestionType {
+  return type in BUILDERS;
+}
 
 function normKey(s: string): string {
   return s
@@ -146,7 +150,7 @@ async function loadBankInventory() {
     SELECT type, status, content_signature, question_json, answer_json
     FROM lms_bank
   `)) as unknown as Array<{
-    type: LMSQuestionType;
+    type: LMSGeneratedQuestionType;
     status: string;
     content_signature: string | null;
     question_json: LMSQuestionPublic;
@@ -175,12 +179,12 @@ function stringArg(args: string[], name: string): string | null {
   return index >= 0 ? args[index + 1] ?? null : null;
 }
 
-function printTypeInventory(counts: Record<LMSQuestionType, number>): void {
+function printTypeInventory(counts: Record<LMSGeneratedQuestionType, number>): void {
   console.log(
     `Distinct signed inventory by type (45-day exact-repeat minimum; broad resources cool down ` +
     `${process.env.LMS_BROAD_COOLDOWN_DAYS ?? 3} days):`
   );
-  for (const type of Object.keys(LMS_COOLDOWN_MINIMUM_BY_TYPE) as LMSQuestionType[]) {
+  for (const type of Object.keys(LMS_COOLDOWN_MINIMUM_BY_TYPE) as LMSGeneratedQuestionType[]) {
     const minimum = LMS_COOLDOWN_MINIMUM_BY_TYPE[type];
     const count = counts[type];
     console.log(`  ${type.padEnd(14)} ${String(count).padStart(4)} / ${minimum}`);
@@ -201,7 +205,7 @@ async function main() {
   );
   const newArg = numericArg(args, '--new') ?? (positional ? Number(positional) : null);
   const totalArg = numericArg(args, '--total');
-  const typeArg = stringArg(args, '--type') as LMSQuestionType | null;
+  const typeArg = stringArg(args, '--type') as LMSGeneratedQuestionType | null;
   if (typeArg && !(typeArg in BUILDERS)) {
     throw new Error(`Unknown LMS type: ${typeArg}`);
   }
@@ -224,7 +228,7 @@ async function main() {
   const typeCounts = inventory.activeDistinctByType;
   const activeTotal = Object.values(typeCounts).reduce((sum, count) => sum + count, 0);
   const requestedTotal = Math.max(0, totalArg ?? (newArg == null ? LMS_COOLDOWN_MINIMUM_TOTAL : 0));
-  const inventoryDeficit = (Object.keys(typeCounts) as LMSQuestionType[]).reduce(
+  const inventoryDeficit = (Object.keys(typeCounts) as LMSGeneratedQuestionType[]).reduce(
     (sum, type) => sum + Math.max(0, LMS_COOLDOWN_MINIMUM_BY_TYPE[type] - typeCounts[type]),
     0
   );
@@ -267,7 +271,7 @@ async function main() {
   // Round-robin slots so the bank covers all types/tiers.
   while (kept < target && batch < Math.max(20, target * 8)) {
     batch += 1;
-    const hasInventoryDeficit = (Object.keys(typeCounts) as LMSQuestionType[])
+    const hasInventoryDeficit = (Object.keys(typeCounts) as LMSGeneratedQuestionType[])
       .some((type) => typeCounts[type] < LMS_COOLDOWN_MINIMUM_BY_TYPE[type]);
     let slotDef = eligibleSlots[slotCursor % eligibleSlots.length]!;
     for (let scan = 0; scan < eligibleSlots.length; scan += 1) {
@@ -344,6 +348,7 @@ async function main() {
     const byId = new Map(verdicts.map((v) => [v.id, v]));
     for (const c of candidates) {
       if (kept >= target) break;
+      if (!isGeneratedQuestionType(c.built.question.type)) continue;
       const v = byId.get(c.localId);
       if (!v) continue;
       if (!v.keep) {

@@ -31,11 +31,13 @@ import {
 import { adminQuestionEngineRouter } from './adminQuestionEngine.js';
 import { adminPuzzleValidationRouter } from './adminPuzzleValidation.js';
 import { adminMonthGenerationRouter } from './adminMonthGeneration.js';
+import { adminMediaRouter } from './adminMedia.js';
 
 export const adminRouter = Router();
 adminRouter.use('/question-engine', adminQuestionEngineRouter);
 adminRouter.use('/validation', adminPuzzleValidationRouter);
 adminRouter.use('/month-generation', adminMonthGenerationRouter);
+adminRouter.use('/media', adminMediaRouter);
 
 adminRouter.post('/login', (req, res) => {
   const body = z

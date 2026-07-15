@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { towerRuleSchema } from './towerRuleSchema.js';
 import { golfRuleSignature } from './golfRuleSignature.js';
+import { isConfiguredOpsMediaUrl } from './opsMediaValidation.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 export interface AdminPuzzleValidationIssue {
@@ -24,7 +25,14 @@ const issue = (
 ) => issues.push({ severity, path, message });
 const unique = (values: string[]) => new Set(values).size === values.length;
 
-const lmsTypes = ['higher_lower', 'career_path', 'odd_one_out', 'which_club', 'image_badge'] as const;
+const lmsTypes = [
+  'higher_lower',
+  'career_path',
+  'odd_one_out',
+  'which_club',
+  'image_badge',
+  'custom_image',
+] as const;
 const lmsOption = z.object({ id, label: text }).passthrough();
 const lmsQuestion = z.object({
   id,
@@ -32,6 +40,11 @@ const lmsQuestion = z.object({
   slot: z.number().int().min(1).max(10),
   prompt: text,
   options: z.array(lmsOption),
+  presentation: z.object({
+    layout: z.string().optional(),
+    imageUrl: z.string().optional(),
+    imageBlur: z.number().optional(),
+  }).passthrough().optional(),
 }).passthrough();
 const lmsPuzzle = z.object({ questions: z.array(lmsQuestion).length(10) }).passthrough();
 const lmsAnswer = z.object({
@@ -186,6 +199,20 @@ function validateLms(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzz
     const count = question.type === 'higher_lower' ? 2 : 4;
     if (question.options.length !== count) issue(issues, `puzzleJson.questions.${index}.options`, `${question.type} requires exactly ${count} options.`);
     if (!unique(question.options.map((option) => option.id))) issue(issues, `puzzleJson.questions.${index}.options`, 'Option ids must be unique.');
+    if (!unique(question.options.map((option) => option.label.trim().toLocaleLowerCase()))) {
+      issue(issues, `puzzleJson.questions.${index}.options`, 'Option text must be unique.');
+    }
+    if (question.type === 'custom_image') {
+      if (question.presentation?.layout !== 'image_header') {
+        issue(issues, `puzzleJson.questions.${index}.presentation.layout`, 'Custom image questions require the image header layout.');
+      }
+      if (!isConfiguredOpsMediaUrl(question.presentation?.imageUrl)) {
+        issue(issues, `puzzleJson.questions.${index}.presentation.imageUrl`, 'Upload an image before saving this question.');
+      }
+      if (question.presentation?.imageBlur !== undefined && question.presentation.imageBlur !== 0) {
+        issue(issues, `puzzleJson.questions.${index}.presentation.imageBlur`, 'Custom images must be unblurred.');
+      }
+    }
     const answerEntry = answer.questions[index];
     if (!answerEntry || answerEntry.questionId !== question.id) {
       issue(issues, `answerJson.questions.${index}.questionId`, 'Answers must be complete and aligned with puzzle question order.');

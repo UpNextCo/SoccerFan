@@ -7,7 +7,7 @@ import {
   lmsContentSignature,
 } from './freshness.js';
 import type {
-  LMSQuestionType,
+  LMSGeneratedQuestionType,
   LastManStandingAnswer,
   LastManStandingPuzzle,
 } from './types.js';
@@ -25,10 +25,10 @@ interface TypeAudit {
 export interface LMSFreshnessAudit {
   lookbackDays: number;
   cutoffDate: string;
-  byType: Record<LMSQuestionType, TypeAudit>;
+  byType: Record<LMSGeneratedQuestionType, TypeAudit>;
 }
 
-function emptyCounts(): Record<LMSQuestionType, number> {
+function emptyCounts(): Record<LMSGeneratedQuestionType, number> {
   return {
     higher_lower: 0,
     career_path: 0,
@@ -64,21 +64,21 @@ export async function auditLMSFreshness(
   ]);
 
   const active = emptyCounts();
-  const activeSignatures = new Map<LMSQuestionType, Set<string>>();
-  for (const type of Object.keys(active) as LMSQuestionType[]) {
+  const activeSignatures = new Map<LMSGeneratedQuestionType, Set<string>>();
+  for (const type of Object.keys(active) as LMSGeneratedQuestionType[]) {
     activeSignatures.set(type, new Set());
   }
   for (const row of bankRows) {
     if (row.type in active && row.contentSignature) {
-      activeSignatures.get(row.type as LMSQuestionType)!.add(row.contentSignature);
+      activeSignatures.get(row.type as LMSGeneratedQuestionType)!.add(row.contentSignature);
     }
   }
   for (const [type, values] of activeSignatures) {
     active[type] = values.size;
   }
 
-  const signatures = new Map<LMSQuestionType, Map<string, number>>();
-  for (const type of Object.keys(active) as LMSQuestionType[]) signatures.set(type, new Map());
+  const signatures = new Map<LMSGeneratedQuestionType, Map<string, number>>();
+  for (const type of Object.keys(active) as LMSGeneratedQuestionType[]) signatures.set(type, new Map());
   for (const row of dailyRows) {
     const puzzle = row.puzzleJson as LastManStandingPuzzle;
     const answer = row.answerJson as LastManStandingAnswer;
@@ -89,13 +89,14 @@ export async function auditLMSFreshness(
       if (!questionAnswer) continue;
       const signature = lmsContentSignature(question, questionAnswer);
       if (!signature) continue;
-      const typeSignatures = signatures.get(question.type)!;
+      const typeSignatures = signatures.get(question.type as LMSGeneratedQuestionType);
+      if (!typeSignatures) continue;
       typeSignatures.set(signature, (typeSignatures.get(signature) ?? 0) + 1);
     }
   }
 
-  const byType = {} as Record<LMSQuestionType, TypeAudit>;
-  for (const type of Object.keys(active) as LMSQuestionType[]) {
+  const byType = {} as Record<LMSGeneratedQuestionType, TypeAudit>;
+  for (const type of Object.keys(active) as LMSGeneratedQuestionType[]) {
     const counts = [...signatures.get(type)!.values()];
     const minimum = LMS_COOLDOWN_MINIMUM_BY_TYPE[type];
     byType[type] = {

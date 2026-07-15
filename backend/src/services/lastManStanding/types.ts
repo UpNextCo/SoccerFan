@@ -3,7 +3,10 @@ export type LMSQuestionType =
   | 'career_path'
   | 'odd_one_out'
   | 'which_club'
-  | 'image_badge';
+  | 'image_badge'
+  | 'custom_image';
+
+export type LMSGeneratedQuestionType = Exclude<LMSQuestionType, 'custom_image'>;
 
 export interface LMSOptionPublic {
   id: string;

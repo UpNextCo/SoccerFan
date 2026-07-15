@@ -18,7 +18,7 @@ struct LastManStandingQuestionCard: View {
             let sub = question.subPrompt?.lowercased() ?? ""
             return sub.contains("clubs")
                 || (sub.contains("club") && !sub.contains("never played for"))
-        default:
+        case .higherLower, .careerPath, .customImage:
             return false
         }
     }
@@ -40,6 +40,11 @@ struct LastManStandingQuestionCard: View {
         case .imageBadge:
             VStack(spacing: Layout.blockSpacing) {
                 imageHeader
+                textClubOptionGrid
+            }
+        case .customImage:
+            VStack(spacing: Layout.blockSpacing) {
+                customImageHeader
                 textClubOptionGrid
             }
         case .oddOneOut, .whichClub:
@@ -186,6 +191,27 @@ struct LastManStandingQuestionCard: View {
                 }
             }
             .frame(maxWidth: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var customImageHeader: some View {
+        if let urlString = question.presentation?.imageUrl, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 240)
+                default:
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(BKTheme.card.opacity(0.5))
+                        .frame(height: 160)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 
