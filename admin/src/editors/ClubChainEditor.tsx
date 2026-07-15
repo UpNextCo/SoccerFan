@@ -247,15 +247,22 @@ export function ClubChainEditor({
             />
           </label>
           <p className="muted">
-            Difficulty {p.difficulty ?? '?'} · path length {p.shortestPathLength ?? '?'}
+            Difficulty {p.difficulty ?? '?'} · fastest path{' '}
+            {p.shortestPathLength == null
+              ? '?'
+              : Math.max(0, p.shortestPathLength - 1)}
           </p>
         </div>
       </div>
 
       <section className="q-card">
         <header>
-          <strong>Start → path → target</strong>
-          <span className="muted tiny">{Math.max(0, pathIds.length - 1)} links</span>
+          <strong>Best solution</strong>
+          <span className="muted tiny">
+            {Math.max(0, pathIds.length - 2)} player
+            {Math.max(0, pathIds.length - 2) === 1 ? '' : 's'} to enter ·{' '}
+            {Math.max(0, pathIds.length - 1)} connections
+          </span>
         </header>
         {warnings.map((warning) => (
           <p className="warning-box" key={warning}>{warning}</p>
@@ -269,7 +276,7 @@ export function ClubChainEditor({
                 {i > 0 && <span className="chain-arrow" aria-hidden="true">→</span>}
                 <div className={`chain-node${i === 0 || i === pathIds.length - 1 ? ' endpoint' : ''}`}>
                   <div className="card-heading">
-                    <strong>{i === 0 ? 'Start' : i === pathIds.length - 1 ? 'Target' : `Step ${i}`}</strong>
+                    <strong>{i === 0 ? 'Start' : i === pathIds.length - 1 ? 'Target' : `Player ${i}`}</strong>
                     {i > 0 && i < pathIds.length - 1 && (
                       <div className="button-row">
                         <button type="button" className="ghost tiny-btn" disabled={locked || i === 1} onClick={() => movePathStep(i, -1)}>←</button>
@@ -292,14 +299,13 @@ export function ClubChainEditor({
                     placeholder={i === 0 || i === pathIds.length - 1 ? undefined : 'Search path player…'}
                     onPickPlayer={(hit) => pickPathPlayer(i, hit)}
                   />
-                  {id && <span className="muted tiny">{id}</span>}
                 </div>
               </div>
             ))}
           </div>
         )}
         <div className="editor-toolbar">
-          <span className="muted tiny">This checks local JSON consistency only, not database path validity.</span>
+          <span className="muted tiny">Run dashboard checks before approving after changing this path.</span>
           <button
             type="button"
             className="ghost"

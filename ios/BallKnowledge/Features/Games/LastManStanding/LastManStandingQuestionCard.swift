@@ -24,7 +24,11 @@ struct LastManStandingQuestionCard: View {
     }
 
     var body: some View {
-        VStack(spacing: Layout.sectionSpacing) {
+        VStack(
+            spacing: question.type == .imageBadge || question.type == .customImage
+                ? 20
+                : Layout.sectionSpacing
+        ) {
             promptHeader
             questionBody
         }
@@ -38,12 +42,12 @@ struct LastManStandingQuestionCard: View {
         case .careerPath:
             careerPathBody
         case .imageBadge:
-            VStack(spacing: Layout.blockSpacing) {
+            VStack(spacing: 24) {
                 imageHeader
                 textClubOptionGrid
             }
         case .customImage:
-            VStack(spacing: 12) {
+            VStack(spacing: 22) {
                 customImageHeader
                 customImageOptionGrid
             }
@@ -203,15 +207,15 @@ struct LastManStandingQuestionCard: View {
                     image
                         .resizable()
                         .scaledToFit()
-                        .frame(maxHeight: 110)
+                        .frame(width: 270)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 default:
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(BKTheme.card.opacity(0.5))
-                        .frame(height: 90)
+                        .frame(width: 270, height: 140)
                 }
             }
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 
@@ -278,10 +282,9 @@ struct LastManStandingQuestionCard: View {
                         Text(option.label)
                             .font(BKFont.body(13))
                             .foregroundStyle(BKTheme.textPrimary)
-                            .multilineTextAlignment(.leading)
+                            .multilineTextAlignment(.center)
                             .lineLimit(2)
                             .minimumScaleFactor(0.82)
-                        Spacer(minLength: 0)
                     }
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .padding(.horizontal, 10)

@@ -272,7 +272,7 @@ struct ClubChainView: View {
     private var statsHero: some View {
         HStack(alignment: .center, spacing: 12) {
             HStack(spacing: 4) {
-                Text("Fastest Route")
+                Text("Fastest Path")
                     .font(BKFont.caption(11))
                     .foregroundStyle(BKTheme.textSecondary)
                 Text("\(state.goldMoves)")
