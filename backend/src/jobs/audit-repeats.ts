@@ -16,6 +16,7 @@ import { generateOneMorePuzzle } from '../services/oneMoreGenerator.js';
 import { generateBattlePuzzle } from '../services/battleGenerator.js';
 import { generateWorldCupXiPuzzle } from '../services/worldCupXiGenerator.js';
 import { generateFootballGolfCourse } from '../services/footballGolfGenerator.js';
+import { golfRuleSignature } from '../services/golfRuleSignature.js';
 import { buildDailyFactPack } from '../services/dailyFactPack.js';
 import { getPlayerById } from '../services/playerService.js';
 import {
@@ -132,6 +133,24 @@ function report(name: string, stats: RepeatStats, worst = 8) {
   for (const g of stats.gaps.slice(0, worst)) console.log(`  ${String(g.gap).padStart(3)}d  ${g.key}`);
 }
 
+function reportGolfRules(map: Occurrences, dates: string[]) {
+  const stats = analyze(map);
+  report('GOLF — structured rule', stats, 8);
+  const repeated = [...map.entries()]
+    .filter(([, days]) => days.length > 1)
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  const maxReuse = Math.max(0, ...[...map.values()].map((days) => days.length));
+  console.log(`max structured rule reuse: ${maxReuse}`);
+  if (repeated.length === 0) {
+    console.log('semantic rule repeat occurrences: none');
+    return;
+  }
+  console.log('semantic rule repeat occurrences/dates:');
+  for (const [signature, days] of repeated) {
+    console.log(`  ${signature} ×${days.length}: ${days.map((day) => dates[day]).join(', ')}`);
+  }
+}
+
 async function main() {
   const dates = futureDates(DAYS);
   console.log(`=== Repeat audit (history-emulated): ${DAYS} days (${dates[0]} … ${dates[dates.length - 1]}) ===`);
@@ -147,6 +166,7 @@ async function main() {
   const battleSetup: Occurrences = new Map();
   const wcxiPlayer: Occurrences = new Map();
   const golfPrompt: Occurrences = new Map();
+  const golfRule: Occurrences = new Map();
   const bingoTile: Occurrences = new Map();
 
   const hGuessWho = new RollingWindow(WINDOWS.guessWho);
@@ -156,6 +176,7 @@ async function main() {
   const hWcxi = new RollingWindow(WINDOWS.wcxi);
   const hBingo = new RollingWindow(WINDOWS.bingo);
   const hGolf = new RollingWindow(WINDOWS.golf);
+  const hGolfRule = new RollingWindow(WINDOWS.golf);
 
   const failures: string[] = [];
 
@@ -233,9 +254,19 @@ async function main() {
     }
 
     try {
-      const p = await generateFootballGolfCourse(date, { recentPromptsOverride: hGolf.visible(day) });
+      const p = await generateFootballGolfCourse(date, {
+        recentPromptsOverride: hGolf.visible(day),
+        recentRuleSignaturesOverride: hGolfRule.visible(day),
+      });
       hGolf.add(day, p.holes.map((h) => h.prompt.toLowerCase()));
-      for (const h of p.holes) record(golfPrompt, h.prompt, day);
+      const ruleSignatures = p.holes.flatMap((hole) =>
+        hole.rule ? [golfRuleSignature(hole.rule)] : []
+      );
+      hGolfRule.add(day, ruleSignatures);
+      for (const h of p.holes) {
+        record(golfPrompt, h.prompt, day);
+        if (h.rule) record(golfRule, golfRuleSignature(h.rule), day);
+      }
     } catch (err) {
       failures.push(`${date} football_golf: ${err instanceof Error ? err.message : err}`);
     }
@@ -262,7 +293,8 @@ async function main() {
   report('BATTLE — category (similar is OK)', analyze(battleCat), 2);
   report('BATTLE — exact setup (category+clubs)', analyze(battleSetup), 8);
   report('WORLD CUP XI — player+year in XI', analyze(wcxiPlayer), 10);
-  report('GOLF — prompt', analyze(golfPrompt), 8);
+  report('GOLF — prompt wording', analyze(golfPrompt), 8);
+  reportGolfRules(golfRule, dates);
   report('BINGO — tile title', analyze(bingoTile), 10);
 
   console.log(`\n=== FAILURES (${failures.length}) ===`);

@@ -10,10 +10,16 @@ import {
   dedupeGolfPlayers,
   golfPromptCopy,
   golfQualityWarnings,
+  golfRuleCandidateAllowed,
   suggestGolfPar,
   type GolfRuleEvaluation,
 } from './footballGolfGenerator.js';
-import { compareGolfAnswerIds } from './adminGolfAuthoring.js';
+import {
+  compareGolfAnswerIds,
+  dedupeAdminGolfTemplates,
+  type AdminGolfTemplate,
+} from './adminGolfAuthoring.js';
+import { golfRuleSignature } from './golfRuleSignature.js';
 
 test('requires the persisted 4x4 Bingo contract', () => {
   const categories = Array.from({ length: 16 }, (_, index) => ({
@@ -188,6 +194,94 @@ test('checks Golf numbering, answer sufficiency, and total par', () => {
   assert.equal(validatePuzzleReport('football_golf', { totalPar: 20, holes }, null).ok, false);
 });
 
+test('canonicalizes Golf rule signatures and keeps executable changes distinct', () => {
+  const equivalentA = {
+    label: 'First label',
+    playedFor: ['Bayern München', 'Arsenal'],
+    nationality: 'Côte d’Ivoire',
+    minPlApps: 20,
+  };
+  const equivalentB = {
+    minPlApps: 20,
+    nationality: 'côte d’ivoire',
+    playedFor: ['Arsenal', 'Bayern München'],
+    label: 'Different non-semantic label',
+  };
+  assert.equal(golfRuleSignature(equivalentA), golfRuleSignature(equivalentB));
+  assert.notEqual(
+    golfRuleSignature(equivalentA),
+    golfRuleSignature({ ...equivalentA, minPlApps: 21 })
+  );
+  assert.notEqual(
+    golfRuleSignature(equivalentA),
+    golfRuleSignature({ ...equivalentA, playedFor: ['Chelsea', 'Arsenal'] })
+  );
+  assert.notEqual(
+    golfRuleSignature(equivalentA),
+    golfRuleSignature({ ...equivalentA, playedFor: ['Bayern Munchen', 'Arsenal'] })
+  );
+});
+
+test('rejects duplicate structured Golf rules across differently worded holes', () => {
+  const holes = Array.from({ length: 9 }, (_, index) => ({
+    holeNumber: index + 1,
+    prompt: `Hole ${index + 1}`,
+    par: 2,
+    target: 2,
+    answers: [
+      { id: `p-${index}-1`, name: 'Player A' },
+      { id: `p-${index}-2`, name: 'Player B' },
+    ],
+    rule: index === 0
+      ? { playedFor: ['Arsenal', 'Bayern München'] }
+      : index === 1
+        ? { label: 'Other wording', playedFor: ['Bayern München', 'Arsenal'] }
+        : { minPlApps: index + 1 },
+  }));
+  const report = validatePuzzleReport('football_golf', { totalPar: 18, holes }, null);
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some((entry) => /structured Golf rule/.test(entry.message)));
+});
+
+test('filters Golf candidate rules against recent and same-course signatures', () => {
+  const rule = { playedFor: ['Arsenal', 'Chelsea'] };
+  const signature = golfRuleSignature(rule);
+  assert.equal(golfRuleCandidateAllowed(rule, new Set(), new Set()), true);
+  assert.equal(golfRuleCandidateAllowed(rule, new Set([signature]), new Set()), false);
+  assert.equal(golfRuleCandidateAllowed(rule, new Set(), new Set([signature])), false);
+});
+
+test('dedupes Golf templates by rule and chooses the deterministic best representative', () => {
+  const template = (
+    id: string,
+    input: Partial<AdminGolfTemplate> = {}
+  ): AdminGolfTemplate => {
+    const rule = input.rule ?? { minPlApps: 10 };
+    return {
+      id,
+      prompt: input.prompt ?? 'Prompt',
+      rule,
+      ruleSignature: golfRuleSignature(rule),
+      tier: 'standard',
+      difficulty: input.difficulty ?? 2,
+      validAnswers: input.validAnswers ?? 20,
+      sampleAnswers: [],
+      usedCount: input.usedCount ?? 0,
+      lastUsedDate: null,
+    };
+  };
+  const preferred = template('b', { prompt: 'Preferred', usedCount: 1 });
+  const rows = dedupeAdminGolfTemplates([
+    template('a', { prompt: 'Overused', usedCount: 3 }),
+    template('d', { prompt: 'Too narrow', validAnswers: 6, usedCount: 0 }),
+    preferred,
+    template('c', { rule: { minPlApps: 11 }, prompt: 'Different rule' }),
+  ]);
+  assert.equal(rows.length, 2);
+  assert.ok(rows.some((row) => row.id === preferred.id));
+  assert.ok(!rows.some((row) => row.id === 'a'));
+});
+
 test('accepts only declarative closed Tower rule fields', () => {
   assert.equal(towerRuleSchema.safeParse({ playedFor: ['Arsenal', 'Chelsea'] }).success, true);
   assert.equal(towerRuleSchema.safeParse({ sql: 'SELECT * FROM players' }).success, false);
@@ -213,6 +307,28 @@ test('uses plural player-facing Golf prompt copy', () => {
   assert.equal(
     golfPromptCopy('Name a Champions League winner.'),
     'Name Champions League winners.'
+  );
+  assert.equal(
+    golfPromptCopy('Name a Swiss footballer who has played in the Premier League.'),
+    'Name Swiss players who have played in the Premier League.'
+  );
+  assert.equal(
+    golfPromptCopy('Name a goalkeeper who has played in La Liga.'),
+    'Name goalkeepers who have played in La Liga.'
+  );
+  assert.equal(
+    golfPromptCopy('Name defenders who have played in La Liga and has won the Champions League.'),
+    'Name defenders who have played in La Liga and have won the Champions League.'
+  );
+  assert.equal(
+    golfPromptCopy('Name a footballer whose record transfer fee is at least €60 million.'),
+    'Name players whose record transfer fee is at least €60 million.'
+  );
+  assert.equal(
+    golfPromptCopy(
+      'Name a footballer whose record transfer fee is at least €60 million and has played in the Bundesliga.'
+    ),
+    'Name players whose record transfer fee is at least €60 million and have played in the Bundesliga.'
   );
 });
 

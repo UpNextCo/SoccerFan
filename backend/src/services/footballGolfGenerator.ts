@@ -15,9 +15,13 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { enumeratePlayers, type AnswerPlayer, type TowerRule } from './towerRules.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
+import { golfRuleSignature } from './golfRuleSignature.js';
+import { recentGolfPrompts, recentGolfRuleSignatures } from './puzzleHistory.js';
 
 /** Prompts used within this window are excluded (shrunk adaptively if the bank runs thin). */
 const GOLF_PROMPT_REPEAT_WINDOW_DAYS = 28;
+/** Structured rule meaning is never reused inside this fixed window. */
+const GOLF_RULE_REPEAT_WINDOW_DAYS = 28;
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'ultraRare';
 
@@ -129,11 +133,49 @@ function hashStr(s: string): number {
   return Math.abs(h);
 }
 
+const GOLF_DEMONYMS: Record<string, string> = {
+  Argentina: 'Argentine',
+  Austria: 'Austrian',
+  Belgium: 'Belgian',
+  Brazil: 'Brazilian',
+  Cameroon: 'Cameroonian',
+  Chile: 'Chilean',
+  Colombia: 'Colombian',
+  Croatia: 'Croatian',
+  Denmark: 'Danish',
+  England: 'English',
+  France: 'French',
+  Germany: 'German',
+  Ghana: 'Ghanaian',
+  Italy: 'Italian',
+  Japan: 'Japanese',
+  Mexico: 'Mexican',
+  Morocco: 'Moroccan',
+  Netherlands: 'Dutch',
+  Nigeria: 'Nigerian',
+  Norway: 'Norwegian',
+  Poland: 'Polish',
+  Portugal: 'Portuguese',
+  Scotland: 'Scottish',
+  Senegal: 'Senegalese',
+  Serbia: 'Serbian',
+  Spain: 'Spanish',
+  Sweden: 'Swedish',
+  Switzerland: 'Swiss',
+  Uruguay: 'Uruguayan',
+  Wales: 'Welsh',
+  "Côte d'Ivoire": 'Ivorian',
+  'Ivory Coast': 'Ivorian',
+  'United States': 'American',
+};
+
 /** Golf always expects multiple answers, so player-facing prompts use plural wording. */
 export function golfPromptCopy(prompt: string): string {
   let copy = prompt.trim()
     .replace(/^Name a footballer who\b/i, 'Name players who')
+    .replace(/^Name a footballer whose\b/i, 'Name players whose')
     .replace(/^Name a player who\b/i, 'Name players who')
+    .replace(/^Name a player whose\b/i, 'Name players whose')
     .replace(/^Name a player with\b/i, 'Name players with')
     .replace(/^Name a player from\b/i, 'Name players from')
     .replace(/^Name an? (.+?) player who\b/i, 'Name $1 players who')
@@ -143,6 +185,27 @@ export function golfPromptCopy(prompt: string): string {
       'Name $1 players who $2'
     )
     .replace(/^Name players who has\b/i, 'Name players who have');
+
+  copy = copy
+    .replace(/\bfootballer players\b/gi, 'players')
+    .replace(/\bgoalkeeper players\b/gi, 'goalkeepers')
+    .replace(/\bdefender players\b/gi, 'defenders')
+    .replace(
+      /^Name (.+?) who (.+?) and has\b/i,
+      'Name $1 who $2 and have'
+    )
+    .replace(
+      /^Name (.+?) whose (.+?) and has\b/i,
+      'Name $1 whose $2 and have'
+    );
+
+  for (const [nation, demonym] of Object.entries(GOLF_DEMONYMS)) {
+    const prefix = `Name ${nation} players`;
+    if (copy.toLowerCase().startsWith(prefix.toLowerCase())) {
+      copy = `Name ${demonym} players${copy.slice(prefix.length)}`;
+      break;
+    }
+  }
 
   if (/^Name a Champions League winner\.?$/i.test(copy)) {
     copy = 'Name Champions League winners.';
@@ -328,24 +391,22 @@ export async function buildGolfHole(input: {
   return { hole: buildGolfHoleFromEvaluation(evaluation, input), evaluation };
 }
 
-/** Recent golf prompts to avoid repeats within a window. */
-async function recentPrompts(days: number): Promise<Set<string>> {
-  const rows = (await db.execute(sql`
-    SELECT puzzle_json AS pj FROM daily_puzzles
-    WHERE mode_id = 'football_golf' AND date >= (CURRENT_DATE - ${`${days} days`}::interval)
-  `)) as unknown as Array<{ pj: { holes?: Array<{ prompt: string }> } }>;
-  const out = new Set<string>();
-  for (const r of rows) {
-    for (const h of r.pj?.holes ?? []) {
-      if (h.prompt) out.add(golfPromptCopy(h.prompt).toLowerCase());
-    }
-  }
-  return out;
+/** Pure rule-cooldown gate shared by generation and tests. */
+export function golfRuleCandidateAllowed(
+  rule: TowerRule,
+  recentRuleSignatures: ReadonlySet<string>,
+  courseRuleSignatures: ReadonlySet<string>
+): boolean {
+  const signature = golfRuleSignature(rule);
+  return !recentRuleSignatures.has(signature) && !courseRuleSignatures.has(signature);
 }
 
 export async function generateFootballGolfCourse(
   date: string,
-  opts?: { recentPromptsOverride?: Set<string> }
+  opts?: {
+    recentPromptsOverride?: Set<string>;
+    recentRuleSignaturesOverride?: Set<string>;
+  }
 ): Promise<FootballGolfPuzzle> {
   // Source prompts: active player prompts from the bank (closed-set + rule-based).
   const prompts = (await db.execute(sql`
@@ -355,8 +416,11 @@ export async function generateFootballGolfCourse(
   // Repeat suppression: prompts used in the last 28 days are excluded; if the bank can't fill a
   // course under that window (too many prompts also fail the quality thresholds), shrink it
   // rather than fail the day.
-  const fullAvoid = opts?.recentPromptsOverride ?? (await recentPrompts(GOLF_PROMPT_REPEAT_WINDOW_DAYS));
+  const fullAvoid = opts?.recentPromptsOverride
+    ?? (await recentGolfPrompts(date, GOLF_PROMPT_REPEAT_WINDOW_DAYS));
   const shorterAvoid = opts?.recentPromptsOverride ?? null;
+  const ruleAvoid = opts?.recentRuleSignaturesOverride
+    ?? (await recentGolfRuleSignatures(date, GOLF_RULE_REPEAT_WINDOW_DAYS));
 
   // Deterministic daily shuffle.
   const seed = hashStr(`${date}:golf`);
@@ -368,11 +432,16 @@ export async function generateFootballGolfCourse(
     .sort((a, b) => a.k - b.k)
     .map((x) => x.p);
 
-  let candidates = await scanCandidates(ordered, fullAvoid);
+  let candidates = await scanCandidates(ordered, fullAvoid, ruleAvoid);
   if (candidates.length < HOLES) {
     for (const window of [14, 7, 0]) {
-      const avoid = shorterAvoid ?? (window > 0 ? await recentPrompts(window) : new Set<string>());
-      candidates = await scanCandidates(ordered, window > 0 ? avoid : new Set<string>());
+      const avoid = shorterAvoid
+        ?? (window > 0 ? await recentGolfPrompts(date, window) : new Set<string>());
+      candidates = await scanCandidates(
+        ordered,
+        window > 0 ? avoid : new Set<string>(),
+        ruleAvoid
+      );
       if (candidates.length >= HOLES) break;
     }
   }
@@ -413,15 +482,19 @@ export async function generateFootballGolfCourse(
 /** Scan the day's shuffled prompt order, enumerating answers until 9 quality holes are found. */
 async function scanCandidates(
   ordered: Array<{ id: string; prompt: string; rule: TowerRule }>,
-  avoid: Set<string>
+  avoid: Set<string>,
+  recentRuleSignatures: ReadonlySet<string>
 ): Promise<Candidate[]> {
   const candidates: Candidate[] = [];
+  const usedRuleSignatures = new Set<string>();
   const usedClubs = new Set<string>();
   const catCount = new Map<string, number>();
   const MAX_PER_CATEGORY = 2; // keep a course varied (clubs / nationality / managers / …)
   for (const { id, prompt, rule } of ordered) {
     if (candidates.length >= HOLES) break;
     if (avoid.has(prompt.toLowerCase())) continue;
+    if (!golfRuleCandidateAllowed(rule, recentRuleSignatures, usedRuleSignatures)) continue;
+    const ruleSignature = golfRuleSignature(rule);
     // club diversity: no two holes sharing a club
     const clubs = Array.isArray(rule.playedFor) ? rule.playedFor.map((c) => c.toLowerCase()) : [];
     if (clubs.some((c) => usedClubs.has(c))) continue;
@@ -449,6 +522,7 @@ async function scanCandidates(
     if (famous < minFamous || evaluation.answers.length > 100) continue;
 
     candidates.push({ templateId: id, prompt, rule, answers: evaluation.answers, famous });
+    usedRuleSignatures.add(ruleSignature);
     for (const c of clubs) usedClubs.add(c);
     catCount.set(cat, (catCount.get(cat) ?? 0) + 1);
   }

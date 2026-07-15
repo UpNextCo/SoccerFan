@@ -79,11 +79,16 @@ export function isGenerationRetryEligible(
   return status === 'completed_with_failures' && failedCount > 0;
 }
 
-/** Mirrors the durable claim policy: LMS is globally single-flight across all month runs. */
+/** Modes whose history-driven generators must be globally single-flight across month runs. */
+export const SERIALIZED_GENERATION_MODES = [
+  'last_man_standing',
+  'football_golf',
+] as const;
+
 export function canClaimGenerationMode(
   candidateMode: string,
   runningModes: readonly string[]
 ): boolean {
-  return candidateMode !== 'last_man_standing' ||
-    !runningModes.includes('last_man_standing');
+  return !(SERIALIZED_GENERATION_MODES as readonly string[]).includes(candidateMode) ||
+    !runningModes.includes(candidateMode);
 }

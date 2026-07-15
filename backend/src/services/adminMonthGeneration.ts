@@ -260,17 +260,17 @@ async function claimNextItem(): Promise<ClaimedItem | null> {
         AND item.next_attempt_at <= now()
         AND run.status IN ('queued', 'running')
         AND (
-          item.mode_id <> 'last_man_standing'
+          item.mode_id NOT IN ('last_man_standing', 'football_golf')
           OR NOT EXISTS (
             SELECT 1
-            FROM ops_generation_items AS active_lms
-            WHERE active_lms.mode_id = 'last_man_standing'
-              AND active_lms.status = 'running'
+            FROM ops_generation_items AS active_serial
+            WHERE active_serial.mode_id = item.mode_id
+              AND active_serial.status = 'running'
           )
         )
       ORDER BY
         run.created_at,
-        CASE WHEN item.mode_id = 'last_man_standing' THEN 1 ELSE 0 END,
+        CASE WHEN item.mode_id IN ('last_man_standing', 'football_golf') THEN 1 ELSE 0 END,
         item.date,
         item.mode_id
       FOR UPDATE OF item SKIP LOCKED

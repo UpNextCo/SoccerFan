@@ -12,6 +12,8 @@
  */
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import { golfRuleSignature } from './golfRuleSignature.js';
+import { towerRuleSchema } from './towerRuleSchema.js';
 
 async function recentRows(
   modeId: string,
@@ -171,6 +173,21 @@ export async function recentGolfPrompts(date: string, days: number): Promise<Set
     for (const h of holes) {
       const prompt = (h as { prompt?: string }).prompt;
       if (prompt) out.add(prompt.toLowerCase());
+    }
+  }
+  return out;
+}
+
+/** Football Golf: semantic structured rules used in the window. Legacy holes are ignored. */
+export async function recentGolfRuleSignatures(date: string, days: number): Promise<Set<string>> {
+  const rows = await recentRows('football_golf', date, days);
+  const out = new Set<string>();
+  for (const { pj } of rows) {
+    const holes = pj['holes'];
+    if (!Array.isArray(holes)) continue;
+    for (const hole of holes) {
+      const parsed = towerRuleSchema.safeParse((hole as { rule?: unknown }).rule);
+      if (parsed.success) out.add(golfRuleSignature(parsed.data));
     }
   }
   return out;

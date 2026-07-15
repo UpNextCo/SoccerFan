@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { towerRuleSchema } from './towerRuleSchema.js';
+import { golfRuleSignature } from './golfRuleSignature.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 export interface AdminPuzzleValidationIssue {
@@ -204,6 +205,16 @@ function validateGolf(puzzleJson: unknown, issues: AdminPuzzleValidationIssue[])
     .filter((templateId): templateId is string => Boolean(templateId));
   if (!unique(templateIds)) {
     issue(issues, 'puzzleJson.holes', 'Each Golf question can only be used once in a course.');
+  }
+  const ruleSignatures = puzzle.holes.flatMap((hole) =>
+    hole.rule ? [golfRuleSignature(hole.rule)] : []
+  );
+  if (!unique(ruleSignatures)) {
+    issue(
+      issues,
+      'puzzleJson.holes',
+      'Each structured Golf rule can only be used once in a course.'
+    );
   }
   const expected = Array.from({ length: puzzle.holes.length }, (_, index) => index + 1);
   if ([...numbers].sort((a, b) => a - b).join(',') !== expected.join(',')) issue(issues, 'puzzleJson.holes', 'Hole numbers must be consecutive from 1.');

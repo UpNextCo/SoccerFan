@@ -8,11 +8,13 @@ import {
   type GolfRuleEvaluation,
 } from './footballGolfGenerator.js';
 import { towerRuleSchema, type TowerRule } from './towerRuleSchema.js';
+import { golfRuleSignature } from './golfRuleSignature.js';
 
 export interface AdminGolfTemplate {
   id: string;
   prompt: string;
   rule: TowerRule;
+  ruleSignature: string;
   tier: string;
   difficulty: number;
   validAnswers: number;
@@ -33,6 +35,47 @@ interface GolfTemplateRow {
   last_used_date: string | null;
 }
 
+function compareGolfTemplates(a: AdminGolfTemplate, b: AdminGolfTemplate): number {
+  const aPreferred = a.validAnswers >= 8 && a.validAnswers <= 100 ? 0 : 1;
+  const bPreferred = b.validAnswers >= 8 && b.validAnswers <= 100 ? 0 : 1;
+  return aPreferred - bPreferred
+    || a.usedCount - b.usedCount
+    || a.difficulty - b.difficulty
+    || a.prompt.localeCompare(b.prompt)
+    || a.id.localeCompare(b.id);
+}
+
+/** Choose one deterministic representative for each semantic rule. */
+export function dedupeAdminGolfTemplates(
+  templates: AdminGolfTemplate[]
+): AdminGolfTemplate[] {
+  const bestByRule = new Map<string, AdminGolfTemplate>();
+  for (const template of templates) {
+    const current = bestByRule.get(template.ruleSignature);
+    if (!current || compareGolfTemplates(template, current) < 0) {
+      bestByRule.set(template.ruleSignature, template);
+    }
+  }
+  return [...bestByRule.values()].sort(compareGolfTemplates);
+}
+
+function adminGolfTemplateFromRow(row: GolfTemplateRow): AdminGolfTemplate | null {
+  const rule = towerRuleSchema.safeParse(row.rule);
+  if (!rule.success) return null;
+  return {
+    id: row.id,
+    prompt: golfPromptCopy(row.prompt),
+    rule: rule.data,
+    ruleSignature: golfRuleSignature(rule.data),
+    tier: row.tier,
+    difficulty: row.difficulty,
+    validAnswers: row.valid_answers,
+    sampleAnswers: Array.isArray(row.sample_answers) ? row.sample_answers : [],
+    usedCount: row.used_count,
+    lastUsedDate: row.last_used_date,
+  };
+}
+
 export async function listAdminGolfTemplates(query = '', limit = 30): Promise<AdminGolfTemplate[]> {
   const normalizedQuery = query.trim().toLowerCase();
   const rows = (await db.execute(sql`
@@ -48,24 +91,14 @@ export async function listAdminGolfTemplates(query = '', limit = 30): Promise<Ad
       used_count ASC,
       difficulty ASC,
       prompt ASC
-    LIMIT ${limit}
   `)) as unknown as GolfTemplateRow[];
 
-  return rows.flatMap((row) => {
-    const rule = towerRuleSchema.safeParse(row.rule);
-    if (!rule.success) return [];
-    return [{
-      id: row.id,
-      prompt: golfPromptCopy(row.prompt),
-      rule: rule.data,
-      tier: row.tier,
-      difficulty: row.difficulty,
-      validAnswers: row.valid_answers,
-      sampleAnswers: Array.isArray(row.sample_answers) ? row.sample_answers : [],
-      usedCount: row.used_count,
-      lastUsedDate: row.last_used_date,
-    }];
-  });
+  return dedupeAdminGolfTemplates(
+    rows.flatMap((row) => {
+      const template = adminGolfTemplateFromRow(row);
+      return template ? [template] : [];
+    })
+  ).slice(0, limit);
 }
 
 async function getAdminGolfTemplate(templateId: string): Promise<AdminGolfTemplate | null> {
@@ -78,21 +111,11 @@ async function getAdminGolfTemplate(templateId: string): Promise<AdminGolfTempla
   `)) as unknown as GolfTemplateRow[];
   const row = rows[0];
   if (!row) return null;
-  const rule = towerRuleSchema.safeParse(row.rule);
-  if (!rule.success) {
+  const template = adminGolfTemplateFromRow(row);
+  if (!template) {
     throw new Error('Selected template contains an unsupported Tower rule.');
   }
-  return {
-    id: row.id,
-    prompt: golfPromptCopy(row.prompt),
-    rule: rule.data,
-    tier: row.tier,
-    difficulty: row.difficulty,
-    validAnswers: row.valid_answers,
-    sampleAnswers: Array.isArray(row.sample_answers) ? row.sample_answers : [],
-    usedCount: row.used_count,
-    lastUsedDate: row.last_used_date,
-  };
+  return template;
 }
 
 export async function previewAdminGolfRule(prompt: string, rule: TowerRule): Promise<GolfRuleEvaluation> {

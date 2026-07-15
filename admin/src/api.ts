@@ -262,6 +262,7 @@ export type AdminGolfTemplate = {
   id: string
   prompt: string
   rule: GolfTowerRule
+  ruleSignature: string
   tier: string
   difficulty: number
   validAnswers: number

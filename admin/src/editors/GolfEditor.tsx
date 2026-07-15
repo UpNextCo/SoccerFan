@@ -86,6 +86,27 @@ function cleanRule(rule: GolfTowerRule): GolfTowerRule {
   ) as GolfTowerRule
 }
 
+function canonicalRuleKey(rule: GolfTowerRule | undefined): string | null {
+  if (!rule) return null
+  const normalize = (value: string) =>
+    value.normalize('NFKD').replace(/\p{Diacritic}/gu, '').trim().replace(/\s+/g, ' ').toLowerCase()
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(rule)
+        .filter(([key, value]) => key !== 'label' && value !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => [
+          key,
+          Array.isArray(value)
+            ? [...new Set(value.map(normalize))].sort()
+            : typeof value === 'string'
+              ? normalize(value)
+              : value,
+        ])
+    )
+  )
+}
+
 function isGolfRarity(value: string | undefined): value is GolfRarity {
   return RARITIES.some((rarity) => rarity === value)
 }
@@ -189,13 +210,23 @@ export function GolfEditor({
     ? templateDetails[activeHole.templateId] ??
       templates.find((template) => template.id === activeHole.templateId)
     : undefined
-  const usedTemplateIds = new Set(
-    holes
-      .filter((hole) => hole.holeNumber !== activeHole?.holeNumber)
-      .map((hole) => hole.templateId)
-      .filter((id): id is string => Boolean(id))
+  const otherHoles = holes.filter((hole) => hole.holeNumber !== activeHole?.holeNumber)
+  const usedRuleSignatures = new Set(
+    otherHoles.flatMap((hole) => {
+      const template = hole.templateId
+        ? templateDetails[hole.templateId] ?? templates.find((item) => item.id === hole.templateId)
+        : undefined
+      return template ? [template.ruleSignature] : []
+    })
   )
-  const availableTemplates = templates.filter((template) => !usedTemplateIds.has(template.id))
+  const usedRuleKeys = new Set(
+    otherHoles.map((hole) => canonicalRuleKey(hole.rule)).filter((key): key is string => key !== null)
+  )
+  const availableTemplates = templates.filter(
+    (template) =>
+      !usedRuleSignatures.has(template.ruleSignature)
+      && !usedRuleKeys.has(canonicalRuleKey(template.rule) ?? '')
+  )
   const answersStale = activeKey ? staleHoleKeys.has(activeKey) : false
   const mutationsDisabled = locked || busyAction !== null
 

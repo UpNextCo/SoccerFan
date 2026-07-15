@@ -102,7 +102,7 @@ test('manual retry resets the item attempt budget', () => {
   assert.equal(attemptsAfterManualRetry(), 0);
 });
 
-test('queue policy allows only one globally running LMS item', () => {
+test('queue policy serializes history-driven LMS and Golf items independently', () => {
   assert.equal(canClaimGenerationMode('last_man_standing', []), true);
   assert.equal(canClaimGenerationMode('last_man_standing', ['football_bingo']), true);
   assert.equal(
@@ -113,4 +113,7 @@ test('queue policy allows only one globally running LMS item', () => {
     canClaimGenerationMode('football_bingo', ['last_man_standing']),
     true
   );
+  assert.equal(canClaimGenerationMode('football_golf', []), true);
+  assert.equal(canClaimGenerationMode('football_golf', ['last_man_standing']), true);
+  assert.equal(canClaimGenerationMode('football_golf', ['football_golf']), false);
 });
