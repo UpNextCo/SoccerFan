@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, type AdminPlayerHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './bingo-lms.css'
+import './editor-clean.css'
 
 type Opt = {
   id: string
@@ -479,7 +480,7 @@ export function LmsEditor({
             onChange={(e) => commit({ ...latestRef.current.p, title: e.target.value }, latestRef.current.a)}
           />
         </label>
-        <p className="muted">Version {p.version ?? '?'} · {questions.length} questions</p>
+        <p className="muted">{questions.length} questions</p>
       </section>
 
       <nav className="lms-question-nav" aria-label="Question navigator">
@@ -518,12 +519,11 @@ export function LmsEditor({
               <div>
                 <div className="lms-question-title">
                   <strong>Question {q.slot}</strong>
-                  <span className="editor-badge">{friendlyType(q.type)}</span>
-                  {q.signature && <span className="editor-badge signature">Signature</span>}
+                  <span className="muted tiny">{friendlyType(q.type)}</span>
+                  {q.signature && <span className="muted tiny">Signature question</span>}
                 </div>
                 <div className="lms-question-statuses">
-                  <span className={complete ? 'status-good' : 'status-warning'}>{complete ? 'Complete' : 'Needs attention'}</span>
-                  <span className={hasCorrect ? 'status-good' : 'status-warning'}>{hasCorrect ? 'Correct answer set' : 'Correct answer missing'}</span>
+                  <span className={complete ? 'editor-clean-status' : 'editor-clean-status warning'}>{complete ? 'Ready' : 'Needs attention'}</span>
                 </div>
               </div>
               <div className="editor-icon-actions">
@@ -553,7 +553,7 @@ export function LmsEditor({
             </div>
 
             <label className="field">
-              Prompt
+              Question
               <textarea
                 rows={2}
                 value={q.prompt}
@@ -562,7 +562,7 @@ export function LmsEditor({
               />
             </label>
             <label className="field">
-              Sub-prompt
+              Extra context
               <input
                 value={q.subPrompt ?? ''}
                 disabled={locked}
@@ -573,8 +573,7 @@ export function LmsEditor({
             {q.type === 'image_badge' && (
               <div className="badge-preview">
                 <div className="badge-preview-heading">
-                  <div className="muted tiny">Blurred badge shown in-game (correct club)</div>
-                  <strong>{q.presentation?.imageBlur ?? 6}px blur</strong>
+                  <div className="muted tiny">Preview shown to players</div>
                 </div>
                 {q.presentation?.imageUrl ? (
                   <img
@@ -585,32 +584,8 @@ export function LmsEditor({
                     style={{ filter: `blur(${Math.max(2, (q.presentation.imageBlur ?? 6) / 2)}px)` }}
                   />
                 ) : (
-                  <p className="error tiny">No presentation.imageUrl — pick/mark the correct club</p>
+                  <p className="error tiny">Choose the correct club to create this preview.</p>
                 )}
-                <label className="field lms-blur-control">
-                  Image blur
-                  <input
-                    type="range"
-                    min="0"
-                    max="20"
-                    step="1"
-                    value={q.presentation?.imageBlur ?? 6}
-                    disabled={locked}
-                    onChange={(event) => updateQuestion(q.slot, {
-                      presentation: { ...(q.presentation ?? {}), imageBlur: Number(event.target.value) },
-                    })}
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    max="20"
-                    value={q.presentation?.imageBlur ?? 6}
-                    disabled={locked}
-                    onChange={(event) => updateQuestion(q.slot, {
-                      presentation: { ...(q.presentation ?? {}), imageBlur: Number(event.target.value) },
-                    })}
-                  />
-                </label>
               </div>
             )}
 
@@ -674,7 +649,7 @@ export function LmsEditor({
             )}
 
             <fieldset disabled={locked} className="options">
-              <legend>Options ({q.options.length}/{expectedOptions}) · pick correct or search to replace</legend>
+              <legend>Possible answers ({q.options.length}/{expectedOptions})</legend>
               {!optionCountValid && (
                 <p className="editor-inline-warning">
                   {friendlyType(q.type)} requires exactly {expectedOptions} options. Add or remove options before saving.
@@ -741,7 +716,7 @@ export function LmsEditor({
             </fieldset>
 
             <label className="field">
-              Reveal
+              Answer explanation
               <textarea
                 rows={2}
                 value={ans?.reveal ?? ''}
@@ -752,11 +727,34 @@ export function LmsEditor({
             <details className="editor-advanced">
               <summary>Advanced</summary>
               <div className="advanced-grid">
-                <label className="field">Question ID<input value={q.id} disabled readOnly /></label>
-                <label className="field">Slot<input value={q.slot} disabled readOnly /></label>
-                <label className="field">Presentation layout<input value={q.presentation?.layout ?? ''} disabled={locked} onChange={(event) => updateQuestion(q.slot, { presentation: { ...(q.presentation ?? {}), layout: event.target.value } })} /></label>
-                {q.presentation?.imageUrl && <label className="field">Image URL<input value={q.presentation.imageUrl} disabled={locked} onChange={(event) => updateQuestion(q.slot, { presentation: { ...(q.presentation ?? {}), imageUrl: event.target.value } })} /></label>}
-                <div className="muted tiny">Correct option ID: <code>{ans?.correctOptionId ?? 'not set'}</code></div>
+                <label className="field">Display style<input value={q.presentation?.layout ?? ''} disabled={locked} onChange={(event) => updateQuestion(q.slot, { presentation: { ...(q.presentation ?? {}), layout: event.target.value } })} /></label>
+                {q.presentation?.imageUrl && <label className="field">Image source<input value={q.presentation.imageUrl} disabled={locked} onChange={(event) => updateQuestion(q.slot, { presentation: { ...(q.presentation ?? {}), imageUrl: event.target.value } })} /></label>}
+                {(q.type === 'image_badge' || q.type === 'custom_image') && (
+                  <label className="field lms-blur-control">
+                    Image blur
+                    <input
+                      type="range"
+                      min="0"
+                      max="20"
+                      step="1"
+                      value={q.presentation?.imageBlur ?? (q.type === 'image_badge' ? 6 : 0)}
+                      disabled={locked}
+                      onChange={(event) => updateQuestion(q.slot, {
+                        presentation: { ...(q.presentation ?? {}), imageBlur: Number(event.target.value) },
+                      })}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      max="20"
+                      value={q.presentation?.imageBlur ?? (q.type === 'image_badge' ? 6 : 0)}
+                      disabled={locked}
+                      onChange={(event) => updateQuestion(q.slot, {
+                        presentation: { ...(q.presentation ?? {}), imageBlur: Number(event.target.value) },
+                      })}
+                    />
+                  </label>
+                )}
               </div>
             </details>
           </article>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './game-editors.css'
+import './editor-clean.css'
 
 type PlayerRef = {
   id: string
@@ -68,9 +69,9 @@ export function ClubChainEditor({
       unresolvedIds.map(async (id) => {
         try {
           const player = (await api.resolvePlayer(id, 'card')) as { id?: string; name?: string }
-          return [id, player.name || id] as const
+          return [id, player.name || 'Unknown player'] as const
         } catch {
-          return [id, id] as const
+          return [id, 'Unknown player'] as const
         }
       })
     ).then((entries) => {
@@ -181,7 +182,7 @@ export function ClubChainEditor({
   }
 
   const warnings: string[] = []
-  if (pathIds.length < 2) warnings.push('The stored path needs a start and target endpoint.')
+  if (pathIds.length < 2) warnings.push('The solution needs a start and target player.')
   if (pathIds.some((id) => !id)) warnings.push('One or more path steps has no player selected.')
   if (pathIds.length >= 1 && p.start?.id && pathIds[0] !== p.start.id) {
     warnings.push('The first path player does not match the selected start player.')
@@ -198,7 +199,7 @@ export function ClubChainEditor({
 
   return (
     <div className="mode-editor">
-      <div className="q-card">
+      <div className="editor-clean-section">
         <header>
           <strong>Chain endpoints</strong>
           <span className="muted tiny">Choose the fixed start and target players</span>
@@ -255,7 +256,7 @@ export function ClubChainEditor({
         </div>
       </div>
 
-      <section className="q-card">
+      <section className="editor-clean-section">
         <header>
           <strong>Best solution</strong>
           <span className="muted tiny">
@@ -268,7 +269,7 @@ export function ClubChainEditor({
           <p className="warning-box" key={warning}>{warning}</p>
         ))}
         {pathIds.length === 0 ? (
-          <p className="muted">No path stored. Adding a step will initialize it from the selected endpoints.</p>
+          <p className="muted">No solution yet. Add a step to start with the selected players.</p>
         ) : (
           <div className="chain-flow">
             {pathIds.map((id, i) => (
@@ -293,7 +294,7 @@ export function ClubChainEditor({
                         ? p.start.name
                         : id === p.target?.id
                           ? p.target.name
-                          : pathNames[id] || id || undefined
+                          : pathNames[id] || 'Unknown player'
                     }
                     disabled={locked || i === 0 || i === pathIds.length - 1}
                     placeholder={i === 0 || i === pathIds.length - 1 ? undefined : 'Search path player…'}
@@ -305,7 +306,7 @@ export function ClubChainEditor({
           </div>
         )}
         <div className="editor-toolbar">
-          <span className="muted tiny">Run dashboard checks before approving after changing this path.</span>
+          <span className="muted tiny">Review the full path after making changes.</span>
           <button
             type="button"
             className="ghost"

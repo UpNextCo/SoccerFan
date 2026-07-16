@@ -1,0 +1,206 @@
+.mode-editor,
+.lms-editor {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.mode-editor > .q-card,
+.lms-editor > .q-card,
+.lms-question-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.editor-clean-section {
+  padding-block: 0.35rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.editor-clean-section:last-child {
+  border-bottom: 0;
+}
+
+.editor-clean-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.editor-clean-heading h3,
+.editor-clean-heading p {
+  margin: 0;
+}
+
+.editor-clean-heading p {
+  margin-top: 0.2rem;
+}
+
+.editor-clean-list {
+  display: grid;
+  gap: 0;
+}
+
+.editor-clean-list > article {
+  padding-block: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.editor-clean-list > article:last-child {
+  border-bottom: 0;
+}
+
+.bingo-category-card,
+.bingo-player-card,
+.om-round,
+.om-player,
+.answer-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.bingo-category-card,
+.bingo-player-card,
+.om-round {
+  border-bottom: 1px solid var(--line);
+}
+
+.bingo-category-card:last-child,
+.bingo-player-card:last-child,
+.om-round:last-child {
+  border-bottom: 0;
+}
+
+.bingo-board-preview {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.bingo-preview-tile {
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.editor-clean-section .numbered-card {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.editor-clean-section .numbered-card:last-of-type {
+  border-bottom: 0;
+}
+
+.golf-rule-composer,
+.golf-template-picker.simple,
+.golf-template-meta,
+.golf-evaluation,
+.golf-validation,
+.om-template-bar,
+.om-preview,
+.om-preview-stats > div,
+.om-sample-grid > div {
+  border: 0;
+  background: transparent;
+}
+
+.golf-rule-composer,
+.golf-template-picker.simple,
+.om-template-bar,
+.om-preview {
+  padding-inline: 0;
+}
+
+.golf-rule-status,
+.om-verified,
+.om-player-state span,
+.hint-chip,
+.position-badge,
+.type-badge {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.golf-rule-status {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.editor-clean-number {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.editor-clean-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.editor-clean-summary > div {
+  min-width: 0;
+}
+
+.editor-clean-summary span,
+.editor-clean-summary strong {
+  display: block;
+}
+
+.editor-clean-summary span {
+  margin-bottom: 0.15rem;
+}
+
+.editor-advanced,
+.advanced-panel {
+  margin-top: 0.9rem;
+  padding: 0.65rem 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.editor-advanced summary,
+.advanced-panel summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.editor-advanced[open] summary,
+.advanced-panel[open] summary {
+  margin-bottom: 0.8rem;
+}
+
+.editor-clean-status {
+  color: #147249;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.editor-clean-status.warning {
+  color: #946114;
+}
+
+.editor-clean-selected {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.85rem;
+}
+
+@media (max-width: 700px) {
+  .editor-clean-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { api, type AdminLeagueHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './game-editors.css'
+import './editor-clean.css'
 
 type Constraint = {
   id?: string
@@ -184,7 +185,7 @@ export function DraftEditor({
 
   return (
     <div className="mode-editor">
-      <div className="editor-summary">
+      <div className="editor-clean-summary">
         <div>
           <span className="muted tiny">Draft overview</span>
           <strong>{p.category?.title || 'Untitled category'}</strong>
@@ -198,15 +199,15 @@ export function DraftEditor({
           <strong>{constraints.length}</strong>
         </div>
         <div>
-          <span className="muted tiny">Optimal score</span>
+          <span className="muted tiny">Best score</span>
           <strong>{p.optimalScore ?? '—'}</strong>
         </div>
       </div>
 
-      <div className="q-card">
+      <div className="editor-clean-section">
         <header>
           <strong>Draft setup</strong>
-          <span className="muted tiny">Category, shape and QA benchmark</span>
+          <span className="muted tiny">Set the category, formation and best score</span>
         </header>
         <label className="field">
           Category title
@@ -231,7 +232,7 @@ export function DraftEditor({
             />
           </label>
           <label className="field">
-            Optimal score
+            Best score
             <input
               type="number"
               value={p.optimalScore ?? ''}
@@ -242,10 +243,10 @@ export function DraftEditor({
         </div>
       </div>
 
-      <section className="q-card">
+      <section className="editor-clean-section">
         <header>
           <strong>Constraints ({constraints.length})</strong>
-          <span className="muted tiny">Order is used by the draft board</span>
+          <span className="muted tiny">Shown in this order</span>
         </header>
         {constraints.map((c, idx) => {
           const type = c.type ?? ''
@@ -253,12 +254,12 @@ export function DraftEditor({
           const needsLeague = type === 'league' || type === 'natLeague'
           const needsNat = type === 'nationality' || type === 'natLeague' || type === 'natClub'
           return (
-            <article key={c.id ?? idx} className="q-card numbered-card">
-              <span className="card-number">{idx + 1}</span>
+            <article key={c.id ?? idx} className="numbered-card">
               <div className="card-heading">
                 <div>
+                  <span className="editor-clean-number">Constraint {idx + 1}</span>
                   <strong>{c.label || 'Untitled constraint'}</strong>{' '}
-                  <span className="type-badge">{isConstraintType(type) ? TYPE_LABELS[type] : type}</span>
+                  <span className="muted tiny">{isConstraintType(type) ? TYPE_LABELS[type] : 'Custom'}</span>
                 </div>
                 <div className="button-row">
                   <button
@@ -359,12 +360,12 @@ export function DraftEditor({
         </p>
       </section>
 
-      <section className="q-card">
+      <section className="editor-clean-section">
         <header>
-          <strong>Optimal lineup (QA)</strong>
+          <strong>Best lineup</strong>
         </header>
         {lineup.length === 0 ? (
-          <p className="muted">No optimal lineup is stored for QA.</p>
+          <p className="muted">No best lineup has been saved.</p>
         ) : (
           <div className="lineup-pitch">
             {lineup.map((pick, i) => (
@@ -377,8 +378,8 @@ export function DraftEditor({
                 <EntityPicker
                   key={`${pick.slotId ?? i}-${pick.playerId ?? ''}-${pick.playerName ?? ''}`}
                   kind="player"
-                  label="QA player"
-                  valueLabel={pick.playerName}
+                  label="Player"
+                  valueLabel={pick.playerName || 'Unknown player'}
                   disabled={locked}
                   onPickPlayer={(hit) => pickLineupPlayer(i, hit)}
                 />

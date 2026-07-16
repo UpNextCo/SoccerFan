@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import './game-editors.css'
+import './editor-clean.css'
 
 type Puzzle = {
   categoryLabel?: string
@@ -78,27 +79,23 @@ export function TargetManEditor({
 
   return (
     <div className="mode-editor">
-      <div className="editor-summary">
+      <div className="editor-clean-summary">
         <div>
           <span className="muted tiny">Category</span>
           <strong>{categoryTitle || 'Unlabelled'}</strong>
-        </div>
-        <div>
-          <span className="muted tiny">Category ID</span>
-          <strong>{p.categoryId || 'Not set'}</strong>
         </div>
         <div>
           <span className="muted tiny">Target</span>
           <strong>{p.target ?? '—'} {p.valueNoun ?? ''}</strong>
         </div>
       </div>
-      <div className="q-card">
+      <div className="editor-clean-section">
         <header>
           <strong>Target Man setup</strong>
-          <span className="muted tiny">Structured fields update answer JSON automatically</span>
+          <span className="muted tiny">Changes are kept in sync automatically</span>
         </header>
         <label className="field">
-          Title / category label
+          Category name
           <input
             value={categoryTitle}
             disabled={locked}
@@ -111,17 +108,6 @@ export function TargetManEditor({
             }
           />
         </label>
-        <div className="row">
-          <label className="field">
-            Category ID
-            <input
-              value={p.categoryId ?? ''}
-              disabled={locked}
-              placeholder="e.g. pl_goals"
-              onChange={(e) => updatePuzzle({ categoryId: e.target.value })}
-            />
-          </label>
-        </div>
         <div className="row">
           <label className="field">
             Target
@@ -143,7 +129,7 @@ export function TargetManEditor({
         </div>
         <div className="row">
           <label className="field">
-            Value noun
+            Answer unit
             <input
               value={p.valueNoun ?? ''}
               disabled={locked}
@@ -151,7 +137,7 @@ export function TargetManEditor({
             />
           </label>
           <label className="field">
-            Off noun
+            Near-miss wording
             <input
               value={p.offNoun ?? ''}
               disabled={locked}
@@ -159,22 +145,22 @@ export function TargetManEditor({
             />
           </label>
         </div>
-        <div className="editor-summary">
-          <div>
-            <span className="muted tiny">Synchronized answer category</span>
-            <strong>{a.answer?.categoryId ?? a.categoryId ?? 'Not set'}</strong>
-          </div>
-          <div>
-            <span className="muted tiny">Synchronized answer target</span>
-            <strong>{a.answer?.target ?? a.target ?? 'Not set'}</strong>
-          </div>
-        </div>
-
         <details className="advanced-panel">
-          <summary>Advanced · raw answer JSON</summary>
+          <summary>Advanced</summary>
           <p className="muted tiny">
-            Use this only for fields not represented above. Invalid JSON is never applied.
+            Developer fallback only. Use these controls only when the standard fields cannot represent the answer.
           </p>
+          <label className="field">
+            Category key
+            <input
+              value={p.categoryId ?? ''}
+              disabled={locked}
+              placeholder="e.g. pl_goals"
+              onChange={(e) => updatePuzzle({ categoryId: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Answer data
           <textarea
             rows={9}
             disabled={locked}
@@ -190,10 +176,11 @@ export function TargetManEditor({
               }
             }}
           />
+          </label>
           {rawError && <p className="error-box">Parse error: {rawError}</p>}
           <div className="json-actions">
             <button type="button" disabled={locked || Boolean(rawError)} onClick={applyRaw}>
-              Apply answer JSON
+              Apply answer data
             </button>
             <button
               type="button"

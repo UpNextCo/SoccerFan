@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import './game-editors.css'
+import './editor-clean.css'
 
 export function JsonFallbackEditor({
   puzzle,
@@ -59,17 +60,17 @@ export function JsonFallbackEditor({
 
   return (
     <div className="mode-editor">
-      <div className="q-card">
+      <div className="editor-clean-section">
         <header>
           <div>
-            <strong>JSON fallback editor</strong>
-            <p className="muted tiny">No structured editor is available for this mode.</p>
+            <strong>Developer fallback</strong>
+            <p className="warning-box">No team-friendly editor is available for this game. Only a developer should change this data.</p>
           </div>
         </header>
-        <details className="advanced-panel" open>
-          <summary>Advanced · raw puzzle data</summary>
+        <details className="advanced-panel">
+          <summary>Advanced</summary>
           <label className="field">
-            puzzle_json
+            Game data
             <textarea
               rows={16}
               value={pText}
@@ -82,7 +83,7 @@ export function JsonFallbackEditor({
             />
           </label>
           <label className="field">
-            answer_json
+            Answer data
             <textarea
               rows={10}
               value={aText}
@@ -96,7 +97,7 @@ export function JsonFallbackEditor({
           </label>
           {err && <p className="error-box">Parse error: {err}</p>}
           <div className="json-actions">
-            <button type="button" disabled={locked} onClick={apply}>Apply JSON</button>
+            <button type="button" disabled={locked} onClick={apply}>Apply data</button>
             <button type="button" className="ghost" disabled={locked} onClick={format}>Format</button>
             <button type="button" className="ghost" disabled={locked} onClick={reset}>Reset</button>
           </div>

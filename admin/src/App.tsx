@@ -6,13 +6,13 @@ import {
   RouterProvider,
   createBrowserRouter,
   createRoutesFromElements,
-  useOutletContext,
 } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { api } from './api'
 import { LoginPage } from './LoginPage'
 import { MonthBoard } from './MonthBoard'
 import { PuzzleEditorPage } from './PuzzleEditorPage'
+import { OpsShell } from './components/OpsShell'
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -40,22 +40,20 @@ function AppShell() {
     return <LoginPage onLoggedIn={setAdminName} />
   }
 
-  return <Outlet context={{ adminName, setAdminName }} />
-}
-
-function AdminHome() {
-  const { adminName, setAdminName } = useOutletContext<{
-    adminName: string
-    setAdminName: (name: string | null) => void
-  }>()
   return (
-    <MonthBoard
+    <OpsShell
       adminName={adminName}
       onLogout={() => {
         void api.logout().finally(() => setAdminName(null))
       }}
-    />
+    >
+      <Outlet />
+    </OpsShell>
   )
+}
+
+function AdminHome() {
+  return <MonthBoard />
 }
 
 const router = createBrowserRouter(

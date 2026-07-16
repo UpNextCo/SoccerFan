@@ -5,8 +5,8 @@ type PuzzleStatus = CellStatus | string
 
 const STATUS_LABELS: Record<CellStatus, string> = {
   missing: 'Missing',
-  generated: 'Generated',
-  approved: 'Approved',
+  generated: 'Needs review',
+  approved: 'Ready',
   locked: 'Locked',
 }
 
@@ -73,9 +73,7 @@ export function ValidationPanel({
 }) {
   return (
     <div className={`validation-panel validation-${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
-      <span className="validation-icon" aria-hidden="true">
-        {tone === 'success' ? '✓' : tone === 'error' ? '!' : 'i'}
-      </span>
+      <span className="validation-icon" aria-hidden="true" />
       <div>
         <strong>{title}</strong>
         {children && <div className="validation-detail">{children}</div>}

@@ -3,6 +3,7 @@ import { api, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import { nationalityFlag } from '../countryFlags'
 import './bingo-lms.css'
+import './editor-clean.css'
 
 type Cat = {
   id?: string
@@ -41,12 +42,6 @@ type Puzzle = {
   [k: string]: unknown
 }
 
-function leagueFromIconValue(iconValue: string | undefined): string {
-  if (!iconValue) return 'Premier League'
-  const parts = iconValue.split('|')
-  return parts[1] || 'Premier League'
-}
-
 const CATEGORY_NAMES: Record<string, string> = {
   nationality: 'Nationality',
   playedForClub: 'Played for club',
@@ -58,7 +53,7 @@ const CATEGORY_NAMES: Record<string, string> = {
 }
 
 function categoryName(category: Cat): string {
-  return CATEGORY_NAMES[category.type ?? ''] ?? category.type ?? category.iconType ?? 'Custom'
+  return CATEGORY_NAMES[category.type ?? ''] ?? 'Custom category'
 }
 
 function ruleSummary(category: Cat): string {
@@ -80,7 +75,7 @@ function ruleSummary(category: Cat): string {
     case 'statThreshold':
       return rule ? `Players meeting ${rule.replace('>=', ' ≥ ')}` : 'Players meeting this stat'
     default:
-      return rule || 'No matching rule set'
+      return 'Custom matching criteria'
   }
 }
 
@@ -270,7 +265,7 @@ export function BingoEditor({
 
   return (
     <div className="mode-editor">
-      <section className="q-card">
+      <section className="editor-clean-section">
         <header className="editor-section-header">
           <div>
             <strong>Categories ({categories.length})</strong>
@@ -305,12 +300,11 @@ export function BingoEditor({
           return (
             <article key={c.id ?? idx} className="bingo-cat bingo-category-card">
               <div className="bingo-category-heading">
-                <div className="bingo-category-number">{idx + 1}</div>
                 <div className="bingo-category-heading-copy">
+                  <span className="editor-clean-number">Category {idx + 1}</span>
                   <strong>{c.title || c.label || `Category ${idx + 1}`}</strong>
                   <div className="bingo-category-summary">
-                    <span className="editor-badge">{categoryName(c)}</span>
-                    <span className="muted tiny">{ruleSummary(c)}</span>
+                    <span className="muted tiny">{categoryName(c)} · {ruleSummary(c)}</span>
                   </div>
                 </div>
                 <div className="editor-icon-actions">
@@ -320,7 +314,7 @@ export function BingoEditor({
                 </div>
               </div>
               <label className="field">
-                Title
+                Category name
                 <input
                   value={(c.title as string) ?? (c.label as string) ?? ''}
                   disabled={locked}
@@ -378,25 +372,15 @@ export function BingoEditor({
                 </div>
               )}
 
-              {!isClub && !isNat && (
-                <label className="field">
-                  matchingRule
-                  <input
-                    disabled={locked}
-                    value={String(c.matchingRule ?? '')}
-                    onChange={(e) => updateCat(idx, { matchingRule: e.target.value })}
-                  />
-                </label>
-              )}
+              {!isClub && !isNat && <p className="muted tiny">This category uses custom matching criteria.</p>}
               <details className="editor-advanced">
                 <summary>Advanced</summary>
                 <div className="advanced-grid">
-                  <label className="field">Category ID<input value={c.id ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { id: e.target.value })} /></label>
-                  <label className="field">Type<input value={type} disabled={locked} onChange={(e) => updateCat(idx, { type: e.target.value })} /></label>
-                  <label className="field">Icon type<input value={c.iconType ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { iconType: e.target.value })} /></label>
-                  <label className="field">Icon value<input value={c.iconValue ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { iconValue: e.target.value })} /></label>
-                  <label className="field">Raw matching rule<input value={String(c.matchingRule ?? '')} disabled={locked} onChange={(e) => updateCat(idx, { matchingRule: e.target.value })} /></label>
-                  <span className="muted tiny">League hint: {leagueFromIconValue(c.iconValue)}</span>
+                  <label className="field">Category key<input value={c.id ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { id: e.target.value })} /></label>
+                  <label className="field">Category style<input value={type} disabled={locked} onChange={(e) => updateCat(idx, { type: e.target.value })} /></label>
+                  <label className="field">Icon style<input value={c.iconType ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { iconType: e.target.value })} /></label>
+                  <label className="field">Icon detail<input value={c.iconValue ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { iconValue: e.target.value })} /></label>
+                  {!isClub && !isNat && <label className="field">Matching criteria<input value={String(c.matchingRule ?? '')} disabled={locked} onChange={(e) => updateCat(idx, { matchingRule: e.target.value })} /></label>}
                 </div>
               </details>
             </article>
@@ -404,7 +388,7 @@ export function BingoEditor({
         })}
       </section>
 
-      <section className="q-card">
+      <section className="editor-clean-section">
         <header>
           <strong>Player pool ({players.length})</strong>
         </header>
@@ -421,8 +405,8 @@ export function BingoEditor({
                 <div className="bingo-player-title">
                   {pl.headshotUrl ? <img src={pl.headshotUrl} alt="" /> : <span className="bingo-player-placeholder" />}
                   <div>
-                    <strong>{pl.name || pl.displayName || `Player ${idx + 1}`}</strong>
-                    <span className="muted tiny">{metadata.join(' · ') || 'No player metadata'}</span>
+                    <strong>{pl.name || pl.displayName || 'Unknown player'}</strong>
+                    <span className="muted tiny">{metadata.join(' · ') || 'Details unavailable'}</span>
                   </div>
                 </div>
                 <EntityPicker
@@ -434,16 +418,6 @@ export function BingoEditor({
                   disabled={locked}
                   onPickPlayer={(hit) => pickPoolPlayer(idx, hit)}
                 />
-                <details className="editor-advanced">
-                  <summary>Advanced</summary>
-                  <div className="muted tiny">
-                    <div>ID: <code>{pl.id ?? '—'}</code></div>
-                    {pl.clubs?.length ? <div>Clubs: {pl.clubs.join(', ')}</div> : null}
-                    {pl.trophies?.length ? <div>Trophies: {pl.trophies.join(', ')}</div> : null}
-                    {pl.awards?.length ? <div>Awards: {pl.awards.join(', ')}</div> : null}
-                    <div>PL apps: {pl.premierLeagueApps ?? '—'} · Top-league apps: {pl.topLeagueApps ?? '—'} · Goals: {pl.topLeagueGoals ?? '—'}</div>
-                  </div>
-                </details>
               </article>
             )
           })}

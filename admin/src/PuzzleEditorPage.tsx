@@ -262,7 +262,6 @@ export function PuzzleEditorPage() {
 
   const locked = query.data?.status === 'locked'
   const approved = query.data?.status === 'approved'
-  const yearMonth = date.slice(0, 7)
   const working = saveMut.isPending || approveMut.isPending || lockMut.isPending || unlockMut.isPending
   const editorReadOnly = locked || saveMut.isPending || approveMut.isPending
   const blocker = useBlocker(dirty)
@@ -339,29 +338,24 @@ export function PuzzleEditorPage() {
       <header className="editor-heading">
         <div className="editor-heading-main">
           <Link to="/" className="back">
-            <span aria-hidden="true">←</span> Back to {yearMonth}
+            <span aria-hidden="true">←</span> Back to schedule
           </Link>
           <div className="editor-title-row">
             <h1>{MODE_LABELS[modeId] ?? modeId}</h1>
             <StatusBadge status={query.data?.status ?? 'loading'} />
             {dirty && <span className="dirty-indicator">Unsaved changes</span>}
           </div>
-          <p className="muted">Puzzle scheduled for {date}</p>
+          <p className="muted">
+            {date
+              ? new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+              : 'Scheduled puzzle'}
+          </p>
         </div>
-        <dl className="editor-meta">
-          <div>
-            <dt>Version</dt>
-            <dd>{query.data ? 'Current' : '—'}</dd>
-          </div>
-          <div>
-            <dt>Content hash</dt>
-            <dd>{query.data?.contentHash?.slice(0, 8) ?? '—'}</dd>
-          </div>
-          <div>
-            <dt>Reviewed</dt>
-            <dd>{query.data?.reviewedAt ? new Date(query.data.reviewedAt).toLocaleDateString() : 'Not yet'}</dd>
-          </div>
-        </dl>
       </header>
 
       <div className="workflow-bar">
@@ -371,27 +365,19 @@ export function PuzzleEditorPage() {
             disabled={editorReadOnly || !dirty}
             onClick={() => saveMut.mutate(currentSnapshot)}
           >
-            {saveMut.isPending ? 'Saving…' : 'Save changes'}
+            {saveMut.isPending ? 'Saving…' : 'Save'}
             <span className="key-hint">⌘S</span>
           </button>
           <button
             type="button"
-            className="ghost"
-            disabled={!dirty || working}
-            onClick={() => setConfirmation('discard')}
-          >
-            Discard
-          </button>
-        </div>
-        <div className="workflow-actions">
-          <button
-            type="button"
-            className="approve-button"
+            className="ghost approve-button"
             disabled={editorReadOnly}
             onClick={() => approveMut.mutate(currentSnapshot)}
           >
-            {approveMut.isPending ? 'Approving…' : 'Save & approve'}
+            {approveMut.isPending ? 'Approving…' : 'Approve'}
           </button>
+        </div>
+        <div className="workflow-actions">
           {locked ? (
             <button
               type="button"
@@ -418,14 +404,27 @@ export function PuzzleEditorPage() {
               Lock
             </button>
           )}
-          <button
-            type="button"
-            className="ghost"
-            disabled={locked || regenMut.isPending}
-            onClick={() => setConfirmation('regenerate')}
-          >
-            {regenMut.isPending ? 'Regenerating…' : 'Regenerate'}
-          </button>
+          <details className="more-menu">
+            <summary>More</summary>
+            <div className="more-menu-popover">
+              <button
+                type="button"
+                className="quiet-button"
+                disabled={!dirty || working}
+                onClick={() => setConfirmation('discard')}
+              >
+                Discard changes
+              </button>
+              <button
+                type="button"
+                className="quiet-button"
+                disabled={locked || regenMut.isPending}
+                onClick={() => setConfirmation('regenerate')}
+              >
+                {regenMut.isPending ? 'Regenerating…' : 'Regenerate puzzle'}
+              </button>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -458,10 +457,18 @@ export function PuzzleEditorPage() {
             />
           </main>
           <aside className="editor-sidebar">
-            <SectionCard
-              title="Validation"
-              description="Checks structure, database facts and whether this puzzle is safe to approve."
-              actions={
+            <details className="secondary-panel" open={validationReport !== null && !validationReport.ok}>
+              <summary>
+                <span>Quality checks</span>
+                <span className="muted tiny">
+                  {validationReport == null
+                    ? 'Not run'
+                    : validationReport.ok
+                      ? 'Passed'
+                      : 'Needs attention'}
+                </span>
+              </summary>
+              <div className="secondary-panel-content">
                 <button
                   type="button"
                   className="ghost"
@@ -470,36 +477,34 @@ export function PuzzleEditorPage() {
                 >
                   {validationMut.isPending ? 'Checking…' : 'Run checks'}
                 </button>
-              }
-            >
-              {validationReport == null ? (
-                <p className="muted tiny">Run checks after editing and before approval.</p>
-              ) : validationReport.issues.length === 0 ? (
-                <ValidationPanel tone="success" title="All checks passed" />
-              ) : (
-                <div className="validation-issue-list">
-                  <ValidationPanel
-                    tone={validationReport.ok ? 'info' : 'error'}
-                    title={
-                      validationReport.ok
-                        ? `${validationReport.issues.length} warning${validationReport.issues.length === 1 ? '' : 's'}`
-                        : `${validationReport.issues.filter((issue) => issue.severity === 'error').length} issue${validationReport.issues.filter((issue) => issue.severity === 'error').length === 1 ? '' : 's'} to fix`
-                    }
-                  />
-                  <ul>
-                    {validationReport.issues.map((issue, index) => (
-                      <li key={`${issue.path}-${index}`} className={`validation-issue issue-${issue.severity}`}>
-                        <strong>{issue.path}</strong>
-                        <span>{issue.message}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </SectionCard>
+                {validationReport == null ? (
+                  <p className="muted tiny">Run checks after editing and before approval.</p>
+                ) : validationReport.issues.length === 0 ? (
+                  <ValidationPanel tone="success" title="All checks passed" />
+                ) : (
+                  <div className="validation-issue-list">
+                    <ValidationPanel
+                      tone={validationReport.ok ? 'info' : 'error'}
+                      title={
+                        validationReport.ok
+                          ? `${validationReport.issues.length} warning${validationReport.issues.length === 1 ? '' : 's'}`
+                          : `${validationReport.issues.filter((issue) => issue.severity === 'error').length} issue${validationReport.issues.filter((issue) => issue.severity === 'error').length === 1 ? '' : 's'} to fix`
+                      }
+                    />
+                    <ul>
+                      {validationReport.issues.map((issue, index) => (
+                        <li key={`${issue.path}-${index}`} className={`validation-issue issue-${issue.severity}`}>
+                          <span>{issue.message}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </details>
             <SectionCard
               title="Review note"
-              description="Context for other editors and approvers."
+              description="Optional context for the team."
             >
               <label className="sr-only" htmlFor="review-note">
                 Review note

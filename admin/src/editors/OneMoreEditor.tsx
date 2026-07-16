@@ -11,6 +11,7 @@ import {
 } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './one-more.css'
+import './editor-clean.css'
 
 type Opt = {
   id: string
@@ -349,7 +350,7 @@ export function OneMoreEditor({
       })
       setCandidateWarnings(result.warnings)
       if (result.pairs.length !== 10) {
-        setActionError(`The engine returned ${result.pairs.length} verified pairs; 10 are required, so no rounds were changed.`)
+        setActionError(`Only ${result.pairs.length} suitable pairs were found. Ten are required, so the rounds were left unchanged.`)
         return
       }
       applyPairs(result.pairs, result.metric, result.threshold)
@@ -390,7 +391,7 @@ export function OneMoreEditor({
       const roundIds = new Set((puzzleRef.current.rounds?.[roundIndex]?.options ?? []).map((option) => option.id))
       const freshPair = result.pairs.find((pair) => pair.options.every((option) => !allCurrentIds.has(option.id)))
         ?? result.pairs.find((pair) => pair.options.every((option) => !roundIds.has(option.id)))
-      if (!freshPair) throw new Error('No safe replacement pair was available. Try again for a different seeded pool.')
+      if (!freshPair) throw new Error('No suitable replacement pair was available. Try again.')
       replaceRound(roundIndex, freshPair)
       setCandidateWarnings(result.warnings)
     } catch (error) {
@@ -508,17 +509,17 @@ export function OneMoreEditor({
         <header>
           <div>
             <strong>Question composer</strong>
-            <p className="muted tiny">Choose a database-backed metric, inspect its coverage, then apply ten verified pairs.</p>
+            <p className="muted tiny">Choose what to measure, set the target, then build ten rounds.</p>
           </div>
           {locked && <span className="om-lock-badge">Locked</span>}
         </header>
 
         {catalogError && <div className="error-box">{catalogError}</div>}
         {!p.metricId && inferredMetric && (
-          <div className="om-notice">Legacy puzzle matched to <strong>{inferredMetric.title}</strong>. Applying a metric change or candidates will persist its ID.</div>
+          <div className="om-notice">This older question matches <strong>{inferredMetric.title}</strong>. Review it before making changes.</div>
         )}
         {!metricId && metrics.length > 0 && (
-          <div className="warning-box">This puzzle has no recognisable metric. Select one before previewing, verifying, or changing players.</div>
+          <div className="warning-box">Choose what this question measures before checking or changing players.</div>
         )}
 
         <div className="om-template-bar">
@@ -583,14 +584,14 @@ export function OneMoreEditor({
 
         <div className="om-config-grid">
           <label className="field">
-            Database metric
+            Measure
             <select value={metricId} disabled={locked} onChange={(event) => selectMetric(event.target.value)}>
               <option value="">Select a metric…</option>
               {metrics.map((metric) => <option key={metric.id} value={metric.id}>{metric.title}</option>)}
             </select>
           </label>
           <label className="field om-title-field">
-            Question title
+            Question
             <input
               value={p.title ?? ''}
               disabled={locked}
@@ -599,7 +600,7 @@ export function OneMoreEditor({
             />
           </label>
           <label className="field">
-            Value noun
+            Answer unit
             <input
               value={p.valueNoun ?? ''}
               disabled={locked}
@@ -608,7 +609,7 @@ export function OneMoreEditor({
             />
           </label>
           <label className="field">
-            Threshold
+            Target
             <input
               type="number"
               min={0}
@@ -622,7 +623,7 @@ export function OneMoreEditor({
 
         {selectedMetric && (
           <div className="om-thresholds">
-            <span className="muted tiny">Suggested thresholds</span>
+            <span className="muted tiny">Suggested targets</span>
             {selectedMetric.ladder.map((threshold) => (
               <button
                 type="button"
@@ -637,20 +638,20 @@ export function OneMoreEditor({
           </div>
         )}
         {selectedMetric?.eventBased && (
-          <div className="warning-box">Event-derived coverage is incomplete before roughly 2010. The engine limits distractors to covered-era players.</div>
+          <div className="warning-box">Results before roughly 2010 may be incomplete, so older players are limited automatically.</div>
         )}
 
         <div className="om-actions">
           <button type="button" className="ghost" disabled={!metricId || previewing} onClick={() => void loadPreview()}>
-            {previewing ? 'Checking coverage…' : 'Preview coverage'}
+            {previewing ? 'Checking players…' : 'Check player pool'}
           </button>
           <button type="button" disabled={locked || !metricId || generating} onClick={() => void generateTen()}>
-            {generating ? 'Generating…' : 'Generate & apply 10 pairs'}
+            {generating ? 'Building rounds…' : 'Build 10 rounds'}
           </button>
           {hasValueMismatch && (
-            <button type="button" className="ghost" disabled={locked} onClick={applyVerifiedValues}>Use verified DB values</button>
+            <button type="button" className="ghost" disabled={locked} onClick={applyVerifiedValues}>Use verified values</button>
           )}
-          <span className="muted tiny">{verifying ? 'Verifying round values…' : verification ? `${verification.pairs.filter((pair) => pair.valid).length}/${verification.pairs.length} pairs DB-verified` : ''}</span>
+          <span className="muted tiny">{verifying ? 'Checking rounds…' : verification ? `${verification.pairs.filter((pair) => pair.valid).length}/${verification.pairs.length} rounds verified` : ''}</span>
         </div>
 
         {actionError && <div className="error-box">{actionError}</div>}
@@ -659,22 +660,22 @@ export function OneMoreEditor({
         {preview && (
           <div className="om-preview">
             <div className="om-preview-stats">
-              <div><strong>{preview.counts.qualifying}</strong><span>qualify</span></div>
-              <div><strong>{preview.counts.distractors}</strong><span>distractors</span></div>
-              <div><strong>{preview.counts.verifiedPairs}</strong><span>close pairs</span></div>
-              <div><strong>{preview.counts.participating}</strong><span>with data</span></div>
+              <div><strong>{preview.counts.qualifying}</strong><span>meet the target</span></div>
+              <div><strong>{preview.counts.distractors}</strong><span>below the target</span></div>
+              <div><strong>{preview.counts.verifiedPairs}</strong><span>usable pairs</span></div>
+              <div><strong>{preview.counts.participating}</strong><span>players checked</span></div>
             </div>
             {preview.suggestedThreshold !== preview.threshold && (
-              <p className="om-notice">Best catalog threshold: <strong>{preview.suggestedThreshold}+</strong></p>
+              <p className="om-notice">Suggested target: <strong>{preview.suggestedThreshold}+</strong></p>
             )}
             {preview.warnings.map((warning) => <div key={warning} className="warning-box">{warning}</div>)}
             <div className="om-sample-grid">
               <div>
-                <strong>Qualifying sample</strong>
+                <strong>Meets the target</strong>
                 <ul>{preview.samples.qualifying.map((candidate) => <li key={candidate.id}>{candidate.name}<b>{candidate.value}</b></li>)}</ul>
               </div>
               <div>
-                <strong>Distractor sample</strong>
+                <strong>Below the target</strong>
                 <ul>{preview.samples.distractors.map((candidate) => <li key={candidate.id}>{candidate.name}<b>{candidate.value}</b></li>)}</ul>
               </div>
             </div>
@@ -685,7 +686,7 @@ export function OneMoreEditor({
       <section className="q-card om-rounds-section">
         <header>
           <div>
-            <strong>Rounds ({rounds.length}/10)</strong>
+            <strong>Rounds {rounds.length}/10</strong>
             <p className="muted tiny">Every pair needs exactly one player at or above {minimum}.</p>
           </div>
         </header>
@@ -697,7 +698,7 @@ export function OneMoreEditor({
                 <div className="om-round-heading">
                   <span className="om-round-number">{roundIndex + 1}</span>
                   <span className={pairVerification?.valid ? 'om-verified valid' : 'om-verified'}>
-                    {pairVerification?.valid ? '✓ verified pair' : verifying ? 'checking…' : 'needs review'}
+                    {pairVerification?.valid ? '✓ Verified' : verifying ? 'Checking…' : 'Needs review'}
                   </span>
                   <button
                     type="button"
@@ -729,15 +730,15 @@ export function OneMoreEditor({
                           disabled={locked || busyRound === roundIndex}
                           onPickPlayer={(hit) => pickPlayer(roundIndex, optionIndex, hit)}
                         />
-                        <p className="muted tiny">{[option.position, option.clubs].filter(Boolean).join(' · ') || option.id}</p>
+                        <p className="muted tiny">{[option.position, option.clubs].filter(Boolean).join(' · ') || 'Player details unavailable'}</p>
                         {verifiedOption && (
                           <p className={verifiedOption.valueMatches ? 'om-db-value ok' : 'om-db-value mismatch'}>
-                            {verifiedOption.valueMatches ? 'Database value verified' : `Saved value differs from DB (${verifiedOption.actualValue ?? 'not found'})`}
+                            {verifiedOption.valueMatches ? 'Value verified' : `Saved value differs (${verifiedOption.actualValue ?? 'not found'})`}
                           </p>
                         )}
                         <details className="advanced-panel">
                           <summary>Advanced</summary>
-                          <div className="warning-box tiny">Manual values can make the published answer disagree with the database. Prefer “Use verified DB values”.</div>
+                          <div className="warning-box tiny">Manual changes may make the answer inaccurate. Prefer “Use verified values”.</div>
                           <label className="field">
                             Override value
                             <input
@@ -748,7 +749,6 @@ export function OneMoreEditor({
                               onChange={(event) => updateOverride(roundIndex, optionIndex, Math.max(0, Math.round(Number(event.target.value))))}
                             />
                           </label>
-                          <span className="muted tiny">Player ID: {option.id}</span>
                         </details>
                       </div>
                     )

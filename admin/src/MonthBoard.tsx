@@ -15,10 +15,6 @@ import {
 import { ConfirmDialog, SectionCard, StatusBadge, ValidationPanel } from './components/AdminUi'
 import './month-generation.css'
 
-function statusClass(status: CellStatus): string {
-  return `cell cell-${status}`
-}
-
 function defaultYearMonth(): string {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
@@ -71,13 +67,7 @@ function countItems(items: MonthGenerationItem[], status: GenerationItemStatus):
   return items.filter((item) => item.status === status).length
 }
 
-export function MonthBoard({
-  adminName,
-  onLogout,
-}: {
-  adminName: string
-  onLogout: () => void
-}) {
+export function MonthBoard() {
   const [yearMonth, setYearMonth] = useState(defaultYearMonth)
   const [modeFilter, setModeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<CellStatus | 'all'>('all')
@@ -232,6 +222,14 @@ export function MonthBoard({
     return m
   }, [matrix?.cells])
 
+  const visibleDates = useMemo(() => {
+    if (!matrix) return []
+    if (statusFilter === 'all') return matrix.dates
+    return matrix.dates.filter((date) =>
+      modes.some((modeId) => cellMap.get(`${date}|${modeId}`)?.status === statusFilter)
+    )
+  }, [cellMap, matrix, modes, statusFilter])
+
   const visibleSummary = useMemo(() => {
     const cells =
       matrix?.cells.filter((cell) => modeFilter === 'all' || cell.modeId === modeFilter) ?? []
@@ -318,17 +316,9 @@ export function MonthBoard({
     <div className="page month-page">
       <header className="topbar board-heading">
         <div>
-          <p className="eyebrow">Content operations</p>
-          <h1>Monthly quiz board</h1>
-          <p className="muted">Review, generate, and publish the daily puzzle schedule.</p>
-        </div>
-        <div className="admin-session">
-          <span>
-            Signed in as <strong>{adminName}</strong>
-          </span>
-          <button type="button" className="ghost" onClick={onLogout}>
-            Log out
-          </button>
+          <p className="eyebrow">Schedule</p>
+          <h1>Quiz schedule</h1>
+          <p className="muted">Plan and review each day’s games.</p>
         </div>
       </header>
 
@@ -358,72 +348,64 @@ export function MonthBoard({
             </label>
           </div>
           <div className="toolbar-actions">
-            <div className="action-group">
-              <span className="action-group-label">Generate</span>
-              <button
-                type="button"
-                disabled={startGenerationMut.isPending}
-                onClick={() => {
-                  if (newestActiveRun) {
-                    setPreferredRun({ yearMonth, id: newestActiveRun.id })
-                    document
-                      .getElementById('generation-progress')
-                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    return
-                  }
-                  setConfirmation('generate')
-                }}
-              >
-                {startGenerationMut.isPending
-                  ? 'Starting…'
-                  : newestActiveRun
-                    ? 'View generation progress'
-                    : 'Generate full month'}
-              </button>
-            </div>
-            <div className="action-group">
-              <span className="action-group-label">Publish controls</span>
-              <div className="button-pair">
-                <button
-                  type="button"
-                  className="danger-outline"
-                  disabled={lockMut.isPending}
-                  onClick={() => setConfirmation('lock')}
-                >
-                  {lockMut.isPending ? 'Locking…' : 'Lock month'}
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={unlockMut.isPending}
-                  onClick={() => setConfirmation('unlock')}
-                >
-                  {unlockMut.isPending ? 'Unlocking…' : 'Unlock'}
-                </button>
-              </div>
-            </div>
+            <button
+              type="button"
+              disabled={startGenerationMut.isPending}
+              onClick={() => {
+                if (newestActiveRun) {
+                  setPreferredRun({ yearMonth, id: newestActiveRun.id })
+                  document
+                    .getElementById('generation-progress')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  return
+                }
+                setConfirmation('generate')
+              }}
+            >
+              {startGenerationMut.isPending
+                ? 'Starting…'
+                : newestActiveRun
+                  ? 'View progress'
+                  : 'Generate month'}
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              disabled={lockMut.isPending}
+              onClick={() => setConfirmation('lock')}
+            >
+              {lockMut.isPending ? 'Locking…' : 'Lock month'}
+            </button>
+            <button
+              type="button"
+              className="quiet-button"
+              disabled={unlockMut.isPending}
+              onClick={() => setConfirmation('unlock')}
+            >
+              {unlockMut.isPending ? 'Unlocking…' : 'Unlock month'}
+            </button>
           </div>
         </div>
       </SectionCard>
 
       {matrix && (
-        <div className="summary" aria-label="Filter board by status">
-          <button
-            type="button"
-            className={`summary-total${statusFilter === 'all' ? ' active' : ''}`}
-            onClick={() => setStatusFilter('all')}
-          >
-            <strong>{visibleSummary.total}</strong>
-            <span>scheduled</span>
-          </button>
-          {(['missing', 'generated', 'approved', 'locked'] as const).map((status) => (
+        <div className="summary" aria-label="Filter schedule by status">
+          {([
+            ['approved', 'Ready'],
+            ['generated', 'Needs review'],
+            ['missing', 'Missing'],
+            ['locked', 'Locked'],
+          ] as const).map(([status, label]) => (
             <button
               type="button"
               key={status}
               className={`summary-status${statusFilter === status ? ' active' : ''}`}
               onClick={() => setStatusFilter((current) => (current === status ? 'all' : status))}
             >
-              <StatusBadge status={status} />
+              <span className="kpi-copy">
+                <span className={`status-marker status-marker-${status}`} aria-hidden="true" />
+                <span>{label}</span>
+              </span>
               <strong>{visibleSummary[status]}</strong>
             </button>
           ))}
@@ -564,87 +546,88 @@ export function MonthBoard({
           })} schedule`}
           description={
             statusFilter === 'all'
-              ? 'Select any populated cell to open its editor.'
-              : `Highlighting ${statusFilter} puzzles. Select the active filter again to clear it.`
+              ? `${visibleSummary.total} games across ${matrix.dates.length} days`
+              : `${visibleDates.length} days have games matching this filter`
           }
           className="board-card"
         >
-          <div className="board-wrap">
-            <table className="board">
-              <thead>
-                <tr>
-                  <th>Mode</th>
-                  {matrix.dates.map((date) => (
-                    <th
-                      key={date}
-                      className={date === todayDate() ? 'today-column' : ''}
-                      title={new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-                        weekday: 'long',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
-                    >
-                      <span>{new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' })}</span>
-                      <strong>{date.slice(-2)}</strong>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {modes.map((modeId) => (
-                  <tr key={modeId}>
-                    <th title={modeId}>
-                      <span className="mode-name">{MODE_LABELS[modeId] ?? modeId}</span>
-                    </th>
-                    {matrix.dates.map((date) => {
-                      const cell = cellMap.get(`${date}|${modeId}`)
-                      const status = cell?.status ?? 'missing'
-                      const dimmed = statusFilter !== 'all' && statusFilter !== status
-                      const detail = [
-                        MODE_LABELS[modeId] ?? modeId,
-                        date,
-                        status,
-                        cell?.version ? `version ${cell.version}` : null,
-                        cell?.snippet,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')
-                      if (status === 'missing') {
-                        return (
-                          <td
-                            key={date}
-                            className={`${statusClass(status)}${date === todayDate() ? ' today-column' : ''}${dimmed ? ' cell-dimmed' : ''}`}
-                            title={detail}
-                          >
-                            <span className="cell-status-letter" aria-label="Missing">—</span>
-                          </td>
+          {visibleDates.length === 0 ? (
+            <div className="empty-schedule">
+              <strong>No matching days</strong>
+              <span>Clear the status filter to see the full schedule.</span>
+              <button type="button" className="ghost" onClick={() => setStatusFilter('all')}>
+                Clear filter
+              </button>
+            </div>
+          ) : (
+            <div className="day-grid">
+              {visibleDates.map((date) => {
+                const dayCells = modes.map((modeId) => ({
+                  modeId,
+                  cell: cellMap.get(`${date}|${modeId}`),
+                }))
+                const readyCount = dayCells.filter(
+                  ({ cell }) => cell?.status === 'approved' || cell?.status === 'locked'
+                ).length
+                const missingCount = dayCells.filter(({ cell }) => !cell || cell.status === 'missing').length
+                const isToday = date === todayDate()
+
+                return (
+                  <article className={`day-card${isToday ? ' today' : ''}`} key={date}>
+                    <header className="day-card-header">
+                      <div>
+                        <span className="day-weekday">
+                          {new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+                            weekday: 'short',
+                          })}
+                        </span>
+                        <strong>
+                          {new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </strong>
+                      </div>
+                      <span className="day-readiness">
+                        {readyCount === modes.length
+                          ? 'All ready'
+                          : missingCount > 0
+                            ? `${missingCount} missing`
+                            : `${readyCount} of ${modes.length} ready`}
+                      </span>
+                    </header>
+                    <div className="day-games">
+                      {dayCells.map(({ modeId, cell }) => {
+                        const status = cell?.status ?? 'missing'
+                        const dimmed = statusFilter !== 'all' && status !== statusFilter
+                        const rowContent = (
+                          <>
+                            <span className="game-name">{MODE_LABELS[modeId] ?? modeId}</span>
+                            <StatusBadge status={status} compact />
+                            {cell && <span className="row-arrow" aria-hidden="true">›</span>}
+                          </>
                         )
-                      }
-                      return (
-                        <td
-                          key={date}
-                          className={`${statusClass(status)}${date === todayDate() ? ' today-column' : ''}${dimmed ? ' cell-dimmed' : ''}`}
-                          title={detail}
-                        >
-                          <Link to={`/d/${date}/${modeId}`} aria-label={`Edit ${detail}`}>
-                            <span className="cell-status-letter">{status[0]!.toUpperCase()}</span>
-                            {cell?.version && <small>v{cell.version}</small>}
+                        return cell ? (
+                          <Link
+                            className={`day-game-row${dimmed ? ' dimmed' : ''}`}
+                            to={`/d/${date}/${modeId}`}
+                            key={modeId}
+                            aria-label={`Open ${MODE_LABELS[modeId] ?? modeId} for ${date}`}
+                          >
+                            {rowContent}
                           </Link>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="legend">
-            <span>Hover for puzzle details</span>
-            <StatusBadge status="missing" compact />
-            <StatusBadge status="generated" compact />
-            <StatusBadge status="approved" compact />
-            <StatusBadge status="locked" compact />
-          </div>
+                        ) : (
+                          <div className={`day-game-row missing${dimmed ? ' dimmed' : ''}`} key={modeId}>
+                            {rowContent}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          )}
         </SectionCard>
       )}
 

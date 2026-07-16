@@ -13,6 +13,7 @@ import { EntityPicker } from '../components/EntityPicker'
 import { canonicalRuleKey, golfRulesSemanticallyEqual } from './golfRuleUtils'
 import './game-editors.css'
 import './golf-editor.css'
+import './editor-clean.css'
 
 type Answer = {
   id?: string
@@ -100,6 +101,12 @@ function summarizeNames(names: string[], limit = 6): string {
 
 function isGolfRarity(value: string | undefined): value is GolfRarity {
   return RARITIES.some((rarity) => rarity === value)
+}
+
+function rarityLabel(rarity: (typeof RARITIES)[number]): string {
+  return rarity === 'ultraRare'
+    ? 'Very rare'
+    : rarity.charAt(0).toUpperCase() + rarity.slice(1)
 }
 
 function toAuthoredHole(hole: Hole): AuthoredGolfHole | null {
@@ -447,12 +454,12 @@ export function GolfEditor({
   function answerGenerationWarning(hole: Hole, rule: GolfTowerRule): string | null {
     const ruleKey = canonicalRuleKey(rule)
     if (!hasRuleSelector(rule) || ruleKey === null || ruleKey === '{}') {
-      return 'Choose at least one rule option before answers can be updated.'
+      return 'Choose at least one question option before answers can be updated.'
     }
     const duplicate = (puzzleRef.current.holes ?? []).some((otherHole) =>
       holeKey(otherHole) !== holeKey(hole) && canonicalRuleKey(otherHole.rule) === ruleKey
     )
-    return duplicate ? 'This question duplicates another hole. Choose a different rule.' : null
+    return duplicate ? 'This question duplicates another hole. Choose different settings.' : null
   }
 
   function cancelScheduledAnswerGeneration() {
@@ -493,7 +500,7 @@ export function GolfEditor({
         setAnswerUpdateState({
           holeKey: target.key,
           status: 'warning',
-          message: warning ?? 'Choose a complete rule before answers can be updated.',
+          message: warning ?? 'Complete the question settings before answers can be updated.',
         })
         if (manual) setBusyAction(null)
       }
@@ -620,7 +627,7 @@ export function GolfEditor({
       setEvaluationState({ holeKey: target.key, evaluation })
     } catch (error) {
       if (operation === operationRef.current) {
-        setActionError(error instanceof Error ? error.message : 'Could not preview rule')
+        setActionError(error instanceof Error ? error.message : 'Could not preview possible answers')
       }
     } finally {
       if (operation === operationRef.current) setBusyAction(null)
@@ -657,7 +664,7 @@ export function GolfEditor({
 
   return (
     <div className="mode-editor">
-      <div className="editor-summary">
+      <div className="editor-clean-summary">
         <div>
           <span className="muted tiny">Five-hole course</span>
           <strong>{holes.length} / {REQUIRED_HOLE_COUNT} holes</strong>
@@ -665,10 +672,6 @@ export function GolfEditor({
         <div>
           <span className="muted tiny">Total par</span>
           <strong>{computedPar}</strong>
-        </div>
-        <div>
-          <span className="muted tiny">Stored total</span>
-          <strong>{p.totalPar ?? 'Not set'}</strong>
         </div>
       </div>
 
@@ -720,7 +723,7 @@ export function GolfEditor({
           </nav>
 
           {activeHole && (
-        <article key={activeHole.holeNumber} className="q-card">
+        <article key={activeHole.holeNumber} className="editor-clean-section">
           <header>
             <strong>
               Hole {activeHole.holeNumber} · par {activeHole.par}
@@ -741,18 +744,18 @@ export function GolfEditor({
               <div>
                 <h3 id="golf-rule-heading">Choose the question</h3>
                 <p className="muted tiny">
-                  Choose a verified question below. Its full answer set, hints and suggested
+                  Choose a ready-made question below. Its possible answers, hints and suggested
                   par are filled in automatically.
                 </p>
               </div>
               <span className={`golf-rule-status ${activeHole.rule ? 'structured' : 'legacy'}`}>
-                {activeHole.rule ? 'Verified question' : 'Needs a verified question'}
+                {activeHole.rule ? 'Verified' : 'Needs a question'}
               </span>
             </div>
 
             {!activeHole.rule && (
               <p className="warning-box">
-                This older hole has no verified question attached. Choose one below before
+                This older hole has no checked question attached. Choose one below before
                 approving the course.
               </p>
             )}
@@ -769,7 +772,7 @@ export function GolfEditor({
                 />
               </label>
               <label className="field">
-                Verified template
+                Ready-made question
                 <select
                   value=""
                   disabled={mutationsDisabled || templatesBusy || availableTemplates.length === 0}
@@ -810,7 +813,8 @@ export function GolfEditor({
             )}
 
             <details className="advanced-panel golf-custom-rule">
-              <summary>Advanced: create a custom question</summary>
+              <summary>Advanced</summary>
+              <h4>Create a custom question</h4>
               {activeHole.rule ? (
                 <div className="golf-rule-builder">
                 {activeHole.rule.validIds ? (
@@ -1010,7 +1014,7 @@ export function GolfEditor({
                       updateRule(activeHole, () => ({ minPlApps: 1 }))
                     }}
                   >
-                    Start a custom rule
+                    Start a custom question
                   </button>
                 </div>
               )}
@@ -1018,13 +1022,13 @@ export function GolfEditor({
 
             <div className="golf-rule-actions">
               <button type="button" className="ghost" disabled={!activeHole.rule || busyAction !== null} onClick={() => void previewRule()}>
-                {busyAction === 'preview' ? 'Checking…' : 'Check possible answers'}
+                {busyAction === 'preview' ? 'Checking…' : 'Preview possible answers'}
               </button>
               <button type="button" className="ghost" disabled={mutationsDisabled || !activeHole.rule} onClick={() => generateAnswers(activeHole)}>
                 {busyAction === 'generate' ? 'Refreshing…' : 'Refresh answers'}
               </button>
               <button type="button" className="ghost" disabled={busyAction !== null} onClick={() => void validateHole()}>
-                {busyAction === 'validate' ? 'Checking…' : 'Check this hole'}
+                {busyAction === 'validate' ? 'Checking…' : 'Verify this hole'}
               </button>
             </div>
             {actionError && <p className="error-box">{actionError}</p>}
@@ -1033,7 +1037,7 @@ export function GolfEditor({
             )}
             {activeAnswerUpdate?.status === 'success' && (
               <p className="golf-answer-update success">
-                {activeAnswerUpdate.count} possible answers updated automatically.
+                {activeAnswerUpdate.count} possible answers updated.
               </p>
             )}
             {activeAnswerUpdate?.status === 'warning' && (
@@ -1054,7 +1058,7 @@ export function GolfEditor({
             )}
             {answersStale && !activeAnswerUpdate && (
               <p className="golf-stale-warning">
-                Answers are stale. Use Refresh answers before approval.
+                Possible answers need refreshing before approval.
               </p>
             )}
             {activeEvaluation && <EvaluationSummary evaluation={activeEvaluation} />}
@@ -1064,9 +1068,9 @@ export function GolfEditor({
                   <p>{activeValidation.warning}</p>
                 ) : (
                   <>
-                    <strong>{activeValidation.valid ? 'Answer set verified' : 'Answer set does not match the rule'}</strong>
+                    <strong>{activeValidation.valid ? 'Verified' : 'Possible answers need attention'}</strong>
                     <p className="tiny">
-                      Stored {activeValidation.storedCount} · expected {activeValidation.expectedCount}
+                      Current {activeValidation.storedCount} · expected {activeValidation.expectedCount}
                     </p>
                     {activeValidation.missingAnswerIds.length > 0 && (
                       <p className="tiny">
@@ -1087,7 +1091,7 @@ export function GolfEditor({
                     {!activeValidation.valid &&
                       activeValidation.missingAnswerIds.length === 0 &&
                       activeValidation.staleAnswerIds.length === 0 && (
-                        <p className="tiny">The stored answer list contains duplicate player ids.</p>
+                        <p className="tiny">The possible answers contain duplicate players.</p>
                       )}
                   </>
                 )}
@@ -1096,7 +1100,7 @@ export function GolfEditor({
           </section>
 
           <label className="field">
-            Display prompt (editable wording)
+            Question
             <textarea
               rows={2}
               value={activeHole.prompt}
@@ -1107,7 +1111,7 @@ export function GolfEditor({
                 setValidationState((current) => current?.holeKey === activeKey ? null : current)
               }}
             />
-            <span className="muted tiny">Changing display wording keeps the attached rule.</span>
+            <span className="muted tiny">You can adjust the wording without changing who qualifies.</span>
           </label>
           <label className="field">
             Category
@@ -1146,7 +1150,7 @@ export function GolfEditor({
             </label>
           </div>
           <div className="field">
-            <span>Hint chips</span>
+            <span>Hints</span>
             <div className="chip-list">
               {(activeHole.hints ?? []).map((hint, index) => (
                 <span className="hint-chip" key={`${index}-${hint}`}>
@@ -1169,7 +1173,7 @@ export function GolfEditor({
             </div>
           </div>
           <label className="field">
-            Hints (one per line)
+            Edit hints (one per line)
             <textarea
               rows={3}
               value={(activeHole.hints ?? []).join('\n')}
@@ -1182,12 +1186,13 @@ export function GolfEditor({
             />
           </label>
           <details className="advanced-panel">
-            <summary>Advanced / manual answers ({activeHole.answers.length})</summary>
+            <summary>Advanced</summary>
+            <h4>Manual possible answers ({activeHole.answers.length})</h4>
             <p className="warning-box">
-              Manual answer edits can make a rule-backed hole stale. Regenerate or validate after every manual change.
+              Manual changes can become inaccurate. Refresh or verify after every change.
             </p>
           <fieldset disabled={mutationsDisabled} className="options">
-            <legend>Answers (search player to set id + aliases)</legend>
+            <legend>Possible answers</legend>
             {activeHole.answers.length === 0 && (
               <p className="warning-box">This hole has no accepted answers.</p>
             )}
@@ -1207,7 +1212,7 @@ export function GolfEditor({
                     aria-label={`Answer ${idx + 1} rarity`}
                     onChange={(e) => updateAnswer(activeHole.holeNumber, idx, { rarity: e.target.value })}
                   >
-                    {RARITIES.map((rarity) => <option key={rarity} value={rarity}>{rarity}</option>)}
+                    {RARITIES.map((rarity) => <option key={rarity} value={rarity}>{rarityLabel(rarity)}</option>)}
                   </select>
                   <button
                     type="button"
@@ -1220,7 +1225,8 @@ export function GolfEditor({
                 </div>
                 <input
                   value={(ans.aliases ?? []).join(', ')}
-                  placeholder="Aliases, comma-separated"
+                  aria-label={`Accepted spellings for answer ${idx + 1}`}
+                  placeholder="Accepted spellings, separated by commas"
                   disabled={mutationsDisabled}
                   onChange={(e) =>
                     updateAnswer(activeHole.holeNumber, idx, {
