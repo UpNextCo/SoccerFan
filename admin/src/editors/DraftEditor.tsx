@@ -242,11 +242,12 @@ export function DraftEditor({
         </div>
       </div>
 
-      <section className="editor-clean-section">
-        <header>
-          <strong>Constraints ({constraints.length})</strong>
-          <span className="muted tiny">Shown in this order</span>
-        </header>
+      <details className="editor-clean-section editor-disclosure">
+        <summary>
+          <strong>Constraints</strong>
+          <span className="muted tiny">{constraints.length} rules</span>
+        </summary>
+        <div className="editor-disclosure-content">
         {constraints.map((c, idx) => {
           const type = c.type ?? ''
           const needsClub = type === 'club' || type === 'natClub'
@@ -357,12 +358,15 @@ export function DraftEditor({
         <p className="muted tiny">
           Constraint count is fixed because it must match formation slots and the optimal lineup.
         </p>
-      </section>
+        </div>
+      </details>
 
-      <section className="editor-clean-section">
-        <header>
+      <details className="editor-clean-section editor-disclosure">
+        <summary>
           <strong>Best lineup</strong>
-        </header>
+          <span className="muted tiny">{lineup.length} players</span>
+        </summary>
+        <div className="editor-disclosure-content">
         {lineup.length === 0 ? (
           <p className="muted">No best lineup has been saved.</p>
         ) : (
@@ -386,7 +390,8 @@ export function DraftEditor({
             ))}
           </div>
         )}
-      </section>
+        </div>
+      </details>
     </div>
   )
 }

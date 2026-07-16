@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, MODE_LABELS, type PuzzleValidationReport } from './api'
 import {
   ConfirmDialog,
-  SectionCard,
   StatusBadge,
   ValidationPanel,
 } from './components/AdminUi'
@@ -509,22 +508,25 @@ export function PuzzleEditorPage() {
                 )}
               </div>
             </details>
-            <SectionCard
-              title="Review note"
-              description="Optional context for the team."
-            >
-              <label className="sr-only" htmlFor="review-note">
-                Review note
-              </label>
-              <textarea
-                id="review-note"
-                rows={5}
-                placeholder="Add review context…"
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                disabled={editorReadOnly}
-              />
-            </SectionCard>
+            <details className="secondary-panel review-note-panel">
+              <summary>
+                <span>Team note</span>
+                <span className="muted tiny">{note.trim() ? 'Added' : 'Optional'}</span>
+              </summary>
+              <div className="secondary-panel-content">
+                <label className="sr-only" htmlFor="review-note">
+                  Team note
+                </label>
+                <textarea
+                  id="review-note"
+                  rows={4}
+                  placeholder="Add a note for the team…"
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  disabled={editorReadOnly}
+                />
+              </div>
+            </details>
             {locked && (
               <ValidationPanel tone="info" title="Read-only">
                 Unlock this puzzle to make changes.

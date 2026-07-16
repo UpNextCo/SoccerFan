@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import { nationalityFlag } from '../countryFlags'
@@ -107,9 +107,13 @@ export function BingoEditor({
   const categories = p.categories ?? []
   const players = p.players ?? []
   const latestRef = useRef(p)
+  const [activeCategoryIndex, setActiveCategoryIndex] = useState(0)
   useEffect(() => {
     latestRef.current = p
   }, [p])
+  useEffect(() => {
+    setActiveCategoryIndex((index) => Math.min(index, Math.max(0, categories.length - 1)))
+  }, [categories.length])
 
   function commit(next: Puzzle) {
     latestRef.current = next
@@ -132,33 +136,6 @@ export function BingoEditor({
     })
   }
 
-  function addCategory() {
-    const current = latestRef.current
-    const nextNumber = (current.categories?.length ?? 0) + 1
-    commit({
-      ...current,
-      categories: [
-        ...(current.categories ?? []),
-        {
-          id: `category-${Date.now()}`,
-          title: `Category ${nextNumber}`,
-          label: `Category ${nextNumber}`,
-          type: 'nationality',
-          iconType: 'flag',
-          iconValue: '',
-          matchingRule: '',
-          flag: '',
-        },
-      ],
-    })
-  }
-
-  function removeCategory(idx: number) {
-    const current = latestRef.current
-    if ((current.categories?.length ?? 0) <= 1) return
-    commit({ ...current, categories: current.categories.filter((_, i) => i !== idx) })
-  }
-
   function moveCategory(idx: number, direction: -1 | 1) {
     const current = latestRef.current
     const nextIdx = idx + direction
@@ -166,6 +143,7 @@ export function BingoEditor({
     const next = [...current.categories]
     ;[next[idx], next[nextIdx]] = [next[nextIdx]!, next[idx]!]
     commit({ ...current, categories: next })
+    setActiveCategoryIndex(nextIdx)
   }
 
   async function pickPoolPlayer(
@@ -268,16 +246,21 @@ export function BingoEditor({
         <header className="editor-section-header">
           <div>
             <strong>Categories ({categories.length})</strong>
-            <p className="muted tiny">Preview the board, then edit each category below.</p>
+            <p className="muted tiny">Select a square to edit it.</p>
           </div>
-          <button type="button" disabled={locked} onClick={addCategory}>+ Add category</button>
         </header>
         <div className="bingo-board-preview" aria-label="Category board preview">
           {categories.map((category, idx) => (
-            <div key={`preview-${category.id ?? idx}`} className="bingo-preview-tile">
+            <button
+              type="button"
+              key={`preview-${category.id ?? idx}`}
+              className={`bingo-preview-tile${idx === activeCategoryIndex ? ' selected' : ''}`}
+              onClick={() => setActiveCategoryIndex(idx)}
+              aria-pressed={idx === activeCategoryIndex}
+            >
               {categoryIcon(category)}
               <span>{category.title || category.label || `Category ${idx + 1}`}</span>
-            </div>
+            </button>
           ))}
         </div>
         {categories.map((c, idx) => {
@@ -297,7 +280,10 @@ export function BingoEditor({
           const ruleParts = String(c.matchingRule ?? '').split('|')
 
           return (
-            <article key={c.id ?? idx} className="bingo-cat bingo-category-card">
+            <article
+              key={c.id ?? idx}
+              className={`bingo-cat bingo-category-card${idx === activeCategoryIndex ? ' active' : ''}`}
+            >
               <div className="bingo-category-heading">
                 <div className="bingo-category-heading-copy">
                   <span className="editor-clean-number">Category {idx + 1}</span>
@@ -309,7 +295,6 @@ export function BingoEditor({
                 <div className="editor-icon-actions">
                   <button type="button" className="ghost tiny-btn" disabled={locked || idx === 0} onClick={() => moveCategory(idx, -1)} aria-label={`Move category ${idx + 1} up`}>↑</button>
                   <button type="button" className="ghost tiny-btn" disabled={locked || idx === categories.length - 1} onClick={() => moveCategory(idx, 1)} aria-label={`Move category ${idx + 1} down`}>↓</button>
-                  <button type="button" className="danger tiny-btn" disabled={locked || categories.length <= 1} onClick={() => removeCategory(idx)}>Remove</button>
                 </div>
               </div>
               <label className="field">
@@ -387,11 +372,12 @@ export function BingoEditor({
         })}
       </section>
 
-      <section className="editor-clean-section">
-        <header>
-          <strong>Player pool ({players.length})</strong>
-        </header>
-        <div className="bingo-player-grid">
+      <details className="editor-clean-section player-pool-panel">
+        <summary>
+          Player pool
+          <span className="muted tiny">{players.length} players · open only to swap someone</span>
+        </summary>
+        <div className="bingo-player-grid player-pool-content">
           {players.map((pl, idx) => {
             const metadata = [
               pl.position,
@@ -421,7 +407,7 @@ export function BingoEditor({
             )
           })}
         </div>
-      </section>
+      </details>
     </div>
   )
 }

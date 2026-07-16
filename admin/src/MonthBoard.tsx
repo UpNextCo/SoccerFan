@@ -45,14 +45,6 @@ function isPlayableMode(mode: string): mode is PlayableMode {
   return (PLAYABLE_MODES as readonly string[]).includes(mode)
 }
 
-function formatTimestamp(value: string | null): string {
-  if (!value) return '—'
-  return new Date(value).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })
-}
-
 function runStatusLabel(status: GenerationRunStatus): string {
   const labels: Record<GenerationRunStatus, string> = {
     queued: 'Waiting to start',
@@ -71,6 +63,7 @@ export function MonthBoard() {
   const [yearMonth, setYearMonth] = useState(defaultYearMonth)
   const [modeFilter, setModeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<CellStatus | 'all'>('all')
+  const [selectedDate, setSelectedDate] = useState(todayDate)
   const [notice, setNotice] = useState<BoardNotice | null>(null)
   const [preferredRun, setPreferredRun] = useState<{ yearMonth: string; id: string } | null>(null)
   const [confirmation, setConfirmation] = useState<MonthConfirmation>(null)
@@ -229,6 +222,17 @@ export function MonthBoard() {
       modes.some((modeId) => cellMap.get(`${date}|${modeId}`)?.status === statusFilter)
     )
   }, [cellMap, matrix, modes, statusFilter])
+
+  useEffect(() => {
+    if (!matrix || matrix.dates.length === 0) return
+    if (visibleDates.includes(selectedDate)) return
+    const today = todayDate()
+    setSelectedDate(
+      visibleDates.includes(today)
+        ? today
+        : visibleDates[0] ?? matrix.dates[0]!
+    )
+  }, [matrix, selectedDate, visibleDates])
 
   const visibleSummary = useMemo(() => {
     const cells =
@@ -402,10 +406,7 @@ export function MonthBoard() {
               className={`summary-status${statusFilter === status ? ' active' : ''}`}
               onClick={() => setStatusFilter((current) => (current === status ? 'all' : status))}
             >
-              <span className="kpi-copy">
-                <span className={`status-marker status-marker-${status}`} aria-hidden="true" />
-                <span>{label}</span>
-              </span>
+              <span className="kpi-copy">{label}</span>
               <strong>{visibleSummary[status]}</strong>
             </button>
           ))}
@@ -431,7 +432,8 @@ export function MonthBoard() {
           {runQuery.error instanceof Error ? runQuery.error.message : 'Failed to load'}
         </ValidationPanel>
       )}
-      {displayedRun && (
+      {displayedRun &&
+        (isActiveRun(displayedRun.status) || displayedRun.failedCount > 0) && (
         <div id="generation-progress">
           <SectionCard
             title={isActiveRun(displayedRun.status) ? 'Month generation progress' : 'Latest generation'}
@@ -449,8 +451,8 @@ export function MonthBoard() {
               ) : undefined
             }
           >
-            <div className="generation-overview" aria-live="polite">
-              <div>
+            <div className="generation-overview generation-overview-compact" aria-live="polite">
+              <div className="generation-main">
                 <span
                   className={`generation-status generation-status-${displayedRun.status}`}
                   role="status"
@@ -464,16 +466,23 @@ export function MonthBoard() {
                   </span>
                 </p>
               </div>
-              <dl className="generation-times">
-                <div>
-                  <dt>Started</dt>
-                  <dd>{formatTimestamp(displayedRun.startedAt)}</dd>
-                </div>
-                <div>
-                  <dt>Finished</dt>
-                  <dd>{formatTimestamp(displayedRun.finishedAt)}</dd>
-                </div>
-              </dl>
+              <p className="generation-summary-line">
+                {runCounts.succeeded} created
+                <span aria-hidden="true"> · </span>
+                {runCounts.skipped} already present
+                {runCounts.failed > 0 && (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    <strong>{runCounts.failed} failed</strong>
+                  </>
+                )}
+                {isActiveRun(displayedRun.status) && (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    {runCounts.running + runCounts.queued} remaining
+                  </>
+                )}
+              </p>
             </div>
 
             <progress
@@ -482,21 +491,6 @@ export function MonthBoard() {
               value={displayedRun.completedCount}
               aria-label={`Generation ${progressPercent}% complete`}
             />
-
-            <dl className="generation-counts">
-              {[
-                ['Created', runCounts.succeeded, 'succeeded'],
-                ['Already present', runCounts.skipped, 'skipped'],
-                ['Failed', runCounts.failed, 'failed'],
-                ['Being created', runCounts.running, 'running'],
-                ['Waiting', runCounts.queued, 'queued'],
-              ].map(([label, value, className]) => (
-                <div className={`generation-count generation-count-${className}`} key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
 
             {failureGroups.length > 0 && (
               <div className="generation-failures">
@@ -560,46 +554,80 @@ export function MonthBoard() {
               </button>
             </div>
           ) : (
-            <div className="day-grid">
-              {visibleDates.map((date) => {
-                const dayCells = modes.map((modeId) => ({
-                  modeId,
-                  cell: cellMap.get(`${date}|${modeId}`),
-                }))
-                const readyCount = dayCells.filter(
-                  ({ cell }) => cell?.status === 'approved' || cell?.status === 'locked'
-                ).length
-                const missingCount = dayCells.filter(({ cell }) => !cell || cell.status === 'missing').length
-                const isToday = date === todayDate()
+            (() => {
+              const selectedCells = modes.map((modeId) => ({
+                modeId,
+                cell: cellMap.get(`${selectedDate}|${modeId}`),
+              }))
+              const leadingDays = new Date(`${yearMonth}-01T12:00:00`).getDay()
+              return (
+                <div className="schedule-workspace">
+                  <div className="month-calendar">
+                    <div className="calendar-weekdays" aria-hidden="true">
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                        <span key={day}>{day}</span>
+                      ))}
+                    </div>
+                    <div className="calendar-days">
+                      {Array.from({ length: leadingDays }, (_, index) => (
+                        <span className="calendar-spacer" key={`spacer-${index}`} />
+                      ))}
+                      {matrix.dates.map((date) => {
+                        const dayCells = modes.map((modeId) =>
+                          cellMap.get(`${date}|${modeId}`)
+                        )
+                        const ready = dayCells.filter(
+                          (cell) => cell?.status === 'approved' || cell?.status === 'locked'
+                        ).length
+                        const missing = dayCells.filter(
+                          (cell) => !cell || cell.status === 'missing'
+                        ).length
+                        const matchesFilter = visibleDates.includes(date)
+                        return (
+                          <button
+                            type="button"
+                            className={[
+                              'calendar-day',
+                              date === selectedDate ? 'selected' : '',
+                              date === todayDate() ? 'today' : '',
+                            ].filter(Boolean).join(' ')}
+                            key={date}
+                            disabled={!matchesFilter}
+                            onClick={() => setSelectedDate(date)}
+                          >
+                            <strong>{Number(date.slice(-2))}</strong>
+                            <span>
+                              {ready === modes.length
+                                ? 'Ready'
+                                : missing > 0
+                                  ? `${missing} missing`
+                                  : `${modes.length - ready} to review`}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
 
-                return (
-                  <article className={`day-card${isToday ? ' today' : ''}`} key={date}>
-                    <header className="day-card-header">
+                  <aside className="selected-day">
+                    <header>
                       <div>
                         <span className="day-weekday">
-                          {new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-                            weekday: 'short',
+                          {new Date(`${selectedDate}T12:00:00`).toLocaleDateString(undefined, {
+                            weekday: 'long',
                           })}
                         </span>
-                        <strong>
-                          {new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-                            month: 'short',
+                        <h3>
+                          {new Date(`${selectedDate}T12:00:00`).toLocaleDateString(undefined, {
+                            month: 'long',
                             day: 'numeric',
                           })}
-                        </strong>
+                        </h3>
                       </div>
-                      <span className="day-readiness">
-                        {readyCount === modes.length
-                          ? 'All ready'
-                          : missingCount > 0
-                            ? `${missingCount} missing`
-                            : `${readyCount} of ${modes.length} ready`}
-                      </span>
                     </header>
                     <div className="day-games">
-                      {dayCells.map(({ modeId, cell }) => {
+                      {selectedCells.map(({ modeId, cell }) => {
                         const status = cell?.status ?? 'missing'
-                        if (statusFilter !== 'all' && status !== statusFilter) return null
                         const rowContent = (
                           <>
                             <span className="game-name">{MODE_LABELS[modeId] ?? modeId}</span>
@@ -610,9 +638,8 @@ export function MonthBoard() {
                         return cell ? (
                           <Link
                             className="day-game-row"
-                            to={`/d/${date}/${modeId}`}
+                            to={`/d/${selectedDate}/${modeId}`}
                             key={modeId}
-                            aria-label={`Open ${MODE_LABELS[modeId] ?? modeId} for ${date}`}
                           >
                             {rowContent}
                           </Link>
@@ -623,10 +650,10 @@ export function MonthBoard() {
                         )
                       })}
                     </div>
-                  </article>
-                )
-              })}
-            </div>
+                  </aside>
+                </div>
+              )
+            })()
           )}
         </SectionCard>
       )}
