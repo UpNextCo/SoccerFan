@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { api, type AdminLeagueHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './game-editors.css'
-import './editor-clean.css'
 
 type Constraint = {
   id?: string

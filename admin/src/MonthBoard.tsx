@@ -599,7 +599,7 @@ export function MonthBoard() {
                     <div className="day-games">
                       {dayCells.map(({ modeId, cell }) => {
                         const status = cell?.status ?? 'missing'
-                        const dimmed = statusFilter !== 'all' && status !== statusFilter
+                        if (statusFilter !== 'all' && status !== statusFilter) return null
                         const rowContent = (
                           <>
                             <span className="game-name">{MODE_LABELS[modeId] ?? modeId}</span>
@@ -609,7 +609,7 @@ export function MonthBoard() {
                         )
                         return cell ? (
                           <Link
-                            className={`day-game-row${dimmed ? ' dimmed' : ''}`}
+                            className="day-game-row"
                             to={`/d/${date}/${modeId}`}
                             key={modeId}
                             aria-label={`Open ${MODE_LABELS[modeId] ?? modeId} for ${date}`}
@@ -617,7 +617,7 @@ export function MonthBoard() {
                             {rowContent}
                           </Link>
                         ) : (
-                          <div className={`day-game-row missing${dimmed ? ' dimmed' : ''}`} key={modeId}>
+                          <div className="day-game-row missing" key={modeId}>
                             {rowContent}
                           </div>
                         )

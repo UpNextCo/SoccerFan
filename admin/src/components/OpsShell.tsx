@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 
 export function OpsShell({
@@ -11,6 +11,68 @@ export function OpsShell({
   children: ReactNode
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const sidebarRef = useRef<HTMLElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const wasMenuOpen = useRef(false)
+
+  useEffect(() => {
+    const content = contentRef.current
+    if (content) content.inert = menuOpen
+
+    if (!menuOpen) {
+      if (wasMenuOpen.current) menuButtonRef.current?.focus()
+      wasMenuOpen.current = false
+      return
+    }
+
+    wasMenuOpen.current = true
+    const frame = window.requestAnimationFrame(() => {
+      const focusable = getFocusableElements(sidebarRef.current)
+      const focusTarget = focusable[0] ?? sidebarRef.current
+      focusTarget?.focus()
+    })
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMenuOpen(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const focusable = getFocusableElements(sidebarRef.current)
+      if (focusable.length === 0) {
+        event.preventDefault()
+        sidebarRef.current?.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [menuOpen])
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 800px)')
+    const handleChange = () => {
+      if (!media.matches) setMenuOpen(false)
+    }
+    media.addEventListener('change', handleChange)
+    return () => media.removeEventListener('change', handleChange)
+  }, [])
 
   return (
     <div className="ops-shell">
@@ -20,6 +82,7 @@ export function OpsShell({
           <span>Ball Knowledge</span>
         </NavLink>
         <button
+          ref={menuButtonRef}
           type="button"
           className="mobile-menu-button ghost"
           aria-expanded={menuOpen}
@@ -30,7 +93,12 @@ export function OpsShell({
         </button>
       </header>
 
-      <aside className={`ops-sidebar${menuOpen ? ' is-open' : ''}`} id="mobile-ops-nav">
+      <aside
+        ref={sidebarRef}
+        className={`ops-sidebar${menuOpen ? ' is-open' : ''}`}
+        id="mobile-ops-nav"
+        tabIndex={-1}
+      >
         <div>
           <NavLink to="/" className="brand desktop-brand" onClick={() => setMenuOpen(false)}>
             <span className="brand-mark" aria-hidden="true">BK</span>
@@ -71,7 +139,18 @@ export function OpsShell({
           onClick={() => setMenuOpen(false)}
         />
       )}
-      <div className="ops-content">{children}</div>
+      <div ref={contentRef} className="ops-content" aria-hidden={menuOpen || undefined}>
+        {children}
+      </div>
     </div>
   )
+}
+
+function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
+  if (!container) return []
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((element) => element.getClientRects().length > 0)
 }

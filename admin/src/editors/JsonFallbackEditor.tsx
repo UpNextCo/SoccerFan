@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import './game-editors.css'
-import './editor-clean.css'
 
 export function JsonFallbackEditor({
   puzzle,

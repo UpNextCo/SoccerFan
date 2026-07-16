@@ -18,6 +18,7 @@
   --success: #27845a;
   --shadow-sm: none;
   --shadow-lg: 0 16px 40px rgba(24, 32, 43, 0.16);
+  --ops-sticky-top: 14px;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.4;
   color: var(--ink);
@@ -843,7 +844,7 @@ button.danger-outline:not(:disabled):hover {
 .workflow-bar {
   position: sticky;
   z-index: 15;
-  top: 0;
+  top: var(--ops-sticky-top);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1668,10 +1669,6 @@ select {
   color: #8a94a3;
 }
 
-.day-game-row.dimmed {
-  opacity: 0.36;
-}
-
 .game-name {
   overflow: hidden;
   font-size: 0.78rem;
@@ -1788,7 +1785,7 @@ select {
 }
 
 .workflow-bar {
-  top: 14px;
+  top: var(--ops-sticky-top);
   margin: 0 0 18px;
   padding: 10px;
   background: rgba(255, 255, 255, 0.96);
@@ -1919,6 +1916,10 @@ select {
 }
 
 @media (max-width: 800px) {
+  :root {
+    --ops-sticky-top: 72px;
+  }
+
   .mobile-shell-header {
     position: sticky;
     top: 0;
@@ -1995,10 +1996,6 @@ select {
   .day-grid {
     grid-template-columns: 1fr;
     padding: 10px;
-  }
-
-  .workflow-bar {
-    top: 72px;
   }
 
   .workflow-primary,

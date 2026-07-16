@@ -16,6 +16,7 @@ import { DraftEditor } from './editors/DraftEditor'
 import { ClubChainEditor } from './editors/ClubChainEditor'
 import { TargetManEditor } from './editors/TargetManEditor'
 import { JsonFallbackEditor } from './editors/JsonFallbackEditor'
+import './editors/editor-clean.css'
 
 type EditorSnapshot = {
   puzzleJson: unknown
@@ -262,8 +263,13 @@ export function PuzzleEditorPage() {
 
   const locked = query.data?.status === 'locked'
   const approved = query.data?.status === 'approved'
-  const working = saveMut.isPending || approveMut.isPending || lockMut.isPending || unlockMut.isPending
-  const editorReadOnly = locked || saveMut.isPending || approveMut.isPending
+  const working =
+    saveMut.isPending ||
+    approveMut.isPending ||
+    lockMut.isPending ||
+    unlockMut.isPending ||
+    regenMut.isPending
+  const editorReadOnly = locked || working
   const blocker = useBlocker(dirty)
 
   useEffect(() => {
@@ -326,6 +332,7 @@ export function PuzzleEditorPage() {
           }
 
   const confirmAction = () => {
+    if (working) return
     const action = confirmation
     setConfirmation(null)
     if (action === 'discard') discardChanges()
@@ -362,7 +369,7 @@ export function PuzzleEditorPage() {
         <div className="workflow-primary">
           <button
             type="button"
-            disabled={editorReadOnly || !dirty}
+            disabled={working || locked || !dirty}
             onClick={() => saveMut.mutate(currentSnapshot)}
           >
             {saveMut.isPending ? 'Saving…' : 'Save'}
@@ -371,7 +378,7 @@ export function PuzzleEditorPage() {
           <button
             type="button"
             className="ghost approve-button"
-            disabled={editorReadOnly}
+            disabled={working || locked}
             onClick={() => approveMut.mutate(currentSnapshot)}
           >
             {approveMut.isPending ? 'Approving…' : 'Approve'}
@@ -382,7 +389,7 @@ export function PuzzleEditorPage() {
             <button
               type="button"
               className="ghost"
-              disabled={unlockMut.isPending}
+              disabled={working}
               onClick={() => unlockMut.mutate()}
             >
               {unlockMut.isPending ? 'Unlocking…' : 'Unlock'}
@@ -418,7 +425,7 @@ export function PuzzleEditorPage() {
               <button
                 type="button"
                 className="quiet-button"
-                disabled={locked || regenMut.isPending}
+                disabled={locked || working}
                 onClick={() => setConfirmation('regenerate')}
               >
                 {regenMut.isPending ? 'Regenerating…' : 'Regenerate puzzle'}
@@ -533,6 +540,7 @@ export function PuzzleEditorPage() {
         description={confirmationContent.description}
         confirmLabel={confirmationContent.label}
         danger
+        confirmDisabled={working}
         onConfirm={confirmAction}
         onCancel={() => setConfirmation(null)}
       />

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './game-editors.css'
-import './editor-clean.css'
 
 type PlayerRef = {
   id: string
@@ -280,9 +279,9 @@ export function ClubChainEditor({
                     <strong>{i === 0 ? 'Start' : i === pathIds.length - 1 ? 'Target' : `Player ${i}`}</strong>
                     {i > 0 && i < pathIds.length - 1 && (
                       <div className="button-row">
-                        <button type="button" className="ghost tiny-btn" disabled={locked || i === 1} onClick={() => movePathStep(i, -1)}>←</button>
-                        <button type="button" className="ghost tiny-btn" disabled={locked || i === pathIds.length - 2} onClick={() => movePathStep(i, 1)}>→</button>
-                        <button type="button" className="ghost tiny-btn" disabled={locked} onClick={() => removePathStep(i)}>×</button>
+                        <button type="button" className="ghost tiny-btn" disabled={locked || i === 1} onClick={() => movePathStep(i, -1)} aria-label={`Move player ${i} earlier`} title="Move earlier">←</button>
+                        <button type="button" className="ghost tiny-btn" disabled={locked || i === pathIds.length - 2} onClick={() => movePathStep(i, 1)} aria-label={`Move player ${i} later`} title="Move later">→</button>
+                        <button type="button" className="ghost tiny-btn" disabled={locked} onClick={() => removePathStep(i)} aria-label={`Remove player ${i} from path`} title="Remove player">×</button>
                       </div>
                     )}
                   </div>

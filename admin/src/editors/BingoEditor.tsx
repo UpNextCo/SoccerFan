@@ -3,7 +3,6 @@ import { api, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import { nationalityFlag } from '../countryFlags'
 import './bingo-lms.css'
-import './editor-clean.css'
 
 type Cat = {
   id?: string

@@ -201,9 +201,6 @@
 }
 
 .lms-question-nav {
-  position: sticky;
-  top: 0;
-  z-index: 10;
   display: grid;
   grid-template-columns: repeat(10, minmax(44px, 1fr));
   gap: 0.35rem;

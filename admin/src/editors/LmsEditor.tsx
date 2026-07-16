@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { api, type AdminPlayerHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './bingo-lms.css'
-import './editor-clean.css'
 
 type Opt = {
   id: string

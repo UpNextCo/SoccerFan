@@ -11,7 +11,6 @@ import {
 } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './one-more.css'
-import './editor-clean.css'
 
 type Opt = {
   id: string

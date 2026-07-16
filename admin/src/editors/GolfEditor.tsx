@@ -13,7 +13,6 @@ import { EntityPicker } from '../components/EntityPicker'
 import { canonicalRuleKey, golfRulesSemanticallyEqual } from './golfRuleUtils'
 import './game-editors.css'
 import './golf-editor.css'
-import './editor-clean.css'
 
 type Answer = {
   id?: string
@@ -1218,6 +1217,8 @@ export function GolfEditor({
                     type="button"
                     className="ghost tiny-btn"
                     disabled={mutationsDisabled}
+                    aria-label={`Remove answer ${ans.name || idx + 1}`}
+                    title="Remove answer"
                     onClick={() => removeAnswer(activeHole.holeNumber, idx)}
                   >
                     ×
