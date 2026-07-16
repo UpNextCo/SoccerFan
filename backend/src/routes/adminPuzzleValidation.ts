@@ -15,6 +15,7 @@ import {
   validateAdminGolfHole,
 } from '../services/adminGolfAuthoring.js';
 import { towerRuleSchema } from '../services/towerRuleSchema.js';
+import { adminTargetCategoryOptions } from '../services/targetManCategories.js';
 
 export const adminPuzzleValidationRouter = Router();
 adminPuzzleValidationRouter.use(requireAdmin);
@@ -58,6 +59,14 @@ adminPuzzleValidationRouter.post('/validate', async (req, res) => {
       body.data.puzzleJson,
       body.data.answerJson ?? null
     ));
+  } catch (error) {
+    sendError(res, error instanceof Error ? error.message : String(error), 500);
+  }
+});
+
+adminPuzzleValidationRouter.get('/target-man/categories', async (_req, res) => {
+  try {
+    sendSuccess(res, await adminTargetCategoryOptions());
   } catch (error) {
     sendError(res, error instanceof Error ? error.message : String(error), 500);
   }

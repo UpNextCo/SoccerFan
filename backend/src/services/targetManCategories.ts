@@ -59,6 +59,39 @@ export function targetCategoryById(id: string): TargetCategoryDef | undefined {
   return TARGET_CATEGORIES.find((c) => c.id === id);
 }
 
+export interface AdminTargetCategoryOption {
+  id: string;
+  label: string;
+  valueNoun: string;
+  offNoun: string;
+  unit: 'eur_m' | null;
+  round: number;
+  minimumPlayerValue: number;
+  suggestedTarget: number;
+}
+
+/** Canonical, currently viable category options for Quiz Ops authoring. */
+export async function adminTargetCategoryOptions(): Promise<AdminTargetCategoryOption[]> {
+  const options = await Promise.all(TARGET_CATEGORIES.map(async (def) => {
+    const ranked = await topPlayersForCategory(def, 30);
+    if (ranked.length < 5) return null;
+    const targetPlayers = (ranked.length >= 9 ? ranked.slice(4) : ranked).slice(0, 5);
+    const combined = targetPlayers.reduce((sum, player) => sum + player.statValue, 0);
+    const suggestedTarget = Math.max(def.round, Math.round(combined / def.round) * def.round);
+    return {
+      id: def.id,
+      label: def.label,
+      valueNoun: def.valueNoun,
+      offNoun: def.offNoun,
+      unit: def.unit,
+      round: def.round,
+      minimumPlayerValue: def.min,
+      suggestedTarget,
+    };
+  }));
+  return options.filter((option): option is AdminTargetCategoryOption => option !== null);
+}
+
 /** Top players for a category, ranked by value desc — used to seed the daily target. */
 export async function topPlayersForCategory(
   def: TargetCategoryDef,

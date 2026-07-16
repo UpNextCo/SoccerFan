@@ -496,17 +496,17 @@ test('checks Club Chain endpoint and length synchronization', () => {
 
 test('checks Target Man answer synchronization', () => {
   const puzzle = {
-    categoryId: 'pl-goals',
-    categoryLabel: 'Premier League goals',
-    title: 'Premier League goals',
+    categoryId: 'pl_goals',
+    categoryLabel: 'Premier League Goals',
+    title: 'Premier League Goals',
     target: 500,
     valueNoun: 'goals',
-    offNoun: 'goals',
+    offNoun: 'goals off',
     unit: null,
   };
   const answer = {
     modeId: 'target_man',
-    answer: { categoryId: 'pl-goals', target: 500 },
+    answer: { categoryId: 'pl_goals', target: 500 },
   };
   assert.equal(validatePuzzleReport('target_man', puzzle, answer).ok, true);
   answer.answer.target = 501;

@@ -216,6 +216,17 @@ export type PuzzleValidationReport = {
   issues: PuzzleValidationIssue[]
 }
 
+export type TargetManCategoryOption = {
+  id: string
+  label: string
+  valueNoun: string
+  offNoun: string
+  unit: 'eur_m' | null
+  round: number
+  minimumPlayerValue: number
+  suggestedTarget: number
+}
+
 export type OpsMediaUpload = {
   id: string
   url: string
@@ -484,6 +495,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  listTargetManCategories: () =>
+    request<TargetManCategoryOption[]>('/validation/target-man/categories'),
   uploadLmsImage: (body: { fileBase64: string; mimeType: string; filename?: string }) =>
     request<OpsMediaUpload>('/media', {
       method: 'POST',

@@ -4,6 +4,7 @@ import { golfRuleSignature } from './golfRuleSignature.js';
 import { isConfiguredOpsMediaUrl } from './opsMediaValidation.js';
 import { FOOTBALL_GOLF_HOLE_COUNT } from './footballGolfConstants.js';
 import { DRAFT_POSITION_COMPATIBILITY_VERSION } from './playerPositionService.js';
+import { targetCategoryById } from './targetManCategories.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 export interface AdminPuzzleValidationIssue {
@@ -361,6 +362,23 @@ function validateTargetMan(puzzleJson: unknown, answerJson: unknown, issues: Adm
   if (answer.categoryId !== puzzle.categoryId) issue(issues, 'answerJson.categoryId', 'Answer category must match puzzle category.');
   if (answer.target !== puzzle.target) issue(issues, 'answerJson.target', 'Answer target must match puzzle target.');
   if (puzzle.title !== puzzle.categoryLabel) issue(issues, 'puzzleJson.title', 'Title and categoryLabel must stay synchronized.');
+  const category = targetCategoryById(puzzle.categoryId);
+  if (!category) {
+    issue(issues, 'puzzleJson.categoryId', 'Choose a supported Target Man category.');
+  } else {
+    if (puzzle.categoryLabel !== category.label) {
+      issue(issues, 'puzzleJson.categoryLabel', `Category name must be “${category.label}”.`);
+    }
+    if (puzzle.valueNoun !== category.valueNoun) {
+      issue(issues, 'puzzleJson.valueNoun', `Answer unit must be “${category.valueNoun}”.`);
+    }
+    if (puzzle.offNoun !== category.offNoun) {
+      issue(issues, 'puzzleJson.offNoun', `Near-miss wording must be “${category.offNoun}”.`);
+    }
+    if (puzzle.unit !== category.unit) {
+      issue(issues, 'puzzleJson.unit', 'Formatting unit does not match the selected category.');
+    }
+  }
 }
 
 export function validatePuzzleReport(modeId: string, puzzleJson: unknown, answerJson: unknown): AdminPuzzleValidationReport {

@@ -1,4 +1,6 @@
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { api, type TargetManCategoryOption } from '../api'
 import './game-editors.css'
 
 type Puzzle = {
@@ -43,6 +45,11 @@ export function TargetManEditor({
   const categoryTitle = p.categoryLabel ?? p.title ?? p.label ?? ''
   const [rawText, setRawText] = useState(() => JSON.stringify(answer ?? null, null, 2))
   const [rawError, setRawError] = useState<string | null>(null)
+  const categoriesQuery = useQuery({
+    queryKey: ['target-man-categories'],
+    queryFn: api.listTargetManCategories,
+    staleTime: Infinity,
+  })
 
   useEffect(() => {
     setRawText(JSON.stringify(answer ?? null, null, 2))
@@ -65,6 +72,19 @@ export function TargetManEditor({
   function updatePuzzle(patch: Partial<Puzzle>) {
     const nextPuzzle = { ...p, ...patch }
     onChange(nextPuzzle, synchronizedAnswer(nextPuzzle))
+  }
+
+  function selectCategory(category: TargetManCategoryOption) {
+    updatePuzzle({
+      categoryId: category.id,
+      categoryLabel: category.label,
+      title: category.label,
+      label: category.label,
+      valueNoun: category.valueNoun,
+      offNoun: category.offNoun,
+      unit: category.unit,
+      target: category.suggestedTarget,
+    })
   }
 
   function applyRaw() {
@@ -94,19 +114,35 @@ export function TargetManEditor({
           <span className="muted tiny">Changes are kept in sync automatically</span>
         </header>
         <label className="field">
-          Category name
-          <input
-            value={categoryTitle}
-            disabled={locked}
-            onChange={(e) =>
-              updatePuzzle({
-                title: e.target.value,
-                categoryLabel: e.target.value,
-                label: e.target.value,
-              })
-            }
-          />
+          Category
+          <select
+            value={p.categoryId ?? ''}
+            disabled={locked || categoriesQuery.isLoading}
+            onChange={(event) => {
+              const category = categoriesQuery.data?.find(
+                (option) => option.id === event.target.value
+              )
+              if (category) selectCategory(category)
+            }}
+          >
+            {!p.categoryId && <option value="">Choose a category</option>}
+            {p.categoryId &&
+              !categoriesQuery.data?.some((option) => option.id === p.categoryId) && (
+                <option value={p.categoryId}>{categoryTitle || p.categoryId}</option>
+              )}
+            {categoriesQuery.data?.map((category) => (
+              <option value={category.id} key={category.id}>
+                {category.label}
+              </option>
+            ))}
+          </select>
         </label>
+        <p className="muted tiny">
+          Changing category also updates the suggested target, units and near-miss wording.
+        </p>
+        {categoriesQuery.error && (
+          <p className="error-box">Categories could not be loaded. Refresh and try again.</p>
+        )}
         <div className="row">
           <label className="field">
             Target
