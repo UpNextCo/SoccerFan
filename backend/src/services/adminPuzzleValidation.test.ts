@@ -24,7 +24,8 @@ import {
   dedupeAdminGolfTemplates,
   type AdminGolfTemplate,
 } from './adminGolfAuthoring.js';
-import { golfRuleSignature } from './golfRuleSignature.js';
+import { summarizeGolfPlayerNames } from './adminDraftValidation.js';
+import { golfRuleSignature, golfRulesSemanticallyEqual } from './golfRuleSignature.js';
 
 test('requires the persisted 4x4 Bingo contract', () => {
   const categories = Array.from({ length: 16 }, (_, index) => ({
@@ -274,6 +275,29 @@ test('canonicalizes Golf rule signatures and keeps executable changes distinct',
   );
 });
 
+test('summarizes Golf answer names without exposing player ids', () => {
+  assert.equal(
+    summarizeGolfPlayerNames(['One', 'Two', 'Three']),
+    'One, Two, Three'
+  );
+  assert.equal(
+    summarizeGolfPlayerNames(['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight']),
+    'One, Two, Three, Four, Five, Six, and 2 more'
+  );
+});
+
+test('detects semantic Golf rule changes but ignores label-only edits', () => {
+  const original = { label: 'Original', playedFor: ['Arsenal', 'Chelsea'], minPlApps: 10 };
+  assert.equal(
+    golfRulesSemanticallyEqual(
+      original,
+      { label: 'New wording', minPlApps: 10, playedFor: ['Chelsea', 'Arsenal'] }
+    ),
+    true
+  );
+  assert.equal(golfRulesSemanticallyEqual(original, { ...original, minPlApps: 11 }), false);
+});
+
 test('rejects duplicate structured Golf rules across differently worded holes', () => {
   const holes = Array.from({ length: FOOTBALL_GOLF_HOLE_COUNT }, (_, index) => ({
     holeNumber: index + 1,
@@ -403,11 +427,13 @@ test('dedupes Golf names and derives bounded authoring output', () => {
   assert.equal(suggestGolfPar(8), 2);
   assert.equal(suggestGolfPar(9), 3);
   assert.equal(suggestGolfPar(12), 4);
-  assert.ok(golfQualityWarnings('Played for both clubs', 'Clubs', {
+  const qualityWarnings = golfQualityWarnings('Played for both clubs', 'Clubs', {
     total: 2,
     nameable: 2,
     duplicateNamesRemoved: 1,
-  }).length >= 2);
+  });
+  assert.equal(qualityWarnings.length, 1);
+  assert.ok(qualityWarnings.every((warning) => !warning.includes('duplicate display-name')));
 
   const evaluation: GolfRuleEvaluation = {
     prompt: 'Played for both Arsenal and Chelsea',

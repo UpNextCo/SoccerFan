@@ -10,6 +10,7 @@ import {
   type GolfTowerRule,
 } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
+import { canonicalRuleKey, golfRulesSemanticallyEqual } from './golfRuleUtils'
 import './game-editors.css'
 import './golf-editor.css'
 
@@ -45,6 +46,10 @@ const RARITIES = ['common', 'uncommon', 'rare', 'ultraRare'] as const
 const REQUIRED_HOLE_COUNT = 5
 
 type BusyAction = 'template' | 'preview' | 'generate' | 'validate'
+type AnswerUpdateState =
+  | { holeKey: string; status: 'pending' }
+  | { holeKey: string; status: 'success'; count: number }
+  | { holeKey: string; status: 'warning' | 'error'; message: string }
 
 const INTEGER_RULE_FIELDS: Array<{
   key: keyof GolfTowerRule
@@ -87,25 +92,10 @@ function cleanRule(rule: GolfTowerRule): GolfTowerRule {
   ) as GolfTowerRule
 }
 
-function canonicalRuleKey(rule: GolfTowerRule | undefined): string | null {
-  if (!rule) return null
-  const normalize = (value: string) =>
-    value.normalize('NFKD').replace(/\p{Diacritic}/gu, '').trim().replace(/\s+/g, ' ').toLowerCase()
-  return JSON.stringify(
-    Object.fromEntries(
-      Object.entries(rule)
-        .filter(([key, value]) => key !== 'label' && value !== undefined)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, value]) => [
-          key,
-          Array.isArray(value)
-            ? [...new Set(value.map(normalize))].sort()
-            : typeof value === 'string'
-              ? normalize(value)
-              : value,
-        ])
-    )
-  )
+function summarizeNames(names: string[], limit = 6): string {
+  const visible = names.slice(0, limit)
+  const remaining = names.length - visible.length
+  return `${visible.join(', ')}${remaining > 0 ? `, and ${remaining} more` : ''}`
 }
 
 function isGolfRarity(value: string | undefined): value is GolfRarity {
@@ -183,6 +173,8 @@ export function GolfEditor({
   const holes = [...(p.holes ?? [])].sort((a, b) => a.holeNumber - b.holeNumber)
   const puzzleRef = useRef(p)
   const operationRef = useRef(0)
+  const answerGenerationRef = useRef(0)
+  const answerGenerationTimerRef = useRef<number | null>(null)
   const templateSearchRef = useRef(0)
   const [activeIndex, setActiveIndex] = useState(0)
   const [templateQuery, setTemplateQuery] = useState('')
@@ -200,6 +192,7 @@ export function GolfEditor({
     result: GolfAnswerSetValidation
   } | null>(null)
   const [staleHoleKeys, setStaleHoleKeys] = useState<Set<string>>(() => new Set())
+  const [answerUpdateState, setAnswerUpdateState] = useState<AnswerUpdateState | null>(null)
   const activeHole = holes[Math.min(activeIndex, Math.max(holes.length - 1, 0))]
   const computedPar = holes.reduce((sum, hole) => sum + (Number.isFinite(hole.par) ? hole.par : 0), 0)
   const activeKey = activeHole ? holeKey(activeHole) : null
@@ -229,6 +222,8 @@ export function GolfEditor({
       && !usedRuleKeys.has(canonicalRuleKey(template.rule) ?? '')
   )
   const answersStale = activeKey ? staleHoleKeys.has(activeKey) : false
+  const activeAnswerUpdate =
+    answerUpdateState?.holeKey === activeKey ? answerUpdateState : null
   const mutationsDisabled = locked || busyAction !== null
 
   useEffect(() => {
@@ -238,6 +233,25 @@ export function GolfEditor({
   useEffect(() => {
     puzzleRef.current = p
   }, [p])
+
+  useEffect(() => () => {
+    if (answerGenerationTimerRef.current !== null) {
+      window.clearTimeout(answerGenerationTimerRef.current)
+    }
+    answerGenerationRef.current += 1
+  }, [])
+
+  useEffect(() => {
+    if (!locked) return
+    answerGenerationRef.current += 1
+    if (answerGenerationTimerRef.current !== null) {
+      window.clearTimeout(answerGenerationTimerRef.current)
+      answerGenerationTimerRef.current = null
+    }
+    operationRef.current += 1
+    setBusyAction(null)
+    setAnswerUpdateState(null)
+  }, [locked])
 
   useEffect(() => {
     const requestId = ++templateSearchRef.current
@@ -282,6 +296,7 @@ export function GolfEditor({
   }
 
   function updateHole(n: number, patch: Partial<Hole>) {
+    cancelScheduledAnswerGeneration()
     commitHoles(
       (puzzleRef.current.holes ?? []).map((h) =>
         h.holeNumber === n ? { ...h, ...patch } : h
@@ -305,9 +320,13 @@ export function GolfEditor({
 
   function updateRule(hole: Hole, change: (current: GolfTowerRule) => GolfTowerRule) {
     const nextRule = cleanRule(change(hole.rule ?? {}))
+    const nextHole = { ...hole, rule: nextRule, templateId: undefined }
     updateHole(hole.holeNumber, { rule: nextRule, templateId: undefined })
-    markAnswersStale(hole)
-    setEvaluationState((current) => current?.holeKey === holeKey(hole) ? null : current)
+    if (!golfRulesSemanticallyEqual(hole.rule, nextRule)) {
+      markAnswersStale(hole)
+      setEvaluationState((current) => current?.holeKey === holeKey(hole) ? null : current)
+      scheduleAutomaticAnswerRefresh(nextHole, nextRule)
+    }
   }
 
   function updateAnswer(n: number, idx: number, patch: Partial<Answer>) {
@@ -316,6 +335,11 @@ export function GolfEditor({
     const answers = hole.answers.map((a, i) => (i === idx ? { ...a, ...patch } : a))
     updateHole(n, { answers })
     markAnswersStale(hole)
+    setAnswerUpdateState({
+      holeKey: holeKey(hole),
+      status: 'warning',
+      message: 'Manual answers changed. Use Refresh answers to restore the verified list.',
+    })
   }
 
   async function pickAnswer(
@@ -350,6 +374,11 @@ export function GolfEditor({
     if (!hole) return
     updateHole(n, { answers: [...hole.answers, { name: '', aliases: [], rarity: 'common' }] })
     markAnswersStale(hole)
+    setAnswerUpdateState({
+      holeKey: holeKey(hole),
+      status: 'warning',
+      message: 'Manual answers changed. Use Refresh answers to restore the verified list.',
+    })
   }
 
   function removeAnswer(n: number, idx: number) {
@@ -357,10 +386,16 @@ export function GolfEditor({
     if (!hole) return
     updateHole(n, { answers: hole.answers.filter((_, i) => i !== idx) })
     markAnswersStale(hole)
+    setAnswerUpdateState({
+      holeKey: holeKey(hole),
+      status: 'warning',
+      message: 'Manual answers changed. Use Refresh answers to restore the verified list.',
+    })
   }
 
   function addHole() {
     if (holes.length >= REQUIRED_HOLE_COUNT) return
+    cancelScheduledAnswerGeneration()
     commitHoles([
       ...holes,
       {
@@ -379,6 +414,7 @@ export function GolfEditor({
 
   function removeHole() {
     if (!activeHole || holes.length <= REQUIRED_HOLE_COUNT) return
+    cancelScheduledAnswerGeneration()
     commitHoles(holes.filter((hole) => hole.holeNumber !== activeHole.holeNumber))
     setActiveIndex((index) => Math.max(0, index - 1))
   }
@@ -386,6 +422,7 @@ export function GolfEditor({
   function moveHole(offset: -1 | 1) {
     const targetIndex = activeIndex + offset
     if (!activeHole || targetIndex < 0 || targetIndex >= holes.length) return
+    cancelScheduledAnswerGeneration()
     const next = [...holes]
     ;[next[activeIndex], next[targetIndex]] = [next[targetIndex]!, next[activeIndex]!]
     commitHoles(next)
@@ -407,8 +444,127 @@ export function GolfEditor({
     )
   }
 
+  function answerGenerationWarning(hole: Hole, rule: GolfTowerRule): string | null {
+    const ruleKey = canonicalRuleKey(rule)
+    if (!hasRuleSelector(rule) || ruleKey === null || ruleKey === '{}') {
+      return 'Choose at least one rule option before answers can be updated.'
+    }
+    const duplicate = (puzzleRef.current.holes ?? []).some((otherHole) =>
+      holeKey(otherHole) !== holeKey(hole) && canonicalRuleKey(otherHole.rule) === ruleKey
+    )
+    return duplicate ? 'This question duplicates another hole. Choose a different rule.' : null
+  }
+
+  function cancelScheduledAnswerGeneration() {
+    answerGenerationRef.current += 1
+    if (answerGenerationTimerRef.current !== null) {
+      window.clearTimeout(answerGenerationTimerRef.current)
+      answerGenerationTimerRef.current = null
+    }
+    setAnswerUpdateState(null)
+  }
+
+  function scheduleAutomaticAnswerRefresh(hole: Hole, rule: GolfTowerRule) {
+    cancelScheduledAnswerGeneration()
+    const warning = answerGenerationWarning(hole, rule)
+    if (warning) {
+      setAnswerUpdateState({ holeKey: holeKey(hole), status: 'warning', message: warning })
+      return
+    }
+    const request = answerGenerationRef.current
+    setAnswerUpdateState({ holeKey: holeKey(hole), status: 'pending' })
+    answerGenerationTimerRef.current = window.setTimeout(() => {
+      answerGenerationTimerRef.current = null
+      void generateAnswersForHole(hole, rule, request, false)
+    }, 725)
+  }
+
+  async function generateAnswersForHole(
+    requestedHole: Hole,
+    requestedRule: GolfTowerRule,
+    request: number,
+    manual: boolean
+  ) {
+    const target = operationTarget(requestedHole)
+    const expectedRuleKey = canonicalRuleKey(requestedRule)
+    const warning = answerGenerationWarning(requestedHole, requestedRule)
+    if (warning || expectedRuleKey === null) {
+      if (request === answerGenerationRef.current) {
+        setAnswerUpdateState({
+          holeKey: target.key,
+          status: 'warning',
+          message: warning ?? 'Choose a complete rule before answers can be updated.',
+        })
+        if (manual) setBusyAction(null)
+      }
+      return
+    }
+    const latestBeforeRequest = currentOperationHole(target)
+    if (
+      request !== answerGenerationRef.current
+      || !latestBeforeRequest
+      || canonicalRuleKey(latestBeforeRequest.rule) !== expectedRuleKey
+    ) {
+      if (manual && request === answerGenerationRef.current) setBusyAction(null)
+      return
+    }
+
+    setActionError(null)
+    setAnswerUpdateState({ holeKey: target.key, status: 'pending' })
+    try {
+      const generated = await api.generateGolfHole({
+        prompt: latestBeforeRequest.prompt,
+        rule: requestedRule,
+        holeNumber: latestBeforeRequest.holeNumber,
+        ...(latestBeforeRequest.id ? { holeId: latestBeforeRequest.id } : {}),
+      })
+      if (request !== answerGenerationRef.current) return
+      const current = currentOperationHole(target)
+      if (!current || canonicalRuleKey(current.rule) !== expectedRuleKey) return
+      const nextHole: Hole = {
+        ...current,
+        ...generated.hole,
+        id: current.id ?? generated.hole.id,
+        holeNumber: current.holeNumber,
+        prompt: current.prompt,
+        templateId: current.templateId,
+      }
+      commitHoles((puzzleRef.current.holes ?? []).map((hole) =>
+        hole === current ? nextHole : hole
+      ))
+      const nextKey = holeKey(nextHole)
+      setEvaluationState({ holeKey: nextKey, evaluation: generated.evaluation })
+      setValidationState(null)
+      clearAnswersStale(nextKey)
+      setAnswerUpdateState({
+        holeKey: nextKey,
+        status: 'success',
+        count: generated.evaluation.answers.length,
+      })
+    } catch (error) {
+      if (request === answerGenerationRef.current) {
+        setAnswerUpdateState({
+          holeKey: target.key,
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Could not update possible answers',
+        })
+      }
+    } finally {
+      if (manual && request === answerGenerationRef.current) setBusyAction(null)
+    }
+  }
+
+  function generateAnswers(hole: Hole) {
+    if (!hole.rule || mutationsDisabled) return
+    cancelScheduledAnswerGeneration()
+    const request = answerGenerationRef.current
+    setBusyAction('generate')
+    void generateAnswersForHole(hole, hole.rule, request, true)
+  }
+
   async function applyTemplate(template: AdminGolfTemplate) {
     if (!activeHole || mutationsDisabled) return
+    cancelScheduledAnswerGeneration()
     const target = operationTarget(activeHole)
     const operation = ++operationRef.current
     setBusyAction('template')
@@ -435,6 +591,11 @@ export function GolfEditor({
       setEvaluationState({ holeKey: nextKey, evaluation: generated.evaluation })
       setValidationState(null)
       clearAnswersStale(nextKey)
+      setAnswerUpdateState({
+        holeKey: nextKey,
+        status: 'success',
+        count: generated.evaluation.answers.length,
+      })
     } catch (error) {
       if (operation === operationRef.current) {
         setActionError(error instanceof Error ? error.message : 'Could not apply template')
@@ -460,45 +621,6 @@ export function GolfEditor({
     } catch (error) {
       if (operation === operationRef.current) {
         setActionError(error instanceof Error ? error.message : 'Could not preview rule')
-      }
-    } finally {
-      if (operation === operationRef.current) setBusyAction(null)
-    }
-  }
-
-  async function generateAnswers() {
-    if (!activeHole?.rule || mutationsDisabled) return
-    const target = operationTarget(activeHole)
-    const operation = ++operationRef.current
-    setBusyAction('generate')
-    setActionError(null)
-    try {
-      const generated = await api.generateGolfHole({
-        prompt: activeHole.prompt,
-        rule: activeHole.rule,
-        holeNumber: activeHole.holeNumber,
-        ...(activeHole.id ? { holeId: activeHole.id } : {}),
-      })
-      if (operation !== operationRef.current) return
-      const current = currentOperationHole(target)
-      if (!current) return
-      const nextHole: Hole = {
-        ...current,
-        ...generated.hole,
-        id: current.id ?? generated.hole.id,
-        holeNumber: current.holeNumber,
-        templateId: current.templateId,
-      }
-      commitHoles((puzzleRef.current.holes ?? []).map((hole) =>
-        hole === current ? nextHole : hole
-      ))
-      const nextKey = holeKey(nextHole)
-      setEvaluationState({ holeKey: nextKey, evaluation: generated.evaluation })
-      setValidationState(null)
-      clearAnswersStale(nextKey)
-    } catch (error) {
-      if (operation === operationRef.current) {
-        setActionError(error instanceof Error ? error.message : 'Could not generate answers')
       }
     } finally {
       if (operation === operationRef.current) setBusyAction(null)
@@ -885,8 +1007,7 @@ export function GolfEditor({
                     className="ghost"
                     disabled={mutationsDisabled}
                     onClick={() => {
-                      updateHole(activeHole.holeNumber, { rule: { minPlApps: 1 }, templateId: undefined })
-                      markAnswersStale(activeHole)
+                      updateRule(activeHole, () => ({ minPlApps: 1 }))
                     }}
                   >
                     Start a custom rule
@@ -899,7 +1020,7 @@ export function GolfEditor({
               <button type="button" className="ghost" disabled={!activeHole.rule || busyAction !== null} onClick={() => void previewRule()}>
                 {busyAction === 'preview' ? 'Checking…' : 'Check possible answers'}
               </button>
-              <button type="button" disabled={mutationsDisabled || !activeHole.rule} onClick={() => void generateAnswers()}>
+              <button type="button" className="ghost" disabled={mutationsDisabled || !activeHole.rule} onClick={() => generateAnswers(activeHole)}>
                 {busyAction === 'generate' ? 'Refreshing…' : 'Refresh answers'}
               </button>
               <button type="button" className="ghost" disabled={busyAction !== null} onClick={() => void validateHole()}>
@@ -907,9 +1028,33 @@ export function GolfEditor({
               </button>
             </div>
             {actionError && <p className="error-box">{actionError}</p>}
-            {answersStale && (
+            {activeAnswerUpdate?.status === 'pending' && (
+              <p className="golf-answer-update">Updating possible answers…</p>
+            )}
+            {activeAnswerUpdate?.status === 'success' && (
+              <p className="golf-answer-update success">
+                {activeAnswerUpdate.count} possible answers updated automatically.
+              </p>
+            )}
+            {activeAnswerUpdate?.status === 'warning' && (
+              <p className="golf-stale-warning">{activeAnswerUpdate.message}</p>
+            )}
+            {activeAnswerUpdate?.status === 'error' && (
+              <div className="error-box golf-answer-error">
+                <span>{activeAnswerUpdate.message}</span>
+                <button
+                  type="button"
+                  className="ghost tiny-btn"
+                  disabled={mutationsDisabled || !activeHole.rule}
+                  onClick={() => generateAnswers(activeHole)}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {answersStale && !activeAnswerUpdate && (
               <p className="golf-stale-warning">
-                Answers are stale: the rule or manual answer set changed. Regenerate or validate before approval.
+                Answers are stale. Use Refresh answers before approval.
               </p>
             )}
             {activeEvaluation && <EvaluationSummary evaluation={activeEvaluation} />}
@@ -925,18 +1070,18 @@ export function GolfEditor({
                     </p>
                     {activeValidation.missingAnswerIds.length > 0 && (
                       <p className="tiny">
-                        <strong>Missing:</strong>{' '}
-                        {activeValidation.missingAnswerIds.map((id) =>
+                        <strong>{activeValidation.missingAnswerIds.length} missing:</strong>{' '}
+                        {summarizeNames(activeValidation.missingAnswerIds.map((id) =>
                           activeValidation.evaluation.answers.find((answer) => answer.id === id)?.name ?? 'Unknown player'
-                        ).join(', ')}
+                        ))}
                       </p>
                     )}
                     {activeValidation.staleAnswerIds.length > 0 && (
                       <p className="tiny">
-                        <strong>Not matched by rule:</strong>{' '}
-                        {activeValidation.staleAnswerIds.map((id) =>
+                        <strong>{activeValidation.staleAnswerIds.length} no longer matched:</strong>{' '}
+                        {summarizeNames(activeValidation.staleAnswerIds.map((id) =>
                           activeHole.answers.find((answer) => answer.id === id)?.name ?? 'Unknown player'
-                        ).join(', ')}
+                        ))}
                       </p>
                     )}
                     {!activeValidation.valid &&

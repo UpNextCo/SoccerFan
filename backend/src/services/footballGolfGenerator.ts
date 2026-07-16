@@ -317,9 +317,6 @@ export function golfQualityWarnings(
     warnings.push(`Only ${counts.nameable} nameable answers; this prompt should have at least ${minimumNameable}.`);
   }
   if (counts.total > 100) warnings.push(`Rule matches ${counts.total} players; use another filter to keep the answer set at 100 or fewer.`);
-  if (counts.duplicateNamesRemoved > 0) {
-    warnings.push(`${counts.duplicateNamesRemoved} duplicate display-name answer(s) were removed.`);
-  }
   return warnings;
 }
 

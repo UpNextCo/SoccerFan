@@ -40,6 +40,12 @@ const issue = (
   severity: AdminPuzzleValidationIssue['severity'] = 'error'
 ) => issues.push({ severity, path, message });
 
+export function summarizeGolfPlayerNames(names: string[], limit = 6): string {
+  const visible = names.slice(0, limit);
+  const remaining = names.length - visible.length;
+  return `${visible.join(', ')}${remaining > 0 ? `, and ${remaining} more` : ''}`;
+}
+
 const oneMoreShape = z.object({
   metricId: z.string().min(1),
   minimum: z.number().int().nonnegative(),
@@ -70,9 +76,13 @@ const optionalTowerRule = z.preprocess(
 );
 const golfShape = z.object({
   holes: z.array(z.object({
+    holeNumber: z.number().int().positive(),
     prompt: z.string().min(1),
     rule: optionalTowerRule,
-    answers: z.array(z.object({ id: z.string().optional() }).passthrough()),
+    answers: z.array(z.object({
+      id: z.string().optional(),
+      name: z.string().min(1),
+    }).passthrough()),
   }).passthrough()),
 }).passthrough();
 const draftShape = z.object({
@@ -211,22 +221,34 @@ async function validateGolf(
         storedIds
       );
       if (comparison.missingAnswerIds.length > 0) {
+        const namesById = new Map(evaluation.answers.map((answer) => [answer.id, answer.name]));
+        const names = comparison.missingAnswerIds.map(
+          (answerId) => namesById.get(answerId) ?? 'Unknown player'
+        );
         issue(
           issues,
-          `puzzleJson.holes.${holeIndex}.answers`,
-          `Missing ${comparison.missingAnswerIds.length} current rule answer(s): ${comparison.missingAnswerIds.join(', ')}.`
+          `Hole ${hole.holeNumber} answers`,
+          `Answer list needs refreshing: ${names.length} players are missing (${summarizeGolfPlayerNames(names)}). Use Refresh answers.`
         );
       }
       if (comparison.staleAnswerIds.length > 0) {
+        const namesById = new Map(
+          hole.answers.flatMap((answer) => answer.id ? [[answer.id, answer.name] as const] : [])
+        );
+        const names = comparison.staleAnswerIds.map(
+          (answerId) => namesById.get(answerId) ?? 'Unknown player'
+        );
         issue(
           issues,
-          `puzzleJson.holes.${holeIndex}.answers`,
-          `Contains ${comparison.staleAnswerIds.length} stale/non-matching answer(s): ${comparison.staleAnswerIds.join(', ')}.`
+          `Hole ${hole.holeNumber} answers`,
+          `${names.length} old answers no longer match (${summarizeGolfPlayerNames(names)}).`
         );
       }
-      evaluation.qualityWarnings.forEach((message) => {
-        issue(issues, `puzzleJson.holes.${holeIndex}.rule`, message, 'warning');
-      });
+      evaluation.qualityWarnings
+        .filter((message) => !message.includes('duplicate display-name answer(s) were removed'))
+        .forEach((message) => {
+          issue(issues, `puzzleJson.holes.${holeIndex}.rule`, message, 'warning');
+        });
     } catch (error) {
       issue(
         issues,

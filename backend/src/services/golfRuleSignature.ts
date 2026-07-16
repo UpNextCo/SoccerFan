@@ -41,3 +41,7 @@ export function golfRuleSignature(rule: TowerRule): string {
     .slice(0, 16);
   return `${SIGNATURE_VERSION}_${digest}`;
 }
+
+export function golfRulesSemanticallyEqual(first: TowerRule, second: TowerRule): boolean {
+  return golfRuleSignature(first) === golfRuleSignature(second);
+}
