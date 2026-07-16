@@ -873,13 +873,20 @@ private struct BattleSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var assignedConstraint: BattleConstraint? { viewModel.state.constraint(forSlot: slot.id) }
+    private var positionCopy: String {
+        let alternatives = BattleFormations.acceptedPositions(for: slot.position)
+            .dropFirst()
+            .map(BattleFormations.shortLabel)
+        guard !alternatives.isEmpty else { return slot.position.uppercased() }
+        return "\(slot.position.uppercased()) · ALSO \(alternatives.joined(separator: " / "))"
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(slot.position.uppercased())")
+                        Text(positionCopy)
                             .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
                         Text(assignedConstraint?.label.uppercased() ?? "CHOOSE A CHIP")
                             .font(BKFont.headline(16)).foregroundStyle(BKTheme.accent)
@@ -923,7 +930,7 @@ private struct BattleSearchSheet: View {
                 if assignedConstraint != nil {
                     HStack(spacing: 12) {
                         TextField("", text: $viewModel.searchQuery, prompt:
-                            Text("SEARCH \(slot.position.uppercased())S").foregroundStyle(BKTheme.textMuted)
+                            Text("SEARCH PLAYERS").foregroundStyle(BKTheme.textMuted)
                                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                         )
                         .textFieldStyle(.plain)

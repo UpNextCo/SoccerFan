@@ -17,7 +17,10 @@ import { db } from '../db/index.js';
 import { lookupTeamLogo } from './teamService.js';
 import { resolveHeadshot } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
-import { playerMatchesSubPositionSql, UNNEST_EFFECTIVE_SUB_POSITIONS_SQL } from './playerPositionService.js';
+import {
+  DRAFT_POSITION_COMPATIBILITY_VERSION,
+  playerMatchesSubPositionSql,
+} from './playerPositionService.js';
 import {
   careerGoalsSub,
   careerAssistsSub,
@@ -292,9 +295,8 @@ async function viableNatClub(clubs: string[]): Promise<Array<{ nationality: stri
 
 interface Cell { id: string; stat: number; name: string }
 
-// How many ranked players to keep per (constraint, position). Only Centre-Back appears in two
-// slots, so a depth of 3 is always enough to give the second CB slot a distinct fallback player.
-const CELL_DEPTH = 3;
+// Keep enough depth for distinct-player materialisation now that adjacent slots can share candidates.
+const CELL_DEPTH = 6;
 
 /**
  * For one constraint, the top-N eligible players (ranked by category value) at each needed
@@ -303,18 +305,19 @@ const CELL_DEPTH = 3;
  * star can't be double-counted across two constraints), so the "optimal" score is achievable.
  */
 async function bestCellsForConstraint(cat: Category, c: Constraint, positions: string[]): Promise<Map<string, Cell[]>> {
-  const posList = sql.join(positions.map((p) => sql`${p}`), sql`, `);
+  const requestedPositions = sql.join(positions.map((position) => sql`(${position})`), sql`, `);
   const rows = (await db.execute(sql`
-    WITH val AS ${cat.sub},
+    WITH requested(pos) AS (VALUES ${requestedPositions}),
+    val AS ${cat.sub},
     elig AS (${eligibilityIds(c)}),
     ranked AS (
-      SELECT pos, p.id, p.name, COALESCE(val.value, 0)::int AS stat,
-             ROW_NUMBER() OVER (PARTITION BY pos ORDER BY COALESCE(val.value, 0) DESC, p.name) AS rn
+      SELECT requested.pos, p.id, p.name, COALESCE(val.value, 0)::int AS stat,
+             ROW_NUMBER() OVER (PARTITION BY requested.pos ORDER BY COALESCE(val.value, 0) DESC, p.name) AS rn
       FROM players p
       JOIN elig ON elig.player_id = p.id
       LEFT JOIN val ON val.player_id = p.id
-      CROSS JOIN LATERAL ${UNNEST_EFFECTIVE_SUB_POSITIONS_SQL}
-      WHERE pos IN (${posList})
+      CROSS JOIN requested
+      WHERE ${playerMatchesSubPositionSql(sql`requested.pos`)}
     )
     SELECT pos, id, name, stat FROM ranked WHERE rn <= ${CELL_DEPTH} ORDER BY pos, rn
   `)) as unknown as Array<{ pos: string; id: string; name: string; stat: number }>;
@@ -402,6 +405,7 @@ export interface BattlePuzzleJson {
   modeId: 'draft_master';
   puzzleId: string;
   date: string;
+  positionCompatibilityVersion: number;
   category: { id: string; title: string; noun: string; unit: 'eur_m' | null };
   formationId: string;
   slots: Array<{ id: string; position: string }>;
@@ -566,6 +570,7 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
       modeId: 'draft_master',
       puzzleId: `${date}-draft_master`,
       date,
+      positionCompatibilityVersion: DRAFT_POSITION_COMPATIBILITY_VERSION,
       category: { id: category.id, title: category.title, noun: category.noun, unit: category.unit },
       formationId: formation.id,
       slots: slots.map((s) => ({ id: s.id, position: s.position })),

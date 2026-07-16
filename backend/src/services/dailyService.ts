@@ -17,6 +17,7 @@ import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenera
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 import { startLastManStandingRun, submitLastManStandingAnswer } from './lastManStandingCheck.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
+import { DRAFT_POSITION_COMPATIBILITY_VERSION } from './playerPositionService.js';
 import { resolveCompletionScore } from './dailyScoring.js';
 import { isAcceptableCompletionDate, previousDay, resolveClientDailyDate, todayUTC } from '../utils/dailyDate.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
@@ -378,10 +379,7 @@ export async function ensureLastManStandingPuzzle(date: string): Promise<void> {
   }
 }
 
-/**
- * Drop a stored Draft Master puzzle if it predates Battle Mode (the old format had `prompts`/
- * `category`; the new one has `scenario`/`formationId`), so it regenerates.
- */
+/** Drop a generated Draft XI puzzle when its format or position rules are stale. */
 async function migrateStaleDraftMaster(date: string): Promise<void> {
   const rows = await db
     .select({ puzzleJson: dailyPuzzles.puzzleJson, status: dailyPuzzles.status })
@@ -389,15 +387,28 @@ async function migrateStaleDraftMaster(date: string): Promise<void> {
     .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')))
     .limit(1);
   if (!rows[0] || rows[0].status === 'locked' || rows[0].status === 'approved') return;
-  const puzzle = rows[0].puzzleJson as { constraints?: unknown; optimalScore?: unknown; optimalLineup?: unknown } | undefined;
+  const puzzle = rows[0].puzzleJson as {
+    constraints?: unknown;
+    optimalScore?: unknown;
+    optimalLineup?: unknown;
+    positionCompatibilityVersion?: unknown;
+  } | undefined;
   if (!puzzle) return;
-  // Current Battle format has `constraints` + `optimalScore` + `optimalLineup`; drop anything older
-  // so it regenerates (scenario/budget puzzles, or pre-lineup/pre-GK-aware puzzles).
-  if (!Array.isArray(puzzle.constraints) || typeof puzzle.optimalScore !== 'number' || !Array.isArray(puzzle.optimalLineup)) {
+  const staleFormat =
+    !Array.isArray(puzzle.constraints) ||
+    typeof puzzle.optimalScore !== 'number' ||
+    !Array.isArray(puzzle.optimalLineup);
+  const stalePositionRules =
+    puzzle.positionCompatibilityVersion !== DRAFT_POSITION_COMPATIBILITY_VERSION;
+  if (staleFormat || stalePositionRules) {
     await db
       .delete(dailyPuzzles)
       .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'draft_master')));
-    console.log(`Removed stale draft_master puzzle for ${date} (will regenerate)`);
+    console.log(
+      `Removed stale draft_master puzzle for ${date} (${
+        stalePositionRules ? 'position rules changed' : 'format changed'
+      }; will regenerate)`
+    );
   }
 }
 

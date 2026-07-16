@@ -47,6 +47,27 @@ const TYPE_LABELS: Record<ConstraintType, string> = {
   natClub: 'Nationality + club',
 }
 
+const POSITION_COMPATIBILITY: Record<string, readonly string[]> = {
+  Goalkeeper: ['Goalkeeper'],
+  'Centre-Back': ['Centre-Back'],
+  'Left-Back': ['Left-Back', 'Left Midfield'],
+  'Right-Back': ['Right-Back', 'Right Midfield'],
+  'Defensive Midfield': ['Defensive Midfield', 'Central Midfield'],
+  'Central Midfield': ['Central Midfield', 'Defensive Midfield', 'Attacking Midfield'],
+  'Attacking Midfield': ['Attacking Midfield', 'Central Midfield', 'Second Striker'],
+  'Left Midfield': ['Left Midfield', 'Left-Back', 'Left Winger'],
+  'Right Midfield': ['Right Midfield', 'Right-Back', 'Right Winger'],
+  'Left Winger': ['Left Winger', 'Left Midfield'],
+  'Right Winger': ['Right Winger', 'Right Midfield'],
+  'Centre-Forward': ['Centre-Forward', 'Second Striker'],
+  'Second Striker': ['Second Striker', 'Centre-Forward', 'Attacking Midfield'],
+}
+
+function additionalPositions(position?: string): string[] {
+  if (!position) return []
+  return [...(POSITION_COMPATIBILITY[position] ?? [position])].filter((candidate) => candidate !== position)
+}
+
 function isConstraintType(value: string): value is ConstraintType {
   return CONSTRAINT_TYPES.some((type) => type === value)
 }
@@ -377,6 +398,11 @@ export function DraftEditor({
                   <span className="position-badge">{pick.position || `Slot ${i + 1}`}</span>
                   <strong>{pick.statValue ?? '—'} pts</strong>
                 </div>
+                {additionalPositions(pick.position).length > 0 && (
+                  <p className="muted tiny">
+                    Also accepts {additionalPositions(pick.position).join(' or ')}
+                  </p>
+                )}
                 <p className="muted tiny">{pick.constraintLabel || 'No constraint label'}</p>
                 <EntityPicker
                   key={`${pick.slotId ?? i}-${pick.playerId ?? ''}-${pick.playerName ?? ''}`}

@@ -3,6 +3,7 @@ import { towerRuleSchema } from './towerRuleSchema.js';
 import { golfRuleSignature } from './golfRuleSignature.js';
 import { isConfiguredOpsMediaUrl } from './opsMediaValidation.js';
 import { FOOTBALL_GOLF_HOLE_COUNT } from './footballGolfConstants.js';
+import { DRAFT_POSITION_COMPATIBILITY_VERSION } from './playerPositionService.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 export interface AdminPuzzleValidationIssue {
@@ -139,6 +140,7 @@ const draftPick = z.object({
   statValue: z.number().positive(),
 }).passthrough();
 const draftPuzzle = z.object({
+  positionCompatibilityVersion: z.number().int().optional(),
   category: z.object({ id, title: text }).passthrough(),
   formationId: id,
   slots: z.array(draftSlot).min(1),
@@ -308,6 +310,13 @@ function validateOneMore(puzzleJson: unknown, answerJson: unknown, issues: Admin
 function validateDraft(puzzleJson: unknown, issues: AdminPuzzleValidationIssue[]) {
   const puzzle = parse(draftPuzzle, puzzleJson, 'puzzleJson', issues);
   if (!puzzle) return;
+  if (puzzle.positionCompatibilityVersion !== DRAFT_POSITION_COMPATIBILITY_VERSION) {
+    issue(
+      issues,
+      'puzzleJson',
+      'This Draft XI uses the old strict position rules. Regenerate it to use flexible positions.'
+    );
+  }
   const count = puzzle.slots.length;
   if (puzzle.constraints.length !== count || puzzle.optimalLineup.length !== count) {
     issue(issues, 'puzzleJson', 'Slots, constraints, and optimal lineup must have equal lengths.');

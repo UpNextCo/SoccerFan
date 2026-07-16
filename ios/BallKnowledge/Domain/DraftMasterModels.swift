@@ -310,6 +310,26 @@ enum BattleFormations {
         default: return String(position.prefix(2)).uppercased()
         }
     }
+
+    /// Mirrors the backend's slot-driven Draft XI compatibility matrix.
+    static func acceptedPositions(for slotPosition: String) -> [String] {
+        switch slotPosition {
+        case "Goalkeeper": return ["Goalkeeper"]
+        case "Centre-Back": return ["Centre-Back"]
+        case "Left-Back": return ["Left-Back", "Left Midfield"]
+        case "Right-Back": return ["Right-Back", "Right Midfield"]
+        case "Defensive Midfield": return ["Defensive Midfield", "Central Midfield"]
+        case "Central Midfield": return ["Central Midfield", "Defensive Midfield", "Attacking Midfield"]
+        case "Attacking Midfield": return ["Attacking Midfield", "Central Midfield", "Second Striker"]
+        case "Left Midfield": return ["Left Midfield", "Left-Back", "Left Winger"]
+        case "Right Midfield": return ["Right Midfield", "Right-Back", "Right Winger"]
+        case "Left Winger": return ["Left Winger", "Left Midfield"]
+        case "Right Winger": return ["Right Winger", "Right Midfield"]
+        case "Centre-Forward": return ["Centre-Forward", "Second Striker"]
+        case "Second Striker": return ["Second Striker", "Centre-Forward", "Attacking Midfield"]
+        default: return [slotPosition]
+        }
+    }
 }
 
 enum BattleTiming {

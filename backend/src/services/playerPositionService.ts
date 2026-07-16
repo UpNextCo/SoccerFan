@@ -20,6 +20,34 @@ export const VALID_SUB_POSITIONS = [
 export type SubPosition = (typeof VALID_SUB_POSITIONS)[number];
 
 export const VALID_SUB_POSITION_SET = new Set<string>(VALID_SUB_POSITIONS);
+export const DRAFT_POSITION_COMPATIBILITY_VERSION = 1;
+
+/**
+ * Slot-driven Draft XI compatibility. These are deliberately adjacent roles rather than broad
+ * position groups: an LM may fill either neighbouring role, but an LB does not implicitly become
+ * an LW. Existing secondary positions remain valid in addition to this small allowance.
+ */
+export const SLOT_POSITION_COMPATIBILITY: Record<SubPosition, readonly SubPosition[]> = {
+  Goalkeeper: ['Goalkeeper'],
+  'Centre-Back': ['Centre-Back'],
+  'Left-Back': ['Left-Back', 'Left Midfield'],
+  'Right-Back': ['Right-Back', 'Right Midfield'],
+  'Defensive Midfield': ['Defensive Midfield', 'Central Midfield'],
+  'Central Midfield': ['Central Midfield', 'Defensive Midfield', 'Attacking Midfield'],
+  'Attacking Midfield': ['Attacking Midfield', 'Central Midfield', 'Second Striker'],
+  'Left Midfield': ['Left Midfield', 'Left-Back', 'Left Winger'],
+  'Right Midfield': ['Right Midfield', 'Right-Back', 'Right Winger'],
+  'Left Winger': ['Left Winger', 'Left Midfield'],
+  'Right Winger': ['Right Winger', 'Right Midfield'],
+  'Centre-Forward': ['Centre-Forward', 'Second Striker'],
+  'Second Striker': ['Second Striker', 'Centre-Forward', 'Attacking Midfield'],
+};
+
+export function compatibleSubPositions(slotPosition: string): readonly string[] {
+  return VALID_SUB_POSITION_SET.has(slotPosition)
+    ? SLOT_POSITION_COMPATIBILITY[slotPosition as SubPosition]
+    : [slotPosition];
+}
 
 /** SQL expression: all fine positions stored for player row alias `p`. */
 export const EFFECTIVE_SUB_POSITIONS_SQL = sql`
@@ -31,7 +59,19 @@ export const EFFECTIVE_SUB_POSITIONS_SQL = sql`
 
 /** SQL predicate: player alias `p` can fill the given slot position. */
 export function playerMatchesSubPositionSql(position: string | SQL): SQL {
-  return sql`${position} = ANY(${EFFECTIVE_SUB_POSITIONS_SQL})`;
+  const compatibilityCases = Object.entries(SLOT_POSITION_COMPATIBILITY).map(
+    ([slot, accepted]) => sql`
+      WHEN ${slot} THEN ARRAY[${sql.join(accepted.map((value) => sql`${value}`), sql`, `)}]::text[]
+    `
+  );
+  return sql`
+    ${EFFECTIVE_SUB_POSITIONS_SQL} && (
+      CASE ${position}
+        ${sql.join(compatibilityCases, sql` `)}
+        ELSE ARRAY[${position}]::text[]
+      END
+    )
+  `;
 }
 
 /** SQL expression expanding each player to one row per playable fine position (alias `pos`). */
