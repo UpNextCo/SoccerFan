@@ -5,6 +5,8 @@ export interface UserProfile {
   displayName: string;
   xp: number;
   level: number;
+  levelXpStart: number;
+  nextLevelXp: number;
   streak: number;
   todayXp: number;
   avatarUrl?: string;

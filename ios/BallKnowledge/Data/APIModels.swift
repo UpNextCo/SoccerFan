@@ -16,6 +16,8 @@ struct UserProfileDTO: Codable, Equatable {
     let displayName: String
     let xp: Int
     let level: Int
+    let levelXpStart: Int?
+    let nextLevelXp: Int?
     let streak: Int
     let todayXp: Int
     var avatarUrl: String?

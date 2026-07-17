@@ -8,7 +8,12 @@ import { resolveClientDailyDate } from '../utils/dailyDate.js';
 import { avatarPublicUrl } from '../utils/avatarUrl.js';
 
 function computeLevel(xp: number): number {
-  return Math.max(1, Math.floor(Math.sqrt(xp / 100)));
+  return Math.max(1, Math.floor(Math.sqrt(Math.max(0, xp) / 1_500)));
+}
+
+function xpRequiredForLevel(level: number): number {
+  if (level <= 1) return 0;
+  return 1_500 * level * level;
 }
 
 const MAX_AVATAR_BYTES = 400_000; // ~400KB compressed JPEG
@@ -20,11 +25,14 @@ function toUserProfile(
 ): UserProfile {
   const dailyDate = resolveClientDailyDate(clientDate);
   const todayXp = progress.todayXpDate === dailyDate ? progress.todayXp : 0;
+  const level = computeLevel(progress.xp);
   return {
     id: user.id,
     displayName: user.displayName,
     xp: progress.xp,
-    level: progress.level,
+    level,
+    levelXpStart: xpRequiredForLevel(level),
+    nextLevelXp: xpRequiredForLevel(level + 1),
     streak: progress.streak,
     todayXp,
     favoriteTeamId: user.favoriteTeamId ?? null,
@@ -165,4 +173,4 @@ export async function deleteUserAccount(userId: string): Promise<void> {
   await db.delete(users).where(eq(users.id, userId));
 }
 
-export { computeLevel };
+export { computeLevel, xpRequiredForLevel };

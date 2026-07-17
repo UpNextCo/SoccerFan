@@ -707,6 +707,19 @@ struct ProfileTabView: View {
         return letters.isEmpty ? "BK" : letters.uppercased()
     }
 
+    private var currentLevel: Int { auth.user?.level ?? 1 }
+    private var currentXp: Int { auth.user?.xp ?? 0 }
+    private var levelXpStart: Int {
+        auth.user?.levelXpStart ?? (currentLevel <= 1 ? 0 : 1_500 * currentLevel * currentLevel)
+    }
+    private var nextLevelXp: Int {
+        auth.user?.nextLevelXp ?? 1_500 * (currentLevel + 1) * (currentLevel + 1)
+    }
+    private var levelProgress: Double {
+        let range = max(1, nextLevelXp - levelXpStart)
+        return min(1, max(0, Double(currentXp - levelXpStart) / Double(range)))
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
@@ -821,9 +834,31 @@ struct ProfileTabView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("Level \(auth.user?.level ?? 1) · \(levelTitle(auth.user?.level ?? 1))")
+                Text("\(levelEmoji(currentLevel))  Level \(currentLevel) · \(levelTitle(currentLevel))")
                     .font(BKFont.caption(13))
                     .foregroundStyle(BKTheme.accent)
+
+                VStack(spacing: 5) {
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(BKTheme.cardElevated)
+                            Capsule()
+                                .fill(BKTheme.accent)
+                                .frame(width: geometry.size.width * levelProgress)
+                        }
+                    }
+                    .frame(height: 6)
+
+                    HStack {
+                        Text("\(currentXp.formatted()) XP")
+                        Spacer()
+                        Text("\(max(0, nextLevelXp - currentXp).formatted()) to Level \(currentLevel + 1)")
+                    }
+                    .font(BKFont.caption(10))
+                    .foregroundStyle(BKTheme.textMuted)
+                }
+                .frame(maxWidth: 250)
             }
         }
         .frame(maxWidth: .infinity)
@@ -1021,6 +1056,17 @@ struct ProfileTabView: View {
         case 8..<12: return "Veteran"
         case 12..<18: return "World Class"
         default: return "Legend"
+        }
+    }
+
+    private func levelEmoji(_ level: Int) -> String {
+        switch level {
+        case ..<3: return "⚽️"
+        case 3..<5: return "🥉"
+        case 5..<8: return "🥈"
+        case 8..<12: return "🥇"
+        case 12..<18: return "🏆"
+        default: return "👑"
         }
     }
 }
