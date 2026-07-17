@@ -287,6 +287,7 @@ struct LastManStandingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: LastManStandingViewModel
+    @FocusState private var customSearchFocused: Bool
     private let allowReplay: Bool
     private let dailyDate: String?
     var onComplete: () -> Void
@@ -311,7 +312,12 @@ struct LastManStandingView: View {
                             .padding(.bottom, 24)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .scrollDismissesKeyboard(.interactively)
 
+                    if state.currentQuestion?.type == .customQuestion,
+                       state.status == .question {
+                        customAnswerPanel
+                    }
                     survivorDock
                 }
                 .background(StadiumBackground(glowIntensity: 0.28))
@@ -355,6 +361,9 @@ struct LastManStandingView: View {
                 .zIndex(999)
         }
         .animation(.easeOut(duration: 0.21), value: state.currentQuestionIndex)
+        .onChange(of: state.currentQuestionIndex) { _, _ in
+            customSearchFocused = false
+        }
         .persistsGameProgress(
             viewModel.state,
             isResumable: viewModel.isResumable,
@@ -506,24 +515,100 @@ struct LastManStandingView: View {
             LastManStandingQuestionCard(
                 question: question,
                 isInteractive: state.isInteractive && !viewModel.isChecking,
-                customSearchQuery: viewModel.customSearchQuery,
-                customSearchResults: viewModel.customSearchResults,
-                isSearchingCustomAnswer: viewModel.isSearchingCustomAnswer,
-                onCustomSearchChange: { viewModel.customSearchQuery = $0 },
-                onCustomPlayerSelect: { player in
-                    Task { await viewModel.submitCustomAnswer(player) }
-                },
                 onSelect: { optionId in
                     Task { await viewModel.submit(optionId: optionId) }
                 }
             )
             .id(question.id)
-            .task(id: viewModel.customSearchQuery) {
-                await viewModel.searchCustomAnswer()
-            }
             .transition(.opacity.combined(with: .offset(y: 8)))
             .opacity(viewModel.isChecking ? 0.72 : 1)
             .animation(.easeOut(duration: 0.12), value: viewModel.isChecking)
+        }
+    }
+
+    private var customAnswerPanel: some View {
+        VStack(spacing: 8) {
+            if viewModel.customSearchQuery
+                .trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
+                if viewModel.customSearchResults.isEmpty &&
+                    !viewModel.isSearchingCustomAnswer {
+                    Text("No players found")
+                        .font(BKFont.caption(11))
+                        .foregroundStyle(BKTheme.textMuted)
+                        .padding(.vertical, 6)
+                } else {
+                    VStack(spacing: 5) {
+                        ForEach(Array(viewModel.customSearchResults.prefix(4))) { player in
+                            Button {
+                                customSearchFocused = false
+                                Task { await viewModel.submitCustomAnswer(player) }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    PlayerAvatar(urlString: player.headshotUrl, size: 34) {
+                                        PlayerSilhouette(size: 34)
+                                    }
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(player.name)
+                                            .font(BKFont.headline(14))
+                                            .foregroundStyle(BKTheme.textPrimary)
+                                        Text(player.club)
+                                            .font(BKFont.caption(9))
+                                            .foregroundStyle(BKTheme.textMuted)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(BKTheme.textMuted)
+                                }
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 7)
+                                .background(BKTheme.card.opacity(0.94))
+                                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!state.isInteractive || viewModel.isChecking)
+                        }
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(BKTheme.textMuted)
+                TextField(
+                    "Search player",
+                    text: Binding(
+                        get: { viewModel.customSearchQuery },
+                        set: { viewModel.customSearchQuery = $0 }
+                    )
+                )
+                .font(BKFont.body(15))
+                .foregroundStyle(BKTheme.textPrimary)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .focused($customSearchFocused)
+                .disabled(!state.isInteractive || viewModel.isChecking)
+                if viewModel.isSearchingCustomAnswer {
+                    ProgressView()
+                        .scaleEffect(0.75)
+                        .tint(BKTheme.accent)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(BKTheme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                LMSVisualStyle.cardStroke(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        .task(id: viewModel.customSearchQuery) {
+            await viewModel.searchCustomAnswer()
         }
     }
 

@@ -3,13 +3,7 @@ import SwiftUI
 struct LastManStandingQuestionCard: View {
     let question: LMSQuestion
     let isInteractive: Bool
-    let customSearchQuery: String
-    let customSearchResults: [PlayerSearchResultDTO]
-    let isSearchingCustomAnswer: Bool
-    let onCustomSearchChange: (String) -> Void
-    let onCustomPlayerSelect: (PlayerSearchResultDTO) -> Void
     let onSelect: (String) -> Void
-    @FocusState private var customSearchFocused: Bool
 
     private enum Layout {
         static let sectionSpacing: CGFloat = 14
@@ -58,7 +52,7 @@ struct LastManStandingQuestionCard: View {
                 customImageOptionGrid
             }
         case .customQuestion:
-            customQuestionSearch
+            EmptyView()
         case .oddOneOut, .whichClub:
             if showsClubOptions {
                 clubOptionGrid
@@ -347,90 +341,6 @@ struct LastManStandingQuestionCard: View {
                 .buttonStyle(LMSOptionButtonStyle())
                 .disabled(!isInteractive)
                 .opacity(isInteractive ? 1 : 0.5)
-            }
-        }
-    }
-
-    private var customQuestionSearch: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(BKTheme.textMuted)
-                TextField(
-                    "Search player",
-                    text: Binding(
-                        get: { customSearchQuery },
-                        set: onCustomSearchChange
-                    )
-                )
-                .font(BKFont.body(15))
-                .foregroundStyle(BKTheme.textPrimary)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
-                .focused($customSearchFocused)
-                .disabled(!isInteractive)
-                if isSearchingCustomAnswer {
-                    ProgressView()
-                        .scaleEffect(0.75)
-                        .tint(BKTheme.accent)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .background(BKTheme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                LMSVisualStyle.cardStroke(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
-            )
-
-            if customSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
-                if customSearchResults.isEmpty && !isSearchingCustomAnswer {
-                    Text("No players found")
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.textMuted)
-                        .padding(.vertical, 12)
-                } else {
-                    VStack(spacing: 6) {
-                        ForEach(Array(customSearchResults.prefix(6))) { player in
-                            Button {
-                                customSearchFocused = false
-                                onCustomPlayerSelect(player)
-                            } label: {
-                                HStack(spacing: 10) {
-                                    PlayerAvatar(urlString: player.headshotUrl, size: 38) {
-                                        PlayerSilhouette(size: 38)
-                                    }
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(player.name)
-                                            .font(BKFont.headline(14))
-                                            .foregroundStyle(BKTheme.textPrimary)
-                                        Text(player.club)
-                                            .font(BKFont.caption(10))
-                                            .foregroundStyle(BKTheme.textMuted)
-                                            .lineLimit(1)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(BKTheme.textMuted)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 9)
-                                .background(BKTheme.card.opacity(0.9))
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(!isInteractive)
-                        }
-                    }
-                }
-            } else {
-                Text("Type at least two letters")
-                    .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.textMuted)
-                    .padding(.vertical, 8)
             }
         }
     }
