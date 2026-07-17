@@ -562,6 +562,14 @@ struct SignInOnboardingPage: View {
                     onError: { auth.errorMessage = $0 }
                 )
 
+                #if DEBUG
+                Button("Dev Sign In") {
+                    Task { await auth.devSignIn() }
+                }
+                .font(BKFont.caption(12))
+                .foregroundStyle(BKTheme.textMuted)
+                #endif
+
                 if let error = auth.errorMessage {
                     Text(error)
                         .font(BKFont.caption())

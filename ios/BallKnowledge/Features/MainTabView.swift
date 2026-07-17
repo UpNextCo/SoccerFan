@@ -969,6 +969,14 @@ struct ProfileTabView: View {
             }
             .buttonStyle(.plain)
 
+            #if DEBUG
+            Button("Reset onboarding (dev)") {
+                UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.hasCompletedOnboarding)
+                Task { await auth.signOut(context: modelContext) }
+            }
+            .font(BKFont.caption())
+            .foregroundStyle(BKTheme.textMuted)
+            #endif
         }
     }
 
