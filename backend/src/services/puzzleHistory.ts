@@ -14,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { golfRuleSignature } from './golfRuleSignature.js';
 import { towerRuleSchema } from './towerRuleSchema.js';
+import { clubKey } from '../utils/clubCanonical.js';
 
 async function recentRows(
   modeId: string,
@@ -121,6 +122,8 @@ export interface BingoTileUsage {
   usedDates: string[];
 }
 
+export type BingoResourceUsage = BingoTileUsage;
+
 function utcDay(date: string): number {
   return Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
 }
@@ -161,6 +164,79 @@ export async function recentBingoTileUsage(
 /** Football Bingo compatibility helper: tile ids used in the window. */
 export async function recentBingoTileIds(date: string, days: number): Promise<Set<string>> {
   return new Set((await recentBingoTileUsage(date, days)).keys());
+}
+
+function usageFromDates(
+  datesByResource: Map<string, Set<string>>,
+  date: string
+): Map<string, BingoResourceUsage> {
+  const targetDay = utcDay(date);
+  const usage = new Map<string, BingoResourceUsage>();
+  for (const [resource, dateSet] of datesByResource) {
+    const usedDates = [...dateSet].sort();
+    const lastUsedDate = usedDates.at(-1)!;
+    usage.set(resource, {
+      frequency: usedDates.length,
+      lastUsedDate,
+      daysSinceLastUse: targetDay - utcDay(lastUsedDate),
+      usedDates,
+    });
+  }
+  return usage;
+}
+
+function clubsFromStoredBingoCategory(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return [];
+  const category = value as { type?: string; matchingRule?: string };
+  const rule = category.matchingRule ?? '';
+  if (category.type === 'playedForClub') return [rule];
+  if (category.type === 'nationClub') return [rule.split('|')[1] ?? ''];
+  if (category.type === 'clubCombo') return rule.split('|').slice(0, 2);
+  return [];
+}
+
+/** Underlying clubs used across direct, nation+club and club-combo tiles. */
+export async function recentBingoClubUsage(
+  date: string,
+  days: number
+): Promise<Map<string, BingoResourceUsage>> {
+  const rows = await recentRows('football_bingo', date, days);
+  const datesByClub = new Map<string, Set<string>>();
+  for (const { date: usedDate, pj } of rows) {
+    const categories = pj['categories'];
+    if (!Array.isArray(categories)) continue;
+    for (const category of categories) {
+      for (const club of clubsFromStoredBingoCategory(category)) {
+        const key = clubKey(club);
+        if (!key) continue;
+        const dates = datesByClub.get(key) ?? new Set<string>();
+        dates.add(usedDate);
+        datesByClub.set(key, dates);
+      }
+    }
+  }
+  return usageFromDates(datesByClub, date);
+}
+
+/** Player frequency in shipped Bingo queues, used to stop adjacent-day pool repetition. */
+export async function recentBingoPlayerUsage(
+  date: string,
+  days: number
+): Promise<Map<string, BingoResourceUsage>> {
+  const rows = await recentRows('football_bingo', date, days);
+  const datesByPlayer = new Map<string, Set<string>>();
+  for (const { date: usedDate, pj } of rows) {
+    const players = pj['players'];
+    if (!Array.isArray(players)) continue;
+    for (const player of players) {
+      const id = (player as { id?: string }).id;
+      if (!id) continue;
+      const dates = datesByPlayer.get(id) ?? new Set<string>();
+      dates.add(usedDate);
+      datesByPlayer.set(id, dates);
+    }
+  }
+  return usageFromDates(datesByPlayer, date);
 }
 
 /** Football Golf: prompts (lowercased) used in the window. */

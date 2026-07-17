@@ -21,17 +21,19 @@ import { resolveHeadshot } from '../constants/footballMedia.js';
 import { lookupTeamLogo } from './teamService.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import {
+  recentBingoClubUsage,
+  recentBingoPlayerUsage,
   recentBingoTileUsage,
+  type BingoResourceUsage,
   type BingoTileUsage,
 } from './puzzleHistory.js';
 import { buildClubDisplayMap, canonicalClubListWith, canonicalClubName, clubKey } from '../utils/clubCanonical.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
 const GRID = 16;
-const POOL_SIZE = 600;
+const POOL_SIZE = 900;
 const MIN_POOL_MATCHERS = 6; // a category needs this many matchers in the pool
 const MIN_COMBO_MATCHERS = 5; // combos are rarer, allow a slightly lower floor
-const MATCHERS_PER_CATEGORY = 5;
 const MAX_QUEUE = 55;
 /** Prefer tiles that haven't shipped within this many days. */
 const BINGO_TILE_REPEAT_WINDOW_DAYS = 10;
@@ -40,6 +42,11 @@ export const BINGO_TILE_WEIGHTING_WINDOW_DAYS = 45;
 /** Every tile should keep at least this many matchers in the shipped queue (timer fairness). */
 const MIN_QUEUE_MATCHERS = 3;
 const TOP_CLUB_COUNT = 22; // marquee clubs = the most-represented clubs in the famous pool
+const MAX_CLUB_REFERENCES_PER_BOARD = 2;
+const BINGO_CLUB_RECENCY_DAYS = 2;
+const BINGO_PLAYER_WEIGHTING_WINDOW_DAYS = 21;
+const BINGO_PLAYER_HARD_RECENCY_DAYS = 7;
+const MAX_PREVIOUS_DAY_PLAYER_SHARE = 0.18;
 
 function norm(v: string): string {
   return v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -229,10 +236,15 @@ async function loadClubLeagues(): Promise<Map<string, string>> {
 
 async function loadPool(): Promise<BingoPlayer[]> {
   const idRows = await rows<{ player_id: string }>(sql`
-    SELECT player_id FROM player_stats
-    WHERE league_id IN (39, 140, 135, 78, 61)
-    GROUP BY player_id
-    ORDER BY SUM(appearances) DESC
+    SELECT ps.player_id
+    FROM player_stats ps
+    JOIN players p ON p.id = ps.player_id
+    WHERE ps.league_id IN (39, 140, 135, 78, 61)
+      AND p.external_id IS NOT NULL
+      AND p.market_value_tier >= 3
+    GROUP BY ps.player_id, p.market_value_tier
+    HAVING SUM(ps.appearances) >= 80
+    ORDER BY p.market_value_tier DESC, SUM(ps.appearances) DESC, ps.player_id
     LIMIT ${POOL_SIZE}
   `);
   const ids = idRows.map((r) => r.player_id);
@@ -503,6 +515,23 @@ function isHardRecent(usage: ReadonlyMap<string, BingoTileUsage>, id: string): b
   return days !== undefined && days <= BINGO_TILE_REPEAT_WINDOW_DAYS;
 }
 
+export function bingoCategoryClubKeys(category: BingoCategory): string[] {
+  if (category.type === 'playedForClub') {
+    return [clubKey(category.matchingRule)].filter(Boolean);
+  }
+  if (category.type === 'nationClub') {
+    return [clubKey(category.matchingRule.split('|')[1] ?? '')].filter(Boolean);
+  }
+  if (category.type === 'clubCombo') {
+    return category.matchingRule
+      .split('|')
+      .slice(0, 2)
+      .map(clubKey)
+      .filter(Boolean);
+  }
+  return [];
+}
+
 /**
  * Pure board selection. Fresh candidates satisfy preferred type targets first. Open slots are
  * then filled by least-used candidates from under-represented types, subject to concentration
@@ -512,16 +541,34 @@ export function selectBingoCategories(
   candidates: BingoCandidates,
   usage: ReadonlyMap<string, BingoTileUsage>,
   seed: number,
-  gridSize = GRID
+  gridSize = GRID,
+  clubUsage: ReadonlyMap<string, BingoResourceUsage> = new Map()
 ): BingoCategory[] {
   const chosen: BingoCategory[] = [];
   const chosenIds = new Set<string>();
   const typeCounts = new Map<CatType, number>();
+  const clubCounts = new Map<string, number>();
   const tie = (category: BingoCategory) => hashStr(`${seed}:bingo-tile:${category.id}`);
+  const clubRecencyPenalty = (category: BingoCategory) =>
+    bingoCategoryClubKeys(category).filter((key) => {
+      const days = clubUsage.get(key)?.daysSinceLastUse;
+      return days !== undefined && days <= BINGO_CLUB_RECENCY_DAYS;
+    }).length;
+  const clubFrequency = (category: BingoCategory) =>
+    bingoCategoryClubKeys(category).reduce(
+      (sum, key) => sum + (clubUsage.get(key)?.frequency ?? 0),
+      0
+    );
+  const respectsClubCap = (category: BingoCategory) =>
+    bingoCategoryClubKeys(category).every(
+      (key) => (clubCounts.get(key) ?? 0) < MAX_CLUB_REFERENCES_PER_BOARD
+    );
   const ranked = (items: BingoCategory[]) =>
     [...items].sort(
       (a, b) =>
         frequencyOf(usage, a.id) - frequencyOf(usage, b.id) ||
+        clubRecencyPenalty(a) - clubRecencyPenalty(b) ||
+        clubFrequency(a) - clubFrequency(b) ||
         tie(a) - tie(b) ||
         a.id.localeCompare(b.id)
     );
@@ -529,13 +576,16 @@ export function selectBingoCategories(
     chosen.push(category);
     chosenIds.add(category.id);
     typeCounts.set(category.type, (typeCounts.get(category.type) ?? 0) + 1);
+    for (const key of bingoCategoryClubKeys(category)) {
+      clubCounts.set(key, (clubCounts.get(key) ?? 0) + 1);
+    }
   };
 
   // Targets are preferences: never spend a recently-used tile merely to satisfy a thin type.
   for (const type of Object.keys(BINGO_TYPE_TARGETS) as CatType[]) {
     for (const category of ranked(candidates[type]).filter((c) => !isHardRecent(usage, c.id))) {
       if ((typeCounts.get(type) ?? 0) >= BINGO_TYPE_TARGETS[type]) break;
-      if (!chosenIds.has(category.id)) add(category);
+      if (!chosenIds.has(category.id) && respectsClubCap(category)) add(category);
     }
   }
 
@@ -544,6 +594,7 @@ export function selectBingoCategories(
       const eligible = Object.values(candidates)
         .flat()
         .filter((c) => !chosenIds.has(c.id))
+        .filter(respectsClubCap)
         .filter((c) => allowRecent || !isHardRecent(usage, c.id))
         // Awards are intentionally rare highlights; never recycle one inside the hard window.
         .filter((c) => c.type !== 'award' || !isHardRecent(usage, c.id))
@@ -554,6 +605,10 @@ export function selectBingoCategories(
       eligible.sort((a, b) => {
         const frequency = frequencyOf(usage, a.id) - frequencyOf(usage, b.id);
         if (frequency !== 0) return frequency;
+        const recentClubs = clubRecencyPenalty(a) - clubRecencyPenalty(b);
+        if (recentClubs !== 0) return recentClubs;
+        const historicalClubs = clubFrequency(a) - clubFrequency(b);
+        if (historicalClubs !== 0) return historicalClubs;
         const aShare = (typeCounts.get(a.type) ?? 0) / BINGO_TYPE_CAPS[a.type];
         const bShare = (typeCounts.get(b.type) ?? 0) / BINGO_TYPE_CAPS[b.type];
         return aShare - bShare || tie(a) - tie(b) || a.id.localeCompare(b.id);
@@ -572,11 +627,125 @@ export function selectBingoCategories(
   return chosen.slice(0, gridSize);
 }
 
+function bingoPlayerRecognitionScore(player: BingoPlayer): number {
+  return (
+    Math.min(player.topLeagueApps ?? 0, 500) +
+    Math.min(player.topLeagueGoals ?? 0, 250) * 2 +
+    Math.min(player.stats.intl_caps ?? 0, 150) +
+    Math.min(player.stats.cl_apps ?? 0, 180) +
+    player.awards.length * 80 +
+    player.trophies.length * 8 +
+    (player.headshotUrl ? 20 : 0)
+  );
+}
+
+/** Build a fair 55-player queue with per-category coverage and bounded adjacent-day overlap. */
+export function selectBingoPlayers(
+  categories: BingoCategory[],
+  pool: BingoPlayer[],
+  usage: ReadonlyMap<string, BingoResourceUsage>,
+  seed: number,
+  maxQueue = MAX_QUEUE
+): BingoPlayer[] {
+  const queue: BingoPlayer[] = [];
+  const queuedIds = new Set<string>();
+  const previousDayLimit = Math.floor(maxQueue * MAX_PREVIOUS_DAY_PLAYER_SHARE);
+  let previousDayCount = 0;
+  const wasUsedPreviousDay = (player: BingoPlayer) =>
+    usage.get(player.id)?.daysSinceLastUse === 1;
+  const recentPenalty = (player: BingoPlayer) => {
+    const days = usage.get(player.id)?.daysSinceLastUse;
+    return days !== undefined && days <= BINGO_PLAYER_HARD_RECENCY_DAYS ? 1 : 0;
+  };
+  const frequency = (player: BingoPlayer) => usage.get(player.id)?.frequency ?? 0;
+  const qualityBand = (player: BingoPlayer) =>
+    Math.floor(bingoPlayerRecognitionScore(player) / 100);
+  const tie = (player: BingoPlayer, salt: string) =>
+    hashStr(`${seed}:bingo-player:${salt}:${player.id}`);
+  const ranked = (players: BingoPlayer[], salt: string) =>
+    [...players].sort(
+      (a, b) =>
+        recentPenalty(a) - recentPenalty(b) ||
+        frequency(a) - frequency(b) ||
+        qualityBand(b) - qualityBand(a) ||
+        tie(a, salt) - tie(b, salt) ||
+        a.id.localeCompare(b.id)
+    );
+  const add = (player: BingoPlayer) => {
+    if (queuedIds.has(player.id) || queue.length >= maxQueue) return false;
+    queuedIds.add(player.id);
+    queue.push(player);
+    if (wasUsedPreviousDay(player)) previousDayCount += 1;
+    return true;
+  };
+  const countInQueue = (category: BingoCategory) =>
+    queue.filter((player) => matches(player, category)).length;
+
+  // Guarantee each tile has enough fresh choices before filling the rest of the queue.
+  for (const category of categories) {
+    const matchers = ranked(
+      pool.filter((player) => matches(player, category)),
+      category.id
+    );
+    for (const player of matchers) {
+      if (countInQueue(category) >= MIN_QUEUE_MATCHERS) break;
+      if (
+        wasUsedPreviousDay(player) &&
+        previousDayCount >= previousDayLimit
+      ) {
+        continue;
+      }
+      add(player);
+    }
+    // Solvability wins only when a category genuinely has no fresh-enough alternatives.
+    for (const player of matchers) {
+      if (countInQueue(category) >= MIN_QUEUE_MATCHERS) break;
+      add(player);
+    }
+  }
+
+  const usefulPlayers = pool.filter(
+    (player) =>
+      !queuedIds.has(player.id) &&
+      categories.some((category) => matches(player, category))
+  );
+  const utility = (player: BingoPlayer) =>
+    categories.filter((category) => matches(player, category)).length;
+  usefulPlayers.sort(
+    (a, b) =>
+      recentPenalty(a) - recentPenalty(b) ||
+      frequency(a) - frequency(b) ||
+      utility(b) - utility(a) ||
+      qualityBand(b) - qualityBand(a) ||
+      tie(a, 'fill') - tie(b, 'fill') ||
+      a.id.localeCompare(b.id)
+  );
+  for (const player of usefulPlayers) {
+    if (queue.length >= maxQueue) break;
+    if (
+      wasUsedPreviousDay(player) &&
+      previousDayCount >= previousDayLimit
+    ) {
+      continue;
+    }
+    add(player);
+  }
+  // A pathological inventory may need a few recent players to retain a full queue.
+  for (const player of usefulPlayers) {
+    if (queue.length >= maxQueue) break;
+    add(player);
+  }
+
+  return seededShuffle(queue, seed ^ 0x77aa);
+}
+
 export async function generateFootballBingoPuzzle(
   date: string,
   opts?: {
     recentTileIds?: Set<string>;
     recentTileUsage?: ReadonlyMap<string, BingoTileUsage>;
+    recentClubUsage?: ReadonlyMap<string, BingoResourceUsage>;
+    recentPlayerUsage?: ReadonlyMap<string, BingoResourceUsage>;
   }
 ): Promise<FootballBingoPuzzle> {
   const [pool, clubLeagues] = await Promise.all([loadPool(), loadClubLeagues()]);
@@ -595,7 +764,13 @@ export async function generateFootballBingoPuzzle(
           ])
         )
       : await recentBingoTileUsage(date, BINGO_TILE_WEIGHTING_WINDOW_DAYS));
-  const chosen = selectBingoCategories(candidates, usage, seed);
+  const [clubUsage, playerUsage] = await Promise.all([
+    opts?.recentClubUsage ??
+      recentBingoClubUsage(date, BINGO_TILE_WEIGHTING_WINDOW_DAYS),
+    opts?.recentPlayerUsage ??
+      recentBingoPlayerUsage(date, BINGO_PLAYER_WEIGHTING_WINDOW_DAYS),
+  ]);
+  const chosen = selectBingoCategories(candidates, usage, seed, GRID, clubUsage);
   if (chosen.length < GRID) {
     throw new Error(`Not enough supported Football Bingo categories (${chosen.length}/${GRID})`);
   }
@@ -623,44 +798,7 @@ export async function generateFootballBingoPuzzle(
     })
   );
 
-  // Solvable queue: top matchers per category by club apps (fame proxy).
-  const queueIds = new Set<string>();
-  const queue: BingoPlayer[] = [];
-  for (const cat of categories) {
-    const matchers = pool
-      .filter((p) => matches(p, cat))
-      .sort((a, b) => (b.premierLeagueApps ?? 0) - (a.premierLeagueApps ?? 0))
-      .slice(0, MATCHERS_PER_CATEGORY);
-    for (const p of matchers) {
-      if (!queueIds.has(p.id)) { queueIds.add(p.id); queue.push(p); }
-    }
-  }
-  let players = seededShuffle(queue, seed ^ 0x9f00).slice(0, MAX_QUEUE);
-
-  // The shuffle+slice can cut a tile down to 1–2 surviving matchers — technically solvable but
-  // brutal under the turn timer. Top tiles back up to ≥3 matchers (or all it has), swapping out
-  // the least-useful player whose removal doesn't starve another tile.
-  const inQueue = new Set(players.map((p) => p.id));
-  const countIn = (cat: BingoCategory) => players.filter((p) => matches(p, cat)).length;
-  for (const cat of categories) {
-    const available = queue.filter((p) => matches(p, cat));
-    const desired = Math.min(MIN_QUEUE_MATCHERS, available.length);
-    for (const cand of available) {
-      if (countIn(cat) >= desired) break;
-      if (inQueue.has(cand.id)) continue;
-      if (players.length >= MAX_QUEUE) {
-        const removable = players
-          .filter((p) => !categories.some((c2) => matches(p, c2) && countIn(c2) <= MIN_QUEUE_MATCHERS))
-          .sort((a, b) => categories.filter((c2) => matches(a, c2)).length - categories.filter((c2) => matches(b, c2)).length)[0];
-        if (!removable) break;
-        players = players.filter((p) => p.id !== removable.id);
-        inQueue.delete(removable.id);
-      }
-      players.push(cand);
-      inQueue.add(cand.id);
-    }
-  }
-  players = seededShuffle(players, seed ^ 0x77aa);
+  const players = selectBingoPlayers(categories, pool, playerUsage, seed);
 
   return { modeId: 'football_bingo', puzzleId: `${date}-football_bingo`, date, title: 'Daily Football Bingo', categories, players };
 }

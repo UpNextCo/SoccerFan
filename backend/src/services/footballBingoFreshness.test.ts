@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   BINGO_TYPE_CAPS,
+  bingoCategoryClubKeys,
   selectBingoCategories,
+  selectBingoPlayers,
   type BingoCandidates,
   type BingoCategory,
+  type BingoPlayer,
   type CatType,
 } from './footballBingoGenerator.js';
-import type { BingoTileUsage } from './puzzleHistory.js';
+import type { BingoResourceUsage, BingoTileUsage } from './puzzleHistory.js';
 
 const types: CatType[] = [
   'nationality',
@@ -110,4 +113,97 @@ test('selection completes a 16-tile board from a pathological thin mix', () => {
   const selected = selectBingoCategories(pool, new Map(), 42);
   assert.equal(selected.length, 16);
   assert.equal(new Set(selected.map((c) => c.id)).size, 16);
+});
+
+test('underlying clubs are capped across every tile type', () => {
+  const pool = candidates(20);
+  const clubs = Array.from({ length: 12 }, (_, index) => `Club ${index}`);
+  pool.playedForClub.forEach((tile, index) => {
+    tile.matchingRule = clubs[index % clubs.length]!;
+  });
+  pool.nationClub.forEach((tile, index) => {
+    tile.matchingRule = `Nation ${index}|${clubs[index % clubs.length]}`;
+  });
+  pool.clubCombo.forEach((tile, index) => {
+    tile.matchingRule = `${clubs[index % clubs.length]}|${clubs[(index + 1) % clubs.length]}`;
+  });
+  const selected = selectBingoCategories(pool, new Map(), 42);
+  const clubCounts = new Map<string, number>();
+  for (const tile of selected) {
+    for (const club of bingoCategoryClubKeys(tile)) {
+      clubCounts.set(club, (clubCounts.get(club) ?? 0) + 1);
+    }
+  }
+  assert.equal(selected.length, 16);
+  assert.ok([...clubCounts.values()].every((count) => count <= 2));
+});
+
+test('shared club history penalizes differently-worded tiles for the same club', () => {
+  const pool: BingoCandidates = {
+    nationality: [],
+    playedForClub: [
+      {
+        ...category('playedForClub', 'inter'),
+        matchingRule: 'Inter',
+      },
+      {
+        ...category('playedForClub', 'arsenal'),
+        matchingRule: 'Arsenal',
+      },
+    ],
+    nationClub: [],
+    clubCombo: [],
+    wonCompetition: [],
+    award: [],
+    statThreshold: [],
+  };
+  const clubUsage = new Map<string, BingoResourceUsage>([['inter', used(12, 1)]]);
+  const selected = selectBingoCategories(pool, new Map(), 42, 1, clubUsage);
+  assert.equal(selected[0]?.matchingRule, 'Arsenal');
+});
+
+function bingoPlayer(index: number): BingoPlayer {
+  return {
+    id: `player-${index}`,
+    name: `Player ${index}`,
+    nationality: 'England',
+    position: 'Midfielder',
+    clubs: [],
+    leagues: [],
+    trophies: [],
+    teammates: [],
+    managers: [],
+    awards: [],
+    stats: { top_apps: 200 + index, intl_caps: 20 },
+    topLeagueApps: 200 + index,
+    topLeagueGoals: index % 30,
+    premierLeagueApps: 200 + index,
+    headshotUrl: null,
+  };
+}
+
+test('player queues cap previous-day overlap and remain unique', () => {
+  const players = Array.from({ length: 120 }, (_, index) => bingoPlayer(index));
+  const usage = new Map<string, BingoResourceUsage>();
+  players.slice(0, 30).forEach((player) => usage.set(player.id, used(1, 1)));
+  const nationality = category('nationality', 'england');
+  nationality.matchingRule = 'England';
+  const selected = selectBingoPlayers([nationality], players, usage, 42);
+  const previousDayPlayers = selected.filter(
+    (player) => usage.get(player.id)?.daysSinceLastUse === 1
+  );
+  assert.equal(selected.length, 55);
+  assert.equal(new Set(selected.map((player) => player.id)).size, 55);
+  assert.ok(previousDayPlayers.length <= 9);
+});
+
+test('frequently shipped players lose ties to equally recognizable fresh players', () => {
+  const players = Array.from({ length: 80 }, (_, index) => bingoPlayer(index));
+  const usage = new Map<string, BingoResourceUsage>([
+    [players[79]!.id, used(12, 8)],
+  ]);
+  const nationality = category('nationality', 'england');
+  nationality.matchingRule = 'England';
+  const selected = selectBingoPlayers([nationality], players, usage, 42, 20);
+  assert.equal(selected.some((player) => player.id === players[79]!.id), false);
 });
