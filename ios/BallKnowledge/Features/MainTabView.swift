@@ -550,6 +550,8 @@ enum ProfileSync {
             if let updated = try? await APIClient.shared.uploadAvatar(jpegData: jpeg) {
                 auth.applyProfile(updated)
             }
+        } else if LocalProfile.loadAvatar() == nil {
+            await restoreRemoteAvatar(auth: auth)
         }
     }
 
@@ -567,18 +569,36 @@ enum ProfileSync {
     static func saveAvatarImage(_ image: UIImage, auth: AuthManager) async {
         guard let data = image.jpegData(compressionQuality: 0.9) else { return }
         LocalProfile.saveAvatar(data)
-        if let jpeg = LocalProfile.avatarUploadData(),
-           let updated = try? await APIClient.shared.uploadAvatar(jpegData: jpeg) {
-            auth.applyProfile(updated)
+        guard let jpeg = LocalProfile.avatarUploadData() else { return }
+        do {
+            auth.applyProfile(try await APIClient.shared.uploadAvatar(jpegData: jpeg))
+        } catch {
+            auth.errorMessage = "Your photo was saved on this device but couldn't be backed up. Please try again."
         }
     }
 
     @MainActor
     static func removeAvatar(auth: AuthManager) async {
         LocalProfile.removeAvatar()
-        if let updated = try? await APIClient.shared.clearAvatar() {
-            auth.applyProfile(updated)
+        do {
+            auth.applyProfile(try await APIClient.shared.clearAvatar())
+        } catch {
+            auth.errorMessage = "Your profile photo couldn't be removed from your account. Please try again."
         }
+    }
+
+    @MainActor
+    private static func restoreRemoteAvatar(auth: AuthManager) async {
+        guard let urlString = auth.user?.avatarUrl, let url = URL(string: urlString) else { return }
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        guard
+            let (data, response) = try? await URLSession.shared.data(for: request),
+            let http = response as? HTTPURLResponse,
+            (200..<300).contains(http.statusCode),
+            UIImage(data: data) != nil
+        else { return }
+        LocalProfile.saveAvatar(data)
     }
 }
 
@@ -869,15 +889,17 @@ struct ProfileTabView: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                LinearGradient(
-                    colors: [BKTheme.cardElevated, BKTheme.card],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .overlay {
-                    Text(initials)
-                        .font(.system(size: 34, weight: .black, design: .rounded))
-                        .foregroundStyle(BKTheme.accent)
+                PlayerAvatar(urlString: auth.user?.avatarUrl, size: 96) {
+                    LinearGradient(
+                        colors: [BKTheme.cardElevated, BKTheme.card],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .overlay {
+                        Text(initials)
+                            .font(.system(size: 34, weight: .black, design: .rounded))
+                            .foregroundStyle(BKTheme.accent)
+                    }
                 }
             }
         }

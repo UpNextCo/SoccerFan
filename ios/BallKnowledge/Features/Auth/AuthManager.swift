@@ -61,6 +61,7 @@ final class AuthManager {
             user = response.user
             isAuthenticated = true
             UserDefaults.standard.set(true, forKey: UserDefaultsKeys.hasCompletedOnboarding)
+            await ProfileSync.pushLocalToServer(auth: self)
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -343,12 +343,14 @@ struct HomeHeaderView: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                BKTheme.cardElevated
-                    .overlay {
-                        Ph.userCircle.fill
-                            .color(BKTheme.accent)
-                            .frame(width: 26, height: 26)
-                    }
+                PlayerAvatar(urlString: user?.avatarUrl, size: 44) {
+                    BKTheme.cardElevated
+                        .overlay {
+                            Ph.userCircle.fill
+                                .color(BKTheme.accent)
+                                .frame(width: 26, height: 26)
+                        }
+                }
             }
         }
         .frame(width: 44, height: 44)
