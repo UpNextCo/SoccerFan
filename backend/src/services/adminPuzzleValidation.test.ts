@@ -26,6 +26,7 @@ import {
 } from './adminGolfAuthoring.js';
 import { summarizeGolfPlayerNames } from './adminDraftValidation.js';
 import { golfRuleSignature, golfRulesSemanticallyEqual } from './golfRuleSignature.js';
+import { sanitizePublicPuzzle } from './dailyService.js';
 
 test('requires the persisted 4x4 Bingo contract', () => {
   const categories = Array.from({ length: 16 }, (_, index) => ({
@@ -186,6 +187,67 @@ test('validates authored LMS custom images and aligned text options', () => {
   questions[2]!.presentation!.imageBlur = 0;
   questions[2]!.options[1]!.label = ' Alpha ';
   assert.equal(validatePuzzleReport('last_man_standing', { questions }, answer).ok, false);
+});
+
+test('validates authored LMS custom questions with one selected player answer', () => {
+  const questions = Array.from({ length: 10 }, (_, index) => {
+    const questionId = `text-q-${index + 1}`;
+    const custom = index === 2;
+    return {
+      id: questionId,
+      type: custom ? 'custom_question' : 'odd_one_out',
+      slot: index + 1,
+      prompt: custom
+        ? 'What Arsenal goalkeeper suffered a fractured skull in 2006?'
+        : `Question ${index + 1}`,
+      options: custom
+        ? [{
+            id: `${questionId}-00000000-0000-4000-8000-000000000001`,
+            label: 'Petr Cech',
+          }]
+        : ['Alpha', 'Bravo', 'Charlie', 'Delta'].map((label, optionIndex) => ({
+            id: `${questionId}-o${optionIndex + 1}`,
+            label,
+          })),
+    };
+  });
+  const answer = {
+    questions: questions.map((question) => ({
+      questionId: question.id,
+      correctOptionId: question.options[0]!.id,
+    })),
+  };
+  assert.equal(validatePuzzleReport('last_man_standing', { questions }, answer).ok, true);
+
+  questions[2]!.options[0]!.id = 'text-q-3-choose-player';
+  const report = validatePuzzleReport('last_man_standing', { questions }, answer);
+  assert.equal(report.ok, false);
+  assert.match(
+    report.issues.find((entry) => entry.path.endsWith('.options.0'))?.message ?? '',
+    /Choose the correct player/
+  );
+});
+
+test('hides custom LMS text answers from the public daily bundle', () => {
+  const puzzle = {
+    questions: [
+      {
+        id: 'q-1',
+        type: 'custom_question',
+        prompt: 'Who is the player?',
+        options: [{ id: 'q-1-player-id', label: 'Hidden answer' }],
+      },
+      {
+        id: 'q-2',
+        type: 'odd_one_out',
+        prompt: 'Which player is different?',
+        options: [{ id: 'q-2-a', label: 'Visible choice' }],
+      },
+    ],
+  };
+  const sanitized = sanitizePublicPuzzle('last_man_standing', puzzle) as typeof puzzle;
+  assert.deepEqual(sanitized.questions[0]!.options, []);
+  assert.deepEqual(sanitized.questions[1]!.options, puzzle.questions[1]!.options);
 });
 
 test('requires One More threshold sides and aligned hidden values', () => {

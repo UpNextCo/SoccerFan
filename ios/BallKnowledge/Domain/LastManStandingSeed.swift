@@ -8,15 +8,17 @@ enum LastManStandingSeed {
     }
 
     private static func mapQuestion(_ dto: LastManStandingQuestionDTO) -> LMSQuestion? {
-        guard !dto.options.isEmpty else { return nil }
         guard let type = LMSQuestionType(rawValue: dto.type) else { return nil }
+        guard type == .customQuestion || !dto.options.isEmpty else { return nil }
         let layout = dto.presentation?.layout.flatMap { LMSPresentationLayout(rawValue: $0) }
         let presentation = dto.presentation.map { pres in
             LMSPresentation(
                 layout: layout,
                 imageUrl: pres.imageUrl,
                 imageBlur: pres.imageBlur,
-                careerClubs: pres.careerClubs?.map { LMSCareerClub(name: $0.name, logoUrl: $0.logoUrl) }
+                careerClubs: pres.careerClubs?.map {
+                    LMSCareerClub(name: $0.name, logoUrl: $0.logoUrl, note: $0.note)
+                }
             )
         }
         return LMSQuestion(

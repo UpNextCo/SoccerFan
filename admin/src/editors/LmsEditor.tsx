@@ -57,6 +57,7 @@ const QUESTION_TYPES = [
   'which_club',
   'image_badge',
   'custom_image',
+  'custom_question',
 ] as const
 type QuestionType = (typeof QUESTION_TYPES)[number]
 
@@ -67,6 +68,7 @@ const FRIENDLY_TYPES: Record<QuestionType, string> = {
   which_club: 'Which club?',
   image_badge: 'Image badge',
   custom_image: 'Custom image',
+  custom_question: 'Custom question',
 }
 
 function isQuestionType(value: string): value is QuestionType {
@@ -78,11 +80,17 @@ function friendlyType(type: string): string {
 }
 
 function expectedOptionCount(type: string): number {
-  return type === 'higher_lower' ? 2 : 4
+  return type === 'higher_lower' ? 2 : type === 'custom_question' ? 1 : 4
 }
 
 function makeOptionId(questionId: string, key: string): string {
   return `${questionId}-${key}`
+}
+
+function hasSelectedPlayerAnswer(question: Q): boolean {
+  if (question.type !== 'custom_question') return true
+  return /-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    .test(question.options[0]?.id ?? '')
 }
 
 function isClubQuestion(q: Q): boolean {
@@ -173,6 +181,36 @@ export function LmsEditor({
       which_club: 'grid',
       image_badge: 'image_header',
       custom_image: 'image_header',
+      custom_question: 'stack',
+    }
+    if (type === 'custom_question') {
+      const { p: curP, a: curA } = latestRef.current
+      const option = {
+        id: makeOptionId(question.id, 'choose-player'),
+        label: 'Choose player',
+      }
+      const nextQuestions = sortedQuestions(curP).map((item) =>
+        item.id === question.id
+          ? {
+              ...item,
+              type,
+              options: [option],
+              presentation: { layout: 'stack' },
+            }
+          : item
+      )
+      const existing = curA.questions.find((item) => item.questionId === question.id)
+      const nextRow: Ans = {
+        ...(existing ?? { questionId: question.id }),
+        questionId: question.id,
+        correctOptionId: option.id,
+        reveal: option.label,
+      }
+      const nextAnswers = existing
+        ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+        : [...curA.questions, nextRow]
+      commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+      return
     }
     if (type === 'custom_image') {
       const { p: curP, a: curA } = latestRef.current
@@ -388,14 +426,21 @@ export function LmsEditor({
   async function pickPlayer(q: Q, oldOpt: Opt, hit: AdminPlayerHit) {
     const nextId = makeOptionId(q.id, hit.id)
     // Optimistic: update name + photo from search hit immediately (fixes stale Raul thumb).
-    replaceOption(q.id, oldOpt.id, {
-      id: nextId,
-      label: hit.name,
-      headshotUrl: hit.headshotUrl,
-      teamLogoUrl: hit.teamLogoUrl,
-      nationality: hit.nationality,
-      position: hit.position,
-    })
+    replaceOption(
+      q.id,
+      oldOpt.id,
+      {
+        id: nextId,
+        label: hit.name,
+        headshotUrl: hit.headshotUrl,
+        teamLogoUrl: hit.teamLogoUrl,
+        nationality: hit.nationality,
+        position: hit.position,
+      },
+      q.type === 'custom_question'
+        ? { answerPatch: { correctOptionId: nextId, reveal: hit.name } }
+        : undefined
+    )
 
     try {
       const full = (await api.resolvePlayer(hit.id, 'card')) as {
@@ -406,14 +451,23 @@ export function LmsEditor({
         headshotUrl?: string
         teamLogoUrl?: string
       }
-      replaceOption(q.id, nextId, {
-        id: makeOptionId(q.id, full.id || hit.id),
-        label: full.name || hit.name,
-        headshotUrl: full.headshotUrl ?? hit.headshotUrl,
-        teamLogoUrl: full.teamLogoUrl ?? hit.teamLogoUrl,
-        nationality: full.nationality ?? hit.nationality,
-        position: full.position ?? hit.position,
-      })
+      const resolvedId = makeOptionId(q.id, full.id || hit.id)
+      const resolvedName = full.name || hit.name
+      replaceOption(
+        q.id,
+        nextId,
+        {
+          id: resolvedId,
+          label: resolvedName,
+          headshotUrl: full.headshotUrl ?? hit.headshotUrl,
+          teamLogoUrl: full.teamLogoUrl ?? hit.teamLogoUrl,
+          nationality: full.nationality ?? hit.nationality,
+          position: full.position ?? hit.position,
+        },
+        q.type === 'custom_question'
+          ? { answerPatch: { correctOptionId: resolvedId, reveal: resolvedName } }
+          : undefined
+      )
     } catch {
       // optimistic row is enough
     }
@@ -573,7 +627,12 @@ export function LmsEditor({
         const hasCorrect = Boolean(ans && q.options.some((option) => option.id === ans.correctOptionId))
         const expectedOptions = expectedOptionCount(q.type)
         const optionCountValid = q.options.length === expectedOptions
-        const complete = Boolean(q.prompt.trim() && hasCorrect && optionCountValid)
+        const complete = Boolean(
+          q.prompt.trim() &&
+          hasCorrect &&
+          optionCountValid &&
+          hasSelectedPlayerAnswer(q)
+        )
         return (
           <article key={q.id} className="q-card lms-question-card">
             <header className="lms-question-header">
@@ -733,7 +792,30 @@ export function LmsEditor({
               </fieldset>
             )}
 
-            <fieldset disabled={locked} className="options">
+            {q.type === 'custom_question' && (
+              <fieldset disabled={locked} className="options">
+                <legend>Correct answer</legend>
+                <p className="muted tiny">
+                  Players will type and search for this answer in the app.
+                </p>
+                {q.options[0] && (
+                  <EntityPicker
+                    key={`custom-answer-${q.options[0].id}-${q.options[0].label}`}
+                    kind="player"
+                    label="Player"
+                    valueLabel={
+                      hasSelectedPlayerAnswer(q) ? q.options[0].label : undefined
+                    }
+                    imageUrl={q.options[0].headshotUrl}
+                    nationality={q.options[0].nationality}
+                    disabled={locked}
+                    onPickPlayer={(hit) => pickPlayer(q, q.options[0]!, hit)}
+                  />
+                )}
+              </fieldset>
+            )}
+
+            {q.type !== 'custom_question' && <fieldset disabled={locked} className="options">
               <legend>Possible answers ({q.options.length}/{expectedOptions})</legend>
               {!optionCountValid && (
                 <p className="editor-inline-warning">
@@ -798,7 +880,7 @@ export function LmsEditor({
               {q.type !== 'custom_image' && (
                 <button type="button" className="ghost" disabled={locked} onClick={() => addOption(q)}>+ Add option</button>
               )}
-            </fieldset>
+            </fieldset>}
 
             <label className="field">
               Answer explanation

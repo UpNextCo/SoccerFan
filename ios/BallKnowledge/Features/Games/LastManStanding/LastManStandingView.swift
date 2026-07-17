@@ -15,6 +15,9 @@ final class LastManStandingViewModel {
     var isChecking = false
     var eliminationWaveToken = 0
     var checkError: String?
+    var customSearchQuery = ""
+    var customSearchResults: [PlayerSearchResultDTO] = []
+    var isSearchingCustomAnswer = false
     /// When true, survivor grid won't animate position changes (X marks stamp in place first).
     var freezeSurvivorLayout = false
     /// Sequential run token from POST /daily/lms/start — required for each check.
@@ -57,6 +60,9 @@ final class LastManStandingViewModel {
         lastReveal = nil
         isChecking = false
         checkError = nil
+        customSearchQuery = ""
+        customSearchResults = []
+        isSearchingCustomAnswer = false
         freezeSurvivorLayout = false
         runToken = nil
     }
@@ -119,6 +125,32 @@ final class LastManStandingViewModel {
         }
     }
 
+    func searchCustomAnswer() async {
+        let query = customSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard state.currentQuestion?.type == .customQuestion, query.count >= 2 else {
+            customSearchResults = []
+            return
+        }
+        isSearchingCustomAnswer = true
+        defer { isSearchingCustomAnswer = false }
+        try? await Task.sleep(for: .milliseconds(250))
+        guard !Task.isCancelled, query == customSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            return
+        }
+        do {
+            customSearchResults = try await APIClient.shared.searchPlayers(query: query)
+        } catch {
+            customSearchResults = []
+        }
+    }
+
+    func submitCustomAnswer(_ player: PlayerSearchResultDTO) async {
+        guard let question = state.currentQuestion, question.type == .customQuestion else { return }
+        customSearchQuery = ""
+        customSearchResults = []
+        await submit(optionId: "\(question.id)-\(player.id)")
+    }
+
     private func handleCorrect() async {
         state.status = .correctReveal
         showCorrectFlash = true
@@ -131,6 +163,7 @@ final class LastManStandingViewModel {
     }
 
     private func handleWrong() {
+        clearCustomSearch()
         state.eliminateUser()
         state.status = .lost
         HapticManager.error()
@@ -213,6 +246,7 @@ final class LastManStandingViewModel {
     }
 
     private func advanceToNextQuestion() {
+        clearCustomSearch()
         state.currentQuestionIndex += 1
         state.status = .question
         lastReveal = nil
@@ -237,6 +271,13 @@ final class LastManStandingViewModel {
         lastReveal = nil
         confettiBurstToken = 0
         freezeSurvivorLayout = false
+        clearCustomSearch()
+    }
+
+    private func clearCustomSearch() {
+        customSearchQuery = ""
+        customSearchResults = []
+        isSearchingCustomAnswer = false
     }
 }
 
@@ -464,11 +505,22 @@ struct LastManStandingView: View {
         if let question = state.currentQuestion, state.status != .lost {
             LastManStandingQuestionCard(
                 question: question,
-                isInteractive: state.isInteractive && !viewModel.isChecking
-            ) { optionId in
-                Task { await viewModel.submit(optionId: optionId) }
-            }
+                isInteractive: state.isInteractive && !viewModel.isChecking,
+                customSearchQuery: viewModel.customSearchQuery,
+                customSearchResults: viewModel.customSearchResults,
+                isSearchingCustomAnswer: viewModel.isSearchingCustomAnswer,
+                onCustomSearchChange: { viewModel.customSearchQuery = $0 },
+                onCustomPlayerSelect: { player in
+                    Task { await viewModel.submitCustomAnswer(player) }
+                },
+                onSelect: { optionId in
+                    Task { await viewModel.submit(optionId: optionId) }
+                }
+            )
             .id(question.id)
+            .task(id: viewModel.customSearchQuery) {
+                await viewModel.searchCustomAnswer()
+            }
             .transition(.opacity.combined(with: .offset(y: 8)))
             .opacity(viewModel.isChecking ? 0.72 : 1)
             .animation(.easeOut(duration: 0.12), value: viewModel.isChecking)

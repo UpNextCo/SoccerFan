@@ -622,7 +622,7 @@ export async function getDailyBundle(userId: string, clientDate?: string): Promi
 }
 
 /** Strip secrets from puzzle JSON before shipping to clients. */
-function sanitizePublicPuzzle(modeId: string, puzzleJson: unknown): unknown {
+export function sanitizePublicPuzzle(modeId: string, puzzleJson: unknown): unknown {
   if (!puzzleJson || typeof puzzleJson !== 'object') return puzzleJson;
 
   if (modeId === 'draft_master') {
@@ -643,6 +643,22 @@ function sanitizePublicPuzzle(modeId: string, puzzleJson: unknown): unknown {
         ...round,
         options: (round.options ?? []).map(({ value: _v, ...opt }) => opt),
       })),
+    };
+  }
+
+  if (modeId === 'last_man_standing') {
+    const puzzle = puzzleJson as {
+      questions?: Array<{ type?: string; options?: unknown[]; [key: string]: unknown }>;
+      [key: string]: unknown;
+    };
+    if (!Array.isArray(puzzle.questions)) return puzzleJson;
+    return {
+      ...puzzle,
+      questions: puzzle.questions.map((question) =>
+        question.type === 'custom_question'
+          ? { ...question, options: [] }
+          : question
+      ),
     };
   }
 

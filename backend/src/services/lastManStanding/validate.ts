@@ -52,6 +52,8 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
   const optionCount = question.options.length;
   if (question.type === 'higher_lower') {
     if (optionCount !== 2) return false;
+  } else if (question.type === 'custom_question') {
+    if (optionCount !== 1) return false;
   } else if (optionCount !== 4) {
     return false;
   }
@@ -68,6 +70,7 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
       (question.presentation.imageBlur === undefined || question.presentation.imageBlur === 0)
     );
   }
+  if (question.type === 'custom_question') return true;
 
   if (!optionsHousehold(built, ctx)) return false;
 

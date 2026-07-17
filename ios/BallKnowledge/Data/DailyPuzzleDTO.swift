@@ -295,6 +295,7 @@ struct LastManStandingOptionDTO: Codable, Equatable {
 struct LastManStandingCareerClubDTO: Codable, Equatable {
     let name: String
     let logoUrl: String?
+    let note: String?
 }
 
 struct LastManStandingPresentationDTO: Codable, Equatable {

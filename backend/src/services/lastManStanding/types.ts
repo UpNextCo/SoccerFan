@@ -4,9 +4,13 @@ export type LMSQuestionType =
   | 'odd_one_out'
   | 'which_club'
   | 'image_badge'
-  | 'custom_image';
+  | 'custom_image'
+  | 'custom_question';
 
-export type LMSGeneratedQuestionType = Exclude<LMSQuestionType, 'custom_image'>;
+export type LMSGeneratedQuestionType = Exclude<
+  LMSQuestionType,
+  'custom_image' | 'custom_question'
+>;
 
 export interface LMSOptionPublic {
   id: string;
@@ -49,7 +53,7 @@ export interface LMSQuestionAnswer {
 }
 
 /** Bump when question shape / answer format changes so stored dailies regenerate. */
-export const LMS_PUZZLE_VERSION = 11;
+export const LMS_PUZZLE_VERSION = 12;
 
 export interface LastManStandingPuzzle {
   modeId: 'last_man_standing';

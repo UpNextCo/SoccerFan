@@ -35,7 +35,9 @@ const lmsTypes = [
   'which_club',
   'image_badge',
   'custom_image',
+  'custom_question',
 ] as const;
+const lmsPlayerOptionId = /-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const lmsOption = z.object({ id, label: text }).passthrough();
 const lmsCareerClub = z.object({
   name: text,
@@ -212,7 +214,10 @@ function validateLms(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzz
   const slots = puzzle.questions.map((q) => q.slot).sort((a, b) => a - b);
   if (slots.join(',') !== '1,2,3,4,5,6,7,8,9,10') issue(issues, 'puzzleJson.questions', 'Questions must cover slots 1–10.');
   puzzle.questions.forEach((question, index) => {
-    const count = question.type === 'higher_lower' ? 2 : 4;
+    const count =
+      question.type === 'higher_lower'
+        ? 2
+        : question.type === 'custom_question' ? 1 : 4;
     if (question.options.length !== count) issue(issues, `puzzleJson.questions.${index}.options`, `${question.type} requires exactly ${count} options.`);
     if (!unique(question.options.map((option) => option.id))) issue(issues, `puzzleJson.questions.${index}.options`, 'Option ids must be unique.');
     if (!unique(question.options.map((option) => option.label.trim().toLocaleLowerCase()))) {
@@ -228,6 +233,16 @@ function validateLms(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzz
       if (question.presentation?.imageBlur !== undefined && question.presentation.imageBlur !== 0) {
         issue(issues, `puzzleJson.questions.${index}.presentation.imageBlur`, 'Custom images must be unblurred.');
       }
+    }
+    if (
+      question.type === 'custom_question' &&
+      !lmsPlayerOptionId.test(question.options[0]?.id ?? '')
+    ) {
+      issue(
+        issues,
+        `puzzleJson.questions.${index}.options.0`,
+        'Choose the correct player for this custom question.'
+      );
     }
     if (question.type === 'career_path') {
       const clubCount = question.presentation?.careerClubs?.length ?? 0;

@@ -146,6 +146,11 @@ export function extractLMSUsedKeys(
       }
       case 'custom_image':
         break;
+      case 'custom_question': {
+        const playerId = playerIdFromOption(question.id, questionAnswer.correctOptionId);
+        if (playerId) keys.push(playerUsedKey(playerId));
+        break;
+      }
       case 'career_path': {
         const playerId = playerIdFromOption(question.id, questionAnswer.correctOptionId);
         if (playerId) keys.push(playerUsedKey(playerId));
