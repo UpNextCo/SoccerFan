@@ -584,30 +584,100 @@ enum ProfileSync {
 
 /// Self-contained local daily reminder (no backend / push infra needed).
 enum DailyReminder {
-    private static let identifier = "daily-games-reminder"
+    private static let legacyIdentifier = "daily-games-reminder"
+    private static let identifierPrefix = "daily-games-reminder-"
+    private static let reminderHour = 19
 
     static func enable() async -> Bool {
         let center = UNUserNotificationCenter.current()
         let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
         guard granted else { return false }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Today's games are ready"
-        content.body = "Keep your streak alive — finish today's set."
-        content.sound = .default
-
-        var date = DateComponents()
-        date.hour = 19
-        let trigger = UNCalendarNotificationTrigger(dateMatching: date, repeats: true)
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
-
-        center.removePendingNotificationRequests(withIdentifiers: [identifier])
-        try? await center.add(request)
+        await scheduleRolling(completedCount: 0, totalCount: DailyPlayOrder.playableModes.count)
         return true
     }
 
+    static func refresh(for bundle: DailyBundleDTO, modes: [GameModeMetaDTO]) async {
+        guard LocalProfile.remindersOn else { return }
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard settings.authorizationStatus == .authorized ||
+                settings.authorizationStatus == .provisional ||
+                settings.authorizationStatus == .ephemeral else { return }
+
+        let enabledIds = Set(
+            modes
+                .filter(\.isAvailable)
+                .map { GameModeCatalog.normalizedModeId($0.id) }
+        )
+        let availableModes = DailyPlayOrder.availableModes(in: bundle).filter {
+            enabledIds.isEmpty || enabledIds.contains($0.rawValue)
+        }
+        let completedCount = availableModes.filter { bundle.isCompleted($0) }.count
+        await scheduleRolling(
+            completedCount: completedCount,
+            totalCount: availableModes.count
+        )
+    }
+
     static func disable() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+    }
+
+    private static func scheduleRolling(completedCount: Int, totalCount: Int) async {
+        let center = UNUserNotificationCenter.current()
+        let pending = await center.pendingNotificationRequests()
+        let ourIdentifiers = pending
+            .map(\.identifier)
+            .filter { $0 == legacyIdentifier || $0.hasPrefix(identifierPrefix) }
+        center.removePendingNotificationRequests(withIdentifiers: ourIdentifiers)
+
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfToday = calendar.startOfDay(for: now)
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        for dayOffset in 0..<7 {
+            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: startOfToday),
+                  let fireDate = calendar.date(
+                    bySettingHour: reminderHour,
+                    minute: 0,
+                    second: 0,
+                    of: day
+                  ),
+                  fireDate > now else { continue }
+
+            // Once today's set is complete, do not send another notification today.
+            if dayOffset == 0, totalCount > 0, completedCount >= totalCount {
+                continue
+            }
+
+            let content = UNMutableNotificationContent()
+            if dayOffset == 0, completedCount > 0 {
+                content.title = "Finish today's games"
+                content.body = "Finish your games to keep your daily streak alive."
+            } else {
+                let count = totalCount > 0 ? totalCount : DailyPlayOrder.playableModes.count
+                content.title = "Your \(count) daily games are ready"
+                content.body = "Play today's set and keep your daily streak alive."
+            }
+            content.sound = .default
+
+            let components = calendar.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: fireDate
+            )
+            let request = UNNotificationRequest(
+                identifier: identifierPrefix + formatter.string(from: day),
+                content: content,
+                trigger: UNCalendarNotificationTrigger(
+                    dateMatching: components,
+                    repeats: false
+                )
+            )
+            try? await center.add(request)
+        }
     }
 }
 

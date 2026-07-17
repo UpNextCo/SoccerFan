@@ -34,6 +34,9 @@ final class HomeViewModel {
         }
 
         await OfflineCache.syncPendingCompletions(context: context)
+        if let dailyBundle {
+            await DailyReminder.refresh(for: dailyBundle, modes: gameModes)
+        }
     }
 }
 
