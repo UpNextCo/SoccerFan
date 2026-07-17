@@ -5,6 +5,7 @@ import { inArray } from 'drizzle-orm';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
 import { resolveAdminBingoPlayer, resolveAdminPlayer } from './adminEntitySearch.js';
+import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -36,6 +37,7 @@ type LMSQuestion = {
 };
 
 type LMSPuzzle = {
+  version?: number;
   questions: LMSQuestion[];
   [k: string]: unknown;
 };
@@ -181,6 +183,7 @@ export async function enrichAdminLMSPuzzle(
     }
   }
 
+  puzzle.version = LMS_PUZZLE_VERSION;
   return { puzzleJson: puzzle, answerJson: answer };
 }
 
