@@ -777,6 +777,7 @@ struct TeamPickerView: View {
             )
             .padding(.top, 28)
             .padding(.bottom, 18)
+            .padding(.horizontal, 20)
 
             searchField
                 .padding(.horizontal, 20)

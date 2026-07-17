@@ -114,6 +114,12 @@ export async function drawLMSFromBank(args: {
   }>;
 
   for (const r of rows) {
+    if (
+      args.type === 'career_path' &&
+      r.question_json.presentation?.careerPathVersion !== 2
+    ) {
+      continue;
+    }
     const extra = Array.isArray(r.extra_keys) ? r.extra_keys : [];
     const contentSignature =
       r.content_signature ?? lmsContentSignature(r.question_json, r.answer_json);

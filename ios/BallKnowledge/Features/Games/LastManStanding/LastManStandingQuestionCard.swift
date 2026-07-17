@@ -144,36 +144,75 @@ struct LastManStandingQuestionCard: View {
     }
 
     private func careerPathClubRow(_ clubs: [LMSCareerClub]) -> some View {
-        let badgeSize: CGFloat = 42
-        let labelWidth: CGFloat = 78
-        return HStack(spacing: 8) {
+        let metrics = careerPathMetrics(for: clubs.count)
+        return HStack(spacing: metrics.spacing) {
             ForEach(Array(clubs.enumerated()), id: \.offset) { index, club in
                 if index > 0 {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: metrics.arrowSize, weight: .bold))
                         .foregroundStyle(BKTheme.textMuted)
                 }
-                VStack(spacing: 5) {
-                    TeamBadgeImage(club: club.name, league: "", logoURL: club.logoUrl.flatMap(URL.init(string:)), size: badgeSize) {
+                VStack(spacing: metrics.verticalSpacing) {
+                    TeamBadgeImage(club: club.name, league: "", logoURL: club.logoUrl.flatMap(URL.init(string:)), size: metrics.badgeSize) {
                         Text(GuessWhoDisplay.clubAbbrev(club.name))
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: metrics.labelSize, weight: .bold))
                             .foregroundStyle(BKTheme.textMuted)
-                            .frame(width: badgeSize, height: badgeSize)
+                            .frame(width: metrics.badgeSize, height: metrics.badgeSize)
                             .background(BKTheme.card.opacity(0.6))
                             .clipShape(Circle())
                     }
                     Text(club.name)
-                        .font(BKFont.caption(10))
+                        .font(BKFont.caption(metrics.labelSize))
                         .foregroundStyle(BKTheme.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                        .frame(width: labelWidth)
+                        .minimumScaleFactor(0.75)
+                        .frame(width: metrics.labelWidth)
+                    if club.note == "loan" {
+                        Text("LOAN")
+                            .font(.system(size: metrics.loanSize, weight: .bold, design: .rounded))
+                            .foregroundStyle(BKTheme.accentMuted)
+                    }
                 }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 2)
+    }
+
+    private struct CareerPathMetrics {
+        let badgeSize: CGFloat
+        let labelWidth: CGFloat
+        let labelSize: CGFloat
+        let loanSize: CGFloat
+        let arrowSize: CGFloat
+        let spacing: CGFloat
+        let verticalSpacing: CGFloat
+    }
+
+    private func careerPathMetrics(for count: Int) -> CareerPathMetrics {
+        switch count {
+        case 4:
+            return CareerPathMetrics(
+                badgeSize: 38, labelWidth: 62, labelSize: 9,
+                loanSize: 7, arrowSize: 9, spacing: 5, verticalSpacing: 4
+            )
+        case 5:
+            return CareerPathMetrics(
+                badgeSize: 34, labelWidth: 51, labelSize: 8.5,
+                loanSize: 6.5, arrowSize: 8, spacing: 3, verticalSpacing: 3
+            )
+        case 6...:
+            return CareerPathMetrics(
+                badgeSize: 30, labelWidth: 42, labelSize: 8,
+                loanSize: 6, arrowSize: 7, spacing: 2, verticalSpacing: 3
+            )
+        default:
+            return CareerPathMetrics(
+                badgeSize: 42, labelWidth: 78, labelSize: 10,
+                loanSize: 7.5, arrowSize: 11, spacing: 8, verticalSpacing: 5
+            )
+        }
     }
 
     @ViewBuilder

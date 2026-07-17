@@ -284,9 +284,36 @@
   padding-left: 0.85rem;
 }
 
+.career-club-editor-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: end;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.career-loan-toggle {
+  min-width: auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  font-weight: 650;
+}
+
+.career-loan-toggle input {
+  min-height: auto;
+}
+
 @media (max-width: 700px) {
   .editor-clean-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .career-club-editor-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 }

@@ -157,6 +157,7 @@ export interface LastManStandingOptionPublic {
 export interface LastManStandingCareerClubPublic {
   name: string;
   logoUrl?: string;
+  note?: 'loan';
 }
 
 export interface LastManStandingPresentationPublic {
@@ -164,6 +165,7 @@ export interface LastManStandingPresentationPublic {
   imageUrl?: string;
   imageBlur?: number;
   careerClubs?: LastManStandingCareerClubPublic[];
+  careerPathVersion?: 2;
 }
 
 export interface LastManStandingQuestionPublic {

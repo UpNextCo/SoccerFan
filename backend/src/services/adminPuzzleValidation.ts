@@ -37,6 +37,11 @@ const lmsTypes = [
   'custom_image',
 ] as const;
 const lmsOption = z.object({ id, label: text }).passthrough();
+const lmsCareerClub = z.object({
+  name: text,
+  logoUrl: z.string().optional(),
+  note: z.literal('loan').optional(),
+}).passthrough();
 const lmsQuestion = z.object({
   id,
   type: z.enum(lmsTypes),
@@ -47,6 +52,8 @@ const lmsQuestion = z.object({
     layout: z.string().optional(),
     imageUrl: z.string().optional(),
     imageBlur: z.number().optional(),
+    careerClubs: z.array(lmsCareerClub).optional(),
+    careerPathVersion: z.literal(2).optional(),
   }).passthrough().optional(),
 }).passthrough();
 const lmsPuzzle = z.object({ questions: z.array(lmsQuestion).length(10) }).passthrough();
@@ -220,6 +227,23 @@ function validateLms(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzz
       }
       if (question.presentation?.imageBlur !== undefined && question.presentation.imageBlur !== 0) {
         issue(issues, `puzzleJson.questions.${index}.presentation.imageBlur`, 'Custom images must be unblurred.');
+      }
+    }
+    if (question.type === 'career_path') {
+      const clubCount = question.presentation?.careerClubs?.length ?? 0;
+      if (clubCount < 3 || clubCount > 6) {
+        issue(
+          issues,
+          `puzzleJson.questions.${index}.presentation.careerClubs`,
+          'Career paths must contain between 3 and 6 clubs.'
+        );
+      }
+      if (question.presentation?.careerPathVersion !== 2) {
+        issue(
+          issues,
+          `puzzleJson.questions.${index}.presentation.careerPathVersion`,
+          'This career path uses the old three-club generator. Edit the path or regenerate the puzzle.'
+        );
       }
     }
     const answerEntry = answer.questions[index];

@@ -16,7 +16,8 @@ type Presentation = {
   layout?: string
   imageUrl?: string
   imageBlur?: number
-  careerClubs?: Array<{ name: string; logoUrl?: string }>
+  careerClubs?: Array<{ name: string; logoUrl?: string; note?: 'loan' }>
+  careerPathVersion?: 2
   [k: string]: unknown
 }
 
@@ -462,10 +463,71 @@ export function LmsEditor({
   async function pickCareerClub(q: Q, clubIdx: number, hit: AdminTeamHit) {
     const team = await api.resolveTeam(hit.id)
     const clubs = [...(q.presentation?.careerClubs ?? [])]
-    clubs[clubIdx] = { name: team.name, logoUrl: team.logoUrl }
-    updateQuestion(q.slot, {
-      presentation: { ...(q.presentation ?? {}), careerClubs: clubs },
-    })
+    clubs[clubIdx] = { ...clubs[clubIdx], name: team.name, logoUrl: team.logoUrl }
+    setCareerClubs(q, clubs)
+  }
+
+  function setCareerClubs(q: Q, clubs: NonNullable<Presentation['careerClubs']>) {
+    const { p: currentPuzzle, a: currentAnswer } = latestRef.current
+    const nextQuestions = sortedQuestions(currentPuzzle).map((question) =>
+      question.slot === q.slot
+        ? {
+            ...question,
+            presentation: {
+              ...(question.presentation ?? {}),
+              careerClubs: clubs,
+              careerPathVersion: 2 as const,
+            },
+          }
+        : question
+    )
+    const currentQuestionAnswer = currentAnswer.questions.find((item) => item.questionId === q.id)
+    const correctPlayer = q.options.find(
+      (option) => option.id === currentQuestionAnswer?.correctOptionId
+    )?.label
+    const path = clubs
+      .filter((club) => club.name.trim())
+      .map((club) => `${club.name}${club.note === 'loan' ? ' (loan)' : ''}`)
+      .join(' → ')
+    const nextAnswers = currentAnswer.questions.map((item) =>
+      item.questionId === q.id && correctPlayer
+        ? { ...item, reveal: `${correctPlayer} — ${path}` }
+        : item
+    )
+    commit(
+      { ...currentPuzzle, questions: nextQuestions },
+      { ...currentAnswer, questions: nextAnswers }
+    )
+  }
+
+  function addCareerClub(q: Q) {
+    const clubs = [...(q.presentation?.careerClubs ?? [])]
+    if (clubs.length >= 6) return
+    clubs.push({ name: '' })
+    setCareerClubs(q, clubs)
+  }
+
+  function removeCareerClub(q: Q, index: number) {
+    const clubs = [...(q.presentation?.careerClubs ?? [])]
+    if (clubs.length <= 3) return
+    clubs.splice(index, 1)
+    setCareerClubs(q, clubs)
+  }
+
+  function moveCareerClub(q: Q, index: number, direction: -1 | 1) {
+    const clubs = [...(q.presentation?.careerClubs ?? [])]
+    const target = index + direction
+    if (target < 0 || target >= clubs.length) return
+    ;[clubs[index], clubs[target]] = [clubs[target]!, clubs[index]!]
+    setCareerClubs(q, clubs)
+  }
+
+  function toggleCareerLoan(q: Q, index: number) {
+    const clubs = [...(q.presentation?.careerClubs ?? [])]
+    const club = clubs[index]
+    if (!club) return
+    clubs[index] = { ...club, note: club.note === 'loan' ? undefined : 'loan' }
+    setCareerClubs(q, clubs)
   }
 
   return (
@@ -630,20 +692,44 @@ export function LmsEditor({
               </div>
             )}
 
-            {Array.isArray(q.presentation?.careerClubs) && q.presentation!.careerClubs!.length > 0 && (
+            {q.type === 'career_path' && (
               <fieldset disabled={locked} className="options">
-                <legend>Career clubs</legend>
-                {q.presentation!.careerClubs!.map((club, idx) => (
-                  <EntityPicker
-                    key={`${q.id}-club-${idx}-${club.name}-${club.logoUrl ?? ''}`}
-                    kind="team"
-                    label={`Club ${idx + 1}`}
-                    valueLabel={club.name}
-                    imageUrl={club.logoUrl}
-                    disabled={locked}
-                    onPickTeam={(hit) => pickCareerClub(q, idx, hit)}
-                  />
+                <legend>Career path ({q.presentation?.careerClubs?.length ?? 0}/6)</legend>
+                <p className="muted tiny">Keep the clubs in chronological order. Mark temporary moves as loans.</p>
+                {(q.presentation?.careerClubs ?? []).map((club, idx, clubs) => (
+                  <div className="career-club-editor-row" key={`${q.id}-club-${idx}-${club.name}-${club.logoUrl ?? ''}`}>
+                    <EntityPicker
+                      kind="team"
+                      label={`Club ${idx + 1}`}
+                      valueLabel={club.name || undefined}
+                      imageUrl={club.logoUrl}
+                      disabled={locked}
+                      onPickTeam={(hit) => pickCareerClub(q, idx, hit)}
+                    />
+                    <label className="career-loan-toggle">
+                      <input
+                        type="checkbox"
+                        checked={club.note === 'loan'}
+                        disabled={locked}
+                        onChange={() => toggleCareerLoan(q, idx)}
+                      />
+                      Loan
+                    </label>
+                    <div className="editor-icon-actions">
+                      <button type="button" className="ghost tiny-btn" disabled={locked || idx === 0} onClick={() => moveCareerClub(q, idx, -1)} aria-label={`Move club ${idx + 1} earlier`}>↑</button>
+                      <button type="button" className="ghost tiny-btn" disabled={locked || idx === clubs.length - 1} onClick={() => moveCareerClub(q, idx, 1)} aria-label={`Move club ${idx + 1} later`}>↓</button>
+                      <button type="button" className="danger tiny-btn" disabled={locked || clubs.length <= 3} onClick={() => removeCareerClub(q, idx)}>Remove</button>
+                    </div>
+                  </div>
                 ))}
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={locked || (q.presentation?.careerClubs?.length ?? 0) >= 6}
+                  onClick={() => addCareerClub(q)}
+                >
+                  + Add club
+                </button>
               </fieldset>
             )}
 

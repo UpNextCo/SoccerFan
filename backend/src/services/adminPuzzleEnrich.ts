@@ -29,7 +29,7 @@ type LMSQuestion = {
     layout?: string;
     imageUrl?: string;
     imageBlur?: number;
-    careerClubs?: Array<{ name: string; logoUrl?: string }>;
+    careerClubs?: Array<{ name: string; logoUrl?: string; note?: 'loan' }>;
     [k: string]: unknown;
   };
   [k: string]: unknown;
@@ -172,6 +172,7 @@ export async function enrichAdminLMSPuzzle(
         ...q.presentation,
         careerClubs: await Promise.all(
           q.presentation.careerClubs.map(async (club) => ({
+            ...club,
             name: club.name,
             logoUrl: (await lookupTeamLogo(club.name, ''))?.logoUrl ?? club.logoUrl,
           }))

@@ -41,6 +41,7 @@ enum LMSQuestionType: String, Codable {
 struct LMSCareerClub: Equatable, Codable {
     let name: String
     var logoUrl: String?
+    var note: String?
 }
 
 enum LMSPresentationLayout: String, Codable {

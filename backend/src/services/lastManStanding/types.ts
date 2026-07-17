@@ -20,6 +20,7 @@ export interface LMSOptionPublic {
 export interface LMSCareerClubPublic {
   name: string;
   logoUrl?: string;
+  note?: 'loan';
 }
 
 export interface LMSPresentationPublic {
@@ -27,6 +28,7 @@ export interface LMSPresentationPublic {
   imageUrl?: string;
   imageBlur?: number;
   careerClubs?: LMSCareerClubPublic[];
+  careerPathVersion?: 2;
 }
 
 export interface LMSQuestionPublic {
@@ -47,7 +49,7 @@ export interface LMSQuestionAnswer {
 }
 
 /** Bump when question shape / answer format changes so stored dailies regenerate. */
-export const LMS_PUZZLE_VERSION = 10;
+export const LMS_PUZZLE_VERSION = 11;
 
 export interface LastManStandingPuzzle {
   modeId: 'last_man_standing';

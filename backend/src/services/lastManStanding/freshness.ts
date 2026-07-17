@@ -71,7 +71,9 @@ export function lmsSemanticSignaturePayload(
       .sort(),
     correctLabel: normalizeSemanticText(correct.label),
     careerClubPath:
-      question.presentation?.careerClubs?.map((club) => normalizeSemanticText(club.name)) ?? [],
+      question.presentation?.careerClubs?.map((club) =>
+        `${normalizeSemanticText(club.name)}${club.note === 'loan' ? ':loan' : ''}`
+      ) ?? [],
     ...(question.type === 'custom_image'
       ? { imageIdentity: (question.presentation?.imageUrl ?? '').trim().toLowerCase() }
       : {}),
