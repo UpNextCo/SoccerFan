@@ -4,6 +4,7 @@ dist/
 *.xcuserstate
 xcuserdata/
 DerivedData/
+.build/
 .DS_Store
 
 backend/node_modules/

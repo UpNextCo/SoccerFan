@@ -593,7 +593,7 @@ enum DailyReminder {
 
         let content = UNMutableNotificationContent()
         content.title = "Today's games are ready"
-        content.body = "Keep your streak alive — finish all 7 daily games."
+        content.body = "Keep your streak alive — finish today's set."
         content.sound = .default
 
         var date = DateComponents()
@@ -614,6 +614,7 @@ enum DailyReminder {
 struct ProfileTabView: View {
     @Environment(AuthManager.self) private var auth
     @Environment(\.requestReview) private var requestReview
+    @Environment(\.modelContext) private var modelContext
 
     @State private var avatarImage: UIImage?
     @State private var photoItem: PhotosPickerItem?
@@ -689,12 +690,27 @@ struct ProfileTabView: View {
         } message: {
             Text("The intro will show again the next time you open each game.")
         }
+        .alert(
+            "Something went wrong",
+            isPresented: Binding(
+                get: { auth.errorMessage != nil },
+                set: { if !$0 { auth.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { auth.errorMessage = nil }
+        } message: {
+            Text(auth.errorMessage ?? "Please try again.")
+        }
         .confirmationDialog("Sign out of Ball Knowledge?", isPresented: $showSignOutConfirm, titleVisibility: .visible) {
-            Button("Sign Out", role: .destructive) { Task { await auth.signOut() } }
+            Button("Sign Out", role: .destructive) {
+                Task { await auth.signOut(context: modelContext) }
+            }
             Button("Cancel", role: .cancel) {}
         }
         .confirmationDialog("Delete your account? This can't be undone.", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Delete Account", role: .destructive) { Task { await auth.deleteAccount() } }
+            Button("Delete Account", role: .destructive) {
+                Task { await auth.deleteAccount(context: modelContext) }
+            }
             Button("Cancel", role: .cancel) {}
         }
     }
@@ -850,12 +866,12 @@ struct ProfileTabView: View {
             rowDivider
             SettingsLinkRow(icon: "lock.shield.fill", title: "Privacy Policy", url: AppConfig.privacyPolicyURL)
             rowDivider
-            SettingsLinkRow(icon: "doc.text.fill", title: "Terms of Service", url: AppConfig.privacyPolicyURL)
+            SettingsLinkRow(icon: "doc.text.fill", title: "Terms of Service", url: AppConfig.termsOfServiceURL)
         }
     }
 
     private var shareRow: some View {
-        ShareLink(item: URL(string: AppConfig.productionAPIURL)!) {
+        ShareLink(item: AppConfig.shareURL) {
             SettingsRowLabel(icon: "square.and.arrow.up.fill", title: "Share with friends")
         }
         .buttonStyle(.plain)

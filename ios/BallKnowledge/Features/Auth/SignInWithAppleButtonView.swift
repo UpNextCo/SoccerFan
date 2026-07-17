@@ -3,6 +3,15 @@ import AuthenticationServices
 
 struct SignInWithAppleButtonView: View {
     var onSignedIn: (String, String?) -> Void
+    var onError: (String) -> Void
+
+    init(
+        onSignedIn: @escaping (String, String?) -> Void,
+        onError: @escaping (String) -> Void = { _ in }
+    ) {
+        self.onSignedIn = onSignedIn
+        self.onError = onError
+    }
 
     var body: some View {
         SignInWithAppleButton(.signIn) { request in
@@ -20,8 +29,12 @@ struct SignInWithAppleButtonView: View {
                     .compactMap { $0 }
                     .joined(separator: " ")
                 onSignedIn(token, name.isEmpty ? nil : name)
-            case .failure:
-                break
+            case .failure(let error):
+                if let authorizationError = error as? ASAuthorizationError,
+                   authorizationError.code == .canceled {
+                    return
+                }
+                onError(error.localizedDescription)
             }
         }
         .signInWithAppleButtonStyle(.white)

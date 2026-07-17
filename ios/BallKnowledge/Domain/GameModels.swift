@@ -63,21 +63,28 @@ enum DailyPlayOrder {
         .lastManStanding,
     ]
 
+    static func availableModes(in bundle: DailyBundleDTO) -> [GameModeID] {
+        let availableIds = Set(bundle.games.map { GameModeCatalog.normalizedModeId($0.modeId) })
+        return playableModes.filter { availableIds.contains($0.rawValue) }
+    }
+
     static func completedCount(in bundle: DailyBundleDTO) -> Int {
-        playableModes.filter { bundle.isCompleted($0) }.count
+        availableModes(in: bundle).filter { bundle.isCompleted($0) }.count
     }
 
     static func allComplete(in bundle: DailyBundleDTO) -> Bool {
-        completedCount(in: bundle) >= playableModes.count
+        let available = availableModes(in: bundle)
+        return !available.isEmpty && available.allSatisfy { bundle.isCompleted($0) }
     }
 
     static func firstIncomplete(in bundle: DailyBundleDTO) -> GameModeID? {
-        playableModes.first { !bundle.isCompleted($0) }
+        availableModes(in: bundle).first { !bundle.isCompleted($0) }
     }
 
     static func nextIncomplete(after mode: GameModeID, in bundle: DailyBundleDTO) -> GameModeID? {
-        guard let index = playableModes.firstIndex(of: mode) else { return nil }
-        return playableModes.dropFirst(index + 1).first { !bundle.isCompleted($0) }
+        let available = availableModes(in: bundle)
+        guard let index = available.firstIndex(of: mode) else { return nil }
+        return available.dropFirst(index + 1).first { !bundle.isCompleted($0) }
     }
 }
 

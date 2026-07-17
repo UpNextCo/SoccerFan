@@ -21,6 +21,7 @@ struct BallKnowledgeApp: App {
 
 struct RootView: View {
     @Environment(AuthManager.self) private var auth
+    @Environment(\.modelContext) private var modelContext
     @AppStorage(UserDefaultsKeys.completedPostSignInSetup) private var completedSetup = false
 
     var body: some View {
@@ -42,7 +43,10 @@ struct RootView: View {
             }
         }
         .task {
-            await auth.bootstrap()
+            await auth.bootstrap(context: modelContext)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .sessionUnauthorized)) { _ in
+            Task { await auth.handleUnauthorized(context: modelContext) }
         }
     }
 }
@@ -73,10 +77,28 @@ struct SignInOnlyView: View {
                     .font(BKFont.title())
                     .foregroundStyle(BKTheme.accent)
 
-                SignInWithAppleButtonView { token, name in
-                    Task { await auth.signIn(identityToken: token, displayName: name) }
-                }
+                SignInWithAppleButtonView(
+                    onSignedIn: { token, name in
+                        Task { await auth.signIn(identityToken: token, displayName: name) }
+                    },
+                    onError: { auth.errorMessage = $0 }
+                )
                 .padding(.horizontal, 24)
+
+                if let error = auth.errorMessage {
+                    Text(error)
+                        .font(BKFont.body(13))
+                        .foregroundStyle(BKTheme.wrong)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+
+                HStack(spacing: 18) {
+                    Link("Privacy Policy", destination: AppConfig.privacyPolicyURL)
+                    Link("Terms of Service", destination: AppConfig.termsOfServiceURL)
+                }
+                .font(BKFont.caption(11))
+                .foregroundStyle(BKTheme.textMuted)
             }
         }
     }

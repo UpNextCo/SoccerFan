@@ -23,14 +23,17 @@ enum GameModeCatalog {
 
     static func resolve(from apiModes: [GameModeMetaDTO]?) -> [GameModeMetaDTO] {
         let apiById = Dictionary(uniqueKeysWithValues: (apiModes ?? []).map { ($0.id, $0) })
+        let hasRemoteCatalog = !apiById.isEmpty
 
         return GameModeID.allCases.enumerated().map { index, mode in
             let apiMode = apiEntry(for: mode, in: apiById)
-            let isAvailable = locallyAvailable.contains(mode) || (apiMode?.isAvailable ?? false)
+            let isAvailable = hasRemoteCatalog
+                ? (apiMode?.isAvailable ?? false)
+                : locallyAvailable.contains(mode)
 
             return GameModeMetaDTO(
                 id: mode.rawValue,
-                title: mode.title,
+                title: apiMode?.title ?? mode.title,
                 subtitle: apiMode?.subtitle ?? "",
                 playerCount: apiMode?.playerCount ?? defaultPlayerCounts[index],
                 isAvailable: isAvailable

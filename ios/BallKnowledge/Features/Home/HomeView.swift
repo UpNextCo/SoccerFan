@@ -54,16 +54,28 @@ struct HomeView: View {
 
     private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
 
+    private func isDailyComplete(_ bundle: DailyBundleDTO) -> Bool {
+        let enabledIds = Set(
+            viewModel.gameModes
+                .filter(\.isAvailable)
+                .map { GameModeCatalog.normalizedModeId($0.id) }
+        )
+        let activeModes = DailyPlayOrder.availableModes(in: bundle).filter {
+            enabledIds.isEmpty || enabledIds.contains($0.rawValue)
+        }
+        return !activeModes.isEmpty && activeModes.allSatisfy { bundle.isCompleted($0) }
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 HomeHeaderView(
                     user: auth.user,
                     streak: auth.user?.streak ?? 0,
-                    dailyComplete: viewModel.dailyBundle.map { DailyPlayOrder.allComplete(in: $0) } ?? false
+                    dailyComplete: viewModel.dailyBundle.map(isDailyComplete) ?? false
                 )
 
-                if viewModel.dailyBundle != nil || !viewModel.gameModes.isEmpty {
+                if viewModel.dailyBundle != nil {
                     DailySection(
                         modes: viewModel.gameModes,
                         bundle: viewModel.dailyBundle,
@@ -79,6 +91,26 @@ struct HomeView: View {
                     ProgressView()
                         .tint(BKTheme.accent)
                         .frame(height: 200)
+                } else if let errorMessage = viewModel.errorMessage {
+                    VStack(spacing: 12) {
+                        Text("Today's games couldn't be loaded")
+                            .font(BKFont.headline(17))
+                            .foregroundStyle(BKTheme.textPrimary)
+                        Text(errorMessage)
+                            .font(BKFont.body(13))
+                            .foregroundStyle(BKTheme.textMuted)
+                            .multilineTextAlignment(.center)
+                        Button("Try Again") {
+                            Task { await viewModel.load(context: modelContext) }
+                        }
+                        .font(BKFont.headline(14))
+                        .foregroundStyle(BKTheme.background)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(BKTheme.accent)
+                        .clipShape(Capsule())
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 200)
                 }
             }
             .padding(.horizontal, 16)
@@ -193,7 +225,7 @@ struct HomeView: View {
     private func presentCelebrationIfNeeded() {
         guard celebrationPayload == nil, !isPlayingGame, presentedMode == nil else { return }
         guard let bundle = viewModel.dailyBundle else { return }
-        guard DailyPlayOrder.allComplete(in: bundle) else { return }
+        guard isDailyComplete(bundle) else { return }
         guard !DailyCompleteCelebration.hasShown(for: bundle.date) else { return }
 
         let todayXp = auth.user?.todayXp ?? 0
@@ -352,7 +384,7 @@ enum HomeActivity {
                 icon: "flame.fill",
                 tint: BKTheme.streak,
                 title: streak > 0 ? "Keep your \(streak)-day streak alive" : "Start your streak today",
-                message: "Finish all 7 daily games to \(streak > 0 ? "extend" : "begin") your streak.",
+                message: "Finish today's games to \(streak > 0 ? "extend" : "begin") your streak.",
                 unread: true
             ))
         } else {
@@ -360,7 +392,7 @@ enum HomeActivity {
                 icon: "flame.fill",
                 tint: BKTheme.streak,
                 title: streak > 0 ? "Finish the set to keep your streak" : "Finish the set to start your streak",
-                message: "\(todayXp) XP so far — clear all 7 games before reset.",
+                message: "\(todayXp) XP so far — clear today's games before reset.",
                 unread: true
             ))
         }
@@ -459,21 +491,29 @@ struct DailySection: View {
     var onSelect: (GameModeMetaDTO) -> Void
 
     private var orderedModes: [GameModeMetaDTO] {
-        DailyPlayOrder.playableModes.compactMap { id in
-            modes.first { GameModeCatalog.normalizedModeId($0.id) == id.rawValue }
+        let order = bundle.map(DailyPlayOrder.availableModes) ?? DailyPlayOrder.playableModes
+        return order.compactMap { id in
+            modes.first {
+                $0.isAvailable && GameModeCatalog.normalizedModeId($0.id) == id.rawValue
+            }
         }
     }
 
-    private var totalCount: Int { DailyPlayOrder.playableModes.count }
+    private var totalCount: Int { orderedModes.count }
 
     private var completedCount: Int {
         guard let bundle, !allowUnlimitedPlay else { return 0 }
-        return DailyPlayOrder.completedCount(in: bundle)
+        return orderedModes.filter { mode in
+            guard let modeId = GameModeID(
+                rawValue: GameModeCatalog.normalizedModeId(mode.id)
+            ) else { return false }
+            return bundle.isCompleted(modeId)
+        }.count
     }
 
     private var allComplete: Bool {
-        guard let bundle, !allowUnlimitedPlay else { return false }
-        return DailyPlayOrder.allComplete(in: bundle)
+        guard bundle != nil, !allowUnlimitedPlay, totalCount > 0 else { return false }
+        return completedCount >= totalCount
     }
 
     var body: some View {
@@ -633,6 +673,9 @@ struct DailySection: View {
     }
 
     private func state(for mode: GameModeMetaDTO) -> DailyTileState {
+        if !mode.isAvailable {
+            return .unavailable
+        }
         let normalized = GameModeCatalog.normalizedModeId(mode.id)
         let modeId = GameModeID(rawValue: normalized)
         if let bundle, !allowUnlimitedPlay, let modeId, bundle.isCompleted(modeId) {
@@ -688,7 +731,7 @@ struct DailyGameCard: View {
                 playAction
             }
             .padding(.vertical, 12)
-            .opacity(state == .completed ? 0.65 : 1)
+            .opacity(state == .completed || state == .unavailable ? 0.65 : 1)
 
             if showsDivider {
                 Rectangle()
@@ -712,7 +755,7 @@ struct DailyGameCard: View {
         }
         .frame(width: iconSize, height: iconSize)
         .clipShape(RoundedRectangle(cornerRadius: iconCornerRadius, style: .continuous))
-        .saturation(state == .completed ? 0.45 : 1)
+        .saturation(state == .completed || state == .unavailable ? 0.45 : 1)
     }
 
     private var playAction: some View {
@@ -728,6 +771,7 @@ struct DailyGameCard: View {
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+            .disabled(state == .unavailable)
 
             if let sublabel = playSublabel {
                 Text(sublabel)
@@ -742,12 +786,13 @@ struct DailyGameCard: View {
         case .completed: return "Done"
         case .inProgress: return "Resume"
         case .available: return "Play"
+        case .unavailable: return "Unavailable"
         }
     }
 
     private var playForeground: Color {
         switch state {
-        case .completed: return BKTheme.textMuted
+        case .completed, .unavailable: return BKTheme.textMuted
         case .inProgress, .available: return BKTheme.accent
         }
     }
@@ -755,7 +800,7 @@ struct DailyGameCard: View {
     private var playSublabel: String? {
         switch state {
         case .inProgress: return "In Progress"
-        case .completed, .available: return nil
+        case .completed, .available, .unavailable: return nil
         }
     }
 
@@ -829,6 +874,7 @@ enum DailyTileState {
     case completed
     case inProgress
     case available
+    case unavailable
 }
 
 struct DailyGameHost: View {

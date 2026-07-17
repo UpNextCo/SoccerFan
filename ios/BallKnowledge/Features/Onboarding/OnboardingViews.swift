@@ -551,9 +551,12 @@ struct SignInOnboardingPage: View {
             .padding(.bottom, 20)
 
             VStack(spacing: 12) {
-                SignInWithAppleButtonView { token, name in
-                    Task { await auth.signIn(identityToken: token, displayName: name) }
-                }
+                SignInWithAppleButtonView(
+                    onSignedIn: { token, name in
+                        Task { await auth.signIn(identityToken: token, displayName: name) }
+                    },
+                    onError: { auth.errorMessage = $0 }
+                )
 
                 if let error = auth.errorMessage {
                     Text(error)
@@ -563,9 +566,12 @@ struct SignInOnboardingPage: View {
                         .padding(.horizontal, 32)
                 }
 
-                Link("Privacy Policy", destination: AppConfig.privacyPolicyURL)
-                    .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.textMuted)
+                HStack(spacing: 18) {
+                    Link("Privacy Policy", destination: AppConfig.privacyPolicyURL)
+                    Link("Terms of Service", destination: AppConfig.termsOfServiceURL)
+                }
+                .font(BKFont.caption(11))
+                .foregroundStyle(BKTheme.textMuted)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
@@ -759,6 +765,7 @@ struct TeamPickerView: View {
     @State private var selected: TeamSearchResultDTO?
     @State private var isSaving = false
     @State private var isSearching = false
+    @State private var saveError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -777,6 +784,12 @@ struct TeamPickerView: View {
             resultsList
 
             VStack(spacing: 12) {
+                if let saveError {
+                    Text(saveError)
+                        .font(BKFont.body(13))
+                        .foregroundStyle(BKTheme.wrong)
+                        .multilineTextAlignment(.center)
+                }
                 OnboardingPrimaryButton(
                     title: isSaving ? "SAVING…" : "CONTINUE",
                     enabled: selected != nil && !isSaving,
@@ -874,11 +887,17 @@ struct TeamPickerView: View {
     private func confirm() {
         guard let selected else { return }
         isSaving = true
+        saveError = nil
         Task {
-            try? await APIClient.shared.setFavoriteTeam(selected.id)
-            await auth.refreshProfile()
-            isSaving = false
-            onDone()
+            do {
+                try await APIClient.shared.setFavoriteTeam(selected.id)
+                await auth.refreshProfile()
+                isSaving = false
+                onDone()
+            } catch {
+                isSaving = false
+                saveError = error.localizedDescription
+            }
         }
     }
 
@@ -1000,7 +1019,7 @@ struct ReminderSetupStep: View {
             OnboardingTitleBlock(
                 eyebrow: "Stay sharp",
                 title: "Never lose your streak",
-                subtitle: "Get a daily nudge when the games are ready — finish all 7 to keep your streak."
+                subtitle: "Get a daily nudge when the games are ready — finish the set to keep your streak."
             )
             .padding(.top, 28)
 

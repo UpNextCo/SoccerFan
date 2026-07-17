@@ -161,6 +161,18 @@ extension View {
 }
 
 enum OfflineCache {
+    /// Remove all persisted data that belongs to the signed-in account.
+    @MainActor
+    static func clearAllAccountData(context: ModelContext) {
+        let cachedBundles = (try? context.fetch(FetchDescriptor<CachedDailyBundle>())) ?? []
+        let pendingCompletions = (try? context.fetch(FetchDescriptor<PendingDailyCompletion>())) ?? []
+        let gameProgress = (try? context.fetch(FetchDescriptor<GameProgress>())) ?? []
+        cachedBundles.forEach { context.delete($0) }
+        pendingCompletions.forEach { context.delete($0) }
+        gameProgress.forEach { context.delete($0) }
+        try? context.save()
+    }
+
     static func saveDailyBundle(_ bundle: DailyBundleDTO, context: ModelContext) throws {
         let data = try JSONEncoder().encode(bundle)
         let existing = try context.fetch(FetchDescriptor<CachedDailyBundle>(

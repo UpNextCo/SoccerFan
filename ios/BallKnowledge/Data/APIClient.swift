@@ -4,6 +4,7 @@ extension Notification.Name {
     /// Posted whenever a daily completion is successfully recorded on the server, so any surface
     /// showing XP / games-completed (e.g. Home) can refresh once the write has actually landed.
     static let dailyCompletionRecorded = Notification.Name("dailyCompletionRecorded")
+    static let sessionUnauthorized = Notification.Name("sessionUnauthorized")
 }
 
 enum APIError: LocalizedError {
@@ -73,7 +74,18 @@ actor APIClient {
         }
 
         if http.statusCode == 401 {
+            await MainActor.run {
+                NotificationCenter.default.post(name: .sessionUnauthorized, object: nil)
+            }
             throw APIError.unauthorized
+        }
+
+        guard (200..<300).contains(http.statusCode) else {
+            if let decoded = try? JSONDecoder().decode(APIResponse<T>.self, from: data),
+               let error = decoded.error {
+                throw APIError.server(error.message)
+            }
+            throw APIError.server("The server is unavailable. Please try again.")
         }
 
         let decoded = try JSONDecoder().decode(APIResponse<T>.self, from: data)

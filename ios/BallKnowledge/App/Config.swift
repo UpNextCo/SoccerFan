@@ -10,7 +10,10 @@ enum AppConfig {
     static let apiBaseURL = URL(string: productionAPIURL)!
     #endif
 
-    static let privacyPolicyURL = URL(string: "https://ballknowledge.app/privacy")!
+    static let websiteURL = URL(string: productionAPIURL)!
+    static let privacyPolicyURL = URL(string: "\(productionAPIURL)/privacy")!
+    static let termsOfServiceURL = URL(string: "\(productionAPIURL)/terms")!
+    static let shareURL = websiteURL
     static let maxGuessWhoGuesses = 8
     static let dailyXpGoal = 3000
 
