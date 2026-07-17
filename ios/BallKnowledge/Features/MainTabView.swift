@@ -883,18 +883,6 @@ struct ProfileTabView: View {
             }
             .buttonStyle(.plain)
 
-            #if DEBUG
-            Button("Reset onboarding (dev)") {
-                UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.hasCompletedOnboarding)
-                UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.completedPostSignInSetup)
-                UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.isDevAccount)
-                LocalProfile.removeAvatar()
-                LocalProfile.nameOverride = nil
-                Task { await auth.signOut() }
-            }
-            .font(BKFont.caption())
-            .foregroundStyle(BKTheme.textMuted)
-            #endif
         }
     }
 

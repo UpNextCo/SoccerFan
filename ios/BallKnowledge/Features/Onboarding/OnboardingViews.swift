@@ -555,14 +555,6 @@ struct SignInOnboardingPage: View {
                     Task { await auth.signIn(identityToken: token, displayName: name) }
                 }
 
-                #if DEBUG
-                Button("Dev Sign In") {
-                    Task { await auth.devSignIn() }
-                }
-                .font(BKFont.caption())
-                .foregroundStyle(BKTheme.textMuted)
-                #endif
-
                 if let error = auth.errorMessage {
                     Text(error)
                         .font(BKFont.caption())

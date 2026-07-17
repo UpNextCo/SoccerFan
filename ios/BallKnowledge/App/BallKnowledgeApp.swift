@@ -77,13 +77,6 @@ struct SignInOnlyView: View {
                     Task { await auth.signIn(identityToken: token, displayName: name) }
                 }
                 .padding(.horizontal, 24)
-
-                #if DEBUG
-                Button("Dev Sign In") {
-                    Task { await auth.devSignIn() }
-                }
-                .foregroundStyle(BKTheme.textMuted)
-                #endif
             }
         }
     }
