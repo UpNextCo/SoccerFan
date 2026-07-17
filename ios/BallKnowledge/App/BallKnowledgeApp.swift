@@ -22,6 +22,7 @@ struct BallKnowledgeApp: App {
 struct RootView: View {
     @Environment(AuthManager.self) private var auth
     @Environment(\.modelContext) private var modelContext
+    @AppStorage(UserDefaultsKeys.hasCompletedOnboarding) private var completedOnboarding = false
     @AppStorage(UserDefaultsKeys.completedPostSignInSetup) private var completedSetup = false
 
     var body: some View {
@@ -36,7 +37,7 @@ struct RootView: View {
                 } else {
                     PostSignInSetupView()
                 }
-            } else if UserDefaults.standard.bool(forKey: UserDefaultsKeys.hasCompletedOnboarding) {
+            } else if completedOnboarding {
                 SignInOnlyView()
             } else {
                 OnboardingContainerView()
@@ -67,39 +68,18 @@ struct LaunchLoadingView: View {
 }
 
 struct SignInOnlyView: View {
-    @Environment(AuthManager.self) private var auth
+    @AppStorage(UserDefaultsKeys.hasCompletedOnboarding) private var completedOnboarding = true
 
     var body: some View {
         ZStack {
-            BKTheme.background.ignoresSafeArea()
-            VStack(spacing: 24) {
-                Text("BALL KNOWLEDGE")
-                    .font(BKFont.title())
-                    .foregroundStyle(BKTheme.accent)
-
-                SignInWithAppleButtonView(
-                    onSignedIn: { token, name in
-                        Task { await auth.signIn(identityToken: token, displayName: name) }
-                    },
-                    onError: { auth.errorMessage = $0 }
-                )
-                .padding(.horizontal, 24)
-
-                if let error = auth.errorMessage {
-                    Text(error)
-                        .font(BKFont.body(13))
-                        .foregroundStyle(BKTheme.wrong)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                }
-
-                HStack(spacing: 18) {
-                    Link("Privacy Policy", destination: AppConfig.privacyPolicyURL)
-                    Link("Terms of Service", destination: AppConfig.termsOfServiceURL)
-                }
-                .font(BKFont.caption(11))
-                .foregroundStyle(BKTheme.textMuted)
-            }
+            HomeAmbientBackground()
+            SignInOnboardingPage(
+                title: "Welcome back",
+                subtitle: "Sign in to continue today's games, keep your streak moving and represent your club.",
+                secondaryActionTitle: "See how it works",
+                secondaryAction: { completedOnboarding = false }
+            )
         }
+        .ignoresSafeArea(edges: .bottom)
     }
 }

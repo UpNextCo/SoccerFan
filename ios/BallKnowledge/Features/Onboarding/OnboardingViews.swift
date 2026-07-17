@@ -532,6 +532,10 @@ struct GameModesPreview: View {
 struct SignInOnboardingPage: View {
     @Environment(AuthManager.self) private var auth
     @State private var appeared = false
+    var title = "Create your account"
+    var subtitle = "Save your progress, climb the leagues and earn XP for your club."
+    var secondaryActionTitle: String?
+    var secondaryAction: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -544,8 +548,8 @@ struct SignInOnboardingPage: View {
 
             OnboardingTitleBlock(
                 eyebrow: nil,
-                title: "Create your account",
-                subtitle: "Save your progress, climb the leagues and earn XP for your club."
+                title: title,
+                subtitle: subtitle
             )
             .padding(.horizontal, 24)
             .padding(.bottom, 20)
@@ -564,6 +568,18 @@ struct SignInOnboardingPage: View {
                         .foregroundStyle(BKTheme.wrong)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
+                }
+
+                if let secondaryActionTitle, let secondaryAction {
+                    Button(action: secondaryAction) {
+                        HStack(spacing: 6) {
+                            Text(secondaryActionTitle)
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 10, weight: .bold))
+                        }
+                    }
+                    .font(BKFont.caption(12))
+                    .foregroundStyle(BKTheme.textSecondary)
                 }
 
                 HStack(spacing: 18) {
