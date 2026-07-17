@@ -318,7 +318,10 @@ struct LastManStandingView: View {
                        state.status == .question {
                         customAnswerPanel
                     }
-                    survivorDock
+                    if !customSearchFocused {
+                        survivorDock
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
                 .background(StadiumBackground(glowIntensity: 0.28))
                 .navigationBarTitleDisplayMode(.inline)
@@ -361,6 +364,7 @@ struct LastManStandingView: View {
                 .zIndex(999)
         }
         .animation(.easeOut(duration: 0.21), value: state.currentQuestionIndex)
+        .animation(.easeOut(duration: 0.18), value: customSearchFocused)
         .onChange(of: state.currentQuestionIndex) { _, _ in
             customSearchFocused = false
         }
@@ -537,39 +541,42 @@ struct LastManStandingView: View {
                         .foregroundStyle(BKTheme.textMuted)
                         .padding(.vertical, 6)
                 } else {
-                    VStack(spacing: 5) {
-                        ForEach(Array(viewModel.customSearchResults.prefix(4))) { player in
-                            Button {
-                                customSearchFocused = false
-                                Task { await viewModel.submitCustomAnswer(player) }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    PlayerAvatar(urlString: player.headshotUrl, size: 34) {
-                                        PlayerSilhouette(size: 34)
-                                    }
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(player.name)
-                                            .font(BKFont.headline(14))
-                                            .foregroundStyle(BKTheme.textPrimary)
-                                        Text(player.club)
-                                            .font(BKFont.caption(9))
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 5) {
+                            ForEach(Array(viewModel.customSearchResults.prefix(6))) { player in
+                                Button {
+                                    customSearchFocused = false
+                                    Task { await viewModel.submitCustomAnswer(player) }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        PlayerAvatar(urlString: player.headshotUrl, size: 34) {
+                                            PlayerSilhouette(size: 34)
+                                        }
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(player.name)
+                                                .font(BKFont.headline(14))
+                                                .foregroundStyle(BKTheme.textPrimary)
+                                            Text(player.club)
+                                                .font(BKFont.caption(9))
+                                                .foregroundStyle(BKTheme.textMuted)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 9, weight: .bold))
                                             .foregroundStyle(BKTheme.textMuted)
-                                            .lineLimit(1)
                                     }
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(BKTheme.textMuted)
+                                    .padding(.horizontal, 11)
+                                    .padding(.vertical, 7)
+                                    .background(BKTheme.card.opacity(0.94))
+                                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                                 }
-                                .padding(.horizontal, 11)
-                                .padding(.vertical, 7)
-                                .background(BKTheme.card.opacity(0.94))
-                                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                                .buttonStyle(.plain)
+                                .disabled(!state.isInteractive || viewModel.isChecking)
                             }
-                            .buttonStyle(.plain)
-                            .disabled(!state.isInteractive || viewModel.isChecking)
                         }
                     }
+                    .frame(maxHeight: 180)
                 }
             }
 
