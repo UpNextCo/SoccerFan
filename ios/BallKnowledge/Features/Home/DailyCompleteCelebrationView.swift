@@ -11,7 +11,7 @@ enum DailyCompleteCelebration {
         UserDefaults.standard.set(date, forKey: UserDefaultsKeys.dailyCompleteCelebratedDate)
     }
 
-    /// Drop `winN.png` into `Resources/WinPics/` — folder reference, same pattern as GameTiles.
+    /// Xcode copies these files from Resources/WinPics into the built app's resource root.
     static let winPicNames = (1...11).map { "win\($0)" }
 
     static func randomWinImage() -> UIImage? {
@@ -25,6 +25,10 @@ enum DailyCompleteCelebration {
     private static func loadWinImage(named name: String) -> UIImage? {
         let extensions = ["png", "PNG", "jpg", "jpeg"]
         for ext in extensions {
+            if let url = Bundle.main.url(forResource: name, withExtension: ext),
+               let image = UIImage(contentsOfFile: url.path) {
+                return image
+            }
             if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "WinPics"),
                let image = UIImage(contentsOfFile: url.path) {
                 return image
@@ -256,14 +260,22 @@ struct DailyCompleteCelebrationView: View {
 
     private var winHeroBackground: some View {
         GeometryReader { geo in
-            let topPad = geo.safeAreaInsets.top + 88
-            Group {
+            let topPad = geo.safeAreaInsets.top + 4
+            ZStack(alignment: .top) {
+                RadialGradient(
+                    colors: [BKTheme.accent.opacity(0.22), .clear],
+                    center: .top,
+                    startRadius: 12,
+                    endRadius: 300
+                )
+                .frame(height: geo.size.height * 0.62)
+
                 if let winImage {
                     Image(uiImage: winImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: geo.size.width * 0.8)
-                        .opacity(0.78)
+                        .frame(width: geo.size.width * 0.9)
+                        .opacity(0.84)
                         // Short, strong dissolve only at the bottom edge — image stays crisp above.
                         .mask(
                             VStack(spacing: 0) {
@@ -294,14 +306,6 @@ struct DailyCompleteCelebrationView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.top, topPad)
-                } else {
-                    RadialGradient(
-                        colors: [BKTheme.accent.opacity(0.18), .clear],
-                        center: .top,
-                        startRadius: 20,
-                        endRadius: 280
-                    )
-                    .padding(.top, topPad)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
