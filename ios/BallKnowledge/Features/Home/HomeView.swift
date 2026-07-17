@@ -53,6 +53,7 @@ struct HomeView: View {
     /// True while a game cover is up — celebration waits until we're back on home.
     @State private var isPlayingGame = false
     @State private var celebrationPayload: DailyCompleteCelebrationPayload?
+    @State private var rankUpPayload: RankUpCelebrationPayload?
     @Binding var selectedTab: AppTab
 
     private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
@@ -143,7 +144,11 @@ struct HomeView: View {
             guard today != trackedDailyDate || viewModel.dailyBundle?.date != today else { return }
             Task { await reloadIfNeeded(force: false, context: modelContext) }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .dailyCompletionRecorded)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .dailyCompletionRecorded)) { notification in
+            if let completion = notification.object as? DailyCompleteResponseDTO,
+               let rankUp = RankUpCelebrationPayload.make(from: completion) {
+                rankUpPayload = rankUp
+            }
             // The completion POST has landed on the server — refresh XP (top bar + card) and the
             // games-completed count now that the write is durable, avoiding the dismiss-time race.
             Task {
@@ -163,7 +168,9 @@ struct HomeView: View {
                 refreshInProgress()
                 // Let the game cover finish dismissing before stacking the celebration cover.
                 try? await Task.sleep(for: .milliseconds(350))
-                presentCelebrationIfNeeded()
+                if rankUpPayload == nil {
+                    presentCelebrationIfNeeded()
+                }
             }
         }) { mode in
             DailyGameHost(
@@ -172,6 +179,15 @@ struct HomeView: View {
                 allowReplay: allowsUnlimitedDailyPlay,
                 onFinished: { handleModeFinished(mode) }
             )
+        }
+        .fullScreenCover(item: $rankUpPayload) { payload in
+            RankUpCelebrationView(payload: payload) {
+                rankUpPayload = nil
+                Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    presentCelebrationIfNeeded()
+                }
+            }
         }
         .fullScreenCover(item: $celebrationPayload) { payload in
             DailyCompleteCelebrationView(payload: payload) {
@@ -226,7 +242,10 @@ struct HomeView: View {
 
     /// Show the all-7 celebration once per day when returning home after clearing the set.
     private func presentCelebrationIfNeeded() {
-        guard celebrationPayload == nil, !isPlayingGame, presentedMode == nil else { return }
+        guard celebrationPayload == nil,
+              rankUpPayload == nil,
+              !isPlayingGame,
+              presentedMode == nil else { return }
         guard let bundle = viewModel.dailyBundle else { return }
         guard isDailyComplete(bundle) else { return }
         guard !DailyCompleteCelebration.hasShown(for: bundle.date) else { return }

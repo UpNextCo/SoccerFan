@@ -144,7 +144,7 @@ actor APIClient {
     func dailyComplete(_ body: DailyCompleteRequestDTO) async throws -> DailyCompleteResponseDTO {
         let response: DailyCompleteResponseDTO = try await request("daily/complete", method: "POST", body: body)
         await MainActor.run {
-            NotificationCenter.default.post(name: .dailyCompletionRecorded, object: nil)
+            NotificationCenter.default.post(name: .dailyCompletionRecorded, object: response)
         }
         return response
     }
