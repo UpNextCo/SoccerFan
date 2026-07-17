@@ -589,11 +589,22 @@ export async function getDailyBundle(userId: string, clientDate?: string): Promi
   });
 
   const completions = await db
-    .select({ modeId: dailyCompletions.modeId })
+    .select({
+      modeId: dailyCompletions.modeId,
+      score: dailyCompletions.score,
+      guesses: dailyCompletions.guesses,
+      won: dailyCompletions.won,
+    })
     .from(dailyCompletions)
     .where(and(eq(dailyCompletions.userId, userId), eq(dailyCompletions.date, date)));
 
   const completedModeIds = completions.map((row) => row.modeId);
+  const completionXpByMode = Object.fromEntries(
+    completions.map((row) => [
+      row.modeId,
+      computeXp(row.modeId, row.score, row.guesses, row.won),
+    ])
+  );
   // "All done" is measured against the modes that ACTUALLY generated for the day — puzzle
   // generation is best-effort and can skip a mode, so requiring every theoretical mode would leave
   // the daily permanently incomplete when one is missing.
@@ -605,6 +616,7 @@ export async function getDailyBundle(userId: string, clientDate?: string): Promi
     date,
     alreadyPlayed: allComplete,
     completedModeIds,
+    completionXpByMode,
     games,
   };
 }

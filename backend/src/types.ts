@@ -208,6 +208,7 @@ export interface DailyBundle {
   date: string;
   alreadyPlayed: boolean;
   completedModeIds: string[];
+  completionXpByMode: Record<string, number>;
   games: Array<{
     modeId: string;
     title: string;

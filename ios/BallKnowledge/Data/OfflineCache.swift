@@ -242,6 +242,7 @@ enum OfflineCache {
 
 enum DailyCompletionService {
     private static let storageKey = "daily_completed_mode_ids"
+    private static let xpStorageKey = "daily_completed_mode_xp"
 
     static func completedSet(for bundle: DailyBundleDTO) -> Set<String> {
         var ids = Set(bundle.completedModeIds.map { GameModeCatalog.normalizedModeId($0) })
@@ -257,18 +258,32 @@ enum DailyCompletionService {
         localCompleted(for: date).contains(mode.rawValue)
     }
 
-    static func markLocallyCompleted(_ mode: GameModeID, date: String) {
+    static func markLocallyCompleted(_ mode: GameModeID, date: String, xp: Int) {
         var store = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: [String]] ?? [:]
         var modes = Set(store[date] ?? [])
         modes.insert(mode.rawValue)
         store[date] = Array(modes)
         UserDefaults.standard.set(store, forKey: storageKey)
+
+        var xpStore =
+            UserDefaults.standard.dictionary(forKey: xpStorageKey) as? [String: [String: Int]] ?? [:]
+        var dailyXp = xpStore[date] ?? [:]
+        dailyXp[mode.rawValue] = xp
+        xpStore[date] = dailyXp
+        UserDefaults.standard.set(xpStore, forKey: xpStorageKey)
+    }
+
+    static func locallyEarnedXp(_ mode: GameModeID, date: String) -> Int? {
+        let store =
+            UserDefaults.standard.dictionary(forKey: xpStorageKey) as? [String: [String: Int]] ?? [:]
+        return store[date]?[mode.rawValue]
     }
 
     /// Wipe every locally-recorded daily completion. Call on sign-out / account deletion so one
     /// account's "games done" state never bleeds into the next account on this device.
     static func clearAllLocalCompletions() {
         UserDefaults.standard.removeObject(forKey: storageKey)
+        UserDefaults.standard.removeObject(forKey: xpStorageKey)
     }
 
     /// Record a finished daily: lock it locally first (so it can't be replayed even offline), then
@@ -287,7 +302,11 @@ enum DailyCompletionService {
     ) async -> DailyCompleteResponseDTO? {
         let normalized = GameModeCatalog.normalizedModeId(modeId)
         if let mode = GameModeID(rawValue: normalized) {
-            markLocallyCompleted(mode, date: date)
+            markLocallyCompleted(
+                mode,
+                date: date,
+                xp: DailyXP.xp(mode: normalized, score: score)
+            )
         }
 
         let request = DailyCompleteRequestDTO(

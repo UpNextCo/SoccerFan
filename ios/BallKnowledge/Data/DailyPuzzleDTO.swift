@@ -638,17 +638,20 @@ struct DailyBundleDTO: Codable, Equatable {
     let date: String
     let alreadyPlayed: Bool
     let completedModeIds: [String]
+    let completionXpByMode: [String: Int]
     let games: [DailyGameDTO]
 
     init(
         date: String,
         alreadyPlayed: Bool,
         completedModeIds: [String] = [],
+        completionXpByMode: [String: Int] = [:],
         games: [DailyGameDTO]
     ) {
         self.date = date
         self.alreadyPlayed = alreadyPlayed
         self.completedModeIds = completedModeIds
+        self.completionXpByMode = completionXpByMode
         self.games = games
     }
 
@@ -657,6 +660,8 @@ struct DailyBundleDTO: Codable, Equatable {
         date = try container.decode(String.self, forKey: .date)
         alreadyPlayed = try container.decode(Bool.self, forKey: .alreadyPlayed)
         completedModeIds = try container.decodeIfPresent([String].self, forKey: .completedModeIds) ?? []
+        completionXpByMode =
+            try container.decodeIfPresent([String: Int].self, forKey: .completionXpByMode) ?? [:]
         // Lenient: a single game whose puzzle we can't decode (e.g. a puzzle stored in an older shape
         // after a schema change) must NOT nuke the whole bundle — that would leave every game tile
         // dead. Skip the bad game; the rest still open, and the affected mode shows "unavailable".
@@ -668,6 +673,7 @@ struct DailyBundleDTO: Codable, Equatable {
         case date
         case alreadyPlayed
         case completedModeIds
+        case completionXpByMode
         case games
     }
 }

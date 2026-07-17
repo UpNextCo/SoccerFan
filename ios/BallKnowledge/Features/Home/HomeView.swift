@@ -526,6 +526,7 @@ struct DailySection: View {
                     DailyGameCard(
                         mode: mode,
                         state: state(for: mode),
+                        earnedXp: earnedXp(for: mode),
                         showsDivider: index < orderedModes.count - 1,
                         onTap: { onSelect(mode) }
                     )
@@ -686,11 +687,22 @@ struct DailySection: View {
         }
         return .available
     }
+
+    private func earnedXp(for mode: GameModeMetaDTO) -> Int? {
+        guard let bundle else { return nil }
+        let normalized = GameModeCatalog.normalizedModeId(mode.id)
+        if let serverXp = bundle.completionXpByMode[normalized] {
+            return serverXp
+        }
+        guard let modeId = GameModeID(rawValue: normalized) else { return nil }
+        return DailyCompletionService.locallyEarnedXp(modeId, date: bundle.date)
+    }
 }
 
 struct DailyGameCard: View {
     let mode: GameModeMetaDTO
     let state: DailyTileState
+    var earnedXp: Int?
     var showsDivider = true
     var onTap: () -> Void
 
@@ -716,10 +728,22 @@ struct DailyGameCard: View {
                 thumbnail
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(displayTitle)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text(displayTitle)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(BKTheme.textPrimary)
+                            .lineLimit(1)
+
+                        if state == .completed, let earnedXp {
+                            Text(earnedXp > 0 ? "+\(earnedXp) XP" : "0 XP")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(BKTheme.textSecondary)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.07))
+                                .clipShape(Capsule())
+                        }
+                    }
 
                     Text(Self.blurb(for: mode))
                         .font(.system(size: 13))
