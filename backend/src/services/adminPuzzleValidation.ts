@@ -308,7 +308,25 @@ function validateBingo(puzzleJson: unknown, issues: AdminPuzzleValidationIssue[]
   if (!puzzle) return;
   if (!unique(puzzle.categories.map((category) => category.id))) issue(issues, 'puzzleJson.categories', 'Category ids must be unique.');
   if (!unique(puzzle.categories.map((category) => category.matchingRule))) issue(issues, 'puzzleJson.categories', 'Category matching rules must be unique.');
-  if (!unique(puzzle.players.map((player) => player.id))) issue(issues, 'puzzleJson.players', 'Player ids must be unique.');
+  const positionsByPlayerId = new Map<string, number[]>();
+  puzzle.players.forEach((player, index) => {
+    const positions = positionsByPlayerId.get(player.id) ?? [];
+    positions.push(index + 1);
+    positionsByPlayerId.set(player.id, positions);
+  });
+  const duplicates = [...positionsByPlayerId.entries()]
+    .filter(([, positions]) => positions.length > 1)
+    .map(([playerId, positions]) => {
+      const player = puzzle.players.find((candidate) => candidate.id === playerId);
+      return `${player?.name ?? 'Unknown player'} appears in pool positions ${positions.join(', ')}`;
+    });
+  if (duplicates.length > 0) {
+    issue(
+      issues,
+      'puzzleJson.players',
+      `Duplicate players: ${duplicates.join('; ')}. Swap one copy of each player.`
+    );
+  }
 }
 
 function validateOneMore(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzzleValidationIssue[]) {

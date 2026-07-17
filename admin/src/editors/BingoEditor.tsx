@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import { nationalityFlag } from '../countryFlags'
@@ -105,9 +105,29 @@ export function BingoEditor({
 }) {
   const p = puzzle as Puzzle
   const categories = p.categories ?? []
-  const players = p.players ?? []
+  const players = useMemo(() => p.players ?? [], [p.players])
   const latestRef = useRef(p)
   const [activeCategoryIndex, setActiveCategoryIndex] = useState(0)
+  const [poolError, setPoolError] = useState<{ message: string; existingIndex?: number } | null>(null)
+  const duplicatePlayerGroups = useMemo(() => {
+    const byId = new Map<string, { name: string; indices: number[] }>()
+    players.forEach((player, index) => {
+      if (!player.id) return
+      const existing = byId.get(player.id) ?? {
+        name: player.name || player.displayName || 'Unknown player',
+        indices: [],
+      }
+      existing.indices.push(index)
+      byId.set(player.id, existing)
+    })
+    return [...byId.entries()]
+      .filter(([, group]) => group.indices.length > 1)
+      .map(([id, group]) => ({ id, ...group }))
+  }, [players])
+  const duplicateIndices = useMemo(
+    () => new Set(duplicatePlayerGroups.flatMap((group) => group.indices)),
+    [duplicatePlayerGroups]
+  )
   useEffect(() => {
     latestRef.current = p
   }, [p])
@@ -150,6 +170,17 @@ export function BingoEditor({
     idx: number,
     hit: { id: string; name: string; nationality?: string; headshotUrl?: string }
   ) {
+    const duplicateIndex = latestRef.current.players.findIndex(
+      (player, playerIndex) => playerIndex !== idx && player.id === hit.id
+    )
+    if (duplicateIndex >= 0) {
+      setPoolError({
+        message: `${hit.name} is already in pool position ${duplicateIndex + 1}. Choose a different player or swap that existing copy first.`,
+        existingIndex: duplicateIndex,
+      })
+      return
+    }
+    setPoolError(null)
     // Optimistic UI update so the thumb changes immediately.
     const currentPlayer = latestRef.current.players[idx]
     replacePlayer(idx, {
@@ -372,11 +403,48 @@ export function BingoEditor({
         })}
       </section>
 
-      <details className="editor-clean-section player-pool-panel">
+      <details
+        className="editor-clean-section player-pool-panel"
+        open={duplicatePlayerGroups.length > 0 ? true : undefined}
+      >
         <summary>
           Player pool
           <span className="muted tiny">{players.length} players · open only to swap someone</span>
         </summary>
+        {duplicatePlayerGroups.length > 0 && (
+          <div className="error-box bingo-duplicate-summary" role="alert">
+            <strong>
+              {duplicatePlayerGroups.length} duplicate player
+              {duplicatePlayerGroups.length === 1 ? '' : 's'} to fix
+            </strong>
+            <ul>
+              {duplicatePlayerGroups.map((group) => (
+                <li key={group.id}>
+                  {group.name} appears in pool positions{' '}
+                  {group.indices.map((index) => index + 1).join(', ')}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {poolError && (
+          <div className="error-box bingo-pool-selection-error" role="alert">
+            <span>{poolError.message}</span>
+            {poolError.existingIndex !== undefined && (
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() =>
+                  document
+                    .getElementById(`bingo-player-${poolError.existingIndex}`)
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+              >
+                Show existing player
+              </button>
+            )}
+          </div>
+        )}
         <div className="bingo-player-grid player-pool-content">
           {players.map((pl, idx) => {
             const metadata = [
@@ -386,12 +454,21 @@ export function BingoEditor({
               pl.leagues?.length ? `${pl.leagues.length} leagues` : undefined,
             ].filter((value): value is string => Boolean(value))
             return (
-              <article key={`${pl.id ?? idx}-${pl.headshotUrl ?? ''}-${pl.name ?? ''}`} className="bingo-player-card">
+              <article
+                id={`bingo-player-${idx}`}
+                key={`${pl.id ?? idx}-${pl.headshotUrl ?? ''}-${pl.name ?? ''}`}
+                className={`bingo-player-card${duplicateIndices.has(idx) ? ' duplicate' : ''}`}
+              >
                 <div className="bingo-player-title">
                   {pl.headshotUrl ? <img src={pl.headshotUrl} alt="" /> : <span className="bingo-player-placeholder" />}
                   <div>
                     <strong>{pl.name || pl.displayName || 'Unknown player'}</strong>
                     <span className="muted tiny">{metadata.join(' · ') || 'Details unavailable'}</span>
+                    {duplicateIndices.has(idx) && (
+                      <span className="bingo-duplicate-label">
+                        Duplicate · pool position {idx + 1}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <EntityPicker

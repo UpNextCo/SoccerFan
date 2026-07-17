@@ -137,6 +137,36 @@
   margin-top: 1rem;
 }
 
+.bingo-duplicate-summary {
+  margin-top: 1rem;
+}
+
+.bingo-duplicate-summary ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.15rem;
+}
+
+.bingo-pool-selection-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.bingo-player-card.duplicate {
+  padding: 12px;
+  background: #fff4f4;
+  border-radius: 12px;
+}
+
+.bingo-duplicate-label {
+  display: block;
+  margin-top: 3px;
+  color: var(--danger);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
 .editor-disclosure {
   padding: 1rem 0;
 }

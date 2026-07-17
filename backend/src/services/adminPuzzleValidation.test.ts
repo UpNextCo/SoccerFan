@@ -51,6 +51,19 @@ test('requires the persisted 4x4 Bingo contract', () => {
     { categories: categories.slice(0, 9), players: players.slice(0, 9) },
     null
   ).ok, false);
+  const duplicatedPlayers = players.map((player, index) =>
+    index === 15 ? { ...player, id: players[0]!.id, name: players[0]!.name } : player
+  );
+  const duplicateReport = validatePuzzleReport(
+    'football_bingo',
+    { categories, players: duplicatedPlayers },
+    null
+  );
+  assert.equal(duplicateReport.ok, false);
+  assert.match(
+    duplicateReport.issues.find((entry) => entry.path === 'puzzleJson.players')?.message ?? '',
+    /Player 0 appears in pool positions 1, 16/
+  );
 });
 
 test('enforces generated -> approved -> locked while preserving unlocks', () => {
