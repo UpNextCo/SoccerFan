@@ -707,18 +707,8 @@ struct ProfileTabView: View {
         return letters.isEmpty ? "BK" : letters.uppercased()
     }
 
-    private var currentLevel: Int { auth.user?.level ?? 1 }
     private var currentXp: Int { auth.user?.xp ?? 0 }
-    private var levelXpStart: Int {
-        auth.user?.levelXpStart ?? (currentLevel <= 1 ? 0 : 1_500 * currentLevel * currentLevel)
-    }
-    private var nextLevelXp: Int {
-        auth.user?.nextLevelXp ?? 1_500 * (currentLevel + 1) * (currentLevel + 1)
-    }
-    private var levelProgress: Double {
-        let range = max(1, nextLevelXp - levelXpStart)
-        return min(1, max(0, Double(currentXp - levelXpStart) / Double(range)))
-    }
+    private var rankProgress: PlayerRankProgress { PlayerRank.progress(for: currentXp) }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -818,7 +808,7 @@ struct ProfileTabView: View {
             }
             .buttonStyle(.plain)
 
-            VStack(spacing: 6) {
+            VStack(spacing: 10) {
                 Button {
                     draftName = displayName
                     showEditName = true
@@ -834,18 +824,19 @@ struct ProfileTabView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("\(levelEmoji(currentLevel))  Level \(currentLevel) · \(levelTitle(currentLevel))")
-                    .font(BKFont.caption(13))
-                    .foregroundStyle(BKTheme.accent)
+                Text("\(rankProgress.emoji)  \(rankProgress.title)")
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .padding(.bottom, 4)
 
-                VStack(spacing: 5) {
+                VStack(spacing: 7) {
                     GeometryReader { geometry in
                         ZStack(alignment: .leading) {
                             Capsule()
                                 .fill(BKTheme.cardElevated)
                             Capsule()
                                 .fill(BKTheme.accent)
-                                .frame(width: geometry.size.width * levelProgress)
+                                .frame(width: geometry.size.width * rankProgress.fraction(at: currentXp))
                         }
                     }
                     .frame(height: 6)
@@ -853,7 +844,13 @@ struct ProfileTabView: View {
                     HStack {
                         Text("\(currentXp.formatted()) XP")
                         Spacer()
-                        Text("\(max(0, nextLevelXp - currentXp).formatted()) to Level \(currentLevel + 1)")
+                        if let remaining = rankProgress.remaining(at: currentXp),
+                           let nextEmoji = rankProgress.nextEmoji,
+                           let nextTitle = rankProgress.nextTitle {
+                            Text("\(remaining.formatted()) XP to \(nextEmoji) \(nextTitle)")
+                        } else {
+                            Text("Top rank reached")
+                        }
                     }
                     .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.textMuted)
@@ -1048,27 +1045,6 @@ struct ProfileTabView: View {
         return "v\(v) (\(b))"
     }
 
-    private func levelTitle(_ level: Int) -> String {
-        switch level {
-        case ..<3: return "Rookie"
-        case 3..<5: return "Semi-Pro"
-        case 5..<8: return "Pro"
-        case 8..<12: return "Veteran"
-        case 12..<18: return "World Class"
-        default: return "Legend"
-        }
-    }
-
-    private func levelEmoji(_ level: Int) -> String {
-        switch level {
-        case ..<3: return "⚽️"
-        case 3..<5: return "🥉"
-        case 5..<8: return "🥈"
-        case 8..<12: return "🥇"
-        case 12..<18: return "🏆"
-        default: return "👑"
-        }
-    }
 }
 
 // MARK: - Settings rows

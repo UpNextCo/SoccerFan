@@ -371,8 +371,8 @@ enum HomeActivity {
     static func events(user: UserProfileDTO?, streak: Int, dailyComplete: Bool = false) -> [ActivityEvent] {
         var events: [ActivityEvent] = []
         let todayXp = user?.todayXp ?? 0
-        let level = user?.level ?? 1
         let xp = user?.xp ?? 0
+        let rank = PlayerRank.progress(for: xp)
 
         if dailyComplete {
             events.append(ActivityEvent(
@@ -413,7 +413,7 @@ enum HomeActivity {
         events.append(ActivityEvent(
             icon: "star.fill",
             tint: BKTheme.accent,
-            title: "Level \(level)",
+            title: "\(rank.emoji) \(rank.title)",
             message: "\(xp) total XP earned. Keep climbing.",
             unread: false
         ))
