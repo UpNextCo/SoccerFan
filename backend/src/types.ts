@@ -162,12 +162,21 @@ export interface LastManStandingCareerClubPublic {
   note?: 'loan';
 }
 
+export interface LastManStandingCluePlayerPublic {
+  id?: string;
+  name: string;
+  headshotUrl?: string;
+  nationality?: string;
+  position?: string;
+}
+
 export interface LastManStandingPresentationPublic {
   layout?: 'two_up' | 'grid' | 'stack' | 'image_header';
   imageUrl?: string;
   imageBlur?: number;
   careerClubs?: LastManStandingCareerClubPublic[];
   careerPathVersion?: 2;
+  cluePlayers?: LastManStandingCluePlayerPublic[];
 }
 
 export interface LastManStandingQuestionPublic {

@@ -65,7 +65,7 @@ export async function composeLastManStandingPuzzle(date: string): Promise<LMSGen
         slot: slotDef.slot,
       });
       if (bankHit) {
-        built = bankHit;
+        built = await enrichLMSBuilderResult(bankHit);
         fromBank += 1;
       }
     } catch (err) {

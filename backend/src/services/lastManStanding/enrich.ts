@@ -73,7 +73,7 @@ async function loadPlayersByNames(names: string[]): Promise<Map<string, PlayerRo
 export async function enrichLMSBuilderResult(result: LMSBuilderResult): Promise<LMSBuilderResult> {
   const overrides = await photoOverrides();
   const question = { ...result.question };
-  const presentation = question.presentation ? { ...question.presentation } : undefined;
+  let presentation = question.presentation ? { ...question.presentation } : undefined;
 
   if (presentation?.careerClubs?.length) {
     presentation.careerClubs = await Promise.all(
@@ -85,13 +85,59 @@ export async function enrichLMSBuilderResult(result: LMSBuilderResult): Promise<
     question.presentation = presentation;
   }
 
-  const playerIds = question.options
+  const clueNames =
+    question.type === 'which_club'
+      ? (
+          presentation?.cluePlayers?.map((player) => player.name) ??
+          question.subPrompt?.split('·').map((name) => name.trim()).filter(Boolean) ??
+          []
+        )
+      : [];
+  const cluePlayerIds =
+    presentation?.cluePlayers
+      ?.map((player) => player.id)
+      .filter((id): id is string => typeof id === 'string' && UUID_RE.test(id)) ??
+    [];
+  const playerIds = [
+    ...question.options
     .map((o) => playerIdFromOption(question.id, o.id))
-    .filter((id): id is string => id != null);
+    .filter((id): id is string => id != null),
+    ...cluePlayerIds,
+  ];
   const byId = await loadPlayers(playerIds);
   const byName = isClubOptionQuestion(question)
     ? new Map<string, PlayerRow>()
     : await loadPlayersByNames(question.options.map((o) => o.label));
+  const clueByName =
+    question.type === 'which_club'
+      ? await loadPlayersByNames(clueNames)
+      : new Map<string, PlayerRow>();
+
+  if (question.type === 'which_club' && clueNames.length > 0) {
+    const existingByName = new Map(
+      (presentation?.cluePlayers ?? []).map((player) => [player.name, player])
+    );
+    presentation = {
+      ...(presentation ?? {}),
+      cluePlayers: clueNames.map((name) => {
+        const existing = existingByName.get(name);
+        const row =
+          (existing?.id ? byId.get(existing.id) : undefined) ??
+          clueByName.get(name);
+        if (!row) return existing ?? { name };
+        return {
+          id: row.id,
+          name: row.name,
+          headshotUrl:
+            resolveHeadshot(overrides.get(row.id), row.api_football_id) ??
+            existing?.headshotUrl,
+          nationality: row.nationality,
+          position: row.position || undefined,
+        };
+      }),
+    };
+    question.presentation = presentation;
+  }
 
   question.options = await Promise.all(
     question.options.map(async (opt) => {

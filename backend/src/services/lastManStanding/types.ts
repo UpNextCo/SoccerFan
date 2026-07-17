@@ -27,12 +27,21 @@ export interface LMSCareerClubPublic {
   note?: 'loan';
 }
 
+export interface LMSCluePlayerPublic {
+  id?: string;
+  name: string;
+  headshotUrl?: string;
+  nationality?: string;
+  position?: string;
+}
+
 export interface LMSPresentationPublic {
   layout?: 'two_up' | 'grid' | 'stack' | 'image_header';
   imageUrl?: string;
   imageBlur?: number;
   careerClubs?: LMSCareerClubPublic[];
   careerPathVersion?: 2;
+  cluePlayers?: LMSCluePlayerPublic[];
 }
 
 export interface LMSQuestionPublic {

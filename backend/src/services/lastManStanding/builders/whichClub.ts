@@ -136,7 +136,13 @@ export async function buildWhichClub(ctx: LMSBuildContext): Promise<LMSBuilderRe
         prompt: 'Which club did they all play for?',
         subPrompt: picked.map((p) => p.name).join(' · '),
         options,
-        presentation: { layout: 'grid' },
+        presentation: {
+          layout: 'grid',
+          cluePlayers: picked.map((player) => ({
+            id: player.player_id,
+            name: player.name,
+          })),
+        },
       },
       answer: {
         questionId,

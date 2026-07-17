@@ -18,6 +18,15 @@ enum LastManStandingSeed {
                 imageBlur: pres.imageBlur,
                 careerClubs: pres.careerClubs?.map {
                     LMSCareerClub(name: $0.name, logoUrl: $0.logoUrl, note: $0.note)
+                },
+                cluePlayers: pres.cluePlayers?.map {
+                    LMSCluePlayer(
+                        id: $0.id,
+                        name: $0.name,
+                        headshotUrl: $0.headshotUrl,
+                        nationality: $0.nationality,
+                        position: $0.position
+                    )
                 }
             )
         }

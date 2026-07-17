@@ -31,6 +31,13 @@ type LMSQuestion = {
     imageUrl?: string;
     imageBlur?: number;
     careerClubs?: Array<{ name: string; logoUrl?: string; note?: 'loan' }>;
+    cluePlayers?: Array<{
+      id?: string;
+      name: string;
+      headshotUrl?: string;
+      nationality?: string;
+      position?: string;
+    }>;
     [k: string]: unknown;
   };
   [k: string]: unknown;
@@ -77,7 +84,16 @@ export async function enrichAdminLMSPuzzle(
   if (!Array.isArray(puzzle.questions)) return { puzzleJson: puzzle, answerJson: answer };
 
   const playerIds = new Set<string>();
+  const cluePlayerNames = new Set<string>();
   for (const q of puzzle.questions) {
+    for (const cluePlayer of q.presentation?.cluePlayers ?? []) {
+      if (cluePlayer.id && UUID_RE.test(cluePlayer.id)) playerIds.add(cluePlayer.id);
+    }
+    if (q.type === 'which_club') {
+      for (const name of q.subPrompt?.split('·').map((value) => value.trim()) ?? []) {
+        if (name) cluePlayerNames.add(name);
+      }
+    }
     if (q.type === 'custom_image') continue;
     if (isClubQuestion(q)) continue;
     for (const o of q.options ?? []) {
@@ -104,6 +120,23 @@ export async function enrichAdminLMSPuzzle(
       .where(inArray(players.id, [...playerIds]));
     for (const r of rows) playerMap.set(r.id, r);
   }
+  const cluePlayerMap = new Map<
+    string,
+    { id: string; name: string; nationality: string; position: string; apiFootballId: number | null }
+  >();
+  if (cluePlayerNames.size > 0) {
+    const rows = await db
+      .select({
+        id: players.id,
+        name: players.name,
+        nationality: players.nationality,
+        position: players.position,
+        apiFootballId: players.apiFootballId,
+      })
+      .from(players)
+      .where(inArray(players.name, [...cluePlayerNames]));
+    for (const row of rows) cluePlayerMap.set(row.name, row);
+  }
 
   for (const q of puzzle.questions) {
     const ans = answer.questions?.find((x) => x.questionId === q.id);
@@ -120,6 +153,36 @@ export async function enrichAdminLMSPuzzle(
     }
 
     if (isClubQuestion(q)) {
+      if (q.type === 'which_club') {
+        const cluePlayers: Array<{
+          id?: string;
+          name: string;
+          headshotUrl?: string;
+          nationality?: string;
+          position?: string;
+        }> =
+          q.presentation?.cluePlayers?.length
+            ? q.presentation.cluePlayers
+            : (q.subPrompt?.split('·').map((name) => ({ name: name.trim() })) ?? []);
+        q.presentation = {
+          ...(q.presentation ?? {}),
+          cluePlayers: cluePlayers.map((cluePlayer) => {
+            const row =
+              (cluePlayer.id ? playerMap.get(cluePlayer.id) : undefined) ??
+              cluePlayerMap.get(cluePlayer.name);
+            if (!row) return cluePlayer;
+            return {
+              id: row.id,
+              name: row.name,
+              headshotUrl:
+                resolveHeadshot(overrides.get(row.id), row.apiFootballId) ??
+                cluePlayer.headshotUrl,
+              nationality: row.nationality,
+              position: row.position || undefined,
+            };
+          }),
+        };
+      }
       q.options = await Promise.all(
         (q.options ?? []).map(async (opt) => {
           const logo = (await lookupTeamLogo(opt.label, ''))?.logoUrl ?? opt.teamLogoUrl;

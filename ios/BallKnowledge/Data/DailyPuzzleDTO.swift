@@ -298,11 +298,20 @@ struct LastManStandingCareerClubDTO: Codable, Equatable {
     let note: String?
 }
 
+struct LastManStandingCluePlayerDTO: Codable, Equatable {
+    let id: String?
+    let name: String
+    let headshotUrl: String?
+    let nationality: String?
+    let position: String?
+}
+
 struct LastManStandingPresentationDTO: Codable, Equatable {
     let layout: String?
     let imageUrl: String?
     let imageBlur: Double?
     let careerClubs: [LastManStandingCareerClubDTO]?
+    let cluePlayers: [LastManStandingCluePlayerDTO]?
 }
 
 struct LastManStandingQuestionDTO: Codable, Equatable {

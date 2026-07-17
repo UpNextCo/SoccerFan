@@ -45,6 +45,14 @@ struct LMSCareerClub: Equatable, Codable {
     var note: String?
 }
 
+struct LMSCluePlayer: Equatable, Codable {
+    let id: String?
+    let name: String
+    var headshotUrl: String?
+    var nationality: String?
+    var position: String?
+}
+
 enum LMSPresentationLayout: String, Codable {
     case twoUp = "two_up"
     case grid
@@ -57,6 +65,7 @@ struct LMSPresentation: Equatable, Codable {
     var imageUrl: String?
     var imageBlur: Double?
     var careerClubs: [LMSCareerClub]?
+    var cluePlayers: [LMSCluePlayer]?
 }
 
 struct LMSOption: Identifiable, Equatable, Codable {

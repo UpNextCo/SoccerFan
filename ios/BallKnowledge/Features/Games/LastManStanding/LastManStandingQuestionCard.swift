@@ -94,27 +94,48 @@ struct LastManStandingQuestionCard: View {
     @ViewBuilder
     private func cluePlayerRow(_ sub: String) -> some View {
         let names = sub.split(separator: "·").map { $0.trimmingCharacters(in: .whitespaces) }
-        HStack(spacing: 8) {
+        VStack(spacing: 7) {
             ForEach(Array(names.enumerated()), id: \.offset) { _, name in
-                if let option = question.options.first(where: { $0.label == name }) {
-                    VStack(spacing: 2) {
-                        PlayerAvatar(urlString: option.headshotUrl, size: 32)
-                        Text(option.label)
-                            .font(BKFont.caption(9))
-                            .foregroundStyle(BKTheme.textSecondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
-                    }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    Text(name)
-                        .font(BKFont.caption(10))
-                        .foregroundStyle(BKTheme.textSecondary)
-                        .frame(maxWidth: .infinity)
+                let clue = question.presentation?.cluePlayers?.first {
+                    $0.name.caseInsensitiveCompare(name) == .orderedSame
                 }
+                HStack(spacing: 12) {
+                    PlayerAvatar(urlString: clue?.headshotUrl, size: 44) {
+                        PlayerSilhouette(size: 44)
+                    }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(clue?.name ?? name)
+                            .font(BKFont.headline(17))
+                            .foregroundStyle(BKTheme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                        HStack(spacing: 6) {
+                            if let nationality = clue?.nationality, !nationality.isEmpty {
+                                Text(GuessWhoDisplay.nationalityFlag(nationality))
+                                    .font(.system(size: 14))
+                            }
+                            if let position = clue?.position, !position.isEmpty {
+                                Text(GuessWhoDisplay.positionAbbrev(position))
+                                    .font(BKFont.caption(10))
+                                    .foregroundStyle(BKTheme.textMuted)
+                            }
+                        }
+                    }
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, minHeight: 54)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 7)
+                .background(BKTheme.card.opacity(0.92))
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .overlay(
+                    LMSVisualStyle.cardStroke(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    )
+                )
             }
         }
-        .padding(.top, 2)
+        .padding(.top, 4)
     }
 
     private func cluePlayerNames(from sub: String) -> [String]? {
