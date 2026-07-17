@@ -260,7 +260,8 @@ struct DailyCompleteCelebrationView: View {
 
     private var winHeroBackground: some View {
         GeometryReader { geo in
-            let topPad = geo.safeAreaInsets.top + 4
+            // Keep the hero comfortably below the status area; the glow now fills this space.
+            let topPad = geo.safeAreaInsets.top + 76
             ZStack(alignment: .top) {
                 RadialGradient(
                     colors: [BKTheme.accent.opacity(0.22), .clear],
