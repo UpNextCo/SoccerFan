@@ -420,12 +420,13 @@ test('dedupes Golf templates by rule and chooses the deterministic best represen
     id: string,
     input: Partial<AdminGolfTemplate> = {}
   ): AdminGolfTemplate => {
-    const rule = input.rule ?? { minPlApps: 10 };
+    const rule = input.rule ?? { playedFor: ['Arsenal', 'Chelsea'] };
     return {
       id,
       prompt: input.prompt ?? 'Prompt',
       rule,
       ruleSignature: golfRuleSignature(rule),
+      category: input.category ?? 'Clubs',
       tier: 'standard',
       difficulty: input.difficulty ?? 2,
       validAnswers: input.validAnswers ?? 20,
@@ -439,7 +440,10 @@ test('dedupes Golf templates by rule and chooses the deterministic best represen
     template('a', { prompt: 'Overused', usedCount: 3 }),
     template('d', { prompt: 'Too narrow', validAnswers: 6, usedCount: 0 }),
     preferred,
-    template('c', { rule: { minPlApps: 11 }, prompt: 'Different rule' }),
+    template('c', {
+      rule: { playedFor: ['Liverpool', 'Chelsea'] },
+      prompt: 'Different rule',
+    }),
   ]);
   assert.equal(rows.length, 2);
   assert.ok(rows.some((row) => row.id === preferred.id));

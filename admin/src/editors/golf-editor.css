@@ -48,6 +48,10 @@
   background: #fff0b8;
 }
 
+.golf-template-select {
+  margin: 0.4rem 0 0.8rem;
+}
+
 .golf-template-picker {
   display: grid;
   grid-template-columns: minmax(220px, 0.7fr) minmax(280px, 1.3fr);

@@ -300,6 +300,7 @@ export type AdminGolfTemplate = {
   prompt: string
   rule: GolfTowerRule
   ruleSignature: string
+  category: string
   tier: string
   difficulty: number
   validAnswers: number
@@ -520,7 +521,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  listGolfTemplates: (q = '', limit = 30) =>
+  listGolfTemplates: (q = '', limit = 80) =>
     request<AdminGolfTemplate[]>(
       `/validation/golf/templates?q=${encodeURIComponent(q)}&limit=${encodeURIComponent(String(limit))}`
     ),

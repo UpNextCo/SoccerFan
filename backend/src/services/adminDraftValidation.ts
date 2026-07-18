@@ -228,7 +228,7 @@ async function validateGolf(
         issue(
           issues,
           `Hole ${hole.holeNumber} answers`,
-          `Answer list needs refreshing: ${names.length} players are missing (${summarizeGolfPlayerNames(names)}). Use Refresh answers.`
+          `Answer list is out of date: ${names.length} players are missing (${summarizeGolfPlayerNames(names)}). Re-select the question or adjust its settings so answers update.`
         );
       }
       if (comparison.staleAnswerIds.length > 0) {

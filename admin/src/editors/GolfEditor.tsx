@@ -2,9 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import {
   api,
   type AdminGolfTemplate,
-  type AuthoredGolfHole,
-  type GolfAnswer,
-  type GolfAnswerSetValidation,
   type GolfRarity,
   type GolfRuleEvaluation,
   type GolfTowerRule,
@@ -44,8 +41,18 @@ type Puzzle = {
 
 const RARITIES = ['common', 'uncommon', 'rare', 'ultraRare'] as const
 const REQUIRED_HOLE_COUNT = 5
+const TEMPLATE_CATEGORY_ORDER = [
+  'Seasons',
+  'Tournaments',
+  'Club Eras',
+  'Finals',
+  'Achievements',
+  'Clubs',
+  'Transfers',
+  'Managers',
+] as const
 
-type BusyAction = 'template' | 'preview' | 'generate' | 'validate'
+type BusyAction = 'template' | 'generate'
 type AnswerUpdateState =
   | { holeKey: string; status: 'pending' }
   | { holeKey: string; status: 'success'; count: number }
@@ -92,54 +99,10 @@ function cleanRule(rule: GolfTowerRule): GolfTowerRule {
   ) as GolfTowerRule
 }
 
-function summarizeNames(names: string[], limit = 6): string {
-  const visible = names.slice(0, limit)
-  const remaining = names.length - visible.length
-  return `${visible.join(', ')}${remaining > 0 ? `, and ${remaining} more` : ''}`
-}
-
-function isGolfRarity(value: string | undefined): value is GolfRarity {
-  return RARITIES.some((rarity) => rarity === value)
-}
-
 function rarityLabel(rarity: (typeof RARITIES)[number]): string {
   return rarity === 'ultraRare'
     ? 'Very rare'
     : rarity.charAt(0).toUpperCase() + rarity.slice(1)
-}
-
-function toAuthoredHole(hole: Hole): AuthoredGolfHole | null {
-  if (
-    !hole.id ||
-    !hole.category ||
-    ![2, 3, 4].includes(hole.par) ||
-    hole.target == null ||
-    !Number.isInteger(hole.target)
-  ) {
-    return null
-  }
-  const answers: GolfAnswer[] = []
-  for (const answer of hole.answers) {
-    if (!answer.id || !isGolfRarity(answer.rarity)) return null
-    answers.push({
-      id: answer.id,
-      name: answer.name,
-      aliases: answer.aliases ?? [],
-      rarity: answer.rarity,
-    })
-  }
-  return {
-    id: hole.id,
-    holeNumber: hole.holeNumber,
-    par: hole.par as 2 | 3 | 4,
-    target: hole.target,
-    prompt: hole.prompt,
-    category: hole.category,
-    answers,
-    hints: hole.hints ?? [],
-    ...(hasRuleSelector(hole.rule) ? { rule: hole.rule } : {}),
-    ...(hole.templateId ? { templateId: hole.templateId } : {}),
-  }
 }
 
 function EvaluationSummary({ evaluation }: { evaluation: GolfRuleEvaluation }) {
@@ -181,9 +144,8 @@ export function GolfEditor({
   const operationRef = useRef(0)
   const answerGenerationRef = useRef(0)
   const answerGenerationTimerRef = useRef<number | null>(null)
-  const templateSearchRef = useRef(0)
+  const templateLoadRef = useRef(0)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [templateQuery, setTemplateQuery] = useState('')
   const [templates, setTemplates] = useState<AdminGolfTemplate[]>([])
   const [templateDetails, setTemplateDetails] = useState<Record<string, AdminGolfTemplate>>({})
   const [templatesBusy, setTemplatesBusy] = useState(false)
@@ -193,10 +155,6 @@ export function GolfEditor({
     holeKey: string
     evaluation: GolfRuleEvaluation
   } | null>(null)
-  const [validationState, setValidationState] = useState<{
-    holeKey: string
-    result: GolfAnswerSetValidation
-  } | null>(null)
   const [staleHoleKeys, setStaleHoleKeys] = useState<Set<string>>(() => new Set())
   const [answerUpdateState, setAnswerUpdateState] = useState<AnswerUpdateState | null>(null)
   const activeHole = holes[Math.min(activeIndex, Math.max(holes.length - 1, 0))]
@@ -204,8 +162,6 @@ export function GolfEditor({
   const activeKey = activeHole ? holeKey(activeHole) : null
   const activeEvaluation =
     evaluationState?.holeKey === activeKey ? evaluationState.evaluation : null
-  const activeValidation =
-    validationState?.holeKey === activeKey ? validationState.result : null
   const activeTemplate = activeHole?.templateId
     ? templateDetails[activeHole.templateId] ??
       templates.find((template) => template.id === activeHole.templateId)
@@ -227,6 +183,10 @@ export function GolfEditor({
       !usedRuleSignatures.has(template.ruleSignature)
       && !usedRuleKeys.has(canonicalRuleKey(template.rule) ?? '')
   )
+  const templatesByCategory = TEMPLATE_CATEGORY_ORDER.map((category) => ({
+    category,
+    templates: availableTemplates.filter((template) => template.category === category),
+  })).filter((group) => group.templates.length > 0)
   const answersStale = activeKey ? staleHoleKeys.has(activeKey) : false
   const activeAnswerUpdate =
     answerUpdateState?.holeKey === activeKey ? answerUpdateState : null
@@ -260,32 +220,29 @@ export function GolfEditor({
   }, [locked])
 
   useEffect(() => {
-    const requestId = ++templateSearchRef.current
-    const timer = window.setTimeout(() => {
-      setTemplatesBusy(true)
-      void api.listGolfTemplates(templateQuery, 30)
-        .then((rows) => {
-          if (requestId !== templateSearchRef.current) return
-          setTemplates(rows)
-          setTemplateDetails((current) => {
-            const next = { ...current }
-            rows.forEach((row) => {
-              next[row.id] = row
-            })
-            return next
+    const requestId = ++templateLoadRef.current
+    setTemplatesBusy(true)
+    void api.listGolfTemplates('', 80)
+      .then((rows) => {
+        if (requestId !== templateLoadRef.current) return
+        setTemplates(rows)
+        setTemplateDetails((current) => {
+          const next = { ...current }
+          rows.forEach((row) => {
+            next[row.id] = row
           })
+          return next
         })
-        .catch((error: unknown) => {
-          if (requestId === templateSearchRef.current) {
-            setActionError(error instanceof Error ? error.message : 'Could not load Golf templates')
-          }
-        })
-        .finally(() => {
-          if (requestId === templateSearchRef.current) setTemplatesBusy(false)
-        })
-    }, 220)
-    return () => window.clearTimeout(timer)
-  }, [templateQuery])
+      })
+      .catch((error: unknown) => {
+        if (requestId === templateLoadRef.current) {
+          setActionError(error instanceof Error ? error.message : 'Could not load Golf templates')
+        }
+      })
+      .finally(() => {
+        if (requestId === templateLoadRef.current) setTemplatesBusy(false)
+      })
+  }, [])
 
   function commitHoles(nextHoles: Hole[]) {
     const normalized = normalizeHoles(nextHoles)
@@ -313,7 +270,6 @@ export function GolfEditor({
   function markAnswersStale(hole: Hole) {
     const key = holeKey(hole)
     setStaleHoleKeys((current) => new Set(current).add(key))
-    setValidationState((current) => current?.holeKey === key ? null : current)
   }
 
   function clearAnswersStale(key: string) {
@@ -344,7 +300,7 @@ export function GolfEditor({
     setAnswerUpdateState({
       holeKey: holeKey(hole),
       status: 'warning',
-      message: 'Manual answers changed. Use Refresh answers to restore the verified list.',
+      message: 'Manual answers changed. Re-select the question or adjust its settings to restore the verified list.',
     })
   }
 
@@ -383,7 +339,7 @@ export function GolfEditor({
     setAnswerUpdateState({
       holeKey: holeKey(hole),
       status: 'warning',
-      message: 'Manual answers changed. Use Refresh answers to restore the verified list.',
+      message: 'Manual answers changed. Re-select the question or adjust its settings to restore the verified list.',
     })
   }
 
@@ -395,7 +351,7 @@ export function GolfEditor({
     setAnswerUpdateState({
       holeKey: holeKey(hole),
       status: 'warning',
-      message: 'Manual answers changed. Use Refresh answers to restore the verified list.',
+      message: 'Manual answers changed. Re-select the question or adjust its settings to restore the verified list.',
     })
   }
 
@@ -410,7 +366,7 @@ export function GolfEditor({
         prompt: '',
         par: 3,
         target: 3,
-        category: 'Career',
+        category: 'Seasons',
         hints: [],
         answers: [],
       },
@@ -433,11 +389,6 @@ export function GolfEditor({
     ;[next[activeIndex], next[targetIndex]] = [next[targetIndex]!, next[activeIndex]!]
     commitHoles(next)
     setActiveIndex(targetIndex)
-  }
-
-  function addHint() {
-    if (!activeHole) return
-    updateHole(activeHole.holeNumber, { hints: [...(activeHole.hints ?? []), 'New hint'] })
   }
 
   function operationTarget(hole: Hole) {
@@ -534,13 +485,13 @@ export function GolfEditor({
         holeNumber: current.holeNumber,
         prompt: current.prompt,
         templateId: current.templateId,
+        hints: [],
       }
       commitHoles((puzzleRef.current.holes ?? []).map((hole) =>
         hole === current ? nextHole : hole
       ))
       const nextKey = holeKey(nextHole)
       setEvaluationState({ holeKey: nextKey, evaluation: generated.evaluation })
-      setValidationState(null)
       clearAnswersStale(nextKey)
       setAnswerUpdateState({
         holeKey: nextKey,
@@ -558,14 +509,6 @@ export function GolfEditor({
     } finally {
       if (manual && request === answerGenerationRef.current) setBusyAction(null)
     }
-  }
-
-  function generateAnswers(hole: Hole) {
-    if (!hole.rule || mutationsDisabled) return
-    cancelScheduledAnswerGeneration()
-    const request = answerGenerationRef.current
-    setBusyAction('generate')
-    void generateAnswersForHole(hole, hole.rule, request, true)
   }
 
   async function applyTemplate(template: AdminGolfTemplate) {
@@ -588,6 +531,7 @@ export function GolfEditor({
         ...generated.hole,
         id: current.id ?? generated.hole.id,
         holeNumber: current.holeNumber,
+        hints: [],
       }
       commitHoles((puzzleRef.current.holes ?? []).map((hole) =>
         hole === current ? nextHole : hole
@@ -595,7 +539,6 @@ export function GolfEditor({
       const nextKey = holeKey(nextHole)
       setTemplateDetails((details) => ({ ...details, [generated.template.id]: generated.template }))
       setEvaluationState({ holeKey: nextKey, evaluation: generated.evaluation })
-      setValidationState(null)
       clearAnswersStale(nextKey)
       setAnswerUpdateState({
         holeKey: nextKey,
@@ -605,56 +548,6 @@ export function GolfEditor({
     } catch (error) {
       if (operation === operationRef.current) {
         setActionError(error instanceof Error ? error.message : 'Could not apply template')
-      }
-    } finally {
-      if (operation === operationRef.current) setBusyAction(null)
-    }
-  }
-
-  async function previewRule() {
-    if (!activeHole?.rule || busyAction) return
-    const target = operationTarget(activeHole)
-    const operation = ++operationRef.current
-    setBusyAction('preview')
-    setActionError(null)
-    try {
-      const evaluation = await api.previewGolfRule({
-        prompt: activeHole.prompt,
-        rule: activeHole.rule,
-      })
-      if (operation !== operationRef.current || !currentOperationHole(target)) return
-      setEvaluationState({ holeKey: target.key, evaluation })
-    } catch (error) {
-      if (operation === operationRef.current) {
-        setActionError(error instanceof Error ? error.message : 'Could not preview possible answers')
-      }
-    } finally {
-      if (operation === operationRef.current) setBusyAction(null)
-    }
-  }
-
-  async function validateHole() {
-    if (!activeHole || busyAction) return
-    const authored = toAuthoredHole(activeHole)
-    if (!authored) {
-      setActionError(
-        'This hole is missing required details. Check its category, par, target and accepted answers.'
-      )
-      return
-    }
-    const target = operationTarget(activeHole)
-    const operation = ++operationRef.current
-    setBusyAction('validate')
-    setActionError(null)
-    try {
-      const result = await api.validateGolfHole(authored)
-      if (operation !== operationRef.current || !currentOperationHole(target)) return
-      setValidationState({ holeKey: target.key, result })
-      if (result.valid && !('warning' in result)) clearAnswersStale(target.key)
-      if (!result.valid) markAnswersStale(activeHole)
-    } catch (error) {
-      if (operation === operationRef.current) {
-        setActionError(error instanceof Error ? error.message : 'Could not validate hole')
       }
     } finally {
       if (operation === operationRef.current) setBusyAction(null)
@@ -743,8 +636,8 @@ export function GolfEditor({
               <div>
                 <h3 id="golf-rule-heading">Choose the question</h3>
                 <p className="muted tiny">
-                  Choose a ready-made question below. Its possible answers, hints and suggested
-                  par are filled in automatically.
+                  Pick a season, club-era, career or tournament question. Answers and suggested
+                  par fill in automatically; Run checks on the right validates the course.
                 </p>
               </div>
               <span className={`golf-rule-status ${activeHole.rule ? 'structured' : 'legacy'}`}>
@@ -759,42 +652,34 @@ export function GolfEditor({
               </p>
             )}
 
-            <div className="golf-template-picker simple">
-              <label className="field">
-                Find a question
-                <input
-                  value={templateQuery}
-                  disabled={locked}
-                  placeholder="Search questions…"
-                  maxLength={120}
-                  onChange={(event) => setTemplateQuery(event.target.value)}
-                />
-              </label>
-              <label className="field">
-                Ready-made question
-                <select
-                  value=""
-                  disabled={mutationsDisabled || templatesBusy || availableTemplates.length === 0}
-                  onChange={(event) => {
-                    const template = templates.find((item) => item.id === event.target.value)
-                    if (template) void applyTemplate(template)
-                  }}
-                >
-                  <option value="">
-                    {templatesBusy
-                      ? 'Loading questions…'
-                      : availableTemplates.length === 0
-                        ? 'No matching questions'
-                        : 'Choose a question…'}
-                  </option>
-                  {availableTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.prompt} ({template.validAnswers} answers)
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <label className="field golf-template-select">
+              Question template
+              <select
+                value=""
+                disabled={mutationsDisabled || templatesBusy || availableTemplates.length === 0}
+                onChange={(event) => {
+                  const template = templates.find((item) => item.id === event.target.value)
+                  if (template) void applyTemplate(template)
+                }}
+              >
+                <option value="">
+                  {templatesBusy
+                    ? 'Loading questions…'
+                    : availableTemplates.length === 0
+                      ? 'No available questions'
+                      : 'Choose a question…'}
+                </option>
+                {templatesByCategory.map((group) => (
+                  <optgroup key={group.category} label={group.category}>
+                    {group.templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.prompt} ({template.validAnswers} answers)
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
 
             {activeHole.templateId && (
               <div className="golf-template-meta">
@@ -1019,17 +904,6 @@ export function GolfEditor({
               )}
             </details>
 
-            <div className="golf-rule-actions">
-              <button type="button" className="ghost" disabled={!activeHole.rule || busyAction !== null} onClick={() => void previewRule()}>
-                {busyAction === 'preview' ? 'Checking…' : 'Preview possible answers'}
-              </button>
-              <button type="button" className="ghost" disabled={mutationsDisabled || !activeHole.rule} onClick={() => generateAnswers(activeHole)}>
-                {busyAction === 'generate' ? 'Refreshing…' : 'Refresh answers'}
-              </button>
-              <button type="button" className="ghost" disabled={busyAction !== null} onClick={() => void validateHole()}>
-                {busyAction === 'validate' ? 'Checking…' : 'Verify this hole'}
-              </button>
-            </div>
             {actionError && <p className="error-box">{actionError}</p>}
             {activeAnswerUpdate?.status === 'pending' && (
               <p className="golf-answer-update">Updating possible answers…</p>
@@ -1045,57 +919,30 @@ export function GolfEditor({
             {activeAnswerUpdate?.status === 'error' && (
               <div className="error-box golf-answer-error">
                 <span>{activeAnswerUpdate.message}</span>
-                <button
-                  type="button"
-                  className="ghost tiny-btn"
-                  disabled={mutationsDisabled || !activeHole.rule}
-                  onClick={() => generateAnswers(activeHole)}
-                >
-                  Retry
-                </button>
+                {activeHole.rule && (
+                  <button
+                    type="button"
+                    className="ghost tiny-btn"
+                    disabled={mutationsDisabled}
+                    onClick={() => {
+                      cancelScheduledAnswerGeneration()
+                      const request = answerGenerationRef.current
+                      setBusyAction('generate')
+                      void generateAnswersForHole(activeHole, activeHole.rule!, request, true)
+                    }}
+                  >
+                    Retry
+                  </button>
+                )}
               </div>
             )}
             {answersStale && !activeAnswerUpdate && (
               <p className="golf-stale-warning">
-                Possible answers need refreshing before approval.
+                Possible answers are out of date. Adjust the question settings or re-select a
+                template, then use Run checks before approving.
               </p>
             )}
             {activeEvaluation && <EvaluationSummary evaluation={activeEvaluation} />}
-            {activeValidation && (
-              <div className={activeValidation.valid ? 'golf-validation valid' : 'golf-validation invalid'}>
-                {'warning' in activeValidation ? (
-                  <p>{activeValidation.warning}</p>
-                ) : (
-                  <>
-                    <strong>{activeValidation.valid ? 'Verified' : 'Possible answers need attention'}</strong>
-                    <p className="tiny">
-                      Current {activeValidation.storedCount} · expected {activeValidation.expectedCount}
-                    </p>
-                    {activeValidation.missingAnswerIds.length > 0 && (
-                      <p className="tiny">
-                        <strong>{activeValidation.missingAnswerIds.length} missing:</strong>{' '}
-                        {summarizeNames(activeValidation.missingAnswerIds.map((id) =>
-                          activeValidation.evaluation.answers.find((answer) => answer.id === id)?.name ?? 'Unknown player'
-                        ))}
-                      </p>
-                    )}
-                    {activeValidation.staleAnswerIds.length > 0 && (
-                      <p className="tiny">
-                        <strong>{activeValidation.staleAnswerIds.length} no longer matched:</strong>{' '}
-                        {summarizeNames(activeValidation.staleAnswerIds.map((id) =>
-                          activeHole.answers.find((answer) => answer.id === id)?.name ?? 'Unknown player'
-                        ))}
-                      </p>
-                    )}
-                    {!activeValidation.valid &&
-                      activeValidation.missingAnswerIds.length === 0 &&
-                      activeValidation.staleAnswerIds.length === 0 && (
-                        <p className="tiny">The possible answers contain duplicate players.</p>
-                      )}
-                  </>
-                )}
-              </div>
-            )}
           </section>
 
           <label className="field">
@@ -1107,7 +954,6 @@ export function GolfEditor({
               onChange={(e) => {
                 updateHole(activeHole.holeNumber, { prompt: e.target.value })
                 setEvaluationState((current) => current?.holeKey === activeKey ? null : current)
-                setValidationState((current) => current?.holeKey === activeKey ? null : current)
               }}
             />
             <span className="muted tiny">You can adjust the wording without changing who qualifies.</span>
@@ -1148,47 +994,12 @@ export function GolfEditor({
               />
             </label>
           </div>
-          <div className="field">
-            <span>Hints</span>
-            <div className="chip-list">
-              {(activeHole.hints ?? []).map((hint, index) => (
-                <span className="hint-chip" key={`${index}-${hint}`}>
-                  {hint || 'Empty hint'}
-                  <button
-                    type="button"
-                    disabled={mutationsDisabled}
-                    aria-label={`Remove hint ${index + 1}`}
-                    onClick={() =>
-                      updateHole(activeHole.holeNumber, {
-                        hints: (activeHole.hints ?? []).filter((_, i) => i !== index),
-                      })
-                    }
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled} onClick={addHint}>+ Hint</button>
-            </div>
-          </div>
-          <label className="field">
-            Edit hints (one per line)
-            <textarea
-              rows={3}
-              value={(activeHole.hints ?? []).join('\n')}
-              disabled={mutationsDisabled}
-              onChange={(e) =>
-                updateHole(activeHole.holeNumber, {
-                  hints: e.target.value.split('\n'),
-                })
-              }
-            />
-          </label>
           <details className="advanced-panel">
             <summary>Advanced</summary>
             <h4>Manual possible answers ({activeHole.answers.length})</h4>
             <p className="warning-box">
-              Manual changes can become inaccurate. Refresh or verify after every change.
+              Manual changes can become inaccurate. Prefer re-selecting a template; Run checks
+              will catch answer mismatches.
             </p>
           <fieldset disabled={mutationsDisabled} className="options">
             <legend>Possible answers</legend>

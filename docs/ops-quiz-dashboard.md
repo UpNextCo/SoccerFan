@@ -61,10 +61,10 @@ current draft, and **Discard** restores the last server copy.
 - **Draft XI** — edit category, formation and constraints, then review the optimal
   lineup and score in the pitch-style QA section.
 - **Football Golf** — build exactly five consecutively numbered holes, navigate them
-  individually, attach a verified prompt
-  template or build a structured rule, preview its database coverage, then
-  regenerate accepted answers, aliases, rarity, hints and suggested par. Display
-  wording stays editable without becoming the source of truth for football facts.
+  individually, and choose a verified template (season, club-era, career or
+  tournament). Answers, rarity and suggested par update automatically as the
+  question changes; use Run checks for full course validation. Display wording
+  stays editable without becoming the source of truth for football facts.
   Approval rejects any course that does not contain exactly five holes. Generated
   courses prefer a fun mix (season/tournament moments, club eras, career journeys)
   with broad answer pools, avoid nationality filter stacks, use a balanced

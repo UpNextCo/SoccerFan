@@ -2,8 +2,12 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   buildGolfHole,
+  categoryFor,
   evaluateGolfRule,
+  FUN_GOLF_CATEGORIES,
   golfPromptCopy,
+  isDullFilterGolfRule,
+  maxAnswersForGolfCategory,
   type GolfHole,
   type GolfRuleEvaluation,
 } from './footballGolfGenerator.js';
@@ -15,6 +19,7 @@ export interface AdminGolfTemplate {
   prompt: string;
   rule: TowerRule;
   ruleSignature: string;
+  category: string;
   tier: string;
   difficulty: number;
   validAnswers: number;
@@ -22,6 +27,23 @@ export interface AdminGolfTemplate {
   usedCount: number;
   lastUsedDate: string | null;
 }
+
+/** Categories the ops template picker should offer — matches live Golf generation. */
+const ADMIN_GOLF_TEMPLATE_CATEGORIES = new Set([
+  ...FUN_GOLF_CATEGORIES,
+  'Clubs',
+]);
+
+const CATEGORY_SORT_RANK: Record<string, number> = {
+  Seasons: 0,
+  Tournaments: 1,
+  'Club Eras': 2,
+  Finals: 3,
+  Achievements: 4,
+  Clubs: 5,
+  Transfers: 6,
+  Managers: 7,
+};
 
 interface GolfTemplateRow {
   id: string;
@@ -35,10 +57,29 @@ interface GolfTemplateRow {
   last_used_date: string | null;
 }
 
+function minAnswersForAdminTemplate(category: string): number {
+  return category === 'Transfers' ? 8 : 20;
+}
+
+function isPreferredAnswerPool(template: AdminGolfTemplate): boolean {
+  const min = minAnswersForAdminTemplate(template.category);
+  const max = maxAnswersForGolfCategory(template.category);
+  return template.validAnswers >= min && template.validAnswers <= max;
+}
+
+export function isAdminGolfTemplateEligible(template: AdminGolfTemplate): boolean {
+  if (!ADMIN_GOLF_TEMPLATE_CATEGORIES.has(template.category)) return false;
+  if (isDullFilterGolfRule(template.rule, template.category, template.prompt)) return false;
+  return isPreferredAnswerPool(template);
+}
+
 function compareGolfTemplates(a: AdminGolfTemplate, b: AdminGolfTemplate): number {
-  const aPreferred = a.validAnswers >= 8 && a.validAnswers <= 100 ? 0 : 1;
-  const bPreferred = b.validAnswers >= 8 && b.validAnswers <= 100 ? 0 : 1;
-  return aPreferred - bPreferred
+  const aCategory = CATEGORY_SORT_RANK[a.category] ?? 99;
+  const bCategory = CATEGORY_SORT_RANK[b.category] ?? 99;
+  const aPreferred = isPreferredAnswerPool(a) ? 0 : 1;
+  const bPreferred = isPreferredAnswerPool(b) ? 0 : 1;
+  return aCategory - bCategory
+    || aPreferred - bPreferred
     || a.usedCount - b.usedCount
     || a.difficulty - b.difficulty
     || a.prompt.localeCompare(b.prompt)
@@ -62,11 +103,13 @@ export function dedupeAdminGolfTemplates(
 function adminGolfTemplateFromRow(row: GolfTemplateRow): AdminGolfTemplate | null {
   const rule = towerRuleSchema.safeParse(row.rule);
   if (!rule.success) return null;
+  const prompt = golfPromptCopy(row.prompt);
   return {
     id: row.id,
-    prompt: golfPromptCopy(row.prompt),
+    prompt,
     rule: rule.data,
     ruleSignature: golfRuleSignature(rule.data),
+    category: categoryFor(rule.data, prompt),
     tier: row.tier,
     difficulty: row.difficulty,
     validAnswers: row.valid_answers,
@@ -76,7 +119,7 @@ function adminGolfTemplateFromRow(row: GolfTemplateRow): AdminGolfTemplate | nul
   };
 }
 
-export async function listAdminGolfTemplates(query = '', limit = 30): Promise<AdminGolfTemplate[]> {
+export async function listAdminGolfTemplates(query = '', limit = 80): Promise<AdminGolfTemplate[]> {
   const normalizedQuery = query.trim().toLowerCase();
   const rows = (await db.execute(sql`
     SELECT id, prompt, rule, tier, difficulty, valid_answers, sample_answers,
@@ -84,10 +127,9 @@ export async function listAdminGolfTemplates(query = '', limit = 30): Promise<Ad
     FROM tower_prompts
     WHERE status = 'active'
       AND answer_type = 'player'
-      AND valid_answers BETWEEN 6 AND 100
+      AND valid_answers BETWEEN 8 AND 220
       AND (${normalizedQuery} = '' OR position(${normalizedQuery} in lower(prompt)) > 0)
     ORDER BY
-      CASE WHEN valid_answers BETWEEN 10 AND 60 THEN 0 ELSE 1 END,
       used_count ASC,
       difficulty ASC,
       prompt ASC
@@ -96,7 +138,8 @@ export async function listAdminGolfTemplates(query = '', limit = 30): Promise<Ad
   return dedupeAdminGolfTemplates(
     rows.flatMap((row) => {
       const template = adminGolfTemplateFromRow(row);
-      return template ? [template] : [];
+      if (!template || !isAdminGolfTemplateEligible(template)) return [];
+      return [template];
     })
   ).slice(0, limit);
 }
@@ -122,13 +165,23 @@ export async function previewAdminGolfRule(prompt: string, rule: TowerRule): Pro
   return evaluateGolfRule(prompt, rule);
 }
 
+function withoutHints<T extends { hole: GolfHole; evaluation: GolfRuleEvaluation }>(
+  generated: T
+): T {
+  return {
+    ...generated,
+    hole: { ...generated.hole, hints: [] },
+    evaluation: { ...generated.evaluation, hints: [] },
+  };
+}
+
 export async function generateAdminGolfHole(input: {
   prompt: string;
   rule: TowerRule;
   holeNumber: number;
   holeId?: string;
-}): ReturnType<typeof buildGolfHole> {
-  return buildGolfHole(input);
+}): Promise<{ hole: GolfHole; evaluation: GolfRuleEvaluation }> {
+  return withoutHints(await buildGolfHole(input));
 }
 
 export async function generateAdminGolfHoleFromTemplate(input: {
@@ -144,7 +197,7 @@ export async function generateAdminGolfHoleFromTemplate(input: {
     holeNumber: input.holeNumber,
     templateId: template.id,
   });
-  return { ...generated, template };
+  return { ...withoutHints(generated), template };
 }
 
 export interface GolfAnswerSetValidation {
