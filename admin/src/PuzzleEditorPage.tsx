@@ -29,7 +29,7 @@ type Notice = {
   detail?: string
 }
 
-type Confirmation = 'discard' | 'regenerate' | 'lock' | null
+type Confirmation = 'discard' | 'regenerate' | null
 
 class PartialApprovalError extends Error {
   row: Awaited<ReturnType<typeof api.getPuzzle>> | null
@@ -56,6 +56,7 @@ export function PuzzleEditorPage() {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [confirmation, setConfirmation] = useState<Confirmation>(null)
   const [validationReport, setValidationReport] = useState<PuzzleValidationReport | null>(null)
+  const [qualityChecksOpen, setQualityChecksOpen] = useState(true)
 
   const query = useQuery({
     queryKey: ['puzzle', date, modeId],
@@ -185,34 +186,6 @@ export function PuzzleEditorPage() {
     },
   })
 
-  const lockMut = useMutation({
-    mutationFn: () => api.lockPuzzle(date, modeId, note || undefined),
-    onSuccess: () => {
-      setNotice({ tone: 'success', title: 'Puzzle locked', detail: 'Regeneration is now blocked.' })
-      void qc.invalidateQueries({ queryKey: ['puzzle', date, modeId] })
-    },
-    onError: (err) =>
-      setNotice({
-        tone: 'error',
-        title: 'Lock failed',
-        detail: err instanceof Error ? err.message : 'Please try again.',
-      }),
-  })
-
-  const unlockMut = useMutation({
-    mutationFn: () => api.unlockPuzzle(date, modeId),
-    onSuccess: () => {
-      setNotice({ tone: 'success', title: 'Puzzle unlocked', detail: 'Editing is available again.' })
-      void qc.invalidateQueries({ queryKey: ['puzzle', date, modeId] })
-    },
-    onError: (err) =>
-      setNotice({
-        tone: 'error',
-        title: 'Unlock failed',
-        detail: err instanceof Error ? err.message : 'Please try again.',
-      }),
-  })
-
   const regenMut = useMutation({
     mutationFn: () => api.regeneratePuzzle(date, modeId, true),
     onSuccess: (data) => {
@@ -261,12 +234,9 @@ export function PuzzleEditorPage() {
   })
 
   const locked = query.data?.status === 'locked'
-  const approved = query.data?.status === 'approved'
   const working =
     saveMut.isPending ||
     approveMut.isPending ||
-    lockMut.isPending ||
-    unlockMut.isPending ||
     regenMut.isPending
   const editorReadOnly = locked || working
   const blocker = useBlocker(dirty)
@@ -316,19 +286,13 @@ export function PuzzleEditorPage() {
           description: 'The editor will return to the last version loaded from the server.',
           label: 'Discard changes',
         }
-      : confirmation === 'regenerate'
-        ? {
-            title: 'Regenerate this puzzle?',
-            description: dirty
-              ? 'Regeneration will replace your unsaved edits with a newly generated puzzle.'
-              : 'The current puzzle will be replaced with a newly generated version.',
-            label: 'Regenerate',
-          }
-        : {
-            title: 'Lock this puzzle?',
-            description: 'Locked puzzles cannot be edited or regenerated until they are unlocked.',
-            label: 'Lock puzzle',
-          }
+      : {
+          title: 'Regenerate this puzzle?',
+          description: dirty
+            ? 'Regeneration will replace your unsaved edits with a newly generated puzzle.'
+            : 'The current puzzle will be replaced with a newly generated version.',
+          label: 'Regenerate',
+        }
 
   const confirmAction = () => {
     if (working) return
@@ -336,7 +300,6 @@ export function PuzzleEditorPage() {
     setConfirmation(null)
     if (action === 'discard') discardChanges()
     if (action === 'regenerate') regenMut.mutate()
-    if (action === 'lock') lockMut.mutate()
   }
 
   return (
@@ -347,9 +310,50 @@ export function PuzzleEditorPage() {
             <span aria-hidden="true">←</span> Back to schedule
           </Link>
           <div className="editor-title-row">
-            <h1>{MODE_LABELS[modeId] ?? modeId}</h1>
-            <StatusBadge status={query.data?.status ?? 'loading'} />
-            {dirty && <span className="dirty-indicator">Unsaved changes</span>}
+            <div className="editor-title-copy">
+              <h1>{MODE_LABELS[modeId] ?? modeId}</h1>
+              <StatusBadge status={query.data?.status ?? 'loading'} />
+              {dirty && <span className="dirty-indicator">Unsaved changes</span>}
+            </div>
+            <div className="editor-title-actions">
+              <button
+                type="button"
+                disabled={working || locked || !dirty}
+                onClick={() => saveMut.mutate(currentSnapshot)}
+              >
+                {saveMut.isPending ? 'Saving…' : 'Save'}
+                <span className="key-hint">⌘S</span>
+              </button>
+              <button
+                type="button"
+                className="ghost approve-button"
+                disabled={working || locked}
+                onClick={() => approveMut.mutate(currentSnapshot)}
+              >
+                {approveMut.isPending ? 'Approving…' : 'Approve'}
+              </button>
+              <details className="more-menu">
+                <summary>More</summary>
+                <div className="more-menu-popover">
+                  <button
+                    type="button"
+                    className="quiet-button"
+                    disabled={!dirty || working}
+                    onClick={() => setConfirmation('discard')}
+                  >
+                    Discard changes
+                  </button>
+                  <button
+                    type="button"
+                    className="quiet-button"
+                    disabled={locked || working}
+                    onClick={() => setConfirmation('regenerate')}
+                  >
+                    {regenMut.isPending ? 'Regenerating…' : 'Regenerate puzzle'}
+                  </button>
+                </div>
+              </details>
+            </div>
           </div>
           <p className="muted">
             {date
@@ -363,76 +367,6 @@ export function PuzzleEditorPage() {
           </p>
         </div>
       </header>
-
-      <div className="workflow-bar">
-        <div className="workflow-primary">
-          <button
-            type="button"
-            disabled={working || locked || !dirty}
-            onClick={() => saveMut.mutate(currentSnapshot)}
-          >
-            {saveMut.isPending ? 'Saving…' : 'Save'}
-            <span className="key-hint">⌘S</span>
-          </button>
-          <button
-            type="button"
-            className="ghost approve-button"
-            disabled={working || locked}
-            onClick={() => approveMut.mutate(currentSnapshot)}
-          >
-            {approveMut.isPending ? 'Approving…' : 'Approve'}
-          </button>
-        </div>
-        <div className="workflow-actions">
-          {locked ? (
-            <button
-              type="button"
-              className="ghost"
-              disabled={working}
-              onClick={() => unlockMut.mutate()}
-            >
-              {unlockMut.isPending ? 'Unlocking…' : 'Unlock'}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="danger-outline"
-              disabled={!approved || dirty || working}
-              title={
-                !approved
-                  ? 'Approve the puzzle before locking'
-                  : dirty
-                    ? 'Save or discard changes before locking'
-                    : undefined
-              }
-              onClick={() => setConfirmation('lock')}
-            >
-              Lock
-            </button>
-          )}
-          <details className="more-menu">
-            <summary>More</summary>
-            <div className="more-menu-popover">
-              <button
-                type="button"
-                className="quiet-button"
-                disabled={!dirty || working}
-                onClick={() => setConfirmation('discard')}
-              >
-                Discard changes
-              </button>
-              <button
-                type="button"
-                className="quiet-button"
-                disabled={locked || working}
-                onClick={() => setConfirmation('regenerate')}
-              >
-                {regenMut.isPending ? 'Regenerating…' : 'Regenerate puzzle'}
-              </button>
-            </div>
-          </details>
-        </div>
-      </div>
 
       {notice && (
         <ValidationPanel
@@ -463,7 +397,11 @@ export function PuzzleEditorPage() {
             />
           </main>
           <aside className="editor-sidebar">
-            <details className="secondary-panel" open={validationReport !== null && !validationReport.ok}>
+            <details
+              className="secondary-panel"
+              open={qualityChecksOpen}
+              onToggle={(event) => setQualityChecksOpen(event.currentTarget.open)}
+            >
               <summary>
                 <span>Quality checks</span>
                 <span className="muted tiny">
@@ -529,7 +467,7 @@ export function PuzzleEditorPage() {
             </details>
             {locked && (
               <ValidationPanel tone="info" title="Read-only">
-                Unlock this puzzle to make changes.
+                This puzzle is locked. Unlock the month from the schedule to edit it.
               </ValidationPanel>
             )}
           </aside>

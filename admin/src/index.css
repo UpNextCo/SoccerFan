@@ -777,20 +777,39 @@ button.danger-outline:not(:disabled):hover {
   justify-content: space-between;
   align-items: end;
   gap: 1.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.1rem;
   padding: 0.4rem 0;
 }
 
 .editor-heading-main {
   min-width: 0;
+  width: 100%;
 }
 
 .editor-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.65rem;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
   margin-top: 0.65rem;
+}
+
+.editor-title-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.editor-title-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
 }
 
 .editor-title-row h1 {
@@ -1246,6 +1265,21 @@ button.danger-outline:not(:disabled):hover {
     width: 100%;
     padding-top: 0.75rem;
     border-top: 1px solid var(--line);
+  }
+
+  .editor-title-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .editor-title-actions {
+    justify-content: stretch;
+    margin-left: 0;
+  }
+
+  .editor-title-actions > button,
+  .editor-title-actions .more-menu {
+    flex: 1 1 auto;
   }
 
   .workflow-bar {

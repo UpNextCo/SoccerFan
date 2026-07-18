@@ -38,7 +38,7 @@ cd admin && npm run dev
 3. Open a puzzle and make changes in its structured editor.
 4. Use **Run checks** to validate structure, database facts and solvability.
 5. **Save changes**, then **Save & approve** once validation is clean.
-6. Lock individual puzzles or **Lock month** when the set is final.
+6. **Lock month** from the schedule when the set is final.
 7. Spot-check the iOS app against a locked date.
 
 The editor warns before leaving with unsaved changes. `Cmd+S`/`Ctrl+S` saves the

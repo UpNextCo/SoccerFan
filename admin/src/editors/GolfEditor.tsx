@@ -158,7 +158,6 @@ export function GolfEditor({
   const [staleHoleKeys, setStaleHoleKeys] = useState<Set<string>>(() => new Set())
   const [answerUpdateState, setAnswerUpdateState] = useState<AnswerUpdateState | null>(null)
   const activeHole = holes[Math.min(activeIndex, Math.max(holes.length - 1, 0))]
-  const computedPar = holes.reduce((sum, hole) => sum + (Number.isFinite(hole.par) ? hole.par : 0), 0)
   const activeKey = activeHole ? holeKey(activeHole) : null
   const activeEvaluation =
     evaluationState?.holeKey === activeKey ? evaluationState.evaluation : null
@@ -374,13 +373,6 @@ export function GolfEditor({
     setActiveIndex(holes.length)
   }
 
-  function removeHole() {
-    if (!activeHole || holes.length <= REQUIRED_HOLE_COUNT) return
-    cancelScheduledAnswerGeneration()
-    commitHoles(holes.filter((hole) => hole.holeNumber !== activeHole.holeNumber))
-    setActiveIndex((index) => Math.max(0, index - 1))
-  }
-
   function moveHole(offset: -1 | 1) {
     const targetIndex = activeIndex + offset
     if (!activeHole || targetIndex < 0 || targetIndex >= holes.length) return
@@ -556,17 +548,6 @@ export function GolfEditor({
 
   return (
     <div className="mode-editor">
-      <div className="editor-clean-summary">
-        <div>
-          <span className="muted tiny">Five-hole course</span>
-          <strong>{holes.length} / {REQUIRED_HOLE_COUNT} holes</strong>
-        </div>
-        <div>
-          <span className="muted tiny">Total par</span>
-          <strong>{computedPar}</strong>
-        </div>
-      </div>
-
       {holes.length !== REQUIRED_HOLE_COUNT && (
         <p className="warning-box">
           Football Golf must contain exactly {REQUIRED_HOLE_COUNT} consecutive holes
@@ -623,14 +604,8 @@ export function GolfEditor({
             <div className="button-row">
               <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled || activeIndex === 0} onClick={() => moveHole(-1)}>← Move</button>
               <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled || activeIndex === holes.length - 1} onClick={() => moveHole(1)}>Move →</button>
-              <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled || holes.length <= REQUIRED_HOLE_COUNT} onClick={removeHole}>Remove hole</button>
             </div>
           </header>
-          {holes.length <= REQUIRED_HOLE_COUNT && (
-            <p className="muted tiny">
-              A publishable course must keep exactly {REQUIRED_HOLE_COUNT} holes; removal is disabled.
-            </p>
-          )}
           <section className="golf-rule-composer" aria-labelledby="golf-rule-heading">
             <div className="golf-section-heading">
               <div>
