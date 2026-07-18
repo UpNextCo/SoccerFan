@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { TowerRule } from './towerRuleSchema.js';
 
-const SIGNATURE_VERSION = 'gr2';
+const SIGNATURE_VERSION = 'gr3';
 
 function exactSet(values: string[]): string[] {
   return [...new Set(values)].sort();
@@ -31,6 +31,27 @@ export function canonicalGolfRule(rule: TowerRule): Record<string, unknown> {
     ...(typeof rule.minUclApps === 'number' ? { minUclApps: rule.minUclApps } : {}),
     ...(typeof rule.minPeakValueEur === 'number' ? { minPeakValueEur: rule.minPeakValueEur } : {}),
     ...(typeof rule.minRecordFeeEur === 'number' ? { minRecordFeeEur: rule.minRecordFeeEur } : {}),
+    ...(rule.seasonStat ? { seasonStat: rule.seasonStat } : {}),
+    ...(rule.clubSeason ? { clubSeason: rule.clubSeason } : {}),
+    ...(rule.managedBy ? { managedBy: rule.managedBy.toLowerCase() } : {}),
+    ...(rule.directTransfer
+      ? {
+          directTransfer: {
+            fromClub: rule.directTransfer.fromClub.toLowerCase(),
+            toClub: rule.directTransfer.toClub.toLowerCase(),
+          },
+        }
+      : {}),
+    ...(rule.finalAppearance ? { finalAppearance: rule.finalAppearance } : {}),
+    ...(typeof rule.worldCupScorerYear === 'number'
+      ? { worldCupScorerYear: rule.worldCupScorerYear }
+      : {}),
+    ...(typeof rule.minCareerHattricks === 'number'
+      ? { minCareerHattricks: rule.minCareerHattricks }
+      : {}),
+    ...(typeof rule.minUclKnockoutGoals === 'number'
+      ? { minUclKnockoutGoals: rule.minUclKnockoutGoals }
+      : {}),
   };
 }
 

@@ -3,10 +3,10 @@
  *   - PAR = expected shots to clear at a typical mix (2–4, capped)
  *   - TARGET = points to clear — equals par (all-common path), max 4
  * Rarity on each answer sets point value (common 1 … ultraRare 4). Prompts are broad
- * ("Played for both Arsenal and Chelsea", "Brazilian players in the Premier League"),
- * drawn from the same prompt bank that fed Tower (tower_prompts) — closed-set and
- * rule-based alike — with EVERY valid answer enumerated and tagged by rarity so the
- * client can validate locally and reward "I know a rarer one" depth.
+ * ("scored in 2023/24 Premier League", "appeared for Leicester in 2015/16"),
+ * drawn from the tower_prompts bank — closed-set and rule-based alike — with EVERY
+ * valid answer enumerated and tagged by rarity so the client can validate locally
+ * and reward "I know a rarer one" depth. Geography filter stacks are a last resort.
  *
  * The full answer set ships in the daily bundle, so validation + scoring run on-device.
  */
@@ -64,6 +64,25 @@ export interface FootballGolfPuzzle {
 
 const MAX_PAR = 4;
 const MAX_TARGET = 4;
+/** Trivia-shaped categories players enjoy naming into. */
+export const FUN_GOLF_CATEGORIES = new Set([
+  'Seasons',
+  'Achievements',
+  'Club Eras',
+  'Finals',
+  'Managers',
+  'Transfers',
+  'Tournaments',
+]);
+/** Broad season / moment prompts — aim for two per course. */
+const MOMENT_GOLF_CATEGORIES = new Set([
+  'Seasons',
+  'Tournaments',
+  'Achievements',
+  'Finals',
+]);
+const ERA_GOLF_CATEGORIES = new Set(['Club Eras']);
+const JOURNEY_GOLF_CATEGORIES = new Set(['Clubs', 'Transfers', 'Managers']);
 // Stroke par per hole — capped at 4 so no hole asks for 5+ names on an all-common run.
 export const PAR_SEQUENCE: ReadonlyArray<2 | 3 | 4> = FOOTBALL_GOLF_PAR_SEQUENCE;
 
@@ -230,10 +249,86 @@ export function categoryFor(rule: TowerRule, prompt: string): string {
     if (/Ballon|Golden|Boot/i.test(prompt)) return 'Awards';
     return 'Connections';
   }
+  if (rule.seasonStat) return 'Seasons';
+  if (rule.clubSeason) return 'Club Eras';
+  if (rule.managedBy) return 'Managers';
+  if (rule.directTransfer) return 'Transfers';
+  if (rule.finalAppearance) return 'Finals';
+  if (rule.worldCupScorerYear) return 'Tournaments';
+  if (
+    typeof rule.minCareerHattricks === 'number' ||
+    typeof rule.minUclKnockoutGoals === 'number'
+  ) return 'Achievements';
   if (rule.playedFor && rule.playedFor.length >= 2) return 'Clubs';
-  if (rule.nationality) return 'Nationality';
+  // Geography / filter stacks read like SQL, not trivia — keep them in one bucket.
+  if (rule.nationality || rule.nonEuropean) return 'Nationality';
   if (rule.leaguePlayed) return 'Leagues';
   return 'Career';
+}
+
+/** Nationality / continent / league-filter prompts — allowed only as a last resort. */
+export function isGeographyHeavyGolfRule(rule: TowerRule, category?: string): boolean {
+  const cat = category ?? categoryFor(rule, '');
+  return Boolean(rule.nationality || rule.nonEuropean)
+    || cat === 'Nationality'
+    || cat === 'Leagues';
+}
+
+/**
+ * Legacy Tower filter stacks (yellow cards, appearance thresholds, lone positions)
+ * and niche manager-pair links that read like SQL rather than football trivia.
+ */
+export function isDullFilterGolfRule(
+  rule: TowerRule,
+  category?: string,
+  prompt = ''
+): boolean {
+  const cat = category ?? categoryFor(rule, prompt);
+  if (isGeographyHeavyGolfRule(rule, cat)) return true;
+  if (cat === 'Career') return true;
+  if (typeof rule.minPlYellowCards === 'number') return true;
+  if (typeof rule.minPlCleanSheets === 'number') return true;
+  if (rule.position && !rule.clubSeason && !(rule.playedFor && rule.playedFor.length >= 2)) {
+    return true;
+  }
+  // "Played under both X and Y" closed sets are often obscure manager pairings.
+  if (rule.validIds && /\bplayed under both\b/i.test(prompt)) return true;
+  return false;
+}
+
+/** Preferred daily mix: 2 moments, 1 club era, 1 career journey, 1 fun wildcard. */
+export type GolfCourseSlot =
+  | 'moment'
+  | 'clubEra'
+  | 'journey'
+  | 'wildcard';
+
+export function golfCourseSlotFor(category: string): GolfCourseSlot | null {
+  if (MOMENT_GOLF_CATEGORIES.has(category)) return 'moment';
+  if (ERA_GOLF_CATEGORIES.has(category)) return 'clubEra';
+  if (JOURNEY_GOLF_CATEGORIES.has(category)) return 'journey';
+  if (FUN_GOLF_CATEGORIES.has(category) || category === 'Clubs') return 'wildcard';
+  return null;
+}
+
+export function golfPromptPriority(category: string, rule: TowerRule, prompt = ''): number {
+  if (isDullFilterGolfRule(rule, category, prompt)) return 5;
+  if (isGeographyHeavyGolfRule(rule, category)) return 4;
+  if (MOMENT_GOLF_CATEGORIES.has(category) || ERA_GOLF_CATEGORIES.has(category)) return 0;
+  if (JOURNEY_GOLF_CATEGORIES.has(category)) return 1;
+  if (FUN_GOLF_CATEGORIES.has(category) || category === 'Clubs') return 2;
+  return 3;
+}
+
+export function minNameableForGolfCategory(category: string, prompt: string): number {
+  if (category === 'Managers' && /\bboth\b/i.test(prompt)) return 12;
+  if (category === 'Transfers') return 8;
+  if (MOMENT_GOLF_CATEGORIES.has(category) || category === 'Club Eras') return 12;
+  return 10;
+}
+
+export function maxAnswersForGolfCategory(category: string): number {
+  return category === 'Seasons' || category === 'Tournaments' ? 220 : 120;
 }
 
 interface Candidate {
@@ -311,12 +406,20 @@ export function golfQualityWarnings(
   counts: Pick<GolfRuleCounts, 'total' | 'nameable' | 'duplicateNamesRemoved'>
 ): string[] {
   const warnings: string[] = [];
-  const minimumNameable = category === 'Managers' && /\bboth\b/i.test(prompt) ? 12 : 8;
+  const minimumNameable = minNameableForGolfCategory(category, prompt);
   if (counts.total === 0) warnings.push('Rule currently matches no players.');
   if (counts.nameable < minimumNameable) {
     warnings.push(`Only ${counts.nameable} nameable answers; this prompt should have at least ${minimumNameable}.`);
   }
-  if (counts.total > 100) warnings.push(`Rule matches ${counts.total} players; use another filter to keep the answer set at 100 or fewer.`);
+  const maximumAnswers = maxAnswersForGolfCategory(category);
+  if (counts.total > maximumAnswers) {
+    warnings.push(
+      `Rule matches ${counts.total} players; keep this category at ${maximumAnswers} answers or fewer.`
+    );
+  }
+  if (category === 'Nationality' || category === 'Leagues') {
+    warnings.push('Geography / league-filter prompts are a last resort for Golf — prefer season, club-era or career questions.');
+  }
   return warnings;
 }
 
@@ -425,17 +528,26 @@ export async function generateFootballGolfCourse(
   const ruleAvoid = opts?.recentRuleSignaturesOverride
     ?? (await recentGolfRuleSignatures(date, GOLF_RULE_REPEAT_WINDOW_DAYS));
 
-  // Deterministic daily shuffle.
+  // Deterministic daily shuffle, with fun trivia categories ahead of filter stacks.
   const seed = hashStr(`${date}:golf`);
   const ordered = prompts
     .map((p, i) => {
       const normalized = { ...p, prompt: golfPromptCopy(p.prompt) };
-      return { p: normalized, k: hashStr(`${seed}:${i}:${normalized.prompt}`) };
+      const category = categoryFor(normalized.rule, normalized.prompt);
+      const priority = golfPromptPriority(category, normalized.rule, normalized.prompt);
+      return {
+        p: normalized,
+        priority,
+        k: hashStr(`${seed}:${i}:${normalized.prompt}`),
+      };
     })
-    .sort((a, b) => a.k - b.k)
+    .sort((a, b) => a.priority - b.priority || a.k - b.k)
     .map((x) => x.p);
 
-  let candidates = await scanCandidates(ordered, fullAvoid, ruleAvoid);
+  let candidates = await scanCandidates(ordered, fullAvoid, ruleAvoid, {
+    allowGeography: false,
+    allowDullFilters: false,
+  });
   if (candidates.length < FOOTBALL_GOLF_HOLE_COUNT) {
     for (const window of [14, 7, 0]) {
       const avoid = shorterAvoid
@@ -443,10 +555,24 @@ export async function generateFootballGolfCourse(
       candidates = await scanCandidates(
         ordered,
         window > 0 ? avoid : new Set<string>(),
-        ruleAvoid
+        ruleAvoid,
+        { allowGeography: false, allowDullFilters: false }
       );
       if (candidates.length >= FOOTBALL_GOLF_HOLE_COUNT) break;
     }
+  }
+  // Last resorts only if the fun bank is thin for this date window.
+  if (candidates.length < FOOTBALL_GOLF_HOLE_COUNT) {
+    candidates = await scanCandidates(ordered, new Set<string>(), ruleAvoid, {
+      allowGeography: false,
+      allowDullFilters: true,
+    });
+  }
+  if (candidates.length < FOOTBALL_GOLF_HOLE_COUNT) {
+    candidates = await scanCandidates(ordered, new Set<string>(), ruleAvoid, {
+      allowGeography: true,
+      allowDullFilters: true,
+    });
   }
 
   if (candidates.length < FOOTBALL_GOLF_HOLE_COUNT) {
@@ -486,52 +612,112 @@ export async function generateFootballGolfCourse(
   return { modeId: 'football_golf', puzzleId: `${date}-football_golf`, date, title: 'Daily Football Golf', totalPar, holes };
 }
 
+interface ScanOptions {
+  allowGeography: boolean;
+  allowDullFilters: boolean;
+}
+
+const SLOT_TARGETS: Record<GolfCourseSlot, number> = {
+  moment: 2,
+  clubEra: 1,
+  journey: 1,
+  wildcard: 1,
+};
+
+function clubsTouchedByRule(rule: TowerRule): string[] {
+  const clubs: string[] = [];
+  if (Array.isArray(rule.playedFor)) {
+    for (const club of rule.playedFor) clubs.push(club.toLowerCase());
+  }
+  if (rule.clubSeason?.club) clubs.push(rule.clubSeason.club.toLowerCase());
+  if (rule.directTransfer) {
+    clubs.push(rule.directTransfer.fromClub.toLowerCase());
+    clubs.push(rule.directTransfer.toClub.toLowerCase());
+  }
+  return clubs;
+}
+
+function slotHasCapacity(
+  slot: GolfCourseSlot | null,
+  slotCount: Map<GolfCourseSlot, number>
+): boolean {
+  if (!slot) return false;
+  return (slotCount.get(slot) ?? 0) < SLOT_TARGETS[slot];
+}
+
 /** Scan the day's shuffled prompt order, enumerating answers until five quality holes are found. */
 async function scanCandidates(
   ordered: Array<{ id: string; prompt: string; rule: TowerRule }>,
   avoid: Set<string>,
-  recentRuleSignatures: ReadonlySet<string>
+  recentRuleSignatures: ReadonlySet<string>,
+  opts: ScanOptions
 ): Promise<Candidate[]> {
   const candidates: Candidate[] = [];
   const usedRuleSignatures = new Set<string>();
   const usedClubs = new Set<string>();
   const catCount = new Map<string, number>();
-  const MAX_PER_CATEGORY = 2; // keep a course varied (clubs / nationality / managers / …)
-  for (const { id, prompt, rule } of ordered) {
-    if (candidates.length >= FOOTBALL_GOLF_HOLE_COUNT) break;
-    if (avoid.has(prompt.toLowerCase())) continue;
-    if (!golfRuleCandidateAllowed(rule, recentRuleSignatures, usedRuleSignatures)) continue;
-    const ruleSignature = golfRuleSignature(rule);
-    // club diversity: no two holes sharing a club
-    const clubs = Array.isArray(rule.playedFor) ? rule.playedFor.map((c) => c.toLowerCase()) : [];
-    if (clubs.some((c) => usedClubs.has(c))) continue;
-    // A "[foreign nationality] in [a non-PL league]" prompt is niche for this audience
-    // (you might not name one Ivorian in the Bundesliga), even if the DB has many. Allow
-    // nationality prompts only when the league is the Premier League.
-    if (rule.nationality && rule.leaguePlayed && rule.leaguePlayed !== 'Premier League') continue;
+  const slotCount = new Map<GolfCourseSlot, number>();
+  const MAX_PER_CATEGORY = 1;
+  let geographyCount = 0;
 
-    // category diversity
-    const cat = categoryFor(rule, prompt);
-    if ((catCount.get(cat) ?? 0) >= MAX_PER_CATEGORY) continue;
+  // Pass 1 fills the preferred mix; pass 2 tops up with any remaining fun/career prompts.
+  for (const pass of ['slots', 'fill'] as const) {
+    for (const { id, prompt, rule } of ordered) {
+      if (candidates.length >= FOOTBALL_GOLF_HOLE_COUNT) break;
+      if (avoid.has(prompt.toLowerCase())) continue;
+      if (!golfRuleCandidateAllowed(rule, recentRuleSignatures, usedRuleSignatures)) continue;
+      const ruleSignature = golfRuleSignature(rule);
+      const clubs = clubsTouchedByRule(rule);
+      if (clubs.some((club) => usedClubs.has(club))) continue;
 
-    let evaluation: GolfRuleEvaluation;
-    try {
-      evaluation = await evaluateGolfRule(prompt, rule);
-    } catch {
-      continue;
+      const cat = categoryFor(rule, prompt);
+      if ((catCount.get(cat) ?? 0) >= MAX_PER_CATEGORY) continue;
+
+      const geographyHeavy = isGeographyHeavyGolfRule(rule, cat);
+      const dullFilter = isDullFilterGolfRule(rule, cat, prompt);
+      if (geographyHeavy && (!opts.allowGeography || geographyCount >= 1)) continue;
+      if (dullFilter && !opts.allowDullFilters) continue;
+
+      const slot = golfCourseSlotFor(cat);
+      if (pass === 'slots') {
+        if (!slotHasCapacity(slot, slotCount)) continue;
+      } else if (!slot || geographyHeavy || (dullFilter && !opts.allowDullFilters)) {
+        continue;
+      }
+
+      let evaluation: GolfRuleEvaluation;
+      try {
+        evaluation = await evaluateGolfRule(prompt, rule);
+      } catch {
+        continue;
+      }
+      const famous = evaluation.counts.nameable;
+      // Broad pools make rarity scoring fun — players know many names, then chase deep cuts.
+      if (
+        famous < minNameableForGolfCategory(cat, prompt)
+        || evaluation.answers.length > maxAnswersForGolfCategory(cat)
+      ) {
+        continue;
+      }
+
+      const assignedSlot: GolfCourseSlot =
+        pass === 'slots' && slot && slotHasCapacity(slot, slotCount)
+          ? slot
+          : 'wildcard';
+
+      candidates.push({
+        templateId: id,
+        prompt,
+        rule,
+        answers: evaluation.answers,
+        famous,
+      });
+      usedRuleSignatures.add(ruleSignature);
+      for (const club of clubs) usedClubs.add(club);
+      catCount.set(cat, (catCount.get(cat) ?? 0) + 1);
+      slotCount.set(assignedSlot, (slotCount.get(assignedSlot) ?? 0) + 1);
+      if (geographyHeavy) geographyCount += 1;
     }
-    const famous = evaluation.counts.nameable;
-    // A fair golf hole must be genuinely BROAD for THIS audience — ≥8 answers they could
-    // name (megastars / PL / UCL), so any par (2–4) is reachable and there's depth for
-    // birdies. Excludes niche foreign-league prompts. Bounded total so it ships.
-    // Manager pair links need a higher bar — knowing who played under both X and Y is harder.
-    const minFamous = cat === 'Managers' && /\bboth\b/i.test(prompt) ? 12 : 8;
-    if (famous < minFamous || evaluation.answers.length > 100) continue;
-
-    candidates.push({ templateId: id, prompt, rule, answers: evaluation.answers, famous });
-    usedRuleSignatures.add(ruleSignature);
-    for (const c of clubs) usedClubs.add(c);
-    catCount.set(cat, (catCount.get(cat) ?? 0) + 1);
   }
 
   return candidates;

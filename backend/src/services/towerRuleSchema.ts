@@ -2,6 +2,26 @@ import { z } from 'zod';
 
 const boundedText = z.string().trim().min(1).max(160);
 const nonNegativeInt = (max: number) => z.number().int().nonnegative().max(max);
+const seasonSelector = z.object({
+  leagueId: z.number().int().positive().max(10_000),
+  season: z.number().int().min(1900).max(2100),
+  metric: z.enum(['goals', 'assists', 'appearances']),
+  minimum: z.number().int().positive().max(1_000),
+}).strict();
+const clubSeasonSelector = z.object({
+  club: boundedText,
+  season: z.number().int().min(1900).max(2100),
+}).strict();
+const transferSelector = z.object({
+  fromClub: boundedText,
+  toClub: boundedText,
+}).strict();
+const finalSelector = z.object({
+  competition: z.enum(['Champions League', 'World Cup', 'Euro']),
+  season: z.number().int().min(1900).max(2100).optional(),
+  scored: z.literal(true).optional(),
+  won: z.literal(true).optional(),
+}).strict();
 
 /**
  * The complete executable surface of the Tower rule engine.
@@ -28,6 +48,14 @@ export const towerRuleSchema = z.object({
   minUclApps: nonNegativeInt(500).optional(),
   minPeakValueEur: nonNegativeInt(2_000_000_000).optional(),
   minRecordFeeEur: nonNegativeInt(2_000_000_000).optional(),
+  seasonStat: seasonSelector.optional(),
+  clubSeason: clubSeasonSelector.optional(),
+  managedBy: boundedText.optional(),
+  directTransfer: transferSelector.optional(),
+  finalAppearance: finalSelector.optional(),
+  worldCupScorerYear: z.number().int().min(1930).max(2100).optional(),
+  minCareerHattricks: nonNegativeInt(100).optional(),
+  minUclKnockoutGoals: nonNegativeInt(500).optional(),
 }).strict().superRefine((rule, ctx) => {
   const selectorKeys = Object.keys(rule).filter((key) => key !== 'label');
   if (selectorKeys.length === 0) {

@@ -7,10 +7,16 @@ import { validateQuestionTemplateActivation } from './questionTemplateValidation
 import { towerRuleSchema } from './towerRuleSchema.js';
 import {
   buildGolfHoleFromEvaluation,
+  categoryFor,
   dedupeGolfPlayers,
+  golfCourseSlotFor,
   golfPromptCopy,
+  golfPromptPriority,
   golfQualityWarnings,
   golfRuleCandidateAllowed,
+  isDullFilterGolfRule,
+  isGeographyHeavyGolfRule,
+  minNameableForGolfCategory,
   suggestGolfPar,
   PAR_SEQUENCE,
   type GolfRuleEvaluation,
@@ -451,6 +457,52 @@ test('accepts only declarative closed Tower rule fields', () => {
   assert.equal(towerRuleSchema.safeParse({
     validIds: ['not-a-uuid'],
   }).success, false);
+});
+
+test('classifies fun Golf prompts and demotes geography filters', () => {
+  assert.equal(
+    categoryFor(
+      { seasonStat: { leagueId: 39, season: 2023, metric: 'goals', minimum: 1 } },
+      'Name players who scored in the 2023/24 Premier League season.'
+    ),
+    'Seasons'
+  );
+  assert.equal(
+    categoryFor({ clubSeason: { club: 'Leicester', season: 2015 } }, 'Name players who appeared for Leicester in 2015/16.'),
+    'Club Eras'
+  );
+  assert.equal(
+    categoryFor({ nonEuropean: true, leaguePlayed: 'Ligue 1', uclWinner: true }, 'Name non-European players who have played in Ligue 1.'),
+    'Nationality'
+  );
+  assert.equal(
+    isGeographyHeavyGolfRule({ nationality: 'Senegal', leaguePlayed: 'Premier League' }),
+    true
+  );
+  assert.equal(
+    isGeographyHeavyGolfRule({
+      seasonStat: { leagueId: 39, season: 2023, metric: 'goals', minimum: 1 },
+    }),
+    false
+  );
+  assert.equal(
+    isDullFilterGolfRule({ minPlYellowCards: 50, position: 'Defender' }),
+    true
+  );
+  assert.equal(
+    isDullFilterGolfRule({ playedFor: ['Arsenal', 'Chelsea'] }),
+    false
+  );
+  assert.equal(golfCourseSlotFor('Seasons'), 'moment');
+  assert.equal(golfCourseSlotFor('Club Eras'), 'clubEra');
+  assert.equal(golfCourseSlotFor('Clubs'), 'journey');
+  assert.ok(
+    golfPromptPriority('Seasons', {
+      seasonStat: { leagueId: 39, season: 2023, metric: 'goals', minimum: 1 },
+    }) < golfPromptPriority('Nationality', { nationality: 'Senegal', leaguePlayed: 'Premier League' })
+  );
+  assert.equal(minNameableForGolfCategory('Seasons', 'Name players who scored.'), 12);
+  assert.equal(minNameableForGolfCategory('Transfers', 'Name players who moved.'), 8);
 });
 
 test('uses plural player-facing Golf prompt copy', () => {

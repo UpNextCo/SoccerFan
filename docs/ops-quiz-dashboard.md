@@ -66,9 +66,11 @@ current draft, and **Discard** restores the last server copy.
   regenerate accepted answers, aliases, rarity, hints and suggested par. Display
   wording stays editable without becoming the source of truth for football facts.
   Approval rejects any course that does not contain exactly five holes. Generated
-  courses use a balanced 2/3/3/4/4 par plan (subject to per-prompt safety clamping)
-  and structured rules retain a fixed 28-day semantic cooldown; five holes per day
-  require 145 distinct rules in the sustainable bank.
+  courses prefer a fun mix (season/tournament moments, club eras, career journeys)
+  with broad answer pools, avoid nationality filter stacks, use a balanced
+  2/3/3/4/4 par plan (subject to per-prompt safety clamping), and keep a fixed
+  28-day semantic rule cooldown; five holes per day require 145 distinct rules in
+  the sustainable bank.
 - **Club Chain** — edit endpoints and inspect the answer path. Validation checks
   every teammate link and compares the stored path with the database graph.
 - **Target Man** — edit category and target through structured fields; puzzle and
@@ -123,7 +125,8 @@ Root scripts:
 - `npm start` — migrates DB, starts API (serves `/admin`)
 - `cd backend && npm run test:validation` — runs pure semantic validator tests
 - `cd backend && npm run job:build-golf-templates` — expands the Golf question
-  bank with narrower, database-verified questions (8–100 possible answers)
+  bank with season, club-era, career and tournament prompts (broad ~20–120
+  answer pools; geography filters are avoided)
 - `cd backend && npm run job:build-lms-bank -- --total 450` — grows the
   Claude-reviewed LMS bank toward the 45-day freshness target
 - `cd backend && npm run job:audit-lms-freshness` — reports exact LMS repeats

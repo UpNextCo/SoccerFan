@@ -255,6 +255,24 @@ export type GolfTowerRule = {
   minUclApps?: number
   minPeakValueEur?: number
   minRecordFeeEur?: number
+  seasonStat?: {
+    leagueId: number
+    season: number
+    metric: 'goals' | 'assists' | 'appearances'
+    minimum: number
+  }
+  clubSeason?: { club: string; season: number }
+  managedBy?: string
+  directTransfer?: { fromClub: string; toClub: string }
+  finalAppearance?: {
+    competition: 'Champions League' | 'World Cup' | 'Euro'
+    season?: number
+    scored?: true
+    won?: true
+  }
+  worldCupScorerYear?: number
+  minCareerHattricks?: number
+  minUclKnockoutGoals?: number
 }
 
 export type GolfAnswer = {

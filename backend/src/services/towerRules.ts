@@ -67,6 +67,84 @@ function ruleConditions(rule: TowerRule) {
       OR EXISTS (SELECT 1 FROM final_appearances f WHERE f.player_id = a.id AND f.competition = 'Champions League' AND f.won = true)
     )`);
   }
+  if (rule.seasonStat) {
+    const metric =
+      rule.seasonStat.metric === 'goals'
+        ? sql`s2.goals`
+        : rule.seasonStat.metric === 'assists'
+          ? sql`s2.assists`
+          : sql`s2.appearances`;
+    c.push(sql`EXISTS (
+      SELECT 1 FROM player_stats s2
+      WHERE s2.player_id = a.id
+        AND s2.league_id = ${rule.seasonStat.leagueId}
+        AND s2.season = ${rule.seasonStat.season}
+        AND ${metric} >= ${rule.seasonStat.minimum}
+    )`);
+  }
+  if (rule.clubSeason) {
+    c.push(sql`EXISTS (
+      SELECT 1 FROM player_stats s2
+      WHERE s2.player_id = a.id
+        AND s2.team_name = ${rule.clubSeason.club}
+        AND s2.season = ${rule.clubSeason.season}
+        AND s2.appearances > 0
+    )`);
+  }
+  if (rule.managedBy) {
+    c.push(sql`EXISTS (
+      SELECT 1
+      FROM player_stats s2
+      JOIN manager_tenures mt
+        ON lower(mt.club) = lower(s2.team_name)
+        AND s2.season >= mt.season_from
+        AND s2.season <= COALESCE(mt.season_to, 2100)
+      WHERE s2.player_id = a.id
+        AND lower(mt.manager) = lower(${rule.managedBy})
+        AND s2.appearances > 0
+    )`);
+  }
+  if (rule.directTransfer) {
+    c.push(sql`EXISTS (
+      SELECT 1 FROM player_transfers t2
+      WHERE t2.player_id = a.id
+        AND lower(t2.from_team_name) = lower(${rule.directTransfer.fromClub})
+        AND lower(t2.to_team_name) = lower(${rule.directTransfer.toClub})
+    )`);
+  }
+  if (rule.finalAppearance) {
+    const final = rule.finalAppearance;
+    c.push(sql`EXISTS (
+      SELECT 1 FROM final_appearances f
+      WHERE f.player_id = a.id
+        AND f.competition = ${final.competition}
+        ${typeof final.season === 'number' ? sql`AND f.season = ${final.season}` : sql``}
+        ${final.scored ? sql`AND f.goals > 0` : sql``}
+        ${final.won ? sql`AND f.won = true` : sql``}
+    )`);
+  }
+  if (typeof rule.worldCupScorerYear === 'number') {
+    c.push(sql`EXISTS (
+      SELECT 1 FROM wc_match_events w
+      WHERE w.player_id = a.id
+        AND w.year = ${rule.worldCupScorerYear}
+        AND w.type = 'goal'
+    )`);
+  }
+  if (typeof rule.minCareerHattricks === 'number') {
+    c.push(sql`EXISTS (
+      SELECT 1 FROM player_extra_stats x
+      WHERE x.player_id = a.id
+        AND x.career_hattricks >= ${rule.minCareerHattricks}
+    )`);
+  }
+  if (typeof rule.minUclKnockoutGoals === 'number') {
+    c.push(sql`EXISTS (
+      SELECT 1 FROM player_extra_stats x
+      WHERE x.player_id = a.id
+        AND x.ucl_knockout_goals >= ${rule.minUclKnockoutGoals}
+    )`);
+  }
   return c.length ? c : [sql`TRUE`];
 }
 
