@@ -280,6 +280,7 @@ export type GolfAnswer = {
   name: string
   aliases: string[]
   rarity: GolfRarity
+  headshotUrl?: string
 }
 
 export type AuthoredGolfHole = {

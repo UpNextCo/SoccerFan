@@ -8,9 +8,11 @@ import {
   golfPromptCopy,
   isDullFilterGolfRule,
   maxAnswersForGolfCategory,
+  type GolfAnswer,
   type GolfHole,
   type GolfRuleEvaluation,
 } from './footballGolfGenerator.js';
+import { enrichAdminGolfPuzzle } from './adminPuzzleEnrich.js';
 import { towerRuleSchema, type TowerRule } from './towerRuleSchema.js';
 import { golfRuleSignature } from './golfRuleSignature.js';
 
@@ -175,13 +177,30 @@ function withoutHints<T extends { hole: GolfHole; evaluation: GolfRuleEvaluation
   };
 }
 
+type GolfAnswerWithMedia = GolfAnswer & { headshotUrl?: string };
+
+async function withAnswerHeadshots<T extends { hole: GolfHole; evaluation: GolfRuleEvaluation }>(
+  generated: T
+): Promise<T> {
+  const cleared = withoutHints(generated);
+  const enriched = (await enrichAdminGolfPuzzle({
+    holes: [{ answers: cleared.hole.answers }],
+  })) as { holes?: Array<{ answers?: GolfAnswerWithMedia[] }> };
+  const answers = (enriched.holes?.[0]?.answers ?? cleared.hole.answers) as GolfAnswer[];
+  return {
+    ...cleared,
+    hole: { ...cleared.hole, answers },
+    evaluation: { ...cleared.evaluation, answers },
+  };
+}
+
 export async function generateAdminGolfHole(input: {
   prompt: string;
   rule: TowerRule;
   holeNumber: number;
   holeId?: string;
 }): Promise<{ hole: GolfHole; evaluation: GolfRuleEvaluation }> {
-  return withoutHints(await buildGolfHole(input));
+  return withAnswerHeadshots(await buildGolfHole(input));
 }
 
 export async function generateAdminGolfHoleFromTemplate(input: {
@@ -197,7 +216,7 @@ export async function generateAdminGolfHoleFromTemplate(input: {
     holeNumber: input.holeNumber,
     templateId: template.id,
   });
-  return { ...withoutHints(generated), template };
+  return { ...(await withAnswerHeadshots(generated)), template };
 }
 
 export interface GolfAnswerSetValidation {

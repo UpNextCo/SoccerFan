@@ -18,6 +18,7 @@ import {
   setPuzzleStatus,
 } from '../services/puzzleOps.js';
 import { validatePuzzlePayload } from '../services/adminPuzzleValidation.js';
+import { enrichAdminGolfPuzzle } from '../services/adminPuzzleEnrich.js';
 import {
   adminSearchLeagues,
   adminSearchNationalities,
@@ -141,12 +142,16 @@ adminRouter.get('/puzzle', requireAdmin, async (req, res) => {
     sendError(res, 'Not found', 404);
     return;
   }
+  const puzzleJson =
+    modeId === 'football_golf'
+      ? await enrichAdminGolfPuzzle(row.puzzleJson)
+      : row.puzzleJson;
   sendSuccess(res, {
     id: row.id,
     date: row.date,
     modeId: row.modeId,
     status: row.status,
-    puzzleJson: row.puzzleJson,
+    puzzleJson,
     answerJson: row.answerJson,
     contentHash: row.contentHash,
     reviewNote: row.reviewNote,

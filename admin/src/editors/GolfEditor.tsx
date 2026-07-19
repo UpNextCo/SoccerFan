@@ -16,6 +16,7 @@ type Answer = {
   name: string
   aliases?: string[]
   rarity?: GolfRarity | string
+  headshotUrl?: string
   [k: string]: unknown
 }
 
@@ -303,15 +304,26 @@ export function GolfEditor({
   async function pickAnswer(
     n: number,
     idx: number,
-    hit: { id: string; name: string }
+    hit: { id: string; name: string; headshotUrl?: string }
   ) {
-    let resolved = { id: hit.id, name: hit.name, aliases: [] as string[] }
+    let resolved = {
+      id: hit.id,
+      name: hit.name,
+      aliases: [] as string[],
+      headshotUrl: hit.headshotUrl,
+    }
     try {
-      const full = (await api.resolvePlayer(hit.id, 'golf')) as typeof resolved
+      const full = (await api.resolvePlayer(hit.id, 'golf')) as {
+        id?: string
+        name?: string
+        aliases?: string[]
+        headshotUrl?: string
+      }
       resolved = {
         id: full.id || hit.id,
         name: full.name || hit.name,
         aliases: full.aliases ?? [],
+        headshotUrl: full.headshotUrl ?? hit.headshotUrl,
       }
     } catch {
       // search hit is enough
@@ -323,6 +335,7 @@ export function GolfEditor({
       id: resolved.id,
       name: resolved.name,
       aliases: resolved.aliases,
+      headshotUrl: resolved.headshotUrl,
       rarity: prev.rarity ?? 'common',
     })
   }
@@ -986,9 +999,10 @@ export function GolfEditor({
               <div key={ans.id ?? idx} className="answer-card option-row stack">
                 <div className="row">
                   <EntityPicker
-                    key={`${ans.id ?? idx}-${ans.name}`}
+                    key={`${ans.id ?? idx}-${ans.headshotUrl ?? ''}-${ans.name}`}
                     kind="player"
                     valueLabel={ans.name || undefined}
+                    imageUrl={ans.headshotUrl}
                     disabled={mutationsDisabled}
                     onPickPlayer={(hit) => pickAnswer(activeHole.holeNumber, idx, hit)}
                   />

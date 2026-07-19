@@ -306,6 +306,65 @@ export async function enrichAdminClubChainPuzzle(puzzleJson: unknown): Promise<u
   return puzzle;
 }
 
+/** Attach player headshots to Golf answers for the ops editor (batch lookup). */
+export async function enrichAdminGolfPuzzle(puzzleJson: unknown): Promise<unknown> {
+  const puzzle = structuredClone(puzzleJson) as {
+    holes?: Array<{
+      rule?: unknown;
+      templateId?: unknown;
+      answers?: Array<{ id?: string; headshotUrl?: string; [key: string]: unknown }>;
+      [key: string]: unknown;
+    }>;
+    [key: string]: unknown;
+  };
+
+  puzzle.holes = (puzzle.holes ?? []).map((hole) => {
+    const rule = hole.rule;
+    if (
+      rule &&
+      typeof rule === 'object' &&
+      !Array.isArray(rule) &&
+      Object.keys(rule).length === 0
+    ) {
+      const { rule: _rule, templateId: _templateId, ...rest } = hole;
+      return rest;
+    }
+    return hole;
+  });
+
+  const ids = new Set<string>();
+  for (const hole of puzzle.holes ?? []) {
+    for (const answer of hole.answers ?? []) {
+      if (typeof answer.id === 'string' && UUID_RE.test(answer.id)) ids.add(answer.id);
+    }
+  }
+  if (ids.size === 0) return puzzle;
+
+  const overrides = await getPhotoOverrides();
+  const rows = await db
+    .select({
+      id: players.id,
+      apiFootballId: players.apiFootballId,
+    })
+    .from(players)
+    .where(inArray(players.id, [...ids]));
+  const headshots = new Map(
+    rows.map((row) => [
+      row.id,
+      resolveHeadshot(overrides.get(row.id), row.apiFootballId) ?? undefined,
+    ])
+  );
+
+  for (const hole of puzzle.holes ?? []) {
+    hole.answers = (hole.answers ?? []).map((answer) => {
+      if (typeof answer.id !== 'string') return answer;
+      const headshotUrl = headshots.get(answer.id);
+      return headshotUrl ? { ...answer, headshotUrl } : answer;
+    });
+  }
+  return puzzle;
+}
+
 export async function enrichAdminBingoPuzzle(puzzleJson: unknown): Promise<unknown> {
   const puzzle = structuredClone(puzzleJson) as {
     players?: Array<Record<string, unknown>>;
@@ -371,26 +430,8 @@ export async function enrichAdminPuzzleForSave(
       return { puzzleJson: await enrichAdminClubChainPuzzle(puzzleJson), answerJson };
     case 'football_bingo':
       return { puzzleJson: await enrichAdminBingoPuzzle(puzzleJson), answerJson };
-    case 'football_golf': {
-      const puzzle = structuredClone(puzzleJson) as {
-        holes?: Array<Record<string, unknown>>;
-        [key: string]: unknown;
-      };
-      puzzle.holes = (puzzle.holes ?? []).map((hole) => {
-        const rule = hole.rule;
-        if (
-          rule &&
-          typeof rule === 'object' &&
-          !Array.isArray(rule) &&
-          Object.keys(rule).length === 0
-        ) {
-          const { rule: _rule, templateId: _templateId, ...rest } = hole;
-          return rest;
-        }
-        return hole;
-      });
-      return { puzzleJson: puzzle, answerJson };
-    }
+    case 'football_golf':
+      return { puzzleJson: await enrichAdminGolfPuzzle(puzzleJson), answerJson };
     default:
       return { puzzleJson, answerJson };
   }
