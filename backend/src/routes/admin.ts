@@ -18,7 +18,7 @@ import {
   setPuzzleStatus,
 } from '../services/puzzleOps.js';
 import { validatePuzzlePayload } from '../services/adminPuzzleValidation.js';
-import { enrichAdminGolfPuzzle } from '../services/adminPuzzleEnrich.js';
+import { enrichAdminClubChainPuzzle, enrichAdminGolfPuzzle } from '../services/adminPuzzleEnrich.js';
 import {
   adminSearchLeagues,
   adminSearchNationalities,
@@ -145,7 +145,9 @@ adminRouter.get('/puzzle', requireAdmin, async (req, res) => {
   const puzzleJson =
     modeId === 'football_golf'
       ? await enrichAdminGolfPuzzle(row.puzzleJson)
-      : row.puzzleJson;
+      : modeId === 'club_chain'
+        ? await enrichAdminClubChainPuzzle(row.puzzleJson)
+        : row.puzzleJson;
   sendSuccess(res, {
     id: row.id,
     date: row.date,

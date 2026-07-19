@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './game-editors.css'
+import './club-chain-editor.css'
 
 type PlayerRef = {
   id: string
@@ -28,6 +29,12 @@ type Answer = {
   [k: string]: unknown
 }
 
+type PathPlayer = {
+  id: string
+  name: string
+  headshotUrl?: string
+}
+
 const EMPTY_ANSWER: Answer = {}
 
 export function ClubChainEditor({
@@ -45,7 +52,7 @@ export function ClubChainEditor({
   const a = (answer as Answer | null) ?? EMPTY_ANSWER
   const pathIds = a.shortestPathPlayerIds ?? []
   const pathKey = pathIds.join('|')
-  const [pathNames, setPathNames] = useState<Record<string, string>>({})
+  const [pathPlayers, setPathPlayers] = useState<Record<string, PathPlayer>>({})
   const latestRef = useRef({ p, a })
 
   useEffect(() => {
@@ -59,27 +66,58 @@ export function ClubChainEditor({
 
   useEffect(() => {
     let cancelled = false
-    const idsToResolve = pathKey ? pathKey.split('|') : []
-    const unresolvedIds = idsToResolve.filter(
-      (id) => id && id !== p.start?.id && id !== p.target?.id
-    )
+    const idsToResolve = pathKey ? pathKey.split('|').filter(Boolean) : []
+    if (idsToResolve.length === 0) return
+
+    const known: Record<string, PathPlayer> = {}
+    if (p.start?.id) {
+      known[p.start.id] = {
+        id: p.start.id,
+        name: p.start.name,
+        headshotUrl: p.start.headshotUrl,
+      }
+    }
+    if (p.target?.id) {
+      known[p.target.id] = {
+        id: p.target.id,
+        name: p.target.name,
+        headshotUrl: p.target.headshotUrl,
+      }
+    }
+    setPathPlayers((current) => ({ ...current, ...known }))
+
+    const unresolvedIds = idsToResolve.filter((id) => !known[id]?.headshotUrl)
     if (unresolvedIds.length === 0) return
+
     void Promise.all(
       unresolvedIds.map(async (id) => {
         try {
-          const player = (await api.resolvePlayer(id, 'card')) as { id?: string; name?: string }
-          return [id, player.name || 'Unknown player'] as const
+          const player = (await api.resolvePlayer(id, 'card')) as {
+            id?: string
+            name?: string
+            headshotUrl?: string
+          }
+          return [
+            id,
+            {
+              id,
+              name: player.name || known[id]?.name || 'Unknown player',
+              headshotUrl: player.headshotUrl,
+            },
+          ] as const
         } catch {
-          return [id, 'Unknown player'] as const
+          return [id, { id, name: known[id]?.name || 'Unknown player' }] as const
         }
       })
     ).then((entries) => {
-      if (!cancelled) setPathNames((current) => ({ ...current, ...Object.fromEntries(entries) }))
+      if (!cancelled) {
+        setPathPlayers((current) => ({ ...current, ...Object.fromEntries(entries) }))
+      }
     })
     return () => {
       cancelled = true
     }
-  }, [pathKey, p.start?.id, p.target?.id])
+  }, [pathKey, p.start?.id, p.start?.headshotUrl, p.start?.name, p.target?.id, p.target?.headshotUrl, p.target?.name])
 
   function commitPath(nextPath: string[]) {
     const { p: currentPuzzle, a: currentAnswer } = latestRef.current
@@ -138,6 +176,14 @@ export function ClubChainEditor({
         shortestPathLength: nextPath.length - 1,
       }
     }
+    setPathPlayers((current) => ({
+      ...current,
+      [resolved.id]: {
+        id: resolved.id,
+        name: resolved.name,
+        headshotUrl: resolved.headshotUrl,
+      },
+    }))
     commit(
       currentPath.length >= 2
         ? { ...nextPuzzle, shortestPathLength: currentPath.length - 1 }
@@ -146,16 +192,32 @@ export function ClubChainEditor({
     )
   }
 
-  async function pickPathPlayer(idx: number, hit: { id: string; name: string }) {
-    let resolved = hit
+  async function pickPathPlayer(
+    idx: number,
+    hit: { id: string; name: string; headshotUrl?: string }
+  ) {
+    let resolved = {
+      id: hit.id,
+      name: hit.name,
+      headshotUrl: hit.headshotUrl,
+    }
     try {
-      resolved = (await api.resolvePlayer(hit.id, 'card')) as { id: string; name: string }
+      const full = (await api.resolvePlayer(hit.id, 'card')) as {
+        id?: string
+        name?: string
+        headshotUrl?: string
+      }
+      resolved = {
+        id: full.id || hit.id,
+        name: full.name || hit.name,
+        headshotUrl: full.headshotUrl ?? hit.headshotUrl,
+      }
     } catch {
       // Search result still provides a valid local reference.
     }
     const currentPath = latestRef.current.a.shortestPathPlayerIds ?? []
     const nextPath = currentPath.map((id, i) => (i === idx ? resolved.id : id))
-    setPathNames((current) => ({ ...current, [resolved.id]: resolved.name }))
+    setPathPlayers((current) => ({ ...current, [resolved.id]: resolved }))
     commitPath(nextPath)
   }
 
@@ -180,6 +242,18 @@ export function ClubChainEditor({
     commitPath(nextPath)
   }
 
+  function pathLabel(id: string, index: number): string {
+    if (index === 0) return p.start?.name || pathPlayers[id]?.name || 'Start'
+    if (index === pathIds.length - 1) return p.target?.name || pathPlayers[id]?.name || 'Target'
+    return pathPlayers[id]?.name || 'Unknown player'
+  }
+
+  function pathImage(id: string, index: number): string | undefined {
+    if (index === 0) return p.start?.headshotUrl ?? pathPlayers[id]?.headshotUrl
+    if (index === pathIds.length - 1) return p.target?.headshotUrl ?? pathPlayers[id]?.headshotUrl
+    return pathPlayers[id]?.headshotUrl
+  }
+
   const warnings: string[] = []
   if (pathIds.length < 2) warnings.push('The solution needs a start and target player.')
   if (pathIds.some((id) => !id)) warnings.push('One or more path steps has no player selected.')
@@ -197,40 +271,39 @@ export function ClubChainEditor({
   }
 
   return (
-    <div className="mode-editor">
+    <div className="mode-editor club-chain-editor">
       <div className="editor-clean-section">
         <header>
           <strong>Chain endpoints</strong>
           <span className="muted tiny">Choose the fixed start and target players</span>
         </header>
-        <div className="chain-flow">
-          <div className="chain-node endpoint">
-          <EntityPicker
-            key={`start-${p.start?.id}-${p.start?.headshotUrl ?? ''}`}
-            kind="player"
-            label="Start player"
-            valueLabel={p.start?.name}
-            imageUrl={p.start?.headshotUrl}
-            nationality={p.start?.nationality}
-            disabled={locked}
-            onPickPlayer={(hit) => pickEndpoint('start', hit)}
-          />
+        <div className="club-chain-endpoints">
+          <div className="club-chain-endpoint">
+            <EntityPicker
+              key={`start-${p.start?.id}-${p.start?.headshotUrl ?? ''}`}
+              kind="player"
+              label="Start player"
+              valueLabel={p.start?.name}
+              imageUrl={p.start?.headshotUrl}
+              nationality={p.start?.nationality}
+              disabled={locked}
+              onPickPlayer={(hit) => pickEndpoint('start', hit)}
+            />
             <p className="muted tiny">
               {[p.start?.club, p.start?.nationality, p.start?.position].filter(Boolean).join(' · ') || 'No player details'}
             </p>
           </div>
-          <span className="chain-arrow" aria-hidden="true">→</span>
-          <div className="chain-node endpoint">
-          <EntityPicker
-            key={`target-${p.target?.id}-${p.target?.headshotUrl ?? ''}`}
-            kind="player"
-            label="Target player"
-            valueLabel={p.target?.name}
-            imageUrl={p.target?.headshotUrl}
-            nationality={p.target?.nationality}
-            disabled={locked}
-            onPickPlayer={(hit) => pickEndpoint('target', hit)}
-          />
+          <div className="club-chain-endpoint">
+            <EntityPicker
+              key={`target-${p.target?.id}-${p.target?.headshotUrl ?? ''}`}
+              kind="player"
+              label="Target player"
+              valueLabel={p.target?.name}
+              imageUrl={p.target?.headshotUrl}
+              nationality={p.target?.nationality}
+              disabled={locked}
+              onPickPlayer={(hit) => pickEndpoint('target', hit)}
+            />
             <p className="muted tiny">
               {[p.target?.club, p.target?.nationality, p.target?.position].filter(Boolean).join(' · ') || 'No player details'}
             </p>
@@ -270,36 +343,31 @@ export function ClubChainEditor({
         {pathIds.length === 0 ? (
           <p className="muted">No solution yet. Add a step to start with the selected players.</p>
         ) : (
-          <div className="chain-flow">
+          <div className="club-chain-path">
             {pathIds.map((id, i) => (
-              <div key={`${i}-${id}`} className="chain-flow">
-                {i > 0 && <span className="chain-arrow" aria-hidden="true">→</span>}
-                <div className={`chain-node${i === 0 || i === pathIds.length - 1 ? ' endpoint' : ''}`}>
-                  <div className="card-heading">
-                    <strong>{i === 0 ? 'Start' : i === pathIds.length - 1 ? 'Target' : `Player ${i}`}</strong>
-                    {i > 0 && i < pathIds.length - 1 && (
-                      <div className="button-row">
-                        <button type="button" className="ghost tiny-btn" disabled={locked || i === 1} onClick={() => movePathStep(i, -1)} aria-label={`Move player ${i} earlier`} title="Move earlier">←</button>
-                        <button type="button" className="ghost tiny-btn" disabled={locked || i === pathIds.length - 2} onClick={() => movePathStep(i, 1)} aria-label={`Move player ${i} later`} title="Move later">→</button>
-                        <button type="button" className="ghost tiny-btn" disabled={locked} onClick={() => removePathStep(i)} aria-label={`Remove player ${i} from path`} title="Remove player">×</button>
-                      </div>
-                    )}
-                  </div>
-                  <EntityPicker
-                    key={`${i}-${id}-${pathNames[id] ?? ''}`}
-                    kind="player"
-                    valueLabel={
-                      id === p.start?.id
-                        ? p.start.name
-                        : id === p.target?.id
-                          ? p.target.name
-                          : pathNames[id] || 'Unknown player'
-                    }
-                    disabled={locked || i === 0 || i === pathIds.length - 1}
-                    placeholder={i === 0 || i === pathIds.length - 1 ? undefined : 'Search path player…'}
-                    onPickPlayer={(hit) => pickPathPlayer(i, hit)}
-                  />
+              <div
+                key={`${i}-${id}`}
+                className={`club-chain-step${i === 0 || i === pathIds.length - 1 ? ' endpoint' : ''}`}
+              >
+                <div className="card-heading">
+                  <strong>{i === 0 ? 'Start' : i === pathIds.length - 1 ? 'Target' : `Player ${i}`}</strong>
+                  {i > 0 && i < pathIds.length - 1 && (
+                    <div className="button-row">
+                      <button type="button" className="ghost tiny-btn" disabled={locked || i === 1} onClick={() => movePathStep(i, -1)} aria-label={`Move player ${i} earlier`} title="Move earlier">←</button>
+                      <button type="button" className="ghost tiny-btn" disabled={locked || i === pathIds.length - 2} onClick={() => movePathStep(i, 1)} aria-label={`Move player ${i} later`} title="Move later">→</button>
+                      <button type="button" className="ghost tiny-btn" disabled={locked} onClick={() => removePathStep(i)} aria-label={`Remove player ${i} from path`} title="Remove player">×</button>
+                    </div>
+                  )}
                 </div>
+                <EntityPicker
+                  key={`${i}-${id}-${pathImage(id, i) ?? ''}-${pathLabel(id, i)}`}
+                  kind="player"
+                  valueLabel={pathLabel(id, i)}
+                  imageUrl={pathImage(id, i)}
+                  disabled={locked || i === 0 || i === pathIds.length - 1}
+                  placeholder={i === 0 || i === pathIds.length - 1 ? undefined : 'Search path player…'}
+                  onPickPlayer={(hit) => pickPathPlayer(i, hit)}
+                />
               </div>
             ))}
           </div>

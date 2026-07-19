@@ -1,0 +1,68 @@
+.club-chain-editor {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.club-chain-endpoints {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: 0.85rem;
+  min-width: 0;
+}
+
+.club-chain-endpoint {
+  min-width: 0;
+  padding: 0.85rem;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #faf7f0;
+}
+
+.club-chain-endpoint .entity-picker,
+.club-chain-step .entity-picker {
+  min-width: 0;
+  width: 100%;
+  flex: none;
+}
+
+.club-chain-endpoint .entity-selected-name,
+.club-chain-step .entity-selected-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.club-chain-path {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+  min-width: 0;
+}
+
+.club-chain-step {
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.club-chain-step.endpoint {
+  border-width: 2px;
+  background: #faf7f0;
+}
+
+.club-chain-step .card-heading {
+  margin-bottom: 0.55rem;
+}
+
+@media (max-width: 700px) {
+  .club-chain-endpoints,
+  .club-chain-path {
+    grid-template-columns: 1fr;
+  }
+}

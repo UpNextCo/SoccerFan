@@ -1,6 +1,15 @@
 import SwiftUI
 import UIKit
 
+struct DailyCompleteWinImage {
+    let name: String
+    let image: UIImage
+
+    var usesFullWidth: Bool {
+        name == "win9" || name == "win10"
+    }
+}
+
 /// Once-per-day gate for the "all 7 complete" homepage celebration.
 enum DailyCompleteCelebration {
     static func hasShown(for date: String) -> Bool {
@@ -14,10 +23,12 @@ enum DailyCompleteCelebration {
     /// Xcode copies these files from Resources/WinPics into the built app's resource root.
     static let winPicNames = (1...11).map { "win\($0)" }
 
-    static func randomWinImage() -> UIImage? {
+    static func randomWinImage() -> DailyCompleteWinImage? {
         let shuffled = winPicNames.shuffled()
         for name in shuffled {
-            if let image = loadWinImage(named: name) { return image }
+            if let image = loadWinImage(named: name) {
+                return DailyCompleteWinImage(name: name, image: image)
+            }
         }
         return nil
     }
@@ -219,7 +230,7 @@ struct DailyCompleteCelebrationView: View {
     @State private var streakPulse: CGFloat = 1
     @State private var streakRevealed = false
     @State private var ctaRevealed = false
-    @State private var winImage: UIImage? = DailyCompleteCelebration.randomWinImage()
+    @State private var winImage = DailyCompleteCelebration.randomWinImage()
 
     var body: some View {
         ZStack {
@@ -272,10 +283,10 @@ struct DailyCompleteCelebrationView: View {
                 .frame(height: geo.size.height * 0.62)
 
                 if let winImage {
-                    Image(uiImage: winImage)
+                    Image(uiImage: winImage.image)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: geo.size.width * 0.9)
+                        .frame(width: geo.size.width * (winImage.usesFullWidth ? 1 : 0.9))
                         .opacity(0.84)
                         // Short, strong dissolve only at the bottom edge — image stays crisp above.
                         .mask(
@@ -355,7 +366,7 @@ struct DailyCompleteCelebrationView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .padding(.horizontal, 20)
-        .background(BKTheme.card)
+        .background(Color(hex: "121212"))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
@@ -382,7 +393,7 @@ struct DailyCompleteCelebrationView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .padding(.horizontal, 20)
-        .background(BKTheme.card)
+        .background(Color(hex: "121212"))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
