@@ -8,7 +8,12 @@
  * word-order/name variants), then name+nationality, then unique token-subset.
  *
  * Expects CSVs in transferdata/ (players.csv, player_valuations.csv, transfers.csv).
- * Usage: DATABASE_URL=... npx tsx src/jobs/import-transfermarkt.ts transferdata
+ * Usage:
+ *   DATABASE_URL=... npx tsx src/jobs/import-transfermarkt.ts transferdata
+ *   DATABASE_URL=... npx tsx src/jobs/import-transfermarkt.ts transferdata --values-only
+ *
+ * --values-only updates market_value_eur / peak_market_value_eur / record_fee_eur /
+ * tm_player_id / foot only. It never changes name, aliases, or search_text.
  */
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
@@ -138,13 +143,36 @@ function tokenCompatible(a: Set<string>, b: Set<string>): boolean {
 }
 
 /** Looser check for the DOB path: an exact date of birth is already highly selective,
- *  so one shared name token is enough — this lets mononyms (Pedro, Marcelo, Raúl…) match. */
+ *  so one shared name token is enough — this lets mononyms (Pedro, Marcelo, Raúl…) match.
+ *  Also allows nickname/legal-name pairs (Rodri ↔ Rodrigo) when one side is a single token. */
 function dobNameMatch(a: Set<string>, b: Set<string>): boolean {
   const [small, big] = a.size <= b.size ? [a, b] : [b, a];
-  return small.size >= 1 && isSubset(small, big);
+  if (small.size >= 1 && isSubset(small, big)) return true;
+  if (a.size === 1 || b.size === 1) {
+    const mono = [...(a.size === 1 ? a : b)][0]!;
+    const multi = a.size === 1 ? b : a;
+    if (mono.length >= 4 && [...multi].some((t) => t.startsWith(mono) || mono.startsWith(t))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function nameTokensForPlayer(name: string, aliases: unknown): Set<string> {
+  const aliasList = Array.isArray(aliases)
+    ? aliases.filter((a): a is string => typeof a === 'string')
+    : [];
+  return tokens([name, ...aliasList].join(' '));
 }
 
 async function main() {
+  // --values-only: write market/fee/tm id fields only. Never rename players or rewrite aliases —
+  // use this after nicknames have been curated.
+  const valuesOnly = process.argv.includes('--values-only');
+  if (valuesOnly) {
+    console.log('Running in --values-only mode (names/aliases/search_text left untouched).');
+  }
+
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS market_value_eur integer`);
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS peak_market_value_eur integer`);
   await db.execute(sql`ALTER TABLE players ADD COLUMN IF NOT EXISTS record_fee_eur integer`);
@@ -215,6 +243,7 @@ async function main() {
 
   interface Update {
     id: string;
+    tmId: string;
     mv: number | null;
     pv: number | null;
     rf: number | null;
@@ -231,12 +260,16 @@ async function main() {
 
   for (const p of ours) {
     let tm: TmPlayer | undefined;
-    const ourToks = tokens(p.name);
+    // Include aliases so mononyms like "Rodri" still match "Rodrigo Hernández Cascante".
+    const ourToks = nameTokensForPlayer(p.name, p.aliases);
+    const displayToks = tokens(p.name);
     const dob = (p.dob ?? '').slice(0, 10);
 
     // 1) Same date of birth + compatible name tokens — robust to word-order/name variants.
     if (dob) {
-      const cands = (byDob.get(dob) ?? []).filter((t) => dobNameMatch(t.toks, ourToks));
+      const cands = (byDob.get(dob) ?? []).filter(
+        (t) => dobNameMatch(t.toks, ourToks) || dobNameMatch(t.toks, displayToks)
+      );
       if (cands.length === 1) {
         tm = cands[0];
         viaDob += 1;
@@ -261,40 +294,67 @@ async function main() {
     }
     if (!tm) continue;
 
-    const chosen = chooseDisplayName(p.name, tm.name);
-    if (chosen !== p.name) renamed += 1;
+    const chosen = valuesOnly ? p.name : chooseDisplayName(p.name, tm.name);
+    if (!valuesOnly && chosen !== p.name) renamed += 1;
     const aliasSet = new Set<string>([...(Array.isArray(p.aliases) ? p.aliases : []), p.name, tm.name, chosen]);
     updates.push({
       id: p.id,
+      tmId: tm.tmId,
       mv: tm.current,
       pv: tm.peak,
       rf: recordFee.get(tm.tmId) ?? null,
       foot: tm.foot,
       name: chosen,
       aliases: JSON.stringify([...aliasSet]),
-      searchText: `${p.search_text} ${normalizeSearchText(tm.name)}`.trim(),
+      searchText: valuesOnly
+        ? p.search_text
+        : `${p.search_text} ${normalizeSearchText(tm.name)}`.trim(),
     });
   }
-  console.log(`Matched ${updates.length} players (${viaDob} dob, ${exact} name+nat, ${subset} subset) · ${renamed} renamed to common name`);
+  console.log(
+    `Matched ${updates.length} players (${viaDob} dob, ${exact} name+nat, ${subset} subset)` +
+      (valuesOnly ? ' · values-only (names unchanged)' : ` · ${renamed} renamed to common name`)
+  );
 
   for (const batch of chunk(updates, 300)) {
-    const tuples = batch.map(
-      (u) => sql`(${u.id}::uuid, ${u.mv}::int, ${u.pv}::int, ${u.rf}::int, ${u.foot}::text, ${u.name}::text, ${u.aliases}::jsonb, ${u.searchText}::text)`
-    );
-    await db.execute(sql`
-      UPDATE players AS p SET
-        market_value_eur = v.mv,
-        peak_market_value_eur = v.pv,
-        record_fee_eur = v.rf,
-        foot = COALESCE(v.ft, p.foot),
-        name = v.nm,
-        aliases = v.al,
-        search_text = v.st
-      FROM (VALUES ${sql.join(tuples, sql`, `)}) AS v(id, mv, pv, rf, ft, nm, al, st)
-      WHERE p.id = v.id
-    `);
+    if (valuesOnly) {
+      const tuples = batch.map(
+        (u) => sql`(${u.id}::uuid, ${u.tmId}::text, ${u.mv}::int, ${u.pv}::int, ${u.rf}::int, ${u.foot}::text)`
+      );
+      await db.execute(sql`
+        UPDATE players AS p SET
+          tm_player_id = COALESCE(p.tm_player_id, v.tm),
+          market_value_eur = v.mv,
+          peak_market_value_eur = v.pv,
+          record_fee_eur = v.rf,
+          foot = COALESCE(v.ft, p.foot)
+        FROM (VALUES ${sql.join(tuples, sql`, `)}) AS v(id, tm, mv, pv, rf, ft)
+        WHERE p.id = v.id
+      `);
+    } else {
+      const tuples = batch.map(
+        (u) => sql`(${u.id}::uuid, ${u.tmId}::text, ${u.mv}::int, ${u.pv}::int, ${u.rf}::int, ${u.foot}::text, ${u.name}::text, ${u.aliases}::jsonb, ${u.searchText}::text)`
+      );
+      await db.execute(sql`
+        UPDATE players AS p SET
+          tm_player_id = COALESCE(p.tm_player_id, v.tm),
+          market_value_eur = v.mv,
+          peak_market_value_eur = v.pv,
+          record_fee_eur = v.rf,
+          foot = COALESCE(v.ft, p.foot),
+          name = v.nm,
+          aliases = v.al,
+          search_text = v.st
+        FROM (VALUES ${sql.join(tuples, sql`, `)}) AS v(id, tm, mv, pv, rf, ft, nm, al, st)
+        WHERE p.id = v.id
+      `);
+    }
   }
-  console.log(`Wrote values + fees + common names for ${updates.length} players`);
+  console.log(
+    valuesOnly
+      ? `Wrote values + fees for ${updates.length} players (names untouched)`
+      : `Wrote values + fees + common names for ${updates.length} players`
+  );
 
   // --- Tier (1-5) from ABSOLUTE peak market value (real €, interpretable, no pool
   // dilution). compute-fame then lifts legends via achievements so older/uncovered
