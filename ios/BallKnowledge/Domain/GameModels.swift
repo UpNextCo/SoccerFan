@@ -334,12 +334,12 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1100). Live seven-game total 6600. A full loss
+    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1100). Live seven-game total 6800. A full loss
     /// earns 0 (no participation floor). Every game's on-screen score IS this XP.
     static let maxByMode: [String: Int] = [
         "guess_who": 800,
         "one_more": 900,
-        "target_man": 900,
+        "target_man": 1100,
         "blind_rank": 1000,
         "football_bingo": 1000,
         "club_chain": 1000,
@@ -414,15 +414,15 @@ enum DailyXP {
         return min(900, streak * oneMorePick(1, rounds: rounds))
     }
 
-    /// Target Man: closeness bands (exact 900 ... within 25% 175, else 0).
+    /// Target Man: closeness bands (exact 1100 ... within 25% 275, else 0).
     static func targetMan(pctOff: Double) -> Int {
         switch pctOff {
-        case ..<0.0001: return 900
-        case ..<0.02: return 800
-        case ..<0.05: return 650
-        case ..<0.10: return 500
-        case ..<0.15: return 350
-        case ..<0.25: return 175
+        case ..<0.0001: return 1100
+        case ..<0.02: return 1000
+        case ..<0.05: return 875
+        case ..<0.10: return 700
+        case ..<0.15: return 500
+        case ..<0.25: return 275
         default: return 0
         }
     }

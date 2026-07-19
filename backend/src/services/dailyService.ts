@@ -94,7 +94,7 @@ const DEFAULT_MAX_XP = 1000;
 export const MAX_XP: Record<string, number> = {
   guess_who: 800,
   one_more: 900,
-  target_man: 900,
+  target_man: 1100,
   blind_rank: 1000,
   football_bingo: 1000,
   club_chain: 1000,

@@ -49,12 +49,12 @@ function golfRarityPoints(rarity: string | undefined): number {
 }
 
 function targetManXp(pctOff: number): number {
-  if (pctOff < 0.0001) return 900;
-  if (pctOff < 0.02) return 800;
-  if (pctOff < 0.05) return 650;
-  if (pctOff < 0.10) return 500;
-  if (pctOff < 0.15) return 350;
-  if (pctOff < 0.25) return 175;
+  if (pctOff < 0.0001) return 1100;
+  if (pctOff < 0.02) return 1000;
+  if (pctOff < 0.05) return 875;
+  if (pctOff < 0.10) return 700;
+  if (pctOff < 0.15) return 500;
+  if (pctOff < 0.25) return 275;
   return 0;
 }
 
@@ -347,7 +347,7 @@ async function scoreTargetMan(row: PuzzleRow, answer: unknown): Promise<ServerSc
   const difference = combined - target;
   const pctOff = Math.abs(difference) / Math.max(target, 1);
   const score = targetManXp(pctOff);
-  return { score, won: score >= 350 };
+  return { score, won: score >= 500 };
 }
 
 // ---- Club Chain ------------------------------------------------------------------------------
