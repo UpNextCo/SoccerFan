@@ -27,12 +27,48 @@
   justify-content: center;
 }
 
+.golf-prompt-display {
+  padding: 0.15rem 0;
+}
+
+.golf-prompt-display p {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
 .golf-prompt-field textarea {
   min-height: 4.5rem;
   font-size: 1.05rem;
   font-weight: 650;
   line-height: 1.45;
   padding: 0.85rem 0.95rem;
+}
+
+.golf-custom-body {
+  display: grid;
+  gap: 1.1rem;
+  padding-top: 0.85rem;
+}
+
+.golf-season-block {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.golf-season-block h4 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.golf-season-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .golf-hole .field {
@@ -269,6 +305,7 @@
   .golf-meta-row,
   .golf-template-picker,
   .golf-rule-grid,
+  .golf-season-grid,
   .golf-threshold-grid {
     grid-template-columns: 1fr;
   }

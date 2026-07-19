@@ -52,6 +52,25 @@ const TEMPLATE_CATEGORY_ORDER = [
   'Transfers',
   'Managers',
 ] as const
+const SEASON_OPTIONS = Array.from({ length: 12 }, (_, index) => {
+  const season = 2025 - index
+  const start = String(season).slice(2)
+  const end = String(season + 1).slice(2)
+  return { value: season, label: `${start}/${end}` }
+})
+const SEASON_LEAGUES = [
+  { id: 39, name: 'Premier League' },
+  { id: 140, name: 'La Liga' },
+  { id: 135, name: 'Serie A' },
+  { id: 78, name: 'Bundesliga' },
+  { id: 61, name: 'Ligue 1' },
+  { id: 2, name: 'Champions League' },
+] as const
+
+function leaguesFromRule(rule: GolfTowerRule): string[] {
+  if (rule.leaguesPlayed && rule.leaguesPlayed.length > 0) return rule.leaguesPlayed
+  return rule.leaguePlayed ? [rule.leaguePlayed] : []
+}
 
 type BusyAction = 'template' | 'generate'
 type AnswerUpdateState =
@@ -633,18 +652,13 @@ export function GolfEditor({
             </div>
           </header>
 
-          <label className="field golf-prompt-field">
-            Question
-            <textarea
-              rows={2}
-              value={activeHole.prompt}
-              disabled={mutationsDisabled}
-              onChange={(e) => {
-                updateHole(activeHole.holeNumber, { prompt: e.target.value })
-                setEvaluationState((current) => current?.holeKey === activeKey ? null : current)
-              }}
-            />
-          </label>
+          <div className="golf-prompt-display">
+            {activeHole.prompt.trim() ? (
+              <p>{activeHole.prompt}</p>
+            ) : (
+              <p className="muted">No question yet — pick a template or write a custom one below.</p>
+            )}
+          </div>
 
           <div className="golf-meta-row">
             <label className="field">
@@ -738,11 +752,39 @@ export function GolfEditor({
             )}
 
             <details className="advanced-panel golf-custom-rule">
-              <summary>Custom rule</summary>
-              <h4>Build your own question</h4>
-              {activeHole.rule ? (
-                <div className="golf-rule-builder">
-                {activeHole.rule.validIds ? (
+              <summary>Custom question</summary>
+              <div className="golf-custom-body">
+                <label className="field golf-prompt-field">
+                  Question
+                  <textarea
+                    rows={2}
+                    value={activeHole.prompt}
+                    disabled={mutationsDisabled}
+                    placeholder="e.g. Name players who played in Ligue 1 and the Bundesliga."
+                    onChange={(e) => {
+                      updateHole(activeHole.holeNumber, { prompt: e.target.value })
+                      setEvaluationState((current) => current?.holeKey === activeKey ? null : current)
+                    }}
+                  />
+                </label>
+
+                {!activeHole.rule ? (
+                  <div className="golf-custom-start">
+                    <p className="muted tiny">
+                      Write the question above, then add the filters that define who qualifies.
+                    </p>
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={mutationsDisabled}
+                      onClick={() => {
+                        updateRule(activeHole, () => ({ leaguesPlayed: ['Premier League'] }))
+                      }}
+                    >
+                      Start building filters
+                    </button>
+                  </div>
+                ) : activeHole.rule.validIds ? (
                   <div className="warning-box">
                     This question has a fixed list of {activeHole.rule.validIds.length} possible answers.
                     <div className="editor-toolbar">
@@ -760,19 +802,7 @@ export function GolfEditor({
                     </div>
                   </div>
                 ) : (
-                  <>
-                    <label className="field">
-                      Short label (optional)
-                      <input
-                        value={activeHole.rule.label ?? ''}
-                        disabled={mutationsDisabled}
-                        maxLength={160}
-                        onChange={(event) => updateRule(activeHole, (rule) => ({
-                          ...rule,
-                          label: event.target.value || undefined,
-                        }))}
-                      />
-                    </label>
+                  <div className="golf-rule-builder">
                     <div className="golf-rule-grid">
                       <div className="field">
                         <span>Nationality</span>
@@ -790,7 +820,7 @@ export function GolfEditor({
                         {activeHole.rule.nationality && (
                           <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled} onClick={() =>
                             updateRule(activeHole, (rule) => ({ ...rule, nationality: undefined }))
-                          }>Clear nationality</button>
+                          }>Clear</button>
                         )}
                       </div>
                       <label className="field">
@@ -810,28 +840,49 @@ export function GolfEditor({
                           <option value="Defender">Defender</option>
                         </select>
                       </label>
-                      <div className="field">
-                        <span>League played in</span>
-                        <EntityPicker
-                          key={`league-${activeHole.rule.leaguePlayed ?? 'empty'}`}
-                          kind="league"
-                          valueLabel={activeHole.rule.leaguePlayed}
-                          disabled={mutationsDisabled}
-                          onPickLeague={(league) => updateRule(activeHole, (rule) => ({
-                            ...rule,
-                            leaguePlayed: league.name,
-                          }))}
-                        />
-                        {activeHole.rule.leaguePlayed && (
-                          <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled} onClick={() =>
-                            updateRule(activeHole, (rule) => ({ ...rule, leaguePlayed: undefined }))
-                          }>Clear league</button>
-                        )}
-                      </div>
                     </div>
 
                     <div className="field">
-                      <span>Played for clubs (all required, maximum 4)</span>
+                      <span>Leagues</span>
+                      <div className="chip-list">
+                        {leaguesFromRule(activeHole.rule).map((league) => (
+                          <span className="hint-chip" key={league}>
+                            {league}
+                            <button
+                              type="button"
+                              disabled={mutationsDisabled}
+                              aria-label={`Remove ${league}`}
+                              onClick={() => updateRule(activeHole, (rule) => {
+                                const next = leaguesFromRule(rule).filter((name) => name !== league)
+                                return {
+                                  ...rule,
+                                  leaguePlayed: undefined,
+                                  leaguesPlayed: next.length > 0 ? next : undefined,
+                                }
+                              })}
+                            >×</button>
+                          </span>
+                        ))}
+                      </div>
+                      {leaguesFromRule(activeHole.rule).length < 4 && (
+                        <EntityPicker
+                          kind="league"
+                          disabled={mutationsDisabled}
+                          placeholder="Add a league…"
+                          onPickLeague={(league) => updateRule(activeHole, (rule) => {
+                            const next = [...new Set([...leaguesFromRule(rule), league.name])]
+                            return {
+                              ...rule,
+                              leaguePlayed: undefined,
+                              leaguesPlayed: next,
+                            }
+                          })}
+                        />
+                      )}
+                    </div>
+
+                    <div className="field">
+                      <span>Clubs</span>
                       <div className="chip-list">
                         {(activeHole.rule.playedFor ?? []).map((club) => (
                           <span className="hint-chip" key={club}>
@@ -852,13 +903,118 @@ export function GolfEditor({
                         <EntityPicker
                           kind="team"
                           disabled={mutationsDisabled}
-                          placeholder="Search club to add…"
+                          placeholder="Add a club…"
                           onPickTeam={(team) => updateRule(activeHole, (rule) => ({
                             ...rule,
                             playedFor: [...new Set([...(rule.playedFor ?? []), team.name])],
                           }))}
                         />
                       )}
+                    </div>
+
+                    <div className="golf-season-block">
+                      <h4>Season snapshot</h4>
+                      <div className="golf-rule-grid golf-season-grid">
+                        <label className="field">
+                          Season
+                          <select
+                            value={activeHole.rule.seasonStat?.season ?? ''}
+                            disabled={mutationsDisabled}
+                            onChange={(event) => {
+                              const season = event.target.value === '' ? undefined : Number(event.target.value)
+                              updateRule(activeHole, (rule) => {
+                                if (season == null) {
+                                  const { seasonStat: _seasonStat, ...rest } = rule
+                                  return rest
+                                }
+                                return {
+                                  ...rule,
+                                  seasonStat: {
+                                    leagueId: rule.seasonStat?.leagueId ?? 39,
+                                    season,
+                                    metric: rule.seasonStat?.metric ?? 'goals',
+                                    minimum: rule.seasonStat?.minimum ?? 1,
+                                  },
+                                }
+                              })
+                            }}
+                          >
+                            <option value="">Any season</option>
+                            {SEASON_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          League
+                          <select
+                            value={activeHole.rule.seasonStat?.leagueId ?? ''}
+                            disabled={mutationsDisabled || activeHole.rule.seasonStat?.season == null}
+                            onChange={(event) => {
+                              const leagueId = Number(event.target.value)
+                              updateRule(activeHole, (rule) => ({
+                                ...rule,
+                                seasonStat: {
+                                  leagueId,
+                                  season: rule.seasonStat?.season ?? 2024,
+                                  metric: rule.seasonStat?.metric ?? 'goals',
+                                  minimum: rule.seasonStat?.minimum ?? 1,
+                                },
+                              }))
+                            }}
+                          >
+                            {SEASON_LEAGUES.map((league) => (
+                              <option key={league.id} value={league.id}>{league.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          Stat
+                          <select
+                            value={activeHole.rule.seasonStat?.metric ?? 'goals'}
+                            disabled={mutationsDisabled || activeHole.rule.seasonStat?.season == null}
+                            onChange={(event) => updateRule(activeHole, (rule) => ({
+                              ...rule,
+                              seasonStat: {
+                                leagueId: rule.seasonStat?.leagueId ?? 39,
+                                season: rule.seasonStat?.season ?? 2024,
+                                metric: event.target.value as 'goals' | 'assists' | 'appearances',
+                                minimum: rule.seasonStat?.minimum ?? 1,
+                              },
+                            }))}
+                          >
+                            <option value="goals">Goals</option>
+                            <option value="assists">Assists</option>
+                            <option value="appearances">Appearances</option>
+                          </select>
+                        </label>
+                        <label className="field">
+                          Minimum
+                          <input
+                            type="number"
+                            min={1}
+                            max={1000}
+                            value={activeHole.rule.seasonStat?.minimum ?? ''}
+                            disabled={mutationsDisabled || activeHole.rule.seasonStat?.season == null}
+                            placeholder="1"
+                            onChange={(event) => {
+                              const value = event.target.value
+                              const parsed = Number(value)
+                              updateRule(activeHole, (rule) => ({
+                                ...rule,
+                                seasonStat: {
+                                  leagueId: rule.seasonStat?.leagueId ?? 39,
+                                  season: rule.seasonStat?.season ?? 2024,
+                                  metric: rule.seasonStat?.metric ?? 'goals',
+                                  minimum: value === ''
+                                    ? 1
+                                    : Math.trunc(Math.max(1, Math.min(1000, parsed))),
+                                },
+                              }))
+                            }}
+                          />
+                        </label>
+                      </div>
                     </div>
 
                     <div className="golf-rule-toggles">
@@ -922,27 +1078,9 @@ export function GolfEditor({
                         </label>
                       ))}
                     </div>
-                  </>
+                  </div>
                 )}
-                </div>
-              ) : (
-                <div className="golf-custom-start">
-                  <p className="muted tiny">
-                    Only use this when no verified template fits. Start broad, then add the
-                    nationality, club, league or stat filters you need.
-                  </p>
-                  <button
-                    type="button"
-                    className="ghost"
-                    disabled={mutationsDisabled}
-                    onClick={() => {
-                      updateRule(activeHole, () => ({ minPlApps: 1 }))
-                    }}
-                  >
-                    Start a custom question
-                  </button>
-                </div>
-              )}
+              </div>
             </details>
 
             {actionError && <p className="error-box">{actionError}</p>}

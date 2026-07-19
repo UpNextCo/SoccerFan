@@ -20,6 +20,7 @@ export function canonicalGolfRule(rule: TowerRule): Record<string, unknown> {
     ...(rule.nonEuropean ? { nonEuropean: true } : {}),
     ...(rule.position ? { position: rule.position } : {}),
     ...(rule.leaguePlayed ? { leaguePlayed: rule.leaguePlayed } : {}),
+    ...(rule.leaguesPlayed ? { leaguesPlayed: exactSet(rule.leaguesPlayed) } : {}),
     ...(rule.playedFor ? { playedFor: exactSet(rule.playedFor) } : {}),
     ...(typeof rule.minPlApps === 'number' ? { minPlApps: rule.minPlApps } : {}),
     ...(typeof rule.minPlAssists === 'number' ? { minPlAssists: rule.minPlAssists } : {}),

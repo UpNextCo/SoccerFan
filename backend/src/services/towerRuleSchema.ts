@@ -36,7 +36,10 @@ export const towerRuleSchema = z.object({
   nationality: boundedText.optional(),
   nonEuropean: z.literal(true).optional(),
   position: z.enum(['Goalkeeper', 'Defender']).optional(),
+  /** Single league (legacy). Prefer leaguesPlayed for new authoring. */
   leaguePlayed: boundedText.optional(),
+  /** Players must have appeared in every listed league. */
+  leaguesPlayed: z.array(boundedText).min(1).max(4).optional(),
   playedFor: z.array(boundedText).min(1).max(4).optional(),
   minPlApps: nonNegativeInt(1_000).optional(),
   minPlAssists: nonNegativeInt(1_000).optional(),
@@ -83,6 +86,23 @@ export const towerRuleSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['playedFor'],
       message: 'playedFor clubs must be unique.',
+    });
+  }
+  if (
+    rule.leaguesPlayed
+    && new Set(rule.leaguesPlayed.map((league) => league.toLowerCase())).size !== rule.leaguesPlayed.length
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['leaguesPlayed'],
+      message: 'leaguesPlayed leagues must be unique.',
+    });
+  }
+  if (rule.leaguePlayed && rule.leaguesPlayed) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['leaguesPlayed'],
+      message: 'Use leaguesPlayed or leaguePlayed, not both.',
     });
   }
   if (rule.validIds && new Set(rule.validIds).size !== rule.validIds.length) {

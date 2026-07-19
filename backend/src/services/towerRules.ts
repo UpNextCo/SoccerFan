@@ -47,8 +47,12 @@ function ruleConditions(rule: TowerRule) {
   if (typeof rule.minUclApps === 'number') c.push(sql`a.ucl_apps >= ${rule.minUclApps}`);
   if (typeof rule.minPeakValueEur === 'number') c.push(sql`a.peak_value >= ${rule.minPeakValueEur}`);
   if (typeof rule.minRecordFeeEur === 'number') c.push(sql`a.record_fee >= ${rule.minRecordFeeEur}`);
-  if (rule.leaguePlayed) {
-    c.push(sql`EXISTS (SELECT 1 FROM player_stats s2 WHERE s2.player_id = a.id AND s2.league_name = ${rule.leaguePlayed} AND s2.appearances > 0)`);
+  const leaguesRequired = [
+    ...(rule.leaguesPlayed ?? []),
+    ...(rule.leaguePlayed ? [rule.leaguePlayed] : []),
+  ];
+  for (const league of leaguesRequired) {
+    c.push(sql`EXISTS (SELECT 1 FROM player_stats s2 WHERE s2.player_id = a.id AND s2.league_name = ${league} AND s2.appearances > 0)`);
   }
   for (const club of rule.playedFor ?? []) {
     // Club affiliation = an appearance row OR a transfer in/out of the club. Transfers

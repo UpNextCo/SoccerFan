@@ -262,7 +262,7 @@ export function categoryFor(rule: TowerRule, prompt: string): string {
   if (rule.playedFor && rule.playedFor.length >= 2) return 'Clubs';
   // Geography / filter stacks read like SQL, not trivia — keep them in one bucket.
   if (rule.nationality || rule.nonEuropean) return 'Nationality';
-  if (rule.leaguePlayed) return 'Leagues';
+  if (rule.leaguePlayed || (rule.leaguesPlayed && rule.leaguesPlayed.length > 0)) return 'Leagues';
   return 'Career';
 }
 
@@ -271,7 +271,8 @@ export function isGeographyHeavyGolfRule(rule: TowerRule, category?: string): bo
   const cat = category ?? categoryFor(rule, '');
   return Boolean(rule.nationality || rule.nonEuropean)
     || cat === 'Nationality'
-    || cat === 'Leagues';
+    || cat === 'Leagues'
+    || Boolean(rule.leaguesPlayed?.length);
 }
 
 /**

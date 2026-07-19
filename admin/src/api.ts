@@ -244,6 +244,7 @@ export type GolfTowerRule = {
   nonEuropean?: true
   position?: 'Goalkeeper' | 'Defender'
   leaguePlayed?: string
+  leaguesPlayed?: string[]
   playedFor?: string[]
   minPlApps?: number
   minPlAssists?: number

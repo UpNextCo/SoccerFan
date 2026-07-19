@@ -452,6 +452,13 @@ test('dedupes Golf templates by rule and chooses the deterministic best represen
 
 test('accepts only declarative closed Tower rule fields', () => {
   assert.equal(towerRuleSchema.safeParse({ playedFor: ['Arsenal', 'Chelsea'] }).success, true);
+  assert.equal(towerRuleSchema.safeParse({
+    leaguesPlayed: ['Ligue 1', 'Bundesliga'],
+  }).success, true);
+  assert.equal(towerRuleSchema.safeParse({
+    leaguePlayed: 'Premier League',
+    leaguesPlayed: ['Ligue 1'],
+  }).success, false);
   assert.equal(towerRuleSchema.safeParse({ sql: 'SELECT * FROM players' }).success, false);
   assert.equal(towerRuleSchema.safeParse({}).success, false);
   assert.equal(towerRuleSchema.safeParse({

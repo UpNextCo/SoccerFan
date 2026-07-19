@@ -16,7 +16,7 @@ export function canonicalRuleKey(rule: SemanticGolfRule | undefined): string | n
       if (key === 'validIds' && Array.isArray(value)) {
         return [key, exactSet(value.map((item) => typeof item === 'string' ? item.toLowerCase() : item))]
       }
-      if (key === 'playedFor' && Array.isArray(value)) {
+      if ((key === 'playedFor' || key === 'leaguesPlayed') && Array.isArray(value)) {
         return [key, exactSet(value)]
       }
       return [key, value]
