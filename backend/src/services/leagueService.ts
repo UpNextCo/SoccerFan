@@ -56,6 +56,32 @@ export async function recordXp(
     });
 }
 
+export type XpByModeRow = {
+  modeId: string;
+  totalXp: number;
+  todayXp: number;
+};
+
+/** Per-mode XP for the profile breakdown (all-time + a specific day). */
+export async function xpByModeForUser(userId: string, date: string): Promise<XpByModeRow[]> {
+  const rows = (await db.execute(sql`
+    SELECT
+      mode_id AS "modeId",
+      COALESCE(SUM(xp_earned), 0)::int AS "totalXp",
+      COALESCE(SUM(CASE WHEN date = ${date} THEN xp_earned ELSE 0 END), 0)::int AS "todayXp"
+    FROM xp_ledger
+    WHERE user_id = ${userId}
+    GROUP BY mode_id
+    ORDER BY "totalXp" DESC, mode_id ASC
+  `)) as unknown as Array<{ modeId: string; totalXp: number; todayXp: number }>;
+
+  return rows.map((row) => ({
+    modeId: row.modeId,
+    totalXp: Number(row.totalXp) || 0,
+    todayXp: Number(row.todayXp) || 0,
+  }));
+}
+
 function rankRows(
   rows: Array<{
     user_id: string;

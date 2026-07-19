@@ -716,6 +716,7 @@ struct ProfileTabView: View {
     @State private var showSignOutConfirm = false
     @State private var showDeleteConfirm = false
     @State private var showIntrosResetAlert = false
+    @State private var xpBreakdownScope: ProfileXpScope?
 
     private var displayName: String {
         LocalProfile.nameOverride ?? auth.user?.displayName ?? "Player"
@@ -805,6 +806,14 @@ struct ProfileTabView: View {
                 Task { await auth.deleteAccount(context: modelContext) }
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .sheet(item: $xpBreakdownScope) { scope in
+            ProfileXpBreakdownView(
+                scope: scope,
+                headerTotal: scope == .total ? (auth.user?.xp ?? 0) : (auth.user?.todayXp ?? 0)
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -912,11 +921,25 @@ struct ProfileTabView: View {
 
     private var statsCard: some View {
         HStack(spacing: 0) {
-            stat(value: "\(auth.user?.xp ?? 0)", label: "TOTAL XP", icon: "bolt.fill", tint: BKTheme.accent)
+            Button {
+                xpBreakdownScope = .total
+            } label: {
+                stat(value: "\(auth.user?.xp ?? 0)", label: "TOTAL XP", icon: "bolt.fill", tint: BKTheme.accent)
+            }
+            .buttonStyle(.plain)
+
             divider
+
             stat(value: "\(auth.user?.streak ?? 0)", label: "DAY STREAK", icon: "flame.fill", tint: BKTheme.streak)
+
             divider
-            stat(value: "\(auth.user?.todayXp ?? 0)", label: "XP TODAY", icon: "calendar", tint: BKTheme.textPrimary)
+
+            Button {
+                xpBreakdownScope = .today
+            } label: {
+                stat(value: "\(auth.user?.todayXp ?? 0)", label: "XP TODAY", icon: "calendar", tint: BKTheme.textPrimary)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, 18)
         .background(BKTheme.card)
@@ -936,6 +959,7 @@ struct ProfileTabView: View {
                 .foregroundStyle(BKTheme.textMuted)
         }
         .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
     }
 
     private var divider: some View {

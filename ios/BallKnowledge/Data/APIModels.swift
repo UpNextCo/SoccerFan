@@ -24,6 +24,19 @@ struct UserProfileDTO: Codable, Equatable {
     var favoriteTeamId: Int?
 }
 
+struct XpByModeRowDTO: Codable, Identifiable, Equatable {
+    let modeId: String
+    let totalXp: Int
+    let todayXp: Int
+
+    var id: String { modeId }
+}
+
+struct XpByModeResponseDTO: Codable, Equatable {
+    let date: String
+    let modes: [XpByModeRowDTO]
+}
+
 struct TeamSearchResultDTO: Codable, Identifiable {
     let id: Int
     let name: String

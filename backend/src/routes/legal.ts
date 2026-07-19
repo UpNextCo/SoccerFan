@@ -99,7 +99,7 @@ legalRouter.get('/privacy', (_req, res) => {
     <p>You can change your display name, club and profile photo in the app. You can delete your account from the Profile screen; this permanently removes the account and associated personal information, subject to limited legal or security retention requirements. You may also contact us to request access, correction or deletion.</p>
 
     <h2>Children</h2>
-    <p>Ball Knowledge is not directed to children under 13. If you believe a child has provided personal information without appropriate permission, contact us.</p>
+    <p>Ball Knowledge is a family friendly game. There is no age restriction, but we do not recommend it for children under 4.</p>
 
     <h2>Security and international processing</h2>
     <p>We use reasonable technical and organisational measures to protect information. Our providers may process information outside your country, with protections appropriate to the service and applicable law.</p>

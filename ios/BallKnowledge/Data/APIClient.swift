@@ -112,6 +112,11 @@ actor APIClient {
         return try await request("auth/me", queryItems: [URLQueryItem(name: "date", value: date)])
     }
 
+    func xpByMode(localDate: String? = nil) async throws -> XpByModeResponseDTO {
+        let date = localDate ?? DailyDate.localToday()
+        return try await request("auth/me/xp-by-mode", queryItems: [URLQueryItem(name: "date", value: date)])
+    }
+
     func updateDisplayName(_ displayName: String) async throws -> UserProfileDTO {
         struct Body: Encodable { let displayName: String }
         return try await request("auth/me", method: "PATCH", body: Body(displayName: displayName))
