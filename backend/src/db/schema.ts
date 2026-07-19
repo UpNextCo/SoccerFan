@@ -321,7 +321,7 @@ export const opsMedia = pgTable(
   },
   (table) => [
     index('ops_media_kind_created_idx').on(table.kind, table.createdAt),
-    check('ops_media_kind_check', sql`${table.kind} = 'lms_custom_image'`),
+    check('ops_media_kind_check', sql`${table.kind} IN ('lms_custom_image', 'player_headshot')`),
     check(
       'ops_media_mime_type_check',
       sql`${table.mimeType} IN ('image/jpeg', 'image/png', 'image/webp')`

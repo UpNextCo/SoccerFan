@@ -22,3 +22,7 @@ export async function getPhotoOverrides(): Promise<Map<string, string>> {
     return new Map();
   }
 }
+
+export function clearPhotoOverridesCache(): void {
+  cache = null;
+}

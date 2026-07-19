@@ -523,6 +523,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  listPlayerPhotoOverrides: (limit = 40) =>
+    request<{ players: AdminPlayerPhoto[] }>(
+      `/player-photos/overrides?limit=${encodeURIComponent(String(limit))}`
+    ),
+  getPlayerPhoto: (playerId: string) =>
+    request<AdminPlayerPhoto>(`/player-photos/${encodeURIComponent(playerId)}`),
+  setPlayerPhoto: (
+    playerId: string,
+    body: { fileBase64: string; mimeType: string; filename?: string }
+  ) =>
+    request<AdminPlayerPhoto>(`/player-photos/${encodeURIComponent(playerId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  clearPlayerPhoto: (playerId: string) =>
+    request<AdminPlayerPhoto>(`/player-photos/${encodeURIComponent(playerId)}`, {
+      method: 'DELETE',
+    }),
   listGolfTemplates: (q = '', limit = 80) =>
     request<AdminGolfTemplate[]>(
       `/validation/golf/templates?q=${encodeURIComponent(q)}&limit=${encodeURIComponent(String(limit))}`
@@ -582,6 +600,17 @@ export type AdminPlayerHit = {
   position: string
   headshotUrl?: string
   teamLogoUrl?: string
+}
+
+export type AdminPlayerPhoto = {
+  id: string
+  name: string
+  club: string
+  nationality: string
+  position: string
+  photoUrl: string | null
+  headshotUrl: string | null
+  hasCustomPhoto: boolean
 }
 
 export type AdminTeamHit = {

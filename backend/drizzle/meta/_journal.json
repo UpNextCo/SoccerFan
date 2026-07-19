@@ -106,6 +106,13 @@
       "when": 1784106000000,
       "tag": "0020_ops_media",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1784486400000,
+      "tag": "0021_ops_media_player_headshot",
+      "breakpoints": true
     }
   ]
 }

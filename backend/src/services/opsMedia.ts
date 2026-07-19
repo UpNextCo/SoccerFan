@@ -8,11 +8,14 @@ export function opsMediaPublicUrl(id: string): string {
   return `${publicApiBaseUrl()}/media/${id}`;
 }
 
+export type OpsMediaKind = 'lms_custom_image' | 'player_headshot';
+
 export async function createOpsImage(input: {
   fileBase64: string;
   suppliedMimeType: string;
   filename?: string;
   createdBy: string;
+  kind?: OpsMediaKind;
 }): Promise<{ id: string; url: string; mimeType: OpsImageMimeType; size: number; filename?: string }> {
   const decoded = decodeOpsImageBase64(input.fileBase64);
   if (input.suppliedMimeType !== decoded.mimeType) {
@@ -23,7 +26,7 @@ export async function createOpsImage(input: {
   const [row] = await db
     .insert(opsMedia)
     .values({
-      kind: 'lms_custom_image',
+      kind: input.kind ?? 'lms_custom_image',
       mimeType: decoded.mimeType,
       bytes: decoded.bytes,
       size: decoded.bytes.length,
