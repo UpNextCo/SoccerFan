@@ -12,6 +12,7 @@ import {
   teamLeaderboard,
   weeklyLeaderboard,
   weekStartFor,
+  xpByModeBreakdownForUser,
 } from '../services/leagueService.js';
 
 export const leaguesRouter = Router();
@@ -64,6 +65,23 @@ leaguesRouter.get('/teams/:teamId', requireAuth, async (req, res) => {
     sendSuccess(res, { teamId, standings: await teamFans(teamId) });
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load team fans', 500);
+  }
+});
+
+leaguesRouter.get('/players/:userId/xp-by-mode', requireAuth, async (req, res) => {
+  const userId = String(req.params.userId || '');
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) {
+    sendError(res, 'Invalid user id', 400, 'VALIDATION_ERROR');
+    return;
+  }
+  const date =
+    typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+      ? req.query.date
+      : todayUTC();
+  try {
+    sendSuccess(res, await xpByModeBreakdownForUser(userId, date));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to load XP by mode', 500);
   }
 });
 

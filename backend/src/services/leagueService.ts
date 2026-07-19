@@ -82,6 +82,38 @@ export async function xpByModeForUser(userId: string, date: string): Promise<XpB
   }));
 }
 
+const PLAYABLE_MODE_IDS = [
+  'football_bingo',
+  'one_more',
+  'draft_master',
+  'football_golf',
+  'club_chain',
+  'target_man',
+  'last_man_standing',
+] as const;
+
+/** Playable modes first (zeros filled), then any legacy modes with XP. */
+export async function xpByModeBreakdownForUser(
+  userId: string,
+  date: string
+): Promise<{ date: string; modes: XpByModeRow[] }> {
+  const earned = await xpByModeForUser(userId, date);
+  const byMode = new Map(earned.map((row) => [row.modeId, row]));
+  const playable = new Set<string>(PLAYABLE_MODE_IDS);
+  const modes: XpByModeRow[] = PLAYABLE_MODE_IDS.map((modeId) => {
+    const row = byMode.get(modeId);
+    return {
+      modeId,
+      totalXp: row?.totalXp ?? 0,
+      todayXp: row?.todayXp ?? 0,
+    };
+  });
+  for (const row of earned) {
+    if (!playable.has(row.modeId)) modes.push(row);
+  }
+  return { date, modes };
+}
+
 function rankRows(
   rows: Array<{
     user_id: string;

@@ -8,8 +8,7 @@ import {
   setUserAvatar,
   updateUserProfile,
 } from '../services/authService.js';
-import { xpByModeForUser } from '../services/leagueService.js';
-import { DAILY_PLAYABLE_MODES } from '../services/dailyService.js';
+import { xpByModeBreakdownForUser } from '../services/leagueService.js';
 import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
 
 export const authRouter = Router();
@@ -88,23 +87,7 @@ authRouter.get('/me/xp-by-mode', requireAuth, async (req, res) => {
       ? req.query.date
       : new Date().toISOString().slice(0, 10);
   try {
-    const earned = await xpByModeForUser(req.auth!.userId, date);
-    const byMode = new Map(earned.map((row) => [row.modeId, row]));
-    const playable = new Set<string>(DAILY_PLAYABLE_MODES);
-    const modes: Array<{ modeId: string; totalXp: number; todayXp: number }> =
-      DAILY_PLAYABLE_MODES.map((modeId) => {
-        const row = byMode.get(modeId);
-        return {
-          modeId,
-          totalXp: row?.totalXp ?? 0,
-          todayXp: row?.todayXp ?? 0,
-        };
-      });
-    // Include any retired/legacy modes that still have ledger XP.
-    for (const row of earned) {
-      if (!playable.has(row.modeId)) modes.push(row);
-    }
-    sendSuccess(res, { date, modes });
+    sendSuccess(res, await xpByModeBreakdownForUser(req.auth!.userId, date));
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load XP by mode', 500);
   }

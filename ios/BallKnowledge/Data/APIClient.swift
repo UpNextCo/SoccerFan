@@ -387,6 +387,19 @@ actor APIClient {
         try await request("leagues/overall")
     }
 
+    func leaguesDaily(localDate: String? = nil) async throws -> PlayerStandingsDTO {
+        let date = localDate ?? DailyDate.localToday()
+        return try await request("leagues/daily", queryItems: [URLQueryItem(name: "date", value: date)])
+    }
+
+    func leaguePlayerXpByMode(userId: String, localDate: String? = nil) async throws -> XpByModeResponseDTO {
+        let date = localDate ?? DailyDate.localToday()
+        return try await request(
+            "leagues/players/\(userId)/xp-by-mode",
+            queryItems: [URLQueryItem(name: "date", value: date)]
+        )
+    }
+
     func leaguesTeams() async throws -> TeamStandingsDTO {
         try await request("leagues/teams")
     }

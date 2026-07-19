@@ -80,6 +80,7 @@ struct MainTabView: View {
 
 enum LeagueScope: String, CaseIterable, Identifiable {
     case overall = "Overall"
+    case today = "Today"
     case teams = "Teams"
     var id: String { rawValue }
 }
@@ -103,6 +104,11 @@ final class LeaguesViewModel {
                 players = result.standings
                 teams = []
                 caption = "All-time XP leaders"
+            case .today:
+                let result = try await APIClient.shared.leaguesDaily()
+                players = result.standings
+                teams = []
+                caption = "Today's XP leaders"
             case .teams:
                 let result = try await APIClient.shared.leaguesTeams()
                 teams = result.standings
@@ -184,10 +190,12 @@ struct LeaguesTabView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 8) {
                         ForEach(viewModel.players) { player in
-                            PlayerStandingRow(
+                            ExpandablePlayerStandingRow(
                                 player: player,
+                                scope: scope,
                                 isCurrentUser: player.userId == auth.user?.id
                             )
+                            .id("\(scope.rawValue)-\(player.userId)")
                         }
                     }
                     .padding(.horizontal, 16)
@@ -217,9 +225,112 @@ struct LeaguesTabView: View {
     }
 }
 
+struct ExpandablePlayerStandingRow: View {
+    let player: PlayerStandingDTO
+    let scope: LeagueScope
+    var isCurrentUser = false
+
+    @State private var isExpanded = false
+    @State private var modes: [XpByModeRowDTO] = []
+    @State private var isLoadingModes = false
+    @State private var didLoadModes = false
+
+    private var canExpand: Bool {
+        scope == .overall || scope == .today
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                guard canExpand else { return }
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    isExpanded.toggle()
+                }
+                if isExpanded, !didLoadModes {
+                    Task { await loadModes() }
+                }
+            } label: {
+                PlayerStandingRow(
+                    player: player,
+                    isCurrentUser: isCurrentUser,
+                    showsChevron: canExpand,
+                    isExpanded: isExpanded
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canExpand)
+
+            if isExpanded {
+                VStack(spacing: 0) {
+                    if isLoadingModes && modes.isEmpty {
+                        ProgressView()
+                            .tint(BKTheme.accent)
+                            .padding(.vertical, 12)
+                    } else if displayModes.isEmpty {
+                        Text(scope == .today ? "No XP earned today" : "No game XP yet")
+                            .font(BKFont.caption(11))
+                            .foregroundStyle(BKTheme.textMuted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                    } else {
+                        ForEach(displayModes) { row in
+                            LeaguePlayerXpGameRow(
+                                modeId: row.modeId,
+                                xp: scope == .today ? row.todayXp : row.totalXp
+                            )
+                        }
+                    }
+                }
+                .padding(.top, 2)
+                .padding(.bottom, 6)
+                .padding(.horizontal, 8)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .background(isCurrentUser ? BKTheme.cardElevated : BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isCurrentUser ? BKTheme.accent.opacity(0.6) : .clear, lineWidth: 1.5)
+        )
+        .onChange(of: scope) { _, _ in
+            isExpanded = false
+            modes = []
+            didLoadModes = false
+        }
+    }
+
+    private var displayModes: [XpByModeRowDTO] {
+        modes
+            .filter { scope == .today ? $0.todayXp > 0 : $0.totalXp > 0 }
+            .sorted { lhs, rhs in
+                let left = scope == .today ? lhs.todayXp : lhs.totalXp
+                let right = scope == .today ? rhs.todayXp : rhs.totalXp
+                if left != right { return left > right }
+                return lhs.modeId < rhs.modeId
+            }
+    }
+
+    private func loadModes() async {
+        isLoadingModes = true
+        defer { isLoadingModes = false }
+        do {
+            let result = try await APIClient.shared.leaguePlayerXpByMode(userId: player.userId)
+            modes = result.modes
+            didLoadModes = true
+        } catch {
+            modes = []
+            didLoadModes = false
+        }
+    }
+}
+
 struct PlayerStandingRow: View {
     let player: PlayerStandingDTO
     var isCurrentUser = false
+    var showsChevron = false
+    var isExpanded = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -247,15 +358,17 @@ struct PlayerStandingRow: View {
                     .font(BKFont.headline(14))
                     .foregroundStyle(BKTheme.textPrimary)
             }
+
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(BKTheme.textMuted)
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(isCurrentUser ? BKTheme.cardElevated : BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(isCurrentUser ? BKTheme.accent.opacity(0.6) : .clear, lineWidth: 1.5)
-        )
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -279,6 +392,57 @@ struct PlayerStandingRow: View {
     private var nameText: String {
         let base = isCurrentUser ? (LocalProfile.nameOverride ?? player.displayName) : player.displayName
         return isCurrentUser ? "\(base) (You)" : base
+    }
+}
+
+private struct LeaguePlayerXpGameRow: View {
+    let modeId: String
+    let xp: Int
+
+    private let iconSize: CGFloat = 36
+    private let iconCornerRadius: CGFloat = 9
+
+    private var normalizedModeId: String {
+        GameModeCatalog.normalizedModeId(modeId)
+    }
+
+    private var tileArtImageName: String? {
+        GameModeTileArt.bundleImageName(for: normalizedModeId)
+    }
+
+    private var title: String {
+        GameModeID(rawValue: normalizedModeId)?.title
+            ?? normalizedModeId.replacingOccurrences(of: "_", with: " ").uppercased()
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                BKTheme.tileIconBackdrop
+                if let tileArtImageName {
+                    GameModeBundleImage(name: tileArtImageName)
+                        .scaledToFill()
+                        .frame(width: iconSize, height: iconSize, alignment: .top)
+                        .scaleEffect(BKTheme.tileIconScale)
+                        .brightness(BKTheme.tileIconBrightness)
+                }
+            }
+            .frame(width: iconSize, height: iconSize)
+            .clipShape(RoundedRectangle(cornerRadius: iconCornerRadius, style: .continuous))
+
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(BKTheme.textPrimary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Text("\(xp.formatted()) XP")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(BKTheme.accent)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
     }
 }
 
@@ -930,16 +1094,16 @@ struct ProfileTabView: View {
 
             divider
 
-            stat(value: "\(auth.user?.streak ?? 0)", label: "DAY STREAK", icon: "flame.fill", tint: BKTheme.streak)
-
-            divider
-
             Button {
                 xpBreakdownScope = .today
             } label: {
                 stat(value: "\(auth.user?.todayXp ?? 0)", label: "XP TODAY", icon: "calendar", tint: BKTheme.textPrimary)
             }
             .buttonStyle(.plain)
+
+            divider
+
+            stat(value: "\(auth.user?.streak ?? 0)", label: "DAY STREAK", icon: "flame.fill", tint: BKTheme.streak)
         }
         .padding(.vertical, 18)
         .background(BKTheme.card)
