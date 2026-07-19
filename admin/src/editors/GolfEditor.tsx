@@ -106,21 +106,18 @@ function rarityLabel(rarity: (typeof RARITIES)[number]): string {
 }
 
 function EvaluationSummary({ evaluation }: { evaluation: GolfRuleEvaluation }) {
+  const examples = evaluation.answers.slice(0, 5).map((answer) => answer.name).join(', ')
   return (
     <div className="golf-evaluation">
       <div className="golf-counts">
-        <span><strong>{evaluation.counts.total}</strong> possible answers</span>
-        <span><strong>{evaluation.counts.nameable}</strong> well-known answers</span>
-        <span><strong>{evaluation.suggestedPar}</strong> suggested par</span>
-        <span><strong>{evaluation.suggestedTarget}</strong> target</span>
+        <span><strong>{evaluation.counts.total}</strong> answers</span>
+        <span><strong>{evaluation.counts.nameable}</strong> well-known</span>
+        <span>Par <strong>{evaluation.suggestedPar}</strong></span>
       </div>
-      <p className="muted tiny">
-        Rarity: {evaluation.counts.rarity.common} common · {evaluation.counts.rarity.uncommon} uncommon
-        {' · '}{evaluation.counts.rarity.rare} rare · {evaluation.counts.rarity.ultraRare} ultra rare
-      </p>
-      <p className="tiny">
-        <strong>For example:</strong>{' '}
-        {evaluation.answers.slice(0, 8).map((answer) => answer.name).join(', ') || 'No matching players'}
+      {examples && <p className="tiny muted">e.g. {examples}</p>}
+      <p className="tiny muted">
+        {evaluation.counts.rarity.common} common · {evaluation.counts.rarity.uncommon} uncommon
+        {' · '}{evaluation.counts.rarity.rare} rare · {evaluation.counts.rarity.ultraRare} ultra
       </p>
       {evaluation.qualityWarnings.map((warning) => (
         <p className="warning-box tiny" key={warning}>{warning}</p>
@@ -596,39 +593,99 @@ export function GolfEditor({
           </nav>
 
           {activeHole && (
-        <article key={activeHole.holeNumber} className="editor-clean-section">
-          <header>
+        <article key={activeHole.holeNumber} className="editor-clean-section golf-hole">
+          <header className="golf-hole-header">
             <strong>
               Hole {activeHole.holeNumber} · par {activeHole.par}
             </strong>
-            <div className="button-row">
-              <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled || activeIndex === 0} onClick={() => moveHole(-1)}>← Move</button>
-              <button type="button" className="ghost tiny-btn" disabled={mutationsDisabled || activeIndex === holes.length - 1} onClick={() => moveHole(1)}>Move →</button>
+            <div className="golf-hole-move">
+              <button
+                type="button"
+                className="ghost tiny-btn"
+                disabled={mutationsDisabled || activeIndex === 0}
+                onClick={() => moveHole(-1)}
+                aria-label="Move hole earlier"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                className="ghost tiny-btn"
+                disabled={mutationsDisabled || activeIndex === holes.length - 1}
+                onClick={() => moveHole(1)}
+                aria-label="Move hole later"
+              >
+                →
+              </button>
             </div>
           </header>
+
+          <label className="field golf-prompt-field">
+            Question
+            <textarea
+              rows={2}
+              value={activeHole.prompt}
+              disabled={mutationsDisabled}
+              onChange={(e) => {
+                updateHole(activeHole.holeNumber, { prompt: e.target.value })
+                setEvaluationState((current) => current?.holeKey === activeKey ? null : current)
+              }}
+            />
+          </label>
+
+          <div className="golf-meta-row">
+            <label className="field">
+              Category
+              <input
+                value={activeHole.category ?? ''}
+                disabled={mutationsDisabled}
+                onChange={(event) => updateHole(activeHole.holeNumber, { category: event.target.value })}
+              />
+            </label>
+            <label className="field">
+              Par
+              <input
+                type="number"
+                value={activeHole.par}
+                disabled={mutationsDisabled}
+                min={2}
+                max={4}
+                onChange={(e) => updateHole(activeHole.holeNumber, { par: Number(e.target.value) })}
+              />
+            </label>
+            <label className="field">
+              Target
+              <input
+                type="number"
+                value={activeHole.target ?? ''}
+                disabled={mutationsDisabled}
+                min={1}
+                max={4}
+                onChange={(e) =>
+                  updateHole(activeHole.holeNumber, {
+                    target: e.target.value === '' ? undefined : Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+          </div>
+
           <section className="golf-rule-composer" aria-labelledby="golf-rule-heading">
             <div className="golf-section-heading">
               <div>
-                <h3 id="golf-rule-heading">Choose the question</h3>
-                <p className="muted tiny">
-                  Pick a season, club-era, career or tournament question. Answers and suggested
-                  par fill in automatically; Run checks on the right validates the course.
-                </p>
+                <h3 id="golf-rule-heading">Change question</h3>
+                <p className="muted tiny">Swap a template to update the answer set.</p>
               </div>
-              <span className={`golf-rule-status ${activeHole.rule ? 'structured' : 'legacy'}`}>
-                {activeHole.rule ? 'Verified' : 'Needs a question'}
-              </span>
             </div>
 
             {!activeHole.rule && (
               <p className="warning-box">
-                This older hole has no checked question attached. Choose one below before
-                approving the course.
+                This hole needs a template before it can be approved.
               </p>
             )}
 
             <label className="field golf-template-select">
-              Question template
+              Template
               <select
                 value=""
                 disabled={mutationsDisabled || templatesBusy || availableTemplates.length === 0}
@@ -656,24 +713,20 @@ export function GolfEditor({
               </select>
             </label>
 
-            {activeHole.templateId && (
+            {!activeEvaluation && activeTemplate && (
               <div className="golf-template-meta">
-                <strong>Selected question:</strong>{' '}
-                {activeTemplate?.prompt ?? activeHole.prompt}
-                {activeTemplate && (
-                  <p className="tiny">
-                    {activeTemplate.validAnswers} possible answers
-                    {activeTemplate.sampleAnswers.length > 0
-                      ? ` (${activeTemplate.sampleAnswers.slice(0, 6).join(', ')}${activeTemplate.sampleAnswers.length > 6 ? ', etc.' : ''})`
-                      : ''}
-                  </p>
-                )}
+                <p className="tiny">
+                  <strong>{activeTemplate.validAnswers}</strong> possible answers
+                  {activeTemplate.sampleAnswers.length > 0
+                    ? ` · e.g. ${activeTemplate.sampleAnswers.slice(0, 5).join(', ')}`
+                    : ''}
+                </p>
               </div>
             )}
 
             <details className="advanced-panel golf-custom-rule">
-              <summary>Advanced</summary>
-              <h4>Create a custom question</h4>
+              <summary>Custom rule</summary>
+              <h4>Build your own question</h4>
               {activeHole.rule ? (
                 <div className="golf-rule-builder">
                 {activeHole.rule.validIds ? (
@@ -913,68 +966,16 @@ export function GolfEditor({
             )}
             {answersStale && !activeAnswerUpdate && (
               <p className="golf-stale-warning">
-                Possible answers are out of date. Adjust the question settings or re-select a
-                template, then use Run checks before approving.
+                Answers are out of date. Re-select a template, then Run checks.
               </p>
             )}
             {activeEvaluation && <EvaluationSummary evaluation={activeEvaluation} />}
           </section>
 
-          <label className="field">
-            Question
-            <textarea
-              rows={2}
-              value={activeHole.prompt}
-              disabled={mutationsDisabled}
-              onChange={(e) => {
-                updateHole(activeHole.holeNumber, { prompt: e.target.value })
-                setEvaluationState((current) => current?.holeKey === activeKey ? null : current)
-              }}
-            />
-            <span className="muted tiny">You can adjust the wording without changing who qualifies.</span>
-          </label>
-          <label className="field">
-            Category
-            <input
-              value={activeHole.category ?? ''}
-              disabled={mutationsDisabled}
-              onChange={(event) => updateHole(activeHole.holeNumber, { category: event.target.value })}
-            />
-          </label>
-          <div className="row">
-            <label className="field">
-              Par
-              <input
-                type="number"
-                value={activeHole.par}
-                disabled={mutationsDisabled}
-                min={2}
-                max={4}
-                onChange={(e) => updateHole(activeHole.holeNumber, { par: Number(e.target.value) })}
-              />
-            </label>
-            <label className="field">
-              Target
-              <input
-                type="number"
-                value={activeHole.target ?? ''}
-                disabled={mutationsDisabled}
-                min={1}
-                max={4}
-                onChange={(e) =>
-                  updateHole(activeHole.holeNumber, {
-                    target: e.target.value === '' ? undefined : Number(e.target.value),
-                  })
-                }
-              />
-            </label>
-          </div>
-          <details className="advanced-panel">
-            <summary>Advanced</summary>
-            <h4>Manual possible answers ({activeHole.answers.length})</h4>
+          <details className="advanced-panel golf-answers-advanced">
+            <summary>Manual answers ({activeHole.answers.length})</summary>
             <p className="warning-box">
-              Manual changes can become inaccurate. Prefer re-selecting a template; Run checks
-              will catch answer mismatches.
+              Prefer templates. Run checks will catch answer mismatches.
             </p>
           <fieldset disabled={mutationsDisabled} className="options">
             <legend>Possible answers</legend>

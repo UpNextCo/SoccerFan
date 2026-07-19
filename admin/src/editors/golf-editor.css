@@ -1,6 +1,55 @@
+.golf-hole {
+  display: grid;
+  gap: 1.35rem;
+  padding-top: 0.85rem;
+}
+
+.golf-hole-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.golf-hole-header strong {
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.golf-hole-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.golf-hole-move .tiny-btn {
+  min-width: 2.1rem;
+  justify-content: center;
+}
+
+.golf-prompt-field textarea {
+  min-height: 4.5rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.45;
+  padding: 0.85rem 0.95rem;
+}
+
+.golf-hole .field {
+  gap: 0.45rem;
+}
+
+.golf-meta-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(88px, 0.55fr));
+  gap: 1rem;
+}
+
 .golf-rule-composer {
-  margin: 0.9rem 0 1rem;
-  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 1.15rem 1.2rem;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #faf7f0;
@@ -18,10 +67,14 @@
 
 .golf-section-heading {
   justify-content: space-between;
-  margin-bottom: 0.8rem;
+  margin: 0;
 }
 
-.golf-section-heading h3,
+.golf-section-heading h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
 .golf-section-heading p,
 .golf-template-meta p,
 .golf-evaluation p,
@@ -29,27 +82,12 @@
   margin: 0;
 }
 
-.golf-rule-status {
-  padding: 0.3rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.golf-rule-status.structured {
-  color: #245832;
-  background: #dff2e3;
-}
-
-.golf-rule-status.legacy {
-  color: #72520c;
-  background: #fff0b8;
+.golf-section-heading p {
+  margin-top: 0.3rem;
 }
 
 .golf-template-select {
-  margin: 0.4rem 0 0.8rem;
+  margin: 0;
 }
 
 .golf-template-picker {
@@ -101,33 +139,34 @@
 .golf-template-meta,
 .golf-evaluation,
 .golf-validation {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
+  margin: 0;
+  padding: 0.9rem 1rem;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: #fff;
 }
 
 .golf-rule-builder {
-  margin-top: 0.8rem;
-  padding-top: 0.8rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
   border-top: 1px solid var(--line);
 }
 
-.golf-custom-rule {
-  margin-top: 0.75rem;
+.golf-custom-rule,
+.golf-answers-advanced {
+  margin: 0;
 }
 
 .golf-custom-start {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.75rem;
   padding-top: 0.75rem;
 }
 
 .golf-rule-grid,
 .golf-threshold-grid {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.85rem;
 }
 
 .golf-rule-grid {
@@ -136,7 +175,7 @@
 
 .golf-threshold-grid {
   grid-template-columns: repeat(3, minmax(170px, 1fr));
-  margin-top: 0.8rem;
+  margin-top: 0.85rem;
 }
 
 .golf-rule-grid .entity-picker {
@@ -144,7 +183,7 @@
 }
 
 .golf-rule-toggles {
-  margin-top: 0.8rem;
+  margin-top: 0.85rem;
 }
 
 .golf-rule-toggles label {
@@ -169,12 +208,12 @@
 }
 
 .golf-rule-actions {
-  margin-top: 0.9rem;
+  margin-top: 0.25rem;
 }
 
 .golf-counts {
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.55rem;
 }
 
 .golf-counts span {
@@ -182,8 +221,8 @@
 }
 
 .golf-stale-warning {
-  margin: 0.7rem 0 0;
-  padding: 0.6rem 0.75rem;
+  margin: 0;
+  padding: 0.7rem 0.85rem;
   border: 1px solid #d69e32;
   border-left-width: 4px;
   border-radius: 8px;
@@ -193,7 +232,7 @@
 }
 
 .golf-answer-update {
-  margin: 0.7rem 0 0;
+  margin: 0;
   color: var(--muted);
   font-weight: 700;
 }
@@ -207,7 +246,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-top: 0.7rem;
+  margin: 0;
 }
 
 .golf-validation.valid {
@@ -222,7 +261,12 @@
   background: #fff0f0;
 }
 
+.mode-editor .hole-nav {
+  margin-bottom: 0.25rem;
+}
+
 @media (max-width: 850px) {
+  .golf-meta-row,
   .golf-template-picker,
   .golf-rule-grid,
   .golf-threshold-grid {
