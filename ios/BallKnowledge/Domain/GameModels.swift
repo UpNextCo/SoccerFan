@@ -452,12 +452,16 @@ enum DailyXP {
         }
     }
 
-    /// Club Chain: medal by moves vs par (gold 1000 / silver 750 / bronze 500 / fail 0).
-    static func clubChain(reached: Bool, moves: Int, par: Int) -> Int {
+    /// Club Chain: medal by moves vs par, then −150 XP per wrong guess (gold 1000 / silver 750 / bronze 500).
+    static let clubChainMistakeCost = 150
+
+    static func clubChain(reached: Bool, moves: Int, par: Int, mistakes: Int = 0) -> Int {
         guard reached else { return 0 }
-        if moves <= par { return 1000 }
-        if moves <= par + 2 { return 750 }
-        return 500
+        let base: Int
+        if moves <= par { base = 1000 }
+        else if moves <= par + 2 { base = 750 }
+        else { base = 500 }
+        return max(0, base - max(0, mistakes) * clubChainMistakeCost)
     }
 
     /// Last Man Standing: 90 XP per question survived (partial credit on loss); full clear = 900.

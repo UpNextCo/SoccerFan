@@ -79,11 +79,20 @@ function bingoXp(filled: number, tiles: number, remaining: number, queueSize: nu
   }
 }
 
-function clubChainXp(reached: boolean, moves: number, par: number): number {
+/** Mirrors ios DailyXP.clubChainMistakeCost — deducted from medal XP per wrong guess. */
+export const CLUB_CHAIN_MISTAKE_COST = 150;
+
+export function clubChainXp(
+  reached: boolean,
+  moves: number,
+  par: number,
+  mistakes = 0
+): number {
   if (!reached) return 0;
-  if (moves <= par) return 1000;
-  if (moves <= par + 2) return 750;
-  return 500;
+  let base = 500;
+  if (moves <= par) base = 1000;
+  else if (moves <= par + 2) base = 750;
+  return Math.max(0, base - Math.max(0, mistakes) * CLUB_CHAIN_MISTAKE_COST);
 }
 
 // ---- Blind Rank -----------------------------------------------------------------------------
@@ -351,10 +360,11 @@ async function scoreTargetMan(row: PuzzleRow, answer: unknown): Promise<ServerSc
 }
 
 // ---- Club Chain ------------------------------------------------------------------------------
-// answer: { steps: string[], won: boolean }
+// answer: { steps: string[], won: boolean, mistakes?: number }
 async function scoreClubChain(row: PuzzleRow, answer: unknown): Promise<ServerScore | null> {
   const steps = (answer as { steps?: unknown })?.steps;
   const won = (answer as { won?: unknown })?.won === true;
+  const mistakesRaw = (answer as { mistakes?: unknown })?.mistakes;
   if (!Array.isArray(steps) || steps.some((x) => typeof x !== 'string')) return null;
 
   const puzzle = row.puzzleJson as {
@@ -362,6 +372,7 @@ async function scoreClubChain(row: PuzzleRow, answer: unknown): Promise<ServerSc
     target?: { id?: string };
     shortestPathLength?: number;
     maxMoves?: number;
+    mistakesAllowed?: number;
   };
   const answerMeta = row.answerJson as { shortestPathLength?: number } | null;
   const startId = puzzle.start?.id;
@@ -372,10 +383,22 @@ async function scoreClubChain(row: PuzzleRow, answer: unknown): Promise<ServerSc
   if (typeof parEdges !== 'number' || parEdges < 1) return null;
   const parMoves = Math.max(1, parEdges - 1);
   const maxMoves = typeof puzzle.maxMoves === 'number' ? puzzle.maxMoves : parMoves + 4;
+  const mistakesAllowed = typeof puzzle.mistakesAllowed === 'number' ? puzzle.mistakesAllowed : 3;
+
+  let mistakes = 0;
+  if (mistakesRaw !== undefined) {
+    if (typeof mistakesRaw !== 'number' || !Number.isInteger(mistakesRaw) || mistakesRaw < 0) {
+      return null;
+    }
+    mistakes = Math.min(mistakesRaw, mistakesAllowed);
+  }
 
   if (!won) {
     return { score: 0, won: false };
   }
+
+  // A win requires at least one life left, so mistakes must be below the cap.
+  if (mistakes >= mistakesAllowed) return { score: 0, won: false };
 
   const path = [startId, ...(steps as string[]), targetId];
   if (steps.length > maxMoves) return { score: 0, won: false };
@@ -386,7 +409,7 @@ async function scoreClubChain(row: PuzzleRow, answer: unknown): Promise<ServerSc
   }
 
   return {
-    score: clubChainXp(true, steps.length, parMoves),
+    score: clubChainXp(true, steps.length, parMoves, mistakes),
     won: true,
   };
 }

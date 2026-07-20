@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  clubChainXp,
   golfHoleXp,
   resolveCompletionScore,
   scoreFootballGolf,
@@ -112,4 +113,12 @@ test('legacy Football Golf completion without an answer still uses clamped fallb
     ),
     { score: 800, won: true }
   );
+});
+
+test('Club Chain XP deducts 150 per wrong guess from medal base', () => {
+  assert.equal(clubChainXp(true, 2, 2, 0), 1000);
+  assert.equal(clubChainXp(true, 2, 2, 1), 850);
+  assert.equal(clubChainXp(true, 2, 2, 2), 700);
+  assert.equal(clubChainXp(true, 4, 2, 1), 600); // silver 750 - 150
+  assert.equal(clubChainXp(false, 2, 2, 3), 0);
 });

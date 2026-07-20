@@ -115,7 +115,7 @@ enum ClubChainMedal: String, Codable {
         }
     }
 
-    /// Medal XP (this IS the XP banked): gold 1000 / silver 750 / bronze 500 / none 0.
+    /// Base medal XP before wrong-guess deductions: gold 1000 / silver 750 / bronze 500 / none 0.
     var points: Int {
         switch self {
         case .gold: return 1000
@@ -172,6 +172,9 @@ struct ClubChainGameState: Codable, Equatable {
 
     var movesRemaining: Int { max(0, puzzle.maxMoves - steps.count) }
 
+    /// Wrong guesses spent (each costs a heart and XP).
+    var mistakesMade: Int { max(0, puzzle.mistakesAllowed - livesRemaining) }
+
     var isResumable: Bool { phase == .playing && !steps.isEmpty }
 
     var medal: ClubChainMedal {
@@ -181,13 +184,16 @@ struct ClubChainGameState: Codable, Equatable {
         return .bronze
     }
 
-    var score: Int { medal.points }
+    var score: Int {
+        DailyXP.clubChain(reached: won, moves: moves, par: optimalMoves, mistakes: mistakesMade)
+    }
     var won: Bool { phase == .won }
 
     func answerPayload() -> JSONValue {
         .object([
             "steps": .array(steps.map { .string($0.player.id) }),
             "won": .bool(phase == .won),
+            "mistakes": .int(mistakesMade),
         ])
     }
 

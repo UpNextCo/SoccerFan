@@ -14,6 +14,8 @@ final class ClubChainViewModel {
     var invalidMessage: String?
     var showResult = false
     var confettiBurstToken = 0
+    /// Bumps when a heart is lost so the hearts row can play a break animation.
+    var heartLossToken = 0
 
     init(puzzle: ClubChainPuzzle) {
         self.state = ClubChainGameState(puzzle: puzzle)
@@ -65,7 +67,10 @@ final class ClubChainViewModel {
 
         guard let link = result.link else {
             // Not club teammates → spend a life.
-            state.livesRemaining -= 1
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.55)) {
+                state.livesRemaining -= 1
+                heartLossToken += 1
+            }
             HapticManager.error()
             invalidMessage = "Not teammates at club level"
             searchQuery = ""
@@ -120,6 +125,7 @@ final class ClubChainViewModel {
         invalidMessage = nil
         showResult = false
         confettiBurstToken = 0
+        heartLossToken = 0
     }
 
     func restore(_ saved: ClubChainGameState) {
@@ -280,9 +286,17 @@ struct ClubChainView: View {
                     .foregroundStyle(BKTheme.accent)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 4)
 
-            Text("\(state.movesRemaining) picks remaining")
+            ClubChainHeartsRow(
+                total: state.puzzle.mistakesAllowed,
+                remaining: state.livesRemaining,
+                lossToken: viewModel.heartLossToken
+            )
+
+            Spacer(minLength: 4)
+
+            Text("\(state.movesRemaining) picks left")
                 .font(BKFont.caption(11))
                 .foregroundStyle(BKTheme.textMuted)
         }
@@ -371,6 +385,50 @@ struct ClubChainView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: viewModel.invalidMessage)
+    }
+}
+
+// MARK: - Hearts
+
+private struct ClubChainHeartsRow: View {
+    let total: Int
+    let remaining: Int
+    let lossToken: Int
+
+    @State private var breakingIndex: Int?
+    @State private var breakScale: CGFloat = 1
+    @State private var breakOpacity: Double = 1
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<total, id: \.self) { index in
+                let filled = index < remaining
+                let isBreaking = breakingIndex == index
+                Image(systemName: filled || isBreaking ? "heart.fill" : "heart")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(filled || isBreaking ? Color(red: 0.95, green: 0.28, blue: 0.38) : BKTheme.textMuted.opacity(0.35))
+                    .scaleEffect(isBreaking ? breakScale : 1)
+                    .opacity(isBreaking ? breakOpacity : 1)
+                    .offset(y: isBreaking ? -6 : 0)
+                    .accessibilityLabel(filled ? "Life remaining" : "Life lost")
+            }
+        }
+        .onChange(of: lossToken) { _, _ in
+            guard remaining < total else { return }
+            let index = remaining // the heart that just emptied (0-based from the left)
+            breakingIndex = index
+            breakScale = 1.35
+            breakOpacity = 1
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.45)) {
+                breakScale = 0.35
+                breakOpacity = 0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                breakingIndex = nil
+                breakScale = 1
+                breakOpacity = 1
+            }
+        }
     }
 }
 
@@ -522,6 +580,11 @@ private struct ClubChainResultView: View {
                     Text("\(state.moves) players added · gold route was \(state.goldMoves)")
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textMuted)
+                    if state.mistakesMade > 0 {
+                        Text("−\(state.mistakesMade * DailyXP.clubChainMistakeCost) XP for \(state.mistakesMade) wrong guess\(state.mistakesMade == 1 ? "" : "es")")
+                            .font(BKFont.caption(11))
+                            .foregroundStyle(BKTheme.wrong)
+                    }
                 } else {
                     Text("You ran out of \(state.livesRemaining <= 0 ? "lives" : "moves").")
                         .font(BKFont.body(14))
@@ -529,14 +592,14 @@ private struct ClubChainResultView: View {
                 }
 
                 XPResultSummary(
-                    earned: DailyXP.clubChain(reached: won, moves: state.moves, par: state.optimalMoves),
+                    earned: state.score,
                     max: DailyXP.maxXP(.clubChain)
                 )
 
                 HStack(spacing: 24) {
                     statBlock(value: "\(state.moves)", label: "ADDED")
+                    statBlock(value: "\(state.mistakesMade)", label: "MISSES")
                     statBlock(value: "\(state.goldMoves)", label: "FOR GOLD")
-                    statBlock(value: "\(state.linkCount)", label: "LINKS")
                 }
 
                 chainSummary

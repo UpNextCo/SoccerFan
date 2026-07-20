@@ -109,7 +109,7 @@ struct GameIntroContent {
                 steps: [
                     "Connect the two players through a chain of real teammates.",
                     "Each step must be two players who shared a club at the same time.",
-                    "Fewer steps earns a better medal - and more XP.",
+                    "You get three lives — wrong guesses cost a heart and XP. Fewer steps earn a better medal.",
                 ]
             )
         case .footballTower:
