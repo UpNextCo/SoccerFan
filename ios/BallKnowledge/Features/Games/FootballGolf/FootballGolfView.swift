@@ -670,30 +670,18 @@ private struct FootballGolfHoleResultOverlay: View {
     var onNext: () -> Void
     @State private var labelIn = false
 
+    private var holeXP: Int { FootballGolfScoring.holeXP(result) }
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.78).ignoresSafeArea().onTapGesture(perform: onNext)
-            VStack(spacing: 16) {
-                Text(result.label)
-                    .font(BKFont.title(38)).foregroundStyle(outcomeColor)
-                    .scaleEffect(labelIn ? 1 : 0.7)
-                    .opacity(labelIn ? 1 : 0)
-                Text("\(result.pointsReached)/\(result.target) pts · \(result.shots) shots · par \(result.par)")
-                    .font(BKFont.headline(15)).foregroundStyle(BKTheme.textPrimary)
-                Text("\(FootballGolfScoring.scoreLabel(result.relativeToPar)) · Hole \(result.holeNumber)")
-                    .font(BKFont.caption(12)).foregroundStyle(BKTheme.textMuted)
-
-                let holeXP = FootballGolfScoring.holeXP(result)
-                Text("+\(holeXP) XP")
-                    .font(BKFont.title(28))
-                    .foregroundStyle(holeXP > 0 ? golfGreen : BKTheme.textMuted)
-                    .scaleEffect(labelIn ? 1 : 0.7)
-                    .opacity(labelIn ? 1 : 0)
-
+            VStack(spacing: 14) {
                 if result.skipped {
-                    Text("Gave up — \(result.pointsReached)/\(result.target) pts")
-                        .font(BKFont.caption(12)).foregroundStyle(BKTheme.textMuted)
+                    skippedContent
+                } else {
+                    completedContent
                 }
+
                 if !result.matched.isEmpty {
                     VStack(spacing: 6) {
                         ForEach(result.matched) { a in
@@ -706,6 +694,7 @@ private struct FootballGolfHoleResultOverlay: View {
                         }
                     }
                     .frame(maxWidth: 240)
+                    .padding(.top, 2)
                 }
 
                 Button(action: onNext) {
@@ -713,13 +702,65 @@ private struct FootballGolfHoleResultOverlay: View {
                         .frame(maxWidth: .infinity).padding(.vertical, 14)
                         .background(golfGreen).clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-                .padding(.top, 6)
+                .padding(.top, 4)
             }
             .padding(24).frame(maxWidth: 320)
             .background(BKTheme.cardElevated).clipShape(RoundedRectangle(cornerRadius: 20))
             .padding(.horizontal, 24)
         }
         .onAppear { withAnimation(GolfMotion.pop) { labelIn = true } }
+    }
+
+    /// Clear 3-line readout: Skipped hole → score vs par → XP.
+    private var skippedContent: some View {
+        VStack(spacing: 10) {
+            Text("SKIPPED HOLE")
+                .font(BKFont.title(28))
+                .foregroundStyle(BKTheme.textPrimary)
+                .scaleEffect(labelIn ? 1 : 0.7)
+                .opacity(labelIn ? 1 : 0)
+
+            Text(FootballGolfScoring.relativeToParLabel(result.relativeToPar).uppercased())
+                .font(BKFont.headline(16))
+                .foregroundStyle(outcomeColor)
+
+            Text(holeXP > 0 ? "+\(holeXP) XP" : "0 XP")
+                .font(BKFont.title(28))
+                .foregroundStyle(holeXP > 0 ? golfGreen : BKTheme.textMuted)
+                .scaleEffect(labelIn ? 1 : 0.7)
+                .opacity(labelIn ? 1 : 0)
+
+            if result.pointsReached > 0 {
+                Text("Had \(result.pointsReached) of \(result.target) pts before skipping")
+                    .font(BKFont.caption(12))
+                    .foregroundStyle(BKTheme.textMuted)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    private var completedContent: some View {
+        VStack(spacing: 10) {
+            Text(result.label)
+                .font(BKFont.title(38))
+                .foregroundStyle(outcomeColor)
+                .scaleEffect(labelIn ? 1 : 0.7)
+                .opacity(labelIn ? 1 : 0)
+
+            Text(FootballGolfScoring.relativeToParLabel(result.relativeToPar))
+                .font(BKFont.headline(16))
+                .foregroundStyle(BKTheme.textPrimary)
+
+            Text(holeXP > 0 ? "+\(holeXP) XP" : "0 XP")
+                .font(BKFont.title(28))
+                .foregroundStyle(holeXP > 0 ? golfGreen : BKTheme.textMuted)
+                .scaleEffect(labelIn ? 1 : 0.7)
+                .opacity(labelIn ? 1 : 0)
+
+            Text("Hole \(result.holeNumber)  ·  \(result.shots) shots  ·  par \(result.par)")
+                .font(BKFont.caption(12))
+                .foregroundStyle(BKTheme.textMuted)
+        }
     }
 
     private var outcomeColor: Color {
