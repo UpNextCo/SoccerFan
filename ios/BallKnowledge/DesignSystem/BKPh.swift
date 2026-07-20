@@ -65,13 +65,13 @@ struct ColorBlended: ViewModifier {
     fileprivate var color: Color
 
     func body(content: Content) -> some View {
-        VStack {
-            ZStack {
-                content
-                color.blendMode(.sourceAtop)
-            }
-            .drawingGroup(opaque: false)
+        ZStack {
+            content
+            color.blendMode(.sourceAtop)
+                .allowsHitTesting(false)
         }
+        .drawingGroup(opaque: false)
+        .compositingGroup()
     }
 }
 

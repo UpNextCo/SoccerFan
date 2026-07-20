@@ -101,6 +101,7 @@ final class AuthManager {
         defaults.set(false, forKey: UserDefaultsKeys.completedPostSignInSetup)
         defaults.removeObject(forKey: UserDefaultsKeys.isDevAccount)
         defaults.removeObject(forKey: UserDefaultsKeys.dailyCompleteCelebratedDate)
+        ActivityFeedStore.clear()
         DailyCompletionService.clearAllLocalCompletions()
         OfflineCache.clearAllAccountData(context: context)
         DailyReminder.disable()

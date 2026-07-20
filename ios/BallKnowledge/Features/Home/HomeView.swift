@@ -282,12 +282,8 @@ struct HomeHeaderView: View {
     @State private var avatarImage: UIImage?
     @State private var showNotifications = false
 
-    private var activityEvents: [ActivityEvent] {
-        HomeActivity.events(user: user, streak: streak, dailyComplete: dailyComplete)
-    }
-
     private var hasUnread: Bool {
-        activityEvents.contains { $0.unread }
+        HomeActivity.hasUnread(user: user, streak: streak, dailyComplete: dailyComplete)
     }
 
     var body: some View {
@@ -339,15 +335,23 @@ struct HomeHeaderView: View {
                                 .fill(BKTheme.accent)
                                 .frame(width: 8, height: 8)
                                 .offset(x: -2, y: 2)
+                                .allowsHitTesting(false)
                         }
                     }
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .zIndex(2)
         }
         .padding(.top, 8)
+        .zIndex(2)
         .onAppear { avatarImage = LocalProfile.loadAvatar() }
         .sheet(isPresented: $showNotifications) {
-            NotificationsView(events: activityEvents)
+            NotificationsView(
+                user: user,
+                streak: streak,
+                dailyComplete: dailyComplete
+            )
         }
     }
 
@@ -377,120 +381,78 @@ struct HomeHeaderView: View {
     }
 }
 
-struct ActivityEvent: Identifiable {
-    let id = UUID()
-    let icon: String
-    let tint: Color
-    let title: String
-    let message: String
-    let unread: Bool
-}
-
-/// Builds the in-app activity feed from current profile state (client-derived for now —
-/// swap to a server activity endpoint later without changing NotificationsView).
-enum HomeActivity {
-    static func events(user: UserProfileDTO?, streak: Int, dailyComplete: Bool = false) -> [ActivityEvent] {
-        var events: [ActivityEvent] = []
-        let todayXp = user?.todayXp ?? 0
-        let xp = user?.xp ?? 0
-        let rank = PlayerRank.progress(for: xp)
-
-        if dailyComplete {
-            events.append(ActivityEvent(
-                icon: "checkmark.circle.fill",
-                tint: BKTheme.accent,
-                title: "Daily complete",
-                message: "All 7 games done — \(todayXp) XP banked today.",
-                unread: false
-            ))
-        } else if todayXp == 0 {
-            events.append(ActivityEvent(
-                icon: "flame.fill",
-                tint: BKTheme.streak,
-                title: streak > 0 ? "Keep your \(streak)-day streak alive" : "Start your streak today",
-                message: "Finish today's games to \(streak > 0 ? "extend" : "begin") your streak.",
-                unread: true
-            ))
-        } else {
-            events.append(ActivityEvent(
-                icon: "flame.fill",
-                tint: BKTheme.streak,
-                title: streak > 0 ? "Finish the set to keep your streak" : "Finish the set to start your streak",
-                message: "\(todayXp) XP so far — clear today's games before reset.",
-                unread: true
-            ))
-        }
-
-        if streak >= 3 {
-            events.append(ActivityEvent(
-                icon: "flame.fill",
-                tint: BKTheme.streak,
-                title: "\(streak)-day streak",
-                message: "You're on a roll — don't break the chain.",
-                unread: false
-            ))
-        }
-
-        events.append(ActivityEvent(
-            icon: "star.fill",
-            tint: BKTheme.accent,
-            title: "\(rank.emoji) \(rank.title)",
-            message: "\(xp) total XP earned. Keep climbing.",
-            unread: false
-        ))
-
-        events.append(ActivityEvent(
-            icon: "chart.bar.fill",
-            tint: .yellow,
-            title: "Leagues are coming",
-            message: "Climb the overall XP leaderboard — weekly leagues come later.",
-            unread: false
-        ))
-
-        return events
-    }
-}
-
 struct NotificationsView: View {
-    let events: [ActivityEvent]
+    let user: UserProfileDTO?
+    let streak: Int
+    var dailyComplete = false
+
     @Environment(\.dismiss) private var dismiss
+    @State private var events: [ActivityEvent] = []
+    @State private var isLoading = true
+    @State private var loadFailed = false
 
     var body: some View {
         NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 10) {
-                    ForEach(events) { event in
-                        HStack(spacing: 14) {
-                            Image(systemName: event.icon)
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(event.tint)
-                                .frame(width: 40, height: 40)
-                                .background(BKTheme.cardElevated)
-                                .clipShape(Circle())
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(event.title)
-                                    .font(BKFont.headline(15))
-                                    .foregroundStyle(BKTheme.textPrimary)
-                                Text(event.message)
-                                    .font(BKFont.body(13))
-                                    .foregroundStyle(BKTheme.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+            Group {
+                if isLoading && events.isEmpty {
+                    ProgressView()
+                        .tint(BKTheme.accent)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if events.isEmpty {
+                    ContentUnavailableView(
+                        "No activity yet",
+                        systemImage: "bell.slash.fill",
+                        description: Text("Play today's games to start filling your feed.")
+                    )
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 10) {
+                            if loadFailed {
+                                Text("Couldn't refresh leagues — showing what we have.")
+                                    .font(BKFont.caption(11))
+                                    .foregroundStyle(BKTheme.textMuted)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 4)
                             }
 
-                            Spacer(minLength: 0)
+                            ForEach(events) { event in
+                                HStack(alignment: .top, spacing: 14) {
+                                    Image(systemName: event.icon)
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(event.tint)
+                                        .frame(width: 40, height: 40)
+                                        .background(BKTheme.cardElevated)
+                                        .clipShape(Circle())
 
-                            if event.unread {
-                                Circle().fill(BKTheme.accent).frame(width: 8, height: 8)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(event.title)
+                                            .font(BKFont.headline(15))
+                                            .foregroundStyle(BKTheme.textPrimary)
+                                        Text(event.message)
+                                            .font(BKFont.body(13))
+                                            .foregroundStyle(BKTheme.textSecondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+
+                                    Spacer(minLength: 0)
+
+                                    if event.unread {
+                                        Circle()
+                                            .fill(BKTheme.accent)
+                                            .frame(width: 8, height: 8)
+                                            .padding(.top, 6)
+                                    }
+                                }
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(BKTheme.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
                             }
                         }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(BKTheme.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(16)
+                        .padding(.bottom, 24)
                     }
                 }
-                .padding(16)
             }
             .background(BKTheme.background)
             .navigationTitle("Activity")
@@ -502,7 +464,71 @@ struct NotificationsView: View {
                         .foregroundStyle(BKTheme.accent)
                 }
             }
+            .task { await load() }
         }
+    }
+
+    private func load() async {
+        isLoading = true
+        loadFailed = false
+
+        let localEvents = HomeActivity.events(
+            user: user,
+            streak: streak,
+            dailyComplete: dailyComplete,
+            league: nil
+        )
+        events = localEvents
+
+        var snapshot = ActivityLeagueSnapshot()
+        let userId = user?.id
+
+        do {
+            async let overallTask = APIClient.shared.leaguesOverall()
+            async let todayTask = APIClient.shared.leaguesDaily()
+            let (overall, today) = try await (overallTask, todayTask)
+
+            if let userId {
+                if let mine = overall.standings.first(where: { $0.userId == userId }) {
+                    snapshot.overallRank = mine.rank
+                    snapshot.overallXp = mine.xp
+                }
+                snapshot.overallTotal = overall.standings.count
+
+                if let mine = today.standings.first(where: { $0.userId == userId }) {
+                    snapshot.todayRank = mine.rank
+                    snapshot.todayXp = mine.xp
+                }
+                snapshot.todayTotal = today.standings.count
+            }
+
+            events = HomeActivity.events(
+                user: user,
+                streak: streak,
+                dailyComplete: dailyComplete,
+                league: snapshot
+            )
+
+            let rank = PlayerRank.progress(for: user?.xp ?? 0)
+            ActivityFeedStore.markOpened(
+                rankTitle: rank.title,
+                overallRank: snapshot.overallRank,
+                todayRank: snapshot.todayRank,
+                todayDate: DailyDate.localToday()
+            )
+        } catch {
+            loadFailed = true
+            let rank = PlayerRank.progress(for: user?.xp ?? 0)
+            // Keep prior league snapshots if the refresh failed.
+            ActivityFeedStore.markOpened(
+                rankTitle: rank.title,
+                overallRank: ActivityFeedStore.lastOverallRank,
+                todayRank: ActivityFeedStore.lastTodayRank,
+                todayDate: ActivityFeedStore.lastTodayRankDate ?? DailyDate.localToday()
+            )
+        }
+
+        isLoading = false
     }
 }
 
@@ -620,6 +646,9 @@ struct DailySection: View {
             BKGlass.roundedRect(cornerRadius: 20)
         }
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        // Decorative art can paint outside the card bounds; never let it steal taps
+        // from the header (notifications bell sits just above this hub).
+        .allowsHitTesting(false)
     }
 
     private var hubHeroImage: some View {
@@ -643,6 +672,7 @@ struct DailySection: View {
                     )
                 }
         }
+        .allowsHitTesting(false)
     }
 
     private var hubTextScrim: some View {
