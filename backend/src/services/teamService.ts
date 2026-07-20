@@ -11,6 +11,34 @@ import { normalizeTeamName } from '../utils/teamName.js';
 
 const PREMIER_LEAGUE_ID = 39;
 
+/**
+ * Current Premier League club IDs (API-Football) for the team-picker default list.
+ * 2026/27: Coventry, Hull, Ipswich up; Burnley, West Ham, Wolves down.
+ * Update each summer when the new season's 20 is confirmed.
+ */
+const CURRENT_PREMIER_LEAGUE_TEAM_IDS = [
+  42, // Arsenal
+  66, // Aston Villa
+  35, // Bournemouth
+  55, // Brentford
+  51, // Brighton
+  49, // Chelsea
+  1346, // Coventry
+  52, // Crystal Palace
+  45, // Everton
+  36, // Fulham
+  64, // Hull City
+  57, // Ipswich
+  63, // Leeds
+  40, // Liverpool
+  50, // Manchester City
+  33, // Manchester United
+  34, // Newcastle
+  65, // Nottingham Forest
+  746, // Sunderland
+  47, // Tottenham
+] as const;
+
 /** SQL: drop U21 / reserves / women's sides from team-picker results. */
 function seniorClubNameSql(column = 'name') {
   const col = sql.raw(column);
@@ -184,9 +212,10 @@ export type TeamSearchResult = {
 };
 
 /**
- * Team picker search. Empty query returns the current Premier League list; otherwise
- * substring-matches on the normalized name. Youth/reserve/women's sides are excluded.
- * Bigger leagues + exact/prefix matches + shorter (senior) names rank first.
+ * Team picker search. Empty query returns the curated current Premier League 20
+ * (`CURRENT_PREMIER_LEAGUE_TEAM_IDS`). Search substring-matches on normalized name;
+ * youth/reserve/women's sides are excluded. Bigger leagues + exact/prefix matches
+ * + shorter names rank first.
  */
 export async function searchTeams(query: string, limit = 30): Promise<TeamSearchResult[]> {
   const q = normalizeTeamName(query);
@@ -196,25 +225,11 @@ export async function searchTeams(query: string, limit = 30): Promise<TeamSearch
   const rows = (await db.execute(
     q === ''
       ? sql`
-          SELECT id, name, logo_url, league_id, country
-          FROM (
-            SELECT t.id, t.name, t.logo_url, t.league_id, t.country
-            FROM teams t
-            WHERE t.league_id = ${PREMIER_LEAGUE_ID}
-              AND ${seniorClubNameSql('t.name')}
-            UNION
-            SELECT t.id, t.name, t.logo_url, t.league_id, t.country
-            FROM teams t
-            WHERE t.id IN (
-              SELECT DISTINCT team_id
-              FROM player_stats
-              WHERE league_id = ${PREMIER_LEAGUE_ID}
-                AND season >= 2024
-                AND team_id > 0
-            )
-              AND ${seniorClubNameSql('t.name')}
-          ) prem
-          ORDER BY name ASC
+          SELECT t.id, t.name, t.logo_url, t.league_id, t.country
+          FROM teams t
+          WHERE t.id IN ${CURRENT_PREMIER_LEAGUE_TEAM_IDS}
+            AND ${seniorClubNameSql('t.name')}
+          ORDER BY t.name ASC
           LIMIT ${limit}
         `
       : sql`
