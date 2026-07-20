@@ -48,7 +48,7 @@ function sendPage(res: Response, title: string, content: string): void {
   <main>
     <nav>
       <a href="/">Ball Knowledge</a>
-      <div><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
+      <div><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
     </nav>
     ${content}
     <footer>Ball Knowledge is operated by UpNextCo. Questions: <a href="mailto:${contactEmail}">${contactEmail}</a>.</footer>
@@ -67,6 +67,32 @@ legalRouter.get('/', (_req, res) => {
     </section>
     <h2>About Ball Knowledge</h2>
     <p>Play the daily set, earn XP, build a streak and represent your club on the Teams leaderboard.</p>`
+  );
+});
+
+legalRouter.get('/support', (_req, res) => {
+  sendPage(
+    res,
+    'Support',
+    `<h1>Support</h1>
+    <p class="meta">Ball Knowledge help</p>
+    <section class="hero">
+      <p>Need a hand with Ball Knowledge? Email us and we’ll get back to you as soon as we can.</p>
+    </section>
+
+    <h2>Contact</h2>
+    <p>Email <a href="mailto:${contactEmail}">${contactEmail}</a> with your question. Include your display name and roughly what happened if you’re reporting a bug — that helps us fix it faster.</p>
+
+    <h2>Common questions</h2>
+    <ul>
+      <li><strong>Daily games:</strong> a new set drops each day. Finish games to earn XP and keep your streak going.</li>
+      <li><strong>Account &amp; profile:</strong> Sign in with Apple saves your progress. You can change your name, photo and club in Profile.</li>
+      <li><strong>Delete account:</strong> you can delete your account from Profile. That permanently removes your account and associated personal information.</li>
+      <li><strong>Privacy &amp; terms:</strong> see our <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms of Service</a>.</li>
+    </ul>
+
+    <h2>App Store</h2>
+    <p>This page is the support contact for Ball Knowledge on the App Store.</p>`
   );
 });
 

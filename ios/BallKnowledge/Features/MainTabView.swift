@@ -1175,6 +1175,8 @@ struct ProfileTabView: View {
             rowDivider
             shareRow
             rowDivider
+            SettingsLinkRow(icon: "envelope.fill", title: "Support", url: AppConfig.supportURL)
+            rowDivider
             SettingsLinkRow(icon: "lock.shield.fill", title: "Privacy Policy", url: AppConfig.privacyPolicyURL)
             rowDivider
             SettingsLinkRow(icon: "doc.text.fill", title: "Terms of Service", url: AppConfig.termsOfServiceURL)
@@ -1220,14 +1222,15 @@ struct ProfileTabView: View {
             }
             .buttonStyle(.plain)
 
-            #if DEBUG
-            Button("Reset onboarding (dev)") {
-                UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.hasCompletedOnboarding)
-                Task { await auth.signOut(context: modelContext) }
-            }
-            .font(BKFont.caption())
-            .foregroundStyle(BKTheme.textMuted)
-            #endif
+            // Distribution: keep Reset onboarding out of the UI (DEBUG builds only if re-enabled).
+            // #if DEBUG
+            // Button("Reset onboarding (dev)") {
+            //     UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.hasCompletedOnboarding)
+            //     Task { await auth.signOut(context: modelContext) }
+            // }
+            // .font(BKFont.caption())
+            // .foregroundStyle(BKTheme.textMuted)
+            // #endif
         }
     }
 
