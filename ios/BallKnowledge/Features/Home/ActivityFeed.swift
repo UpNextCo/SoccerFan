@@ -96,7 +96,7 @@ enum HomeActivity {
             streak: streak,
             dailyComplete: dailyComplete,
             league: nil
-        ).contains(\.unread)
+        ).contains(where: \.unread)
     }
 
     static func events(
