@@ -1,8 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import logoUrl from '../assets/ball-knowledge-logo.jpg'
 
 export function OpsShell({
-  adminName,
   onLogout,
   children,
 }: {
@@ -78,7 +78,7 @@ export function OpsShell({
     <div className="ops-shell">
       <header className="mobile-shell-header">
         <NavLink to="/" className="brand" onClick={() => setMenuOpen(false)}>
-          <span className="brand-mark" aria-hidden="true">BK</span>
+          <img src={logoUrl} alt="" className="brand-logo" />
           <span>Ball Knowledge</span>
         </NavLink>
         <button
@@ -101,7 +101,7 @@ export function OpsShell({
       >
         <div>
           <NavLink to="/" className="brand desktop-brand" onClick={() => setMenuOpen(false)}>
-            <span className="brand-mark" aria-hidden="true">BK</span>
+            <img src={logoUrl} alt="" className="brand-logo" />
             <span>Ball Knowledge</span>
           </NavLink>
           <p className="nav-label">Quiz Ops</p>
@@ -126,13 +126,6 @@ export function OpsShell({
           </nav>
         </div>
         <div className="account-block">
-          <span className="account-avatar" aria-hidden="true">
-            {adminName.trim().charAt(0).toUpperCase()}
-          </span>
-          <div>
-            <strong>{adminName}</strong>
-            <span>Quiz team</span>
-          </div>
           <button type="button" className="logout-button" onClick={onLogout}>
             Log out
           </button>

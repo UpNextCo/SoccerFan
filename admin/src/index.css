@@ -1381,7 +1381,8 @@ button.danger-outline:not(:disabled):hover {
   letter-spacing: -0.02em;
 }
 
-.brand-mark {
+.brand-mark,
+.brand-logo {
   display: grid;
   width: 34px;
   height: 34px;
@@ -1390,6 +1391,11 @@ button.danger-outline:not(:disabled):hover {
   background: var(--ink);
   border-radius: 10px;
   font-size: 0.7rem;
+}
+
+.brand-logo {
+  object-fit: cover;
+  background: transparent;
   letter-spacing: -0.03em;
 }
 
@@ -1427,44 +1433,13 @@ button.danger-outline:not(:disabled):hover {
 }
 
 .account-block {
-  display: grid;
-  grid-template-columns: 34px 1fr;
-  gap: 9px;
+  display: flex;
   align-items: center;
   padding-top: 16px;
   border-top: 1px solid var(--line);
 }
 
-.account-avatar {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-radius: 50%;
-  font-size: 0.8rem;
-  font-weight: 750;
-}
-
-.account-block strong,
-.account-block span {
-  display: block;
-}
-
-.account-block strong {
-  font-size: 0.78rem;
-}
-
-.account-block div span {
-  margin-top: 1px;
-  color: var(--muted);
-  font-size: 0.68rem;
-}
-
 .logout-button {
-  grid-column: 2;
-  justify-self: start;
   padding: 0;
   color: var(--muted);
   background: transparent;

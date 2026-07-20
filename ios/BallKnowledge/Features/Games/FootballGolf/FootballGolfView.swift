@@ -214,10 +214,18 @@ final class FootballGolfViewModel {
             skipped: skipped
         )
         results.append(result)
-        phase = .holeResult
         if result.relativeToPar <= -1 { HapticManager.success() }
         else if result.relativeToPar == 0 { HapticManager.light() }
         else { HapticManager.error() }
+
+        // Last hole: skip the mid-round "Next hole" overlay and go straight to the scorecard.
+        if results.count >= course.holes.count {
+            phase = .finished
+            if totalScore <= -2 { confettiToken += 1 }
+            showResult = true
+            return
+        }
+        phase = .holeResult
     }
 
     func advance() {
