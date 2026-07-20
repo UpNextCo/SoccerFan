@@ -868,6 +868,7 @@ enum DailyReminder {
 struct ProfileTabView: View {
     @Environment(AuthManager.self) private var auth
     @Environment(\.requestReview) private var requestReview
+    @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var modelContext
 
     @State private var avatarImage: UIImage?
@@ -1170,9 +1171,7 @@ struct ProfileTabView: View {
 
     private var aboutSection: some View {
         settingsCard(title: "ABOUT") {
-            SettingsRow(icon: "star.fill", title: "Rate Ball Knowledge") {
-                requestReview()
-            }
+            SettingsRow(icon: "star.fill", title: "Rate Ball Knowledge", action: rateApp)
             rowDivider
             shareRow
             rowDivider
@@ -1180,6 +1179,16 @@ struct ProfileTabView: View {
             rowDivider
             SettingsLinkRow(icon: "doc.text.fill", title: "Terms of Service", url: AppConfig.termsOfServiceURL)
         }
+    }
+
+    /// Prefer the App Store write-review URL (reliable for a tapped Rate button).
+    /// `requestReview()` is Apple-gated and almost always a no-op on TestFlight.
+    private func rateApp() {
+        if let url = AppConfig.rateAppURL {
+            openURL(url)
+            return
+        }
+        requestReview()
     }
 
     private var shareRow: some View {

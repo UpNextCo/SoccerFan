@@ -17,6 +17,18 @@ enum AppConfig {
     static let maxGuessWhoGuesses = 8
     static let dailyXpGoal = 3000
 
+    /// Numeric Apple ID from App Store Connect → your app → App Information.
+    /// Needed for Profile → Rate (opens the write-review page). `requestReview()` alone
+    /// is throttled by Apple and usually does nothing on TestFlight.
+    /// Set this once the ASC app record exists — it works before public release.
+    static let appStoreId: String? = "6791646115"
+
+    /// App Store “Write a Review” deep link. Nil until `appStoreId` is set.
+    static var rateAppURL: URL? {
+        guard let appStoreId, !appStoreId.isEmpty else { return nil }
+        return URL(string: "https://apps.apple.com/app/id\(appStoreId)?action=write-review")
+    }
+
     /// Dev sign-in can replay dailies and skips completed-game UI lockout (DEBUG only).
     static func allowsUnlimitedDailyPlay(isDevAccount: Bool) -> Bool {
         #if DEBUG
