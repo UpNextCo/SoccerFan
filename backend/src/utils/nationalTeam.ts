@@ -31,13 +31,14 @@ export function isNationalTeam(name: string, nations: Set<string>): boolean {
   return false;
 }
 
-/** Reserve / youth club sides — not useful for career-path puzzles. */
+/** Reserve / youth / women's sides — not useful for career paths or the team picker. */
 export function isYouthOrReserveSide(name: string): boolean {
   return (
-    /\s+U\d{1,2}(\s+W)?$/i.test(name) ||
-    /\s+(II| B)$/i.test(name) ||
+    /\bU\d{1,2}(\s+W)?\b/i.test(name) ||
+    /\s+(II|B)$/i.test(name) ||
     / Castilla$/i.test(name) ||
-    /\s+Amateurs$/i.test(name)
+    /\s+(Women|Ladies|WFC|Reserves?|Academy|Amateurs|Youth)$/i.test(name) ||
+    /\s+W$/i.test(name)
   );
 }
 

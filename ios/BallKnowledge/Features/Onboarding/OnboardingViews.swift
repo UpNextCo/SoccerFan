@@ -849,6 +849,14 @@ struct TeamPickerView: View {
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 8) {
+                if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !results.isEmpty {
+                    Text("Premier League")
+                        .font(BKFont.caption(12))
+                        .foregroundStyle(BKTheme.textMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 2)
+                }
+
                 ForEach(results) { team in
                     Button { selected = team } label: {
                         teamRow(team)
@@ -857,7 +865,7 @@ struct TeamPickerView: View {
                 }
 
                 if results.isEmpty && !isSearching {
-                    Text(query.isEmpty ? "Start typing to find your club." : "No teams found.")
+                    Text(query.isEmpty ? "Couldn't load Premier League clubs." : "No teams found.")
                         .font(BKFont.body(13))
                         .foregroundStyle(BKTheme.textMuted)
                         .padding(.top, 40)

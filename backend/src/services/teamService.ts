@@ -5,8 +5,23 @@ import {
   LEAGUE_ID_BY_NAME,
   teamLogoUrl,
 } from '../constants/footballMedia.js';
+import { isYouthOrReserveSide } from '../utils/nationalTeam.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
 import { normalizeTeamName } from '../utils/teamName.js';
+
+const PREMIER_LEAGUE_ID = 39;
+
+/** SQL: drop U21 / reserves / women's sides from team-picker results. */
+function seniorClubNameSql(column = 'name') {
+  const col = sql.raw(column);
+  return sql`
+    ${col} !~* '\\mU\\d{1,2}(\\s+W)?\\M'
+    AND ${col} !~* '\\s+(II|B)$'
+    AND ${col} !~* ' Castilla$'
+    AND ${col} !~* '\\s+(Women|Ladies|WFC|Reserves?|Academy|Amateurs|Youth)$'
+    AND ${col} !~* '\\s+W$'
+  `;
+}
 
 export type TeamLogoMatch = {
   teamId: number;
@@ -169,26 +184,59 @@ export type TeamSearchResult = {
 };
 
 /**
- * Team picker search. Empty query returns current top-5-league clubs; otherwise
- * substring-matches on the normalized name. Big leagues + prefix matches rank first.
+ * Team picker search. Empty query returns the current Premier League list; otherwise
+ * substring-matches on the normalized name. Youth/reserve/women's sides are excluded.
+ * Bigger leagues + exact/prefix matches + shorter (senior) names rank first.
  */
 export async function searchTeams(query: string, limit = 30): Promise<TeamSearchResult[]> {
   const q = normalizeTeamName(query);
   const like = `%${q}%`;
   const prefix = `${q}%`;
 
-  const rows = (await db.execute(sql`
-    SELECT id, name, logo_url, league_id, country
-    FROM teams
-    WHERE (${q} = '' AND league_id IS NOT NULL)
-       OR (${q} <> '' AND name_norm LIKE ${like})
-    ORDER BY
-      (league_id IN (39, 140, 135, 78, 61)) DESC,
-      (name_norm LIKE ${prefix}) DESC,
-      length(name) ASC,
-      name ASC
-    LIMIT ${limit}
-  `)) as unknown as Array<{
+  const rows = (await db.execute(
+    q === ''
+      ? sql`
+          SELECT id, name, logo_url, league_id, country
+          FROM (
+            SELECT t.id, t.name, t.logo_url, t.league_id, t.country
+            FROM teams t
+            WHERE t.league_id = ${PREMIER_LEAGUE_ID}
+              AND ${seniorClubNameSql('t.name')}
+            UNION
+            SELECT t.id, t.name, t.logo_url, t.league_id, t.country
+            FROM teams t
+            WHERE t.id IN (
+              SELECT DISTINCT team_id
+              FROM player_stats
+              WHERE league_id = ${PREMIER_LEAGUE_ID}
+                AND season >= 2024
+                AND team_id > 0
+            )
+              AND ${seniorClubNameSql('t.name')}
+          ) prem
+          ORDER BY name ASC
+          LIMIT ${limit}
+        `
+      : sql`
+          SELECT id, name, logo_url, league_id, country
+          FROM teams
+          WHERE name_norm LIKE ${like}
+            AND ${seniorClubNameSql('name')}
+          ORDER BY
+            CASE
+              WHEN league_id = ${PREMIER_LEAGUE_ID} THEN 0
+              WHEN league_id IN (140, 135, 78, 61) THEN 1
+              WHEN league_id IN (40, 88, 94, 179, 203, 253, 262, 71, 307) THEN 2
+              WHEN league_id IS NOT NULL THEN 3
+              ELSE 4
+            END ASC,
+            (name_norm = ${q}) DESC,
+            (name_norm LIKE ${prefix}) DESC,
+            length(name) ASC,
+            name ASC
+          LIMIT ${Math.max(limit * 3, 60)}
+        `
+  )) as unknown as Array<{
     id: number;
     name: string;
     logo_url: string;
@@ -196,13 +244,24 @@ export async function searchTeams(query: string, limit = 30): Promise<TeamSearch
     country: string | null;
   }>;
 
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    logoUrl: row.logo_url,
-    leagueId: row.league_id,
-    country: row.country,
-  }));
+  // Dedupe near-identical labels (keep the higher-ranked row) and belt-and-braces youth filter.
+  const seen = new Set<string>();
+  const results: TeamSearchResult[] = [];
+  for (const row of rows) {
+    if (isYouthOrReserveSide(row.name)) continue;
+    const key = normalizeTeamName(row.name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    results.push({
+      id: row.id,
+      name: row.name,
+      logoUrl: row.logo_url,
+      leagueId: row.league_id,
+      country: row.country,
+    });
+    if (results.length >= limit) break;
+  }
+  return results;
 }
 
 export async function upsertTeam(row: {
@@ -213,6 +272,23 @@ export async function upsertTeam(row: {
   logoUrl?: string;
 }): Promise<void> {
   const nameNorm = normalizeTeamName(row.name);
+  // Never wipe a known league/country with null — player-data backfill often lacks both.
+  const patch: {
+    name: string;
+    nameNorm: string;
+    logoUrl: string;
+    updatedAt: Date;
+    leagueId?: number;
+    country?: string;
+  } = {
+    name: row.name,
+    nameNorm,
+    logoUrl: row.logoUrl ?? teamLogoUrl(row.id),
+    updatedAt: new Date(),
+  };
+  if (row.leagueId != null) patch.leagueId = row.leagueId;
+  if (row.country != null) patch.country = row.country;
+
   await db
     .insert(teams)
     .values({
@@ -226,13 +302,6 @@ export async function upsertTeam(row: {
     })
     .onConflictDoUpdate({
       target: teams.id,
-      set: {
-        name: row.name,
-        nameNorm,
-        leagueId: row.leagueId ?? null,
-        country: row.country ?? null,
-        logoUrl: row.logoUrl ?? teamLogoUrl(row.id),
-        updatedAt: new Date(),
-      },
+      set: patch,
     });
 }
