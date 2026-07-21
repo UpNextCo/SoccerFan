@@ -3,8 +3,7 @@
  * (nationalcapsN / nationalgoalsN). Used for legends outside the England 100+/national
  * list coverage (Bergkamp, Vieira, Maldini, Zidane, …).
  *
- * Takes the largest nationalcaps* value in the career range (30–280) — usually the
- * senior national team total.
+ * Takes senior nationalteam* caps (skips U21/youth/olympic), accepting 1–280.
  *
  * Usage:
  *   DATABASE_URL=... npm run job:ingest-infobox-caps
@@ -14,7 +13,7 @@
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { INTL_CAPS_SANITY_MAX, INTL_CAPS_TRUST_MIN } from '../services/statMetrics.js';
+import { INTL_CAPS_DISPLAY_MIN, INTL_CAPS_SANITY_MAX } from '../services/statMetrics.js';
 
 /** Ambiguous mononyms / DB names → English Wikipedia title. */
 const WIKI_TITLE_OVERRIDE: Record<string, string> = {
@@ -63,26 +62,29 @@ async function fetchPlayerWikitext(name: string): Promise<string | null> {
 }
 
 function extractInfoboxCaps(wt: string): { caps: number; goals: number } | null {
-  const m = wt.match(/\{\{\s*Infobox football biography[\s\S]*?\n\}\}/i);
-  if (!m) return null;
-  const box = m[0];
-  const caps: number[] = [];
-  const goals: number[] = [];
-  for (const cm of box.matchAll(/\|\s*nationalcaps\d*\s*=\s*([^\n|]+)/gi)) {
-    const n = parseInt(cm[1]!.replace(/[^\d]/g, ''), 10);
-    if (Number.isFinite(n) && n > 0) caps.push(n);
+  let bestCaps = 0;
+  let bestGoals = 0;
+  for (let i = 1; i <= 8; i += 1) {
+    const teamM = wt.match(new RegExp(`\\|\\s*nationalteam${i}\\s*=\\s*([^\\n]+)`, 'i'));
+    const capsM = wt.match(new RegExp(`\\|\\s*nationalcaps${i}\\s*=\\s*([^\\n]+)`, 'i'));
+    const goalsM = wt.match(new RegExp(`\\|\\s*nationalgoals${i}\\s*=\\s*([^\\n]+)`, 'i'));
+    if (!teamM || !capsM) continue;
+    const team = teamM[1]!;
+    if (!/national (football|soccer) team/i.test(team)) continue;
+    if (/under[- ]?\d|u-?\d{1,2}|olympic|youth|amateur|b team|universiade/i.test(team)) continue;
+    const caps = parseInt(capsM[1]!.replace(/[^\d]/g, ''), 10);
+    const goals = goalsM ? parseInt(goalsM[1]!.replace(/[^\d]/g, ''), 10) : 0;
+    if (
+      Number.isFinite(caps) &&
+      caps >= INTL_CAPS_DISPLAY_MIN &&
+      caps <= INTL_CAPS_SANITY_MAX &&
+      caps > bestCaps
+    ) {
+      bestCaps = caps;
+      bestGoals = Number.isFinite(goals) && goals <= 150 ? goals : 0;
+    }
   }
-  for (const gm of box.matchAll(/\|\s*nationalgoals\d*\s*=\s*([^\n|]+)/gi)) {
-    const n = parseInt(gm[1]!.replace(/[^\d]/g, ''), 10);
-    if (Number.isFinite(n) && n >= 0) goals.push(n);
-  }
-  const trusted = caps.filter((c) => c >= INTL_CAPS_TRUST_MIN && c <= INTL_CAPS_SANITY_MAX);
-  if (trusted.length === 0) return null;
-  const bestCaps = Math.max(...trusted);
-  // Pair goals with the same index as best caps when possible; else max goals in range.
-  const bestIdx = caps.indexOf(bestCaps);
-  const bestGoals = bestIdx >= 0 && goals[bestIdx] != null ? goals[bestIdx]! : Math.max(0, ...goals);
-  return { caps: bestCaps, goals: bestGoals };
+  return bestCaps > 0 ? { caps: bestCaps, goals: bestGoals } : null;
 }
 
 async function loadTargets(): Promise<Array<{ id: string; name: string }>> {

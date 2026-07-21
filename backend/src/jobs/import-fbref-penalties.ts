@@ -15,7 +15,6 @@ import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { players } from '../db/schema.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
 
 interface FbrefRow { player: string; leagueId: number; penalties?: number }
@@ -58,24 +57,49 @@ async function main() {
   }
   console.log(`${byName.size} players have >=1 FBref penalty`);
 
-  // Match to EXISTING players by normalised name; skip ambiguous (same name → multiple) / unmatched.
-  const existing = await db.select({ id: players.id, name: players.name }).from(players);
-  const idsByName = new Map<string, string[]>();
+  // Match to EXISTING players by normalised name. Ambiguous names (e.g. two "Bruno Fernandes")
+  // resolve to the strongest career row — most apps, then has API-Football / TM id.
+  const existing = (await db.execute(sql`
+    SELECT p.id, p.name, p.api_football_id, p.tm_player_id,
+           COALESCE(SUM(s.appearances), 0)::int AS apps
+    FROM players p
+    LEFT JOIN player_stats s ON s.player_id = p.id
+    GROUP BY p.id
+  `)) as unknown as Array<{
+    id: string;
+    name: string;
+    api_football_id: number | null;
+    tm_player_id: string | null;
+    apps: number;
+  }>;
+  const candsByName = new Map<string, typeof existing>();
   for (const p of existing) {
     const k = normalizeSearchText(p.name);
-    (idsByName.get(k) ?? idsByName.set(k, []).get(k)!).push(p.id);
+    const arr = candsByName.get(k) ?? [];
+    arr.push(p);
+    candsByName.set(k, arr);
   }
 
   const updates: Array<{ id: string; p: Pens }> = [];
-  let ambiguous = 0;
+  let ambiguousResolved = 0;
   let unmatched = 0;
   for (const [name, p] of byName) {
-    const ids = idsByName.get(name);
-    if (!ids) { unmatched += 1; continue; }
-    if (ids.length > 1) { ambiguous += 1; continue; }
-    updates.push({ id: ids[0]!, p });
+    const cands = candsByName.get(name);
+    if (!cands?.length) { unmatched += 1; continue; }
+    if (cands.length > 1) {
+      cands.sort((a, b) => {
+        if (b.apps !== a.apps) return b.apps - a.apps;
+        const aId = a.api_football_id != null || a.tm_player_id != null ? 1 : 0;
+        const bId = b.api_football_id != null || b.tm_player_id != null ? 1 : 0;
+        return bId - aId;
+      });
+      ambiguousResolved += 1;
+    }
+    updates.push({ id: cands[0]!.id, p });
   }
-  console.log(`Matched ${updates.length} players (${ambiguous} ambiguous, ${unmatched} unmatched names skipped)`);
+  console.log(
+    `Matched ${updates.length} players (${ambiguousResolved} ambiguous names resolved by apps, ${unmatched} unmatched skipped)`
+  );
 
   for (const batch of chunk(updates, 300)) {
     const tuples = batch.map((u) => sql`(${u.id}::uuid, ${u.p.pl + u.p.laliga + u.p.seriea + u.p.bundesliga + u.p.ligue1}, ${u.p.pl}, ${u.p.laliga}, ${u.p.seriea}, ${u.p.bundesliga}, ${u.p.ligue1})`);
