@@ -6,6 +6,7 @@
  * the identical-looking tile disagreed between modes.
  */
 import { sql, type SQL } from 'drizzle-orm';
+import { clubCareerOnlySql } from '../utils/nationalTeam.js';
 
 /** Club competitions counted as "career" everywhere: big-5 leagues + Champions League + Europa League. */
 export const CAREER_LEAGUE_IDS = [39, 140, 135, 78, 61, 2, 3];
@@ -57,3 +58,38 @@ export const INTL_CAPS_DISPLAY_MIN = 1;
 export const intlCapsSub: SQL = sql`(SELECT player_id,
   CASE WHEN intl_caps BETWEEN ${INTL_CAPS_DISPLAY_MIN} AND ${INTL_CAPS_SANITY_MAX} THEN intl_caps ELSE 0 END::int AS value
   FROM player_extra_stats)`;
+
+/**
+ * Distinct senior clubs played for.
+ * Unions `player_career` with club names seen in `player_stats` so legends with thin API career
+ * rows (Anelka / Verón) still get a real count. National / U21 / Olympic sides are dropped.
+ * Count by lower(team_name) — stats often reuse the same club under several team_id hashes.
+ */
+export const mostClubsSub: SQL = sql`(
+  SELECT player_id, COUNT(DISTINCT club_key)::int AS value
+  FROM (
+    SELECT pc.player_id, lower(pc.team_name) AS club_key
+    FROM player_career pc
+    WHERE pc.team_id > 0 AND ${clubCareerOnlySql('pc')}
+    UNION
+    SELECT s.player_id, lower(s.team_name) AS club_key
+    FROM player_stats s
+    WHERE COALESCE(s.appearances, 0) > 0
+      AND s.team_name IS NOT NULL
+      AND s.team_name <> ''
+      AND NOT (
+        EXISTS (
+          SELECT 1 FROM players _nat
+          WHERE _nat.nationality <> '' AND _nat.nationality = s.team_name
+        )
+        OR EXISTS (
+          SELECT 1 FROM players _nat
+          WHERE _nat.nationality <> ''
+            AND _nat.nationality = regexp_replace(s.team_name, '\\s+U\\d{1,2}(\\s+W)?$', '', 'i')
+        )
+        OR s.team_name ~* '\\s+(Olympics?|Olympic)$'
+        OR s.team_name ~* '\\s+U\\d{1,2}(\\s+W)?$'
+      )
+  ) clubs
+  GROUP BY player_id
+)`;

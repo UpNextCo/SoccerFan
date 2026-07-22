@@ -30,8 +30,8 @@ import {
   recordFeeSub,
   careerTrophiesSub,
   intlCapsSub,
+  mostClubsSub,
 } from './statMetrics.js';
-import { clubCareerOnlySql } from '../utils/nationalTeam.js';
 
 // ---------------------------------------------------------------------------
 // Categories (13). Each yields a per-player scalar `(player_id, value)`.
@@ -57,14 +57,6 @@ const LEAGUE_TITLE_COMPETITIONS = ['Premier League', 'La Liga', 'Serie A', 'Bund
 const leagueTitlesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM player_honours
   WHERE lower(placement) = 'winner' AND competition IN (${sql.join(LEAGUE_TITLE_COMPETITIONS.map((c) => sql`${c}`), sql`, `)})
   GROUP BY player_id)`;
-
-/** Distinct senior clubs only — national / U21 / Olympic sides inflate this (e.g. Vermaelen 7→5). */
-const mostClubsSub: SQL = sql`(
-  SELECT pc.player_id, COUNT(DISTINCT pc.team_id)::int AS value
-  FROM player_career pc
-  WHERE pc.team_id > 0 AND ${clubCareerOnlySql('pc')}
-  GROUP BY pc.player_id
-)`;
 
 const CATEGORIES: Category[] = [
   { id: 'career_goals', title: 'Career Goals', noun: 'goals', unit: null, scope: 'global', sub: careerGoalsSub },
