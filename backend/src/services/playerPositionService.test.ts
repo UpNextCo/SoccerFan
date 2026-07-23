@@ -10,13 +10,13 @@ test('Draft XI slot compatibility matches the approved matrix', () => {
   assert.deepEqual(SLOT_POSITION_COMPATIBILITY, {
     Goalkeeper: ['Goalkeeper'],
     'Centre-Back': ['Centre-Back'],
-    'Left-Back': ['Left-Back', 'Left Midfield'],
-    'Right-Back': ['Right-Back', 'Right Midfield'],
+    'Left-Back': ['Left-Back'],
+    'Right-Back': ['Right-Back'],
     'Defensive Midfield': ['Defensive Midfield', 'Central Midfield'],
     'Central Midfield': ['Central Midfield', 'Defensive Midfield', 'Attacking Midfield'],
     'Attacking Midfield': ['Attacking Midfield', 'Central Midfield', 'Second Striker'],
-    'Left Midfield': ['Left Midfield', 'Left-Back', 'Left Winger'],
-    'Right Midfield': ['Right Midfield', 'Right-Back', 'Right Winger'],
+    'Left Midfield': ['Left Midfield', 'Left Winger'],
+    'Right Midfield': ['Right Midfield', 'Right Winger'],
     'Left Winger': ['Left Winger', 'Left Midfield'],
     'Right Winger': ['Right Winger', 'Right Midfield'],
     'Centre-Forward': ['Centre-Forward', 'Second Striker'],
@@ -30,14 +30,17 @@ test('every canonical position accepts itself', () => {
   }
 });
 
-test('compatibility is slot-driven and not transitively expanded', () => {
-  assert.deepEqual(compatibleSubPositions('Left Midfield'), [
-    'Left Midfield',
-    'Left-Back',
-    'Left Winger',
-  ]);
+test('fullbacks and wingers do not cross via midfield bridges', () => {
+  assert.deepEqual(compatibleSubPositions('Left Midfield'), ['Left Midfield', 'Left Winger']);
+  assert.deepEqual(compatibleSubPositions('Right Midfield'), ['Right Midfield', 'Right Winger']);
   assert.ok(!compatibleSubPositions('Left-Back').includes('Left Winger'));
+  assert.ok(!compatibleSubPositions('Left-Back').includes('Left Midfield'));
   assert.ok(!compatibleSubPositions('Left Winger').includes('Left-Back'));
+  assert.ok(!compatibleSubPositions('Right-Back').includes('Right Winger'));
+  assert.ok(!compatibleSubPositions('Right-Back').includes('Right Midfield'));
+  assert.ok(!compatibleSubPositions('Right Winger').includes('Right-Back'));
+  assert.ok(!compatibleSubPositions('Right Midfield').includes('Right-Back'));
+  assert.ok(!compatibleSubPositions('Left Midfield').includes('Left-Back'));
   assert.ok(!compatibleSubPositions('Centre-Back').includes('Defensive Midfield'));
   assert.ok(!compatibleSubPositions('Left Winger').includes('Right Winger'));
 });

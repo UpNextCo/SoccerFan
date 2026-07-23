@@ -20,23 +20,22 @@ export const VALID_SUB_POSITIONS = [
 export type SubPosition = (typeof VALID_SUB_POSITIONS)[number];
 
 export const VALID_SUB_POSITION_SET = new Set<string>(VALID_SUB_POSITIONS);
-export const DRAFT_POSITION_COMPATIBILITY_VERSION = 1;
+export const DRAFT_POSITION_COMPATIBILITY_VERSION = 2;
 
 /**
- * Slot-driven Draft XI compatibility. These are deliberately adjacent roles rather than broad
- * position groups: an LM may fill either neighbouring role, but an LB does not implicitly become
- * an LW. Existing secondary positions remain valid in addition to this small allowance.
+ * Slot-driven Draft XI compatibility. Adjacent midfield roles may still share (CM↔DM, RW↔RM),
+ * but fullbacks and wingers must not cross: RB ↛ RW and LB ↛ LW (v1's RM/LM bridge allowed that).
  */
 export const SLOT_POSITION_COMPATIBILITY: Record<SubPosition, readonly SubPosition[]> = {
   Goalkeeper: ['Goalkeeper'],
   'Centre-Back': ['Centre-Back'],
-  'Left-Back': ['Left-Back', 'Left Midfield'],
-  'Right-Back': ['Right-Back', 'Right Midfield'],
+  'Left-Back': ['Left-Back'],
+  'Right-Back': ['Right-Back'],
   'Defensive Midfield': ['Defensive Midfield', 'Central Midfield'],
   'Central Midfield': ['Central Midfield', 'Defensive Midfield', 'Attacking Midfield'],
   'Attacking Midfield': ['Attacking Midfield', 'Central Midfield', 'Second Striker'],
-  'Left Midfield': ['Left Midfield', 'Left-Back', 'Left Winger'],
-  'Right Midfield': ['Right Midfield', 'Right-Back', 'Right Winger'],
+  'Left Midfield': ['Left Midfield', 'Left Winger'],
+  'Right Midfield': ['Right Midfield', 'Right Winger'],
   'Left Winger': ['Left Winger', 'Left Midfield'],
   'Right Winger': ['Right Winger', 'Right Midfield'],
   'Centre-Forward': ['Centre-Forward', 'Second Striker'],
