@@ -2,7 +2,7 @@ import appleSignin from 'apple-signin-auth';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users, userProgress } from '../db/schema.js';
-import { signToken } from '../middleware/auth.js';
+import { forgetUser, signToken } from '../middleware/auth.js';
 import type { UserProfile } from '../types.js';
 import { resolveClientDailyDate } from '../utils/dailyDate.js';
 import { avatarPublicUrl } from '../utils/avatarUrl.js';
@@ -171,6 +171,8 @@ export async function getUserAvatarJpeg(userId: string): Promise<Buffer | null> 
 
 export async function deleteUserAccount(userId: string): Promise<void> {
   await db.delete(users).where(eq(users.id, userId));
+  // Drop the cached existence entry so the deleted token is rejected on the very next request.
+  forgetUser(userId);
 }
 
 export { computeLevel, xpRequiredForLevel };

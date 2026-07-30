@@ -11,12 +11,16 @@ enum APIError: LocalizedError {
     case invalidResponse
     case server(String)
     case unauthorized
+    /// The token is well-formed but its account is gone (deleted account, wiped database). Distinct
+    /// from `.unauthorized` only so callers can word it differently — both mean "sign in again".
+    case accountMissing
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse: return "Invalid server response"
         case .server(let msg): return msg
         case .unauthorized: return "Please sign in again"
+        case .accountMissing: return "Your account is no longer available. Please sign in again."
         }
     }
 }
@@ -43,7 +47,10 @@ actor APIClient {
         method: String = "GET",
         queryItems: [URLQueryItem]? = nil,
         body: Encodable? = nil,
-        authorized: Bool = true
+        authorized: Bool = true,
+        // Set on account-scoped reads: a 404 there means the account itself is gone, so the session
+        // must be torn down rather than reported as a transient failure.
+        signedOutOnNotFound: Bool = false
     ) async throws -> T {
         var components = URLComponents(
             url: AppConfig.apiBaseURL.appendingPathComponent(path),
@@ -81,8 +88,14 @@ actor APIClient {
         }
 
         guard (200..<300).contains(http.statusCode) else {
-            if let decoded = try? JSONDecoder().decode(APIResponse<T>.self, from: data),
-               let error = decoded.error {
+            let decoded = try? JSONDecoder().decode(APIResponse<T>.self, from: data)
+            if decoded?.error?.code == "USER_NOT_FOUND" || (http.statusCode == 404 && signedOutOnNotFound) {
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .sessionUnauthorized, object: nil)
+                }
+                throw APIError.accountMissing
+            }
+            if let error = decoded?.error {
                 throw APIError.server(error.message)
             }
             throw APIError.server("The server is unavailable. Please try again.")
@@ -109,7 +122,11 @@ actor APIClient {
 
     func me(localDate: String? = nil) async throws -> UserProfileDTO {
         let date = localDate ?? DailyDate.localToday()
-        return try await request("auth/me", queryItems: [URLQueryItem(name: "date", value: date)])
+        return try await request(
+            "auth/me",
+            queryItems: [URLQueryItem(name: "date", value: date)],
+            signedOutOnNotFound: true
+        )
     }
 
     func xpByMode(localDate: String? = nil) async throws -> XpByModeResponseDTO {

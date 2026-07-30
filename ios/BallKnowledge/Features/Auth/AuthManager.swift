@@ -32,16 +32,32 @@ final class AuthManager {
             isDevAccount = UserDefaults.standard.bool(forKey: UserDefaultsKeys.isDevAccount)
             await ProfileSync.pushLocalToServer(auth: self)
         } catch APIError.unauthorized {
-            await APIClient.shared.clearToken()
-            isAuthenticated = false
-            isDevAccount = false
-            clearLocalAccountState(context: context)
+            await tearDownSession(context: context, message: nil)
+        } catch APIError.accountMissing {
+            // The token outlived its account. Anything cached locally belongs to an account that no
+            // longer exists, so it must go — otherwise the app shows phantom XP against a fresh one.
+            await tearDownSession(
+                context: context,
+                message: "Your account is no longer available. Please sign in again."
+            )
         } catch {
-            // Keep the valid local session usable during transient network/server failures.
+            // Keep the valid local session usable during transient failures, but only claim to be
+            // offline when it really was connectivity — a server error is not the same thing.
             isAuthenticated = true
             isDevAccount = UserDefaults.standard.bool(forKey: UserDefaultsKeys.isDevAccount)
-            errorMessage = "You're offline. Some information may be out of date."
+            errorMessage = error is URLError
+                ? "You're offline. Some information may be out of date."
+                : error.localizedDescription
         }
+    }
+
+    private func tearDownSession(context: ModelContext, message: String?) async {
+        await APIClient.shared.clearToken()
+        user = nil
+        isAuthenticated = false
+        isDevAccount = false
+        clearLocalAccountState(context: context)
+        errorMessage = message
     }
 
     func signIn(identityToken: String, displayName: String?) async {
