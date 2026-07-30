@@ -2,6 +2,10 @@
  * Backfill players.sub_position (fine position: Right-Back, Centre-Back, Left Winger, …) from
  * the Transfermarkt players.csv. Also seeds players.sub_positions with the matched primary.
  *
+ * players.csv carries only ONE position per player, so this job can never populate a player's
+ * secondary roles — job:backfill-lineup-positions derives those from real match lineups. This
+ * job therefore only ever ADDS to sub_positions.
+ *
  * Match order: external_id (TM player id) → DOB + name tokens.
  *
  * Usage: DATABASE_URL=... npx tsx src/jobs/ingest-sub-positions.ts [transferdata]
@@ -90,10 +94,15 @@ async function main() {
   for (let i = 0; i < updates.length; i += 500) {
     const batch = updates.slice(i, i + 500);
     const tuples = batch.map((u) => sql`(${u.id}::uuid, ${u.sub})`);
+    // Union rather than assign: sub_positions also holds roles derived from real lineups
+    // (job:backfill-lineup-positions) and curated overrides, which must survive a re-run.
     await db.execute(sql`
       UPDATE players AS p
-      SET sub_position = v.s,
-          sub_positions = ARRAY[v.s]::text[]
+      SET sub_position = COALESCE(p.sub_position, v.s),
+          sub_positions = CASE
+            WHEN p.sub_positions @> ARRAY[v.s]::text[] THEN p.sub_positions
+            ELSE array_append(p.sub_positions, v.s)
+          END
       FROM (VALUES ${sql.join(tuples, sql`, `)}) AS v(id, s)
       WHERE p.id = v.id
     `);

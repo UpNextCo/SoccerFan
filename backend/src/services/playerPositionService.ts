@@ -20,7 +20,10 @@ export const VALID_SUB_POSITIONS = [
 export type SubPosition = (typeof VALID_SUB_POSITIONS)[number];
 
 export const VALID_SUB_POSITION_SET = new Set<string>(VALID_SUB_POSITIONS);
-export const DRAFT_POSITION_COMPATIBILITY_VERSION = 2;
+/** Bump whenever slot compatibility OR the stored player position data changes, so already
+ *  generated Draft XI puzzles (which cache optimalScore/optimalLineup) are regenerated.
+ *  v3: sub_positions backfilled from real Transfermarkt lineups. */
+export const DRAFT_POSITION_COMPATIBILITY_VERSION = 3;
 
 /**
  * Slot-driven Draft XI compatibility. Adjacent midfield roles may still share (CM↔DM, RW↔RM),
