@@ -13,6 +13,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { playerCareer } from '../db/schema.js';
 import { clubCareerOnlySql } from '../utils/nationalTeam.js';
+import { statsTeamNameKeySql } from '../utils/statsClubEvidence.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -47,21 +48,7 @@ async function loadMissingSpells(): Promise<MissingSpell[]> {
       SELECT
         s.player_id,
         s.team_name,
-        -- Common stats shorthand → teams.name keys
-        CASE lower(s.team_name)
-          WHEN 'porto' THEN 'fc porto'
-          WHEN 'sporting' THEN 'sporting cp'
-          WHEN 'psg' THEN 'paris saint germain'
-          WHEN 'inter milan' THEN 'inter'
-          WHEN 'man utd' THEN 'manchester united'
-          WHEN 'man united' THEN 'manchester united'
-          WHEN 'man city' THEN 'manchester city'
-          WHEN 'spurs' THEN 'tottenham'
-          WHEN 'atletico' THEN 'atletico madrid'
-          WHEN 'atlético madrid' THEN 'atletico madrid'
-          WHEN 'charlton athletic' THEN 'charlton'
-          ELSE lower(s.team_name)
-        END AS name_key,
+        ${statsTeamNameKeySql(sql`s.team_name`)} AS name_key,
         MIN(s.season)::int AS season_from,
         MAX(s.season)::int AS season_to,
         SUM(COALESCE(s.appearances, 0))::int AS apps

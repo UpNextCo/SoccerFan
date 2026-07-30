@@ -23,7 +23,7 @@
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { canonicalNationality } from '../utils/nationality.js';
+import { clubTeamIds, isNationalTeam, nationSet } from '../utils/nationalTeam.js';
 import { resolveHeadshot, teamLogoUrl } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 
@@ -136,32 +136,10 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 // A shared national (or national-youth) team is exactly the "same nationality" link the game
 // forbids, so those spells must never form a teammate edge. Club reserve/B/youth sides ARE real
 // clubs (playing together there is a genuine link) and are kept.
-
-let NATION_SET: Set<string> | null = null;
-async function nationSet(): Promise<Set<string>> {
-  if (NATION_SET) return NATION_SET;
-  const rows = (await db.execute(sql`
-    SELECT DISTINCT nationality FROM players WHERE nationality IS NOT NULL AND nationality <> ''
-  `)) as unknown as Array<{ nationality: string }>;
-  const s = new Set<string>();
-  for (const r of rows) {
-    s.add(r.nationality.trim());
-    s.add(canonicalNationality(r.nationality));
-  }
-  NATION_SET = s;
-  return s;
-}
-
-/** True if a career row is a national or national-youth side (to be excluded from teammate links). */
-function isNationalTeam(name: string, nations: Set<string>): boolean {
-  const n = name.trim();
-  if (nations.has(n) || nations.has(canonicalNationality(n))) return true;
-  // Strip a national-youth / Olympic suffix and re-test the base country ("England U19" → "England",
-  // "Nigeria Olympic" → "Nigeria"). Club sides like "Real Madrid Castilla" won't match a nation.
-  const base = n.replace(/\s+(U\d{1,2}|Olympics?|Olympic)$/i, '').trim();
-  if (base !== n && (nations.has(base) || nations.has(canonicalNationality(base)))) return true;
-  return false;
-}
+//
+// The filter lives in utils/nationalTeam so one rule serves every caller. It has to cut both ways:
+// country names appear in several spellings ("Rep. Of Ireland"), while some real clubs are named after
+// a country (AS Monaco) and must NOT be discarded — hence the league_id escape via clubTeamIds().
 
 // ---- Pairwise areTeammates (live validation) ---------------------------------------------------
 
@@ -176,13 +154,14 @@ interface CareerRow {
 async function loadSpells(playerIds: string[], nations: Set<string>): Promise<Map<string, ClubSpell[]>> {
   const map = new Map<string, ClubSpell[]>();
   if (playerIds.length === 0) return map;
+  const clubs = await clubTeamIds();
   const list = sql.join(playerIds.map((id) => sql`${id}::uuid`), sql`, `);
   const rows = (await db.execute(sql`
     SELECT player_id, team_id, team_name, season_from, season_to
     FROM player_career WHERE player_id IN (${list}) AND team_id > 0
   `)) as unknown as CareerRow[];
   for (const r of rows) {
-    if (isNationalTeam(r.team_name, nations)) continue;
+    if (!clubs.has(Number(r.team_id)) && isNationalTeam(r.team_name, nations)) continue;
     const spell: ClubSpell = {
       clubId: r.team_id,
       clubName: r.team_name,
@@ -296,10 +275,11 @@ async function buildGraph(): Promise<Graph> {
   `)) as unknown as CareerRow[];
 
   // Group non-national spells by club so we only compare within-club rosters.
+  const clubs = await clubTeamIds();
   const byClub = new Map<number, Array<{ id: string; from: number; to: number }>>();
   for (const r of careerRows) {
     if (!players.has(r.player_id)) continue;
-    if (isNationalTeam(r.team_name, nations)) continue;
+    if (!clubs.has(Number(r.team_id)) && isNationalTeam(r.team_name, nations)) continue;
     const spell = { id: r.player_id, from: r.season_from, to: r.season_to ?? CURRENT_YEAR };
     (byClub.get(r.team_id) ?? byClub.set(r.team_id, []).get(r.team_id)!).push(spell);
   }
