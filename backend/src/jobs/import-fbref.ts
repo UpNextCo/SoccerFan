@@ -87,10 +87,57 @@ async function main() {
   console.log(`Loaded ${rows.length} FBref rows from ${path}`);
 
   // Existing players → match by normalized name so legends merge instead of duplicating.
-  const existing = await db.select({ id: players.id, name: players.name }).from(players);
+  //
+  // Display names do not always spell a player the way FBref does, so the name alone is not enough to
+  // recognise someone we already hold: our "Marco Basten" and "Paolo Canio" are FBref's "Marco van
+  // Basten" and "Paolo Di Canio". Falling back to the aliases and search text catches those, without
+  // which the import inserts a second row for the player and splits their career across both.
+  const existing = await db
+    .select({
+      id: players.id,
+      name: players.name,
+      aliases: players.aliases,
+      searchText: players.searchText,
+      birthDate: players.birthDate,
+    })
+    .from(players);
   const nameToId = new Map<string, string>();
+  const fallbackToId = new Map<string, string>();
+  const birthYearById = new Map<string, number>();
+  for (const p of existing) {
+    const year = p.birthDate ? new Date(p.birthDate).getUTCFullYear() : NaN;
+    if (Number.isFinite(year)) birthYearById.set(p.id, year);
+  }
+  // Surname-only aliases ("Tissier") are skipped — they collide across unrelated players.
+  const addFallback = (value: string | null | undefined, id: string): void => {
+    const key = normalizeSearchText(value ?? '');
+    if (key.includes(' ') && !nameToId.has(key) && !fallbackToId.has(key)) fallbackToId.set(key, id);
+  };
   for (const p of existing) nameToId.set(normalizeSearchText(p.name), p.id);
-  console.log(`${existing.length} existing players loaded for dedupe`);
+  for (const p of existing) {
+    const aliases = Array.isArray(p.aliases) ? (p.aliases as string[]) : [];
+    for (const alias of aliases) addFallback(alias, p.id);
+    addFallback(p.searchText, p.id);
+  }
+  /** Youngest a top-flight debut is credible at; below this the name match is a different person. */
+  const MIN_DEBUT_AGE = 15;
+
+  /**
+   * The player we already hold under this name, or undefined when this is somebody new.
+   *
+   * A name match alone is not identity — football is full of namesakes a generation apart, and merging
+   * them stacks one career on top of the other. Our "Alan Smith" is the Leeds striker born 1980, so the
+   * Arsenal one's 1992 goals are not his; the same collision put Ronaldo Nazário's 1996-2004 record on a
+   * Brazilian born in 1990. Where a birth date rules the seasons out, treat it as a separate player.
+   */
+  const resolveExisting = (key: string, earliestSeason: number): string | undefined => {
+    const id = nameToId.get(key) ?? fallbackToId.get(key);
+    if (!id) return undefined;
+    const birthYear = birthYearById.get(id);
+    if (birthYear !== undefined && earliestSeason < birthYear + MIN_DEBUT_AGE) return undefined;
+    return id;
+  };
+  console.log(`${existing.length} existing players loaded for dedupe (${fallbackToId.size} alias keys)`);
 
   // Group by player; latest season drives profile fields (club/league/age/position).
   const byPlayer = new Map<string, FbrefRow[]>();
@@ -106,8 +153,17 @@ async function main() {
   }
 
   let created = 0;
+  let namesakes = 0;
+  // One decision per name, reused for that name's stat rows, so a namesake split cannot half-apply.
+  const resolvedId = new Map<string, string>();
   for (const [key, group] of byPlayer) {
-    if (nameToId.has(key)) continue;
+    const earliestSeason = group.reduce((a, b) => Math.min(a, b.season), Infinity);
+    const matched = resolveExisting(key, earliestSeason);
+    if (matched) {
+      resolvedId.set(key, matched);
+      continue;
+    }
+    if (nameToId.has(key) || fallbackToId.has(key)) namesakes += 1;
     const latest = group.reduce((a, b) => (b.season > a.season ? b : a));
     const fields = buildPlayerSearchFields(latest.player);
     const inserted = await db
@@ -125,14 +181,14 @@ async function main() {
         searchText: fields.searchText,
       })
       .returning({ id: players.id });
-    nameToId.set(key, inserted[0]!.id);
+    resolvedId.set(key, inserted[0]!.id);
     created += 1;
   }
-  console.log(`Created ${created} new historical players`);
+  console.log(`Created ${created} new historical players (${namesakes} were namesakes of someone we hold)`);
 
   const statValues = rows
     .map((row) => {
-      const playerId = nameToId.get(normalizeSearchText(row.player));
+      const playerId = resolvedId.get(normalizeSearchText(row.player));
       if (!playerId) return null;
       return {
         playerId,

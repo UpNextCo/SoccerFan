@@ -11,8 +11,14 @@ Usage:
   pip install -r scripts/requirements.txt
   python scripts/fbref_backfill.py            # default 1995-2009
   python scripts/fbref_backfill.py 1992 2009  # custom start/end (season start years)
+  SOCCERDATA_DIR=./.soccerdata python ...     # keep the cache out of $HOME
 
 soccerdata caches pages under ~/.cache, so re-runs are fast and polite to FBref.
+
+Coverage note: the Premier League, La Liga, Serie A and Bundesliga all hold 1992-1994, but Ligue 1 does
+not come back through soccerdata for those years — its season index trips a CAPTCHA and the read fails
+with a bare season key ("9293"). So pre-1995 Ligue 1 goals are still missing, and Target Man's "Ligue 1
+Goals" undercounts anyone who played there before 1995/96 (Papin, Ginola, Waddle).
 """
 import json
 import math

@@ -52,6 +52,12 @@ export function formatDisplayName(
 
   if (!last) return trimmedApi;
 
+  // Shortening to "given name + surname" below relies on the API profile's firstname/lastname split to
+  // know where the surname starts. With neither, every middle token looks like a middle NAME, so the
+  // surname itself gets cut: "Matt Le Tissier" -> "Matt Tissier", "Marco van Basten" -> "Marco Basten".
+  // A source that supplies a bare name (FBref) is already giving the fan-facing form, so keep it whole.
+  if (!first && !lastname?.trim() && !isAbbreviatedName(trimmedApi)) return trimmedApi;
+
   const parts = givenNameParts(trimmedApi, first, last);
   const lastNorm = last.toLowerCase();
 
