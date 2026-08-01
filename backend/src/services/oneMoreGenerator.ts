@@ -16,6 +16,7 @@ import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
 import { oneMorePairKey, recentOneMorePairs } from './puzzleHistory.js';
 import { oneMoreEligibilityErrors } from './oneMoreEligibility.js';
+import { trustedIntlCapsSql } from './statMetrics.js';
 
 // Always exactly 10 rounds, so each correct answer is a clean +90 XP toward the 900 max.
 const ROUND_TARGET = 10;
@@ -128,7 +129,7 @@ const AGG = sql`
       COALESCE(MAX(e.weak_foot_goals), 0)::int AS weak_foot_goals,
       -- Goals before turning 21, from season totals + DOB → covers all eras (not just TM events).
       COALESCE(SUM(s.goals) FILTER (WHERE s.league_id <> 1 AND p.birth_date IS NOT NULL AND s.season <= EXTRACT(YEAR FROM p.birth_date) + 20), 0)::int AS goals_u21,
-      COALESCE(MAX(CASE WHEN e.intl_caps >= 1 AND e.intl_caps <= 280 THEN e.intl_caps ELSE 0 END), 0)::int AS intl_caps
+      COALESCE(MAX(${trustedIntlCapsSql('e')}), 0)::int AS intl_caps
     FROM players p
       LEFT JOIN player_stats s ON s.player_id = p.id
       LEFT JOIN player_extra_stats e ON e.player_id = p.id

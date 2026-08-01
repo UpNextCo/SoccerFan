@@ -3,6 +3,7 @@ import { db } from '../../../db/index.js';
 import type { LMSBuildContext, LMSBuilderResult } from '../types.js';
 import { isHouseholdIndexed, hlPairUsedKey, metricUsedKey, playerUsedKey } from '../recognition.js';
 import { makeOptionId, seededIndex } from '../shared.js';
+import { trustedIntlCapsSql, trustedIntlGoalsSql } from '../../statMetrics.js';
 import {
   availableHigherLowerMetrics,
   formatHigherLowerValue,
@@ -63,14 +64,14 @@ async function buildHigherLowerForMetric(
         COALESCE(SUM(s.appearances) FILTER (WHERE s.league_id = 2), 0)::int AS cl_apps,
         COALESCE(p.peak_market_value_eur, 0)::int AS peak_value,
         COALESCE(p.record_fee_eur, 0)::int AS record_fee,
-        CASE WHEN COALESCE(es.intl_caps, 0) BETWEEN 30 AND 280 THEN es.intl_caps ELSE 0 END::int AS intl_caps,
-        CASE WHEN COALESCE(es.intl_goals, 0) BETWEEN 1 AND 150 THEN es.intl_goals ELSE 0 END::int AS intl_goals
+        CASE WHEN ${trustedIntlCapsSql('es')} BETWEEN 30 AND 280 THEN ${trustedIntlCapsSql('es')} ELSE 0 END::int AS intl_caps,
+        CASE WHEN ${trustedIntlGoalsSql('es')} BETWEEN 1 AND 150 THEN ${trustedIntlGoalsSql('es')} ELSE 0 END::int AS intl_goals
       FROM players p
       LEFT JOIN player_stats s ON s.player_id = p.id
       LEFT JOIN player_extra_stats es ON es.player_id = p.id
       WHERE p.market_value_tier >= 4
       GROUP BY p.id, p.name, p.market_value_tier, p.peak_market_value_eur,
-        p.record_fee_eur, es.intl_caps, es.intl_goals
+        p.record_fee_eur, es.intl_caps, es.intl_goals, es.tm_intl_caps, es.tm_intl_goals
     )
     SELECT id, name, mvt, ${sql.raw(metric.col)} AS val
     FROM agg

@@ -17,6 +17,9 @@ import { clubCareerOnlySql } from '../utils/nationalTeam.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
+/** Transfers dated before this are feed placeholders, not history — see the query below. */
+const MIN_PLAUSIBLE_TRANSFER_DATE = '1970-01-01';
+
 type MissingSpell = {
   player_id: string;
   team_id: number;
@@ -48,6 +51,11 @@ async function loadMissingSpells(): Promise<MissingSpell[]> {
         AND t.to_team_name IS NOT NULL
         AND t.to_team_name <> ''
         AND t.transfer_date IS NOT NULL
+        -- The feed uses 1926-01-01 as a "date unknown" placeholder on otherwise modern moves
+        -- (Charlotte -> Standard Liège, Mazatlán -> Tigres). Taken literally it produced club
+        -- spells running 1926 to today, which in Club Chain makes a player a team-mate of
+        -- everyone who ever wore the shirt.
+        AND t.transfer_date >= ${MIN_PLAUSIBLE_TRANSFER_DATE}
     ),
     first_join AS (
       SELECT DISTINCT ON (player_id, team_id)

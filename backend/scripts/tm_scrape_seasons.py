@@ -42,11 +42,22 @@ def remaining():
 
 # ---------------- worker: scrape one batch in its own process ----------------
 def season_year(s):
-    m = re.match(r"(\d{2})/(\d{2})", s.strip())
-    if not m:
-        return None
-    yy = int(m.group(1))
-    return (1900 + yy) if yy > 30 else (2000 + yy)
+    """Start year of a TM season label.
+
+    Split-season leagues label rows "23/24", but calendar-year leagues (MLS, Brasileirao, Liga MX,
+    J1, pre-2011 Russia, Scandinavia) label them "2023". Only accepting the first form silently
+    dropped every one of those competitions -- Henry's Red Bulls and Zlatan's Galaxy goals vanished.
+    """
+    s = s.strip()
+    m = re.match(r"^(\d{2})/(\d{2})$", s)
+    if m:
+        yy = int(m.group(1))
+        return (1900 + yy) if yy > 30 else (2000 + yy)
+    m = re.match(r"^(\d{4})$", s)
+    if m:
+        yr = int(m.group(1))
+        return yr if 1880 <= yr <= 2100 else None
+    return None
 
 
 def num(x):

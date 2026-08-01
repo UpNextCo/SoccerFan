@@ -7,6 +7,7 @@
  *   - starts too late  (Gerrard at Liverpool from 2005; he arrived in 1998)
  *   - ends too late    (Gerrard at Liverpool until 2017; he left in 2015)
  *   - stints merged    (Cristiano at United 2003–2021, one row covering two separate spells)
+ *   - starts impossibly early (Morata at Milan from 1926, from a placeholder transfer date)
  */
 
 /** An inclusive season range, e.g. { from: 1998, to: 2014 } is 1998/99 through 2014/15. */
@@ -69,12 +70,16 @@ function stintFor(stints: Stint[], season: number): number {
  * (current-season stats lag) or unattributed appearances sit in the tail.
  *
  * @param ongoingFrom Seasons at or after this count as "still there", so their end is left alone.
+ * @param earliestPlausibleStart A stored start before this is a broken value rather than history (the
+ *   transfer feed dates unknown moves 1926-01-01, which gave Morata a Milan spell from 1926), so it is
+ *   discarded in favour of the appearance evidence. Callers that can't judge plausibility omit it.
  */
 export function reconcileStints(
   stints: Stint[],
   seasons: number[],
   context: SeasonContext,
-  ongoingFrom: number
+  ongoingFrom: number,
+  earliestPlausibleStart = -Infinity
 ): Stint[] | null {
   if (stints.length === 0 || seasons.length === 0) return null;
 
@@ -93,7 +98,10 @@ export function reconcileStints(
     const runs = runsOf(mine, context);
     for (let r = 0; r < runs.length; r += 1) {
       const run = runs[r]!;
-      const from = r === 0 ? Math.min(stint.from, run.from) : run.from;
+      // A start we believe can only move EARLIER (our stats don't reach every era); one that predates
+      // the player existing is thrown away and rebuilt from the appearances.
+      const storedStartIsReal = stint.from >= earliestPlausibleStart;
+      const from = r === 0 && storedStartIsReal ? Math.min(stint.from, run.from) : run.from;
       const keepStoredEnd =
         stint.to > run.to && (stint.to >= ongoingFrom || context.unknownDuring(run.to + 1, stint.to));
       const to = r === runs.length - 1 && keepStoredEnd ? stint.to : run.to;

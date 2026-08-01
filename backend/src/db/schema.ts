@@ -551,6 +551,18 @@ export const playerExtraStats = pgTable('player_extra_stats', {
    *  ("Premier League penalties") rather than a fuzzy, undercounted all-competitions "career"
    *  total. fbrefPenalties (Big-5 sum) is retained but no longer drives a category. */
   fbrefPenalties: integer('fbref_penalties').notNull().default(0),
+  /** Whole-career CLUB totals across every senior competition (league, cups, super cups, continental)
+   *  from the Transfermarkt per-season scrape. player_stats only covers a handful of tracked leagues, so
+   *  summing it undercounts anyone who played outside the big-5 — Ronaldo lost his Sporting, Al-Nassr and
+   *  every domestic-cup goal. NULL means "not scraped", which is different from 0 and keeps a player OUT
+   *  of career-total categories rather than ranking them on a partial number. */
+  tmCareerGoals: integer('tm_career_goals'),
+  tmCareerApps: integer('tm_career_apps'),
+  /** Senior national-team caps/goals from Transfermarkt's national-team page. Kept separate from
+   *  intlCaps/intlGoals (Wikipedia + TM players.csv) because those two disagree and players.csv
+   *  sometimes stored club appearances as caps. NULL means "not scraped". */
+  tmIntlCaps: integer('tm_intl_caps'),
+  tmIntlGoals: integer('tm_intl_goals'),
   plPenalties: integer('pl_penalties').notNull().default(0),
   laligaPenalties: integer('laliga_penalties').notNull().default(0),
   serieaPenalties: integer('seriea_penalties').notNull().default(0),

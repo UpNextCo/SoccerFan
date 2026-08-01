@@ -1,0 +1,432 @@
+outcome,player,birth_date,tm_player_id,wikidata,matched_on
+matched,"Zinédine Zidane",1972-06-23,3111,Q1835,name
+matched,"Thierry Henry",1977-08-17,3207,Q45901,name
+matched,"Oliver Kahn",1969-06-15,206,Q131261,name
+matched,"Paolo Maldini",1968-06-26,5803,Q483027,name
+matched,"Andriy Shevchenko",1976-09-29,3522,Q41244,name
+matched,"Fabien Barthez",1971-06-28,3289,Q191139,name
+matched,"Roberto Carlos",1973-04-10,7518,Q429039,name
+matched,"Alessandro Del Piero",1974-11-09,4289,Q624,name
+matched,"Didier Deschamps",1968-10-15,75553,Q508711,name
+matched,"Fabio Cannavaro",1973-09-13,5775,Q102027,name
+matched,"Nwankwo Kanu",1976-08-01,3133,Q599675,name
+matched,"Deco",1977-08-27,8564,Q659634,name
+matched,"Dennis Bergkamp",1969-05-10,3187,Q185389,name
+matched,"Diego Forlán",1979-05-19,3408,Q261534,name
+matched,"Hristo Stoichkov",1966-02-08,7938,Q187125,name
+matched,"Patrick Vieira",1976-06-23,3183,Q46347,name
+matched,"Alessandro Nesta",1976-03-19,4171,Q227892,name
+matched,"Davor Šuker",1968-01-01,1407,Q189217,name
+matched,"Demetrio Albertini",1971-08-23,3390,Q245011,name
+matched,"Edwin van der Sar",1970-10-29,3516,Q482955,name
+matched,"Frank Rijkaard",1962-09-30,70667,Q169098,name
+matched,"Lilian Thuram",1972-01-01,3521,Q180326,name
+matched,"Marcel Desailly",1968-09-07,3154,Q193625,name
+matched,"Pavel Nedvěd",1972-08-30,3603,Q171295,name
+matched,"Ronaldinho",1980-03-21,3373,Q39444,name
+matched,"David Trézéguet",1977-10-15,4146,Q183967,name
+matched,"Franco Baresi",1960-05-08,42049,Q189984,name
+matched,"Kaká",1982-04-22,3366,Q531814,name
+matched,"Cafú",1970-06-07,5937,Q178683,name
+matched,"Daniele Massaro",1961-05-23,102480,Q352826,name
+matched,"Edgar Davids",1973-03-13,5758,Q185115,name
+matched,"Fernando Morientes",1976-04-05,7531,Q45567,name
+matched,"Gennaro Gattuso",1978-01-09,5813,Q116980,name
+matched,"Roberto Donadoni",1963-09-09,102474,Q294718,name
+matched,"Henrik Larsson",1971-09-20,3514,Q179334,name
+matched,"Jari Litmanen",1971-02-20,4675,Q209650,name
+matched,"Luís Figo",1972-11-04,3446,Q483145,name
+matched,"Rivaldo",1972-04-19,3372,Q483577,name
+matched,"Alessandro Costacurta",1966-04-24,10055,Q213828,name
+matched,"Angelo Peruzzi",1970-02-16,5826,Q294565,name
+matched,"Antonio Conte",1969-07-31,5759,Q26580,name
+matched,"Bixente Lizarazu",1969-12-09,210,Q44073,name
+matched,"Christian Panucci",1973-04-12,5940,Q168287,name
+matched,"Claude Makelele",1973-02-18,4182,Q184362,name
+matched,"Dietmar Hamann",1973-08-27,919,Q155903,name
+matched,"Fernando Hierro",1968-03-23,7513,Q205499,name
+matched,"Filippo Inzaghi",1973-08-09,5821,Q126503,name
+matched,"Gianluca Pessotto",1970-08-11,5751,Q319543,name
+matched,"Mark Iuliano",1973-08-12,5750,Q353046,name
+matched,"Markus Babbel",1972-09-08,192,Q61225,name
+matched,"Michael Ballack",1976-09-26,63,Q11948,name
+matched,"Paolo Montero",1971-09-03,5747,Q342484,name
+matched,"Robert Pirès",1973-10-29,3185,Q113156,name
+matched,"Santiago Cañizares",1969-12-18,7562,Q270311,name
+matched,"Thomas Linke",1969-12-26,209,Q163040,name
+matched,"Torsten Frings",1976-11-22,528,Q107076,name
+matched,"Hasan Salihamidžić",1977-01-01,214,Q153387,name
+matched,"Míchel Salgado",1975-10-22,7515,Q216816,name
+matched,"Sylvain Wiltord",1974-05-10,3188,Q217760,name
+matched,"Roberto Baggio",1967-02-18,4153,Q67964,name
+matched,"Alan Shearer",1970-08-13,3110,Q483583,name
+matched,"Frédéric Kanouté",1977-09-02,3700,Q218394,name
+matched,"Harry Kewell",1978-09-22,3241,Q204429,name
+matched,"Marc Overmars",1973-03-29,3513,Q219248,name
+matched,"Matthias Sammer",1967-09-05,77010,Q57183,name
+matched,"Romário",1966-01-29,7942,Q178649,name
+matched,"Cláudio Taffarel",1966-05-08,5855,Q295891,name
+matched,"Costinha",1974-12-01,9826,Q311087,name
+matched,"Maniche",1977-11-11,9822,Q29339,name
+matched,"Vladimir Jugović",1969-08-30,5297,Q146119,name
+matched,"Youri Djorkaeff",1968-03-09,4,Q217482,name
+matched,"Dejan Savićević",1966-09-15,35894,Q135625,name
+matched,"Freddie Ljungberg",1977-04-16,3134,Q10560,name
+matched,"Jürgen Klinsmann",1964-07-30,16980,Q57079,name
+matched,"Lothar Matthäus",1961-03-21,1527,Q36386,name
+matched,"Nuno Mendes",1979-12-06,134435,Q108130277,name~
+matched,"Peter Schmeichel",1963-11-18,3465,Q182314,name
+matched,"Predrag Mijatović",1969-01-19,24481,Q237964,name
+matched,"Alain Boghossian",1970-10-27,4148,Q350738,name
+matched,"Aldair",1965-11-30,4151,Q297721,name
+matched,"Alen Bokšić",1970-01-21,3571,Q313518,name
+matched,"Bernd Schneider",1973-11-17,90,Q152458,name
+matched,"Carsten Jancker",1974-08-28,202,Q170150,name
+matched,"Carsten Ramelow",1974-03-20,86,Q435065,name
+matched,"Christian Karembeu",1970-12-03,9209,Q286511,name
+matched,"Christian Ziege",1972-02-01,916,Q155884,name
+matched,"Christophe Dugarry",1972-03-24,3237,Q176755,name
+matched,"Danny Blind",1961-08-01,101044,Q434702,name
+matched,"Danny Murphy",1977-03-18,3221,Q296589,name
+matched,"Denílson",1977-08-24,7660,Q311641,name
+matched,"Dino Baggio",1971-07-24,5843,Q328770,name
+matched,"Dmitri Alenichev",1972-10-20,9804,Q526233,name
+matched,"Dunga",1963-10-31,96342,Q215890,name
+matched,"Edmílson",1976-07-10,5343,Q296058,name
+matched,"Emmanuel Petit",1970-09-22,3166,Q269883,name
+matched,"Fábio Rochemback",1981-12-10,7606,Q375496,name
+matched,"Fernando Redondo",1969-06-06,5811,Q295456,name
+matched,"Finidi George",1971-04-15,13241,Q379349,name
+matched,"Gaizka Mendieta",1974-03-27,7603,Q295410,name
+matched,"Gianluca Pagliuca",1966-12-18,5985,Q313480,name
+matched,"Gianluca Zambrotta",1977-02-19,5757,Q182907,name
+matched,"Gilberto Silva",1976-10-07,3194,Q190142,name
+matched,"Hans-Jörg Butt",1974-05-28,294,Q152354,name
+matched,"Hernán Crespo",1975-07-05,3410,Q160206,name
+matched,"Jaap Stam",1972-07-17,3557,Q216917,name
+matched,"Jens Jeremies",1974-03-05,204,Q167962,name
+matched,"Jon Dahl Tomasson",1976-08-29,4169,Q203657,name
+matched,"Jorge Costa",1971-10-14,9810,Q465049,name
+matched,"Jörg Heinrich",1969-12-06,113,Q390159,name
+matched,"Juliano Belletti",1976-06-20,7829,Q237561,name
+matched,"Jürgen Kohler",1965-10-06,119,Q308925,name
+matched,"Kily González",1974-08-04,7438,Q314761,name
+matched,"Lars Ricken",1976-07-10,131,Q506919,name
+matched,"Laurent Blanc",1965-11-19,3113,Q1839,name
+matched,"Luisão",1981-02-13,13230,Q210950,name
+matched,"Luís Fabiano",1980-11-08,19082,Q192963,name
+matched,"Marco Bode",1969-07-23,520,Q437274,name
+matched,"Marco Materazzi",1973-08-19,5778,Q185081,name
+matched,"Mauro Camoranesi",1976-10-04,5762,Q189716,name
+matched,"Mauro Tassotti",1960-01-19,102483,Q312999,name
+matched,"Miroslav Đukić",1966-02-19,7569,Q431287,name
+matched,"Moreno Torricelli",1970-01-23,15769,Q371904,name
+matched,"Oliver Bierhoff",1968-05-01,56,Q152844,name
+matched,"Oliver Neuville",1973-05-01,81,Q152972,name
+matched,"Owen Hargreaves",1981-01-20,201,Q437545,name
+matched,"Patrick Kluivert",1976-07-01,4385,Q189686,name
+matched,"Paul Lambert",1969-08-07,3982,Q246724,name
+matched,"Paulo Sousa",1970-08-30,1536,Q314440,name
+matched,"Roberto Ayala",1973-04-14,7565,Q189535,name
+matched,"Roque Júnior",1976-08-31,5807,Q315831,name
+matched,"Rubén Baraja",1975-07-11,4191,Q299488,name
+matched,"Samuel Kuffour",1976-09-03,208,Q951342,name
+matched,"Stefan Effenberg",1968-08-02,197,Q44522,name
+matched,"Stefan Reuter",1966-10-16,130,Q327285,name
+matched,"Steve Finnan",1976-04-24,4038,Q239914,name
+matched,"Steve McManaman",1972-02-11,3980,Q294501,name
+matched,"Vítor Baía",1969-10-15,8016,Q295887,name
+matched,"Willy Sagnol",1977-03-18,213,Q44513,name
+matched,"Zvonimir Boban",1968-10-08,89545,Q231468,name
+matched,"Alexandre Pato",1989-09-02,37579,Q138075,name
+matched,"Robbie Fowler",1975-04-09,3225,Q206548,name
+matched,"Albert Ferrer",1970-06-06,3152,Q316809,name
+matched,"Arif Erdem",1972-01-02,3377,Q660534,name
+matched,"Boris Živković",1975-11-15,94,Q893814,name
+matched,"Boudewijn Zenden",1976-08-15,3173,Q271615,name
+matched,"Bülent Korkmaz",1968-11-24,3380,Q507832,name
+matched,"Capucho",1972-02-21,8563,Q1337793,name
+matched,"David Seaman",1963-09-19,3141,Q214498,name
+matched,"Dejan Stankovic",1978-11-09,10244,Q1940751,name
+matched,"Denis Irwin",1965-10-31,4280,Q317807,name
+matched,"Edouard Cissé",1978-03-30,3800,Q274268,name
+matched,"Ergün Penbe",1972-05-17,8052,Q729999,name
+matched,"Francesco Toldo",1971-12-02,5769,Q234532,name
+matched,"Gary Neville",1975-02-18,3403,Q348857,name
+matched,"Hakan Şükür",1971-09-01,3363,Q192974,name
+matched,"Hasan Şaş",1976-08-01,6102,Q313474,name
+matched,"Jerzy Dudek",1973-03-23,3209,Q190651,name
+matched,"Joel Matip",1991-08-08,82105,Q57567,name
+matched,"John Carew",1979-09-05,3570,Q192986,name
+matched,"Juan Sebastián Verón",1975-03-09,3143,Q46502,name
+matched,"Mauro Silva",1968-01-12,15476,Q342457,name
+matched,"Michael Reiziger",1973-05-03,4375,Q34658,name
+matched,"Michael Tarnat",1969-10-27,222,Q142283,name
+matched,"Nicky Butt",1975-01-21,3543,Q295506,name
+matched,"Sergei Ignashevich",1979-07-14,9644,Q213980,name
+matched,"Sergi Barjuán",1971-12-28,8063,Q342223,name
+matched,"Sol Campbell",1974-09-18,3198,Q214734,name
+matched,"Ümit Davala",1973-07-30,3381,Q312494,name
+matched,"Walter Pandiani",1976-04-27,7691,Q316778,name
+matched,"Christian Vieri",1973-07-12,5797,Q188696,name
+matched,"Dwight Yorke",1971-11-03,3223,Q192175,name
+matched,"Emerson",1976-04-04,70,Q215952,name
+matched,"Juninho Paulista",1973-02-22,3505,Q318184,name
+matched,"Mikaël Silvestre",1977-08-09,3393,Q177343,name
+matched,"Phillip Cocu",1970-10-29,5198,Q11958,name
+matched,"Raúl",1977-06-27,7349,Q11576,name
+matched,"Teddy Sheringham",1966-04-02,3392,Q234576,name
+matched,"Tony Adams",1966-10-10,28238,Q299391,name
+matched,"Tyler Dibling",2006-03-12,866655,Q115973966,name
+matched,"Óscar Cardozo",1983-05-20,45865,Q213437,name
+matched,"Andreas Brehme",1960-11-09,16056,Q159045,name
+matched,"Hugo Sánchez",1958-07-11,84528,Q487155,name
+matched,"Nikos Machlas",1973-06-16,3853,Q353059,name
+matched,"Oleg Salenko",1969-10-25,88147,Q295746,name
+matched,"Roy Keane",1971-08-10,3396,Q188632,name
+matched,"Toni Polster",1964-03-10,22416,Q311520,name
+matched,"Abel Balbo",1966-06-01,102187,Q318387,name
+matched,"Adrian Ilie",1974-04-20,9536,Q359484,name
+matched,"Alberico Evani",1963-01-01,102475,Q458474,name
+matched,"Alberto Rodríguez",1984-03-31,30543,Q552066,name
+matched,"Andoni Zubizarreta",1961-10-23,8117,Q215963,name
+matched,"Andreas Köpke",1962-03-12,1445,Q154856,name
+matched,"Andreas Möller",1967-09-02,124,Q155919,name
+matched,"Andriy Pyatov",1984-06-28,39996,Q215297,name
+matched,"Angelos Charisteas",1980-02-09,1519,Q109417,name
+matched,"Antonio Benarrivo",1968-08-21,5857,Q530759,name
+matched,"Arne Friedrich",1979-05-29,698,Q63676,name
+matched,"Aron Winter",1967-03-01,4324,Q311046,name
+matched,"Barry Ferguson",1978-02-02,10251,Q312382,name
+matched,"Benni McCarthy",1977-11-12,3091,Q214233,name
+matched,"Bodo Illgner",1967-04-07,24474,Q833002,name
+matched,"Bonaventure Kalou",1978-01-12,4164,Q343965,name
+matched,"Branco",1964-04-04,102590,Q351827,name
+matched,"César Sampaio",1968-03-31,103560,Q316436,name
+matched,"Chidi Odiah",1983-12-17,15906,Q318536,name
+matched,"Christian Wörns",1972-05-10,137,Q167241,name
+matched,"Claudio López",1974-07-17,3418,Q295883,name
+matched,"Cosmin Contra",1975-12-15,5808,Q296215,name
+matched,"Curro Torres",1976-12-27,7567,Q169983,name
+matched,"Cyril Domoraud",1971-07-22,6149,Q533472,name
+matched,"Dado Pršo",1974-11-05,4178,Q296467,name
+matched,"Damien Duff",1979-03-02,3259,Q192971,name
+matched,"Dan Eggen",1970-01-13,6819,Q369069,name
+matched,"Daniel Carvalho",1983-03-01,16223,Q537644,name
+matched,"Dani Güiza",1980-08-17,8186,Q19041,name
+matched,"Dani Olmo",1998-05-07,293385,Q19560313,name
+matched,"David Weir",1970-05-10,3312,Q464467,name
+matched,"Dickson Etuhu",1982-06-08,14011,Q310660,name
+matched,"Diego Placente",1977-04-24,76,Q346402,name
+matched,"Diego Simeone",1970-04-28,5841,Q258115,name
+matched,"Djimi Traoré",1980-03-01,3598,Q250978,name
+matched,"Edmundo",1971-04-02,53219,Q445541,name
+matched,"Edson Ramos da Silva",1986-05-31,41990,Q1029119,name
+matched,"Elvir Rahimić",1976-04-04,15591,Q559993,name
+matched,"Emile Heskey",1978-01-11,3142,Q191162,name
+matched,"Enrico Chiesa",1970-12-29,7329,Q345026,name
+matched,"Evgeni Aldonin",1980-01-22,15730,Q552732,name
+matched,"Faustino Asprilla",1969-11-10,102150,Q361409,name
+matched,"Francesco Moriero",1969-03-31,108638,Q585252,name
+matched,"Frank Baumann",1975-10-29,519,Q159803,name
+matched,"Frank Leboeuf",1968-01-22,5314,Q290769,name
+matched,"Gareth Southgate",1970-09-03,3744,Q316681,name
+matched,"George Boateng",1975-09-05,3358,Q464701,name
+matched,"Gheorghe Hagi",1965-02-05,7939,Q189892,name
+matched,"Gheorghe Popescu",1967-10-09,3129,Q313205,name
+matched,"Giourkas Seitaridis",1981-06-04,9841,Q299238,name
+matched,"Guillermo Amor",1967-12-04,104046,Q342808,name
+matched,"Habib Beye",1977-10-19,3923,Q314643,name
+matched,"Hakan Ünsal",1973-05-14,8050,Q1378770,name
+matched,"Igor Tudor",1978-04-16,5752,Q276544,name
+matched,"Iván Alonso",1979-04-10,51583,Q562663,name
+matched,"Iván Campo",1974-02-21,3274,Q316692,name
+matched,"Iván Zamorano",1967-01-18,129083,Q192035,name
+matched,"Ivica Dragutinovic",1975-11-13,13453,Q310615,name
+matched,"Jackie McNamara",1973-10-24,3479,Q461705,name
+matched,"Jan Koller",1973-03-30,1157,Q152340,name
+matched,"Javier Farinós",1978-03-29,5785,Q763807,name
+matched,"Jérémy Gavanon",1983-09-20,7338,Q2526430,name
+matched,"Jesper Blomqvist",1974-02-05,3095,Q342387,name
+matched,"Johan Mjällby",1971-02-09,3097,Q349848,name
+matched,"John Heitinga",1983-11-15,4315,Q946457,name
+matched,"Jonathan Greening",1979-01-02,3865,Q355847,name
+matched,"Jorge Andrade",1978-04-09,7491,Q311095,name
+matched,"Jorginho",1964-08-17,17166,Q163750,name
+matched,"José Kléberson",1979-06-19,3365,Q311035,name
+matched,"Joseph Enakarhire",1982-11-06,13458,Q721235,name
+matched,"Júnior Baiano",1970-03-14,17284,Q440945,name
+matched,"Karel Poborský",1972-03-30,3420,Q224033,name
+matched,"Karl-Heinz Riedle",1965-09-16,13806,Q159951,name
+matched,"Kim Dong-jin",1982-01-29,27399,Q356046,name
+matched,"Kostas Katsouranis",1979-06-21,9852,Q211124,name
+matched,"Kostas Mitroglou",1988-03-12,34944,Q312534,name
+matched,"Laurent Batlles",1975-09-23,5669,Q732431,name
+matched,"Luca Marchegiani",1966-02-22,5827,Q440920,name
+matched,"Luigi Apolloni",1967-05-02,102472,Q523685,name
+matched,"Luis Perea",1979-01-30,27489,Q316631,name
+matched,"Manuel Almunia",1977-05-19,16621,Q10711,name
+matched,"Marcelo Zalayeta",1978-12-05,5767,Q316551,name
+matched,"Márcio Santos",1969-09-15,16326,Q1526974,name
+matched,"Marco Delvecchio",1973-04-07,5961,Q250093,name
+matched,"Marcos Senna",1976-07-17,7840,Q194439,name
+matched,"Marek Jankulovski",1977-05-09,3532,Q200868,name
+matched,"Mario Basler",1968-12-18,2,Q366109,name
+matched,"Marko Babić",1981-01-28,62,Q318281,name
+matched,"Mark Viduka",1975-10-09,3242,Q239513,name
+matched,"Martín Astudillo",1977-07-10,29082,Q716570,name
+matched,"Martin Keown",1966-07-24,3184,Q314405,name
+matched,"Massimo Oddo",1976-06-14,5837,Q125438,name
+matched,"Matías Almeyda",1973-12-21,5792,Q359494,name
+matched,"Maxi Pereira",1984-06-08,57834,Q214886,name
+matched,"Mazinho",1966-04-08,102588,Q350761,name
+matched,"Nicola Berti",1967-04-14,102473,Q461305,name
+matched,"Nuno Gomes",1976-07-05,3626,Q193568,name
+matched,"Okan Buruk",1973-10-19,5791,Q444318,name
+matched,"Otto Addo",1975-06-09,102,Q472293,name
+matched,"Paolo Vanoli",1972-08-12,4290,Q3362674,name
+matched,"Patrick Paauwe",1975-12-27,4372,Q258872,name
+matched,"Patrik Andersson",1971-08-18,191,Q312089,name
+matched,"Pauleta",1973-04-28,3623,Q218165,name
+matched,"Pedro Barbosa",1970-08-06,7905,Q942727,name
+matched,"Pierluigi Casiraghi",1969-03-04,102485,Q378583,name
+matched,"Roberto Mussi",1963-08-25,102482,Q552965,name
+matched,"Roberto Sensini",1966-10-12,5882,Q369133,name
+matched,"Ronny Johnsen",1969-06-10,3578,Q381460,name
+matched,"Roudolphe Douala",1978-09-25,14103,Q614199,name
+matched,"Rúben Amorim",1985-01-27,25101,Q368682,name
+matched,"Rudi Völler",1960-04-13,13775,Q44464,name
+matched,"Saša Papac",1980-02-07,4960,Q700567,name
+matched,"Shinji Ono",1979-09-27,4379,Q360580,name
+matched,"Stefan Kuntz",1962-10-30,8194,Q437241,name
+matched,"Stéphane Chapuisat",1969-06-28,3501,Q313438,name
+matched,"Stéphane Guivarc'h",1970-09-06,102753,Q125669,name
+matched,"Stuart Parnaby",1982-07-19,3866,Q734234,name
+matched,"Sylvain N'Diaye",1976-06-25,5649,Q2313836,name
+matched,"Taribo West",1974-03-26,1403,Q449434,name
+matched,"Thomas Brdarić",1975-01-23,66,Q62403,name
+matched,"Thomas Häßler",1966-05-30,553,Q155911,name
+matched,"Thomas Helmer",1965-04-21,12405,Q508467,name
+matched,"Thomas Strunz",1968-04-25,221,Q60536,name
+matched,"Tomasz Rząsa",1973-03-11,4373,Q1378853,name
+matched,"Traianos Dellas",1976-01-31,5944,Q313722,name
+matched,"Ulf Kirsten",1965-12-04,74,Q310519,name
+matched,"Vasili Berezutski",1982-06-20,15362,Q311349,name
+matched,"Viktor Fayzulin",1986-04-22,40254,Q559154,name
+matched,"Vincenzo Montella",1974-06-18,5960,Q297768,name
+matched,"Viola",1969-01-01,7283,Q509812,name
+matched,"Winston Bogarde",1970-10-22,3155,Q125796,name
+matched,"Yıldıray Baştürk",1978-12-24,618,Q76322,name
+matched,"Zlatko Zahovič",1971-02-01,13234,Q207186,name
+matched,"Abelardo Fernández",1970-04-19,8036,Q318546,name
+matched,"Alban Lafont",1999-01-23,357117,Q21590318,name
+matched,"Albert Celades",1975-09-29,7521,Q459099,name
+matched,"André Ooijer",1974-07-11,4345,Q208020,name
+matched,"Andriy Husin",1972-12-11,9788,Q551630,name
+matched,"Andriy Nesmachniy",1979-02-28,9787,Q362580,name
+matched,"Bertrand Crasson",1971-10-05,13046,Q374970,name
+matched,"Carlos Vinícius",1994-06-22,226155,Q5042772,name
+matched,"David Luiz",1987-04-22,45304,Q314652,name
+matched,"Diego Tristán",1976-01-05,7504,Q12278088,name
+matched,"Dmitri Khlestov",1971-01-21,67110,Q2423134,name
+matched,"El-Hadji Diouf",1981-01-15,3604,Q988626,name
+matched,"Enrique Romero",1971-06-23,7494,Q538457,name
+matched,"Erik Hoftun",1969-03-03,12370,Q2421576,name
+matched,"Fábio Aurélio",1979-09-24,7570,Q216910,name
+matched,"Fernando Couto",1969-08-02,5831,Q313468,name
+matched,"Fredrik Winsnes",1975-12-28,12385,Q2601483,name
+matched,"Gabriel Heinze",1978-04-19,5555,Q63659,name
+matched,"Geremi",1978-12-20,3374,Q204230,name
+matched,"Gert Verheyen",1970-09-20,9672,Q981579,name
+matched,"Giorgos Karagounis",1977-03-06,6106,Q188983,name
+matched,"Giovanni",1972-02-04,8014,Q382069,name
+matched,"Gregory Coupet",1972-12-31,3910,Q13488,name
+matched,"Henning Berg",1969-09-01,3823,Q343093,name
+matched,"Jan Heintze",1963-08-17,1539,Q446107,name
+matched,"Jens Nowotny",1974-01-11,82,Q159050,name
+matched,"Jirí Jarosík",1977-10-27,15581,Q454196,name
+matched,"Johan Micoud",1973-07-24,2713,Q169995,name
+matched,"Johann Vogel",1977-03-08,4352,Q312176,name
+matched,"José Molina",1970-08-08,7485,Q448451,name~
+matched,"Julio Ricardo Cruz",1974-10-10,6006,Q297397,name
+matched,"Juninho Pernambucano",1975-01-30,5354,Q203451,name
+matched,"Lauren",1977-01-19,3189,Q314755,name
+matched,"Libor Sionko",1977-02-01,9770,Q297595,name
+matched,"Ljubinko Drulović",1968-09-11,3627,Q932932,name
+matched,"Luc Nilis",1967-05-25,27656,Q362712,name
+matched,"Luis Enrique",1970-05-08,7601,Q222789,name
+matched,"Michalis Konstantinou",1978-02-19,9839,Q444118,name
+matched,"Mikael Nilsson",1978-06-24,15353,Q317293,name
+matched,"Mini Jakobsen",1965-11-08,102507,Q938247,name
+matched,"Mohamed Amoura",2000-05-09,676549,Q106588747,name
+matched,"Nery Castillo",1984-06-13,9711,Q350257,name
+matched,"Noureddine Naybet",1970-02-10,7493,Q137899,name
+matched,"Patrick Müller",1976-12-17,5347,Q315336,name
+matched,"Predrag Đorđević",1972-08-04,9683,Q448099,name
+matched,"Roar Strand",1970-02-02,12383,Q706452,name
+matched,"Robert Kovač",1974-04-06,75,Q271882,name
+matched,"Sergio",1976-11-10,7500,Q145808,name
+matched,"Siniša Mihajlović",1969-02-20,5834,Q294351,name
+matched,"Stephane Dalmat",1979-02-16,7259,Q703959,name
+matched,"Tim Borowski",1980-05-02,692,Q76753,name
+matched,"Tugay Kerimoğlu",1970-08-24,3703,Q347045,name
+matched,"Vicente Rodríguez",1981-07-16,7582,Q296180,name
+matched,"Vladyslav Vashchuk",1975-01-02,15114,Q540296,name
+matched,"Yegor Titov",1976-05-29,15082,Q446262,name
+matched,"Yuriy Nikiforov",1970-09-16,4492,Q459392,name
+matched,"Zdenek Grygera",1980-05-14,6833,Q168997,name
+matched,"Enzo Scifo",1966-02-19,15547,Q221432,name
+matched,"Michel Preud'homme",1959-01-24,34524,Q315992,name
+matched,"Victor Ikpeba",1973-06-12,115,Q365175,name
+matched,"Antonio López",1981-09-13,7723,Q299360,name
+matched,"Dedê",1978-04-18,109,Q58762,name
+matched,"Diego Maradona",1960-10-30,8024,Q17515,name
+matched,"Emmanuel Amunike",1970-12-25,8062,Q431526,name
+matched,"Landon Donovan",1982-03-04,68,Q202237,name
+matched,"Les Ferdinand",1966-12-08,3645,Q311709,name
+matched,"Mustapha Hadji",1971-11-16,3840,Q311344,name
+matched,"Paul McGrath",1959-12-04,102492,Q380200,name
+matched,"Paul Merson",1968-03-20,3250,Q430740,name
+matched,"Rashidi Yekini",1963-10-23,102320,Q320194,name
+matched,"Robert Prosinečki",1969-01-12,8013,Q298190,name
+matched,"Deividas Semberas",1978-08-02,15595,Q380028,name
+matched,"Ronald Koeman",1963-03-21,7940,Q192635,name
+unmatched,"Dani Carvajal",1992-01-11,,,"birth date found, but no name match"
+unmatched,"Clarence Seedorf",1976-04-01,,,"2 people share the name and birth date"
+unmatched,"Jens Lehmann",1969-10-11,,,"birth date found, but no name match"
+unmatched,"Andy Robertson",1994-03-11,,,"birth date found, but no name match"
+unmatched,"Iván Helguera",1975-03-18,,,"birth date found, but no name match"
+unmatched,"Giovanni van Bronckhorst",1975-05-02,,,"birth date found, but no name match"
+unmatched,"Paolo Rossi",1983-09-06,,,"birth date found, but no name match"
+unmatched,"Park Ji-sung",1981-03-30,,,"birth date found, but no name match"
+unmatched,"Sami Hyypia",1973-07-10,,,"birth date found, but no name match"
+unmatched,"Angelos Basinas",1976-03-01,,,"birth date found, but no name match"
+unmatched,"Ruud van Nistelrooy",1976-01-07,,,"birth date found, but no name match"
+unmatched,"Evanilson",1999-10-06,,,"birth date found, but no name match"
+unmatched,"Luis Alberto",1992-07-09,,,"birth date found, but no name match"
+unmatched,"Oscar",1991-09-09,,,"2 people share the name and birth date"
+unmatched,"Ebert Willian Amâncio",1983-11-11,,,"birth date found, but no name match"
+unmatched,"Fabio Grosso",1977-11-28,,,"2 people share the name and birth date"
+unmatched,"Iván Peña",1976-06-05,,,"birth date found, but no name match"
+unmatched,"Javier Hernández",1988-06-01,,,"birth date found, but no name match"
+unmatched,"Javi Moreno",1984-01-23,,,"birth date found, but no name match"
+unmatched,"Martín Herrera",1979-12-08,,,"birth date found, but no name match"
+unmatched,"Pierre Issa",1975-09-12,,,"birth date found, but no name match"
+unmatched,"Steve Marlet",1974-10-01,,,"birth date found, but no name match"
+unmatched,"Stiliyan Petrov",1979-05-07,,,"birth date found, but no name match"
+unmatched,"Albert Luque",1978-11-03,,,"birth date found, but no name match"
+unmatched,"Assane Diao",2005-09-07,,,"2 people share the name and birth date"
+unmatched,"Dimitrios Eleftheropoulos",1976-07-08,,,"birth date found, but no name match"
+unmatched,"Francisco Pavón",1980-09-01,,,"birth date found, but no name match"
+unmatched,"Gabriel Fernández Arenas",1983-07-10,,,"birth date found, but no name match"
+unmatched,"Ivan Cordoba",1976-11-08,,,"birth date found, but no name match"
+unmatched,"Jan Vennegoor of Hesselink",1978-07-11,,,"birth date found, but no name match"
+unmatched,"Joaquín",1981-07-21,,,"birth date found, but no name match"
+unmatched,"John Obi Mikel",1987-04-22,,,"birth date found, but no name match"
+unmatched,"Lucho González",1981-01-19,,,"birth date found, but no name match"
+unmatched,"Mateja Kezman",1979-12-04,,,"birth date found, but no name match"
+unmatched,"Nikos Liberopoulos",1975-04-08,,,"birth date found, but no name match"
+unmatched,"Óscar Fernández Rodríguez",1981-09-30,,,"birth date found, but no name match"
+unmatched,"Rafinha",1992-02-12,,,"birth date found, but no name match"
+unmatched,"Sebastian Rudy",1990-02-28,,,"birth date found, but no name match"
+unmatched,"Patrick M'Boma",1970-11-15,,,"birth date found, but no name match"

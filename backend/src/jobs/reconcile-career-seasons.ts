@@ -53,6 +53,9 @@ import {
 /** Spells reaching this close to now are treated as ongoing, so their end is never pulled in. */
 const ONGOING_FROM = new Date().getUTCFullYear() - 1;
 
+/** Nobody plays senior club football younger than this, so an earlier start is a broken date. */
+const MIN_DEBUT_AGE = 15;
+
 const APPLY = process.argv.includes('--apply');
 const REVIEW_PATH = process.argv.find((a) => a.startsWith('--review='))?.slice(9) ?? 'career_seasons_review.csv';
 
@@ -61,6 +64,8 @@ interface CareerGroup {
   playerName: string;
   teamId: number;
   teamName: string;
+  /** Null when we don't know the birth year, in which case no start is judged implausible. */
+  birthYear: number | null;
   stints: Stint[];
 }
 
@@ -73,7 +78,8 @@ interface PlayerEvidence {
 
 async function load(): Promise<{ groups: Map<string, CareerGroup>; evidence: Map<string, PlayerEvidence> }> {
   const careerRows = (await db.execute(sql`
-    SELECT pc.player_id, p.name AS player_name, pc.team_id, pc.team_name, pc.season_from, pc.season_to
+    SELECT pc.player_id, p.name AS player_name, pc.team_id, pc.team_name, pc.season_from, pc.season_to,
+           EXTRACT(YEAR FROM p.birth_date)::int AS birth_year
     FROM player_career pc
     JOIN players p ON p.id = pc.player_id
     WHERE pc.team_id > 0 AND ${clubCareerOnlySql('pc')}
@@ -85,6 +91,7 @@ async function load(): Promise<{ groups: Map<string, CareerGroup>; evidence: Map
     team_name: string;
     season_from: number;
     season_to: number | null;
+    birth_year: number | null;
   }>;
 
   const groups = new Map<string, CareerGroup>();
@@ -97,6 +104,7 @@ async function load(): Promise<{ groups: Map<string, CareerGroup>; evidence: Map
         playerName: row.player_name,
         teamId: row.team_id,
         teamName: row.team_name,
+        birthYear: row.birth_year,
         stints: [],
       }).get(key)!;
     group.stints.push({ from: row.season_from, to: row.season_to ?? row.season_from });
@@ -170,7 +178,8 @@ async function main(): Promise<void> {
       },
     };
 
-    const reconciled = reconcileStints(group.stints, clubSeasons, context, ONGOING_FROM);
+    const earliestPlausibleStart = group.birthYear === null ? -Infinity : group.birthYear + MIN_DEBUT_AGE;
+    const reconciled = reconcileStints(group.stints, clubSeasons, context, ONGOING_FROM, earliestPlausibleStart);
     if (!reconciled || sameSpells(group.stints, reconciled)) continue;
 
     changes.push({ ...group, spells: reconciled });

@@ -28,6 +28,7 @@ import {
   type BingoTileUsage,
 } from './puzzleHistory.js';
 import { buildClubDisplayMap, canonicalClubListWith, canonicalClubName, clubKey } from '../utils/clubCanonical.js';
+import { trustedIntlCapsSql, trustedIntlGoalsSql } from './statMetrics.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
 const GRID = 16;
@@ -285,15 +286,20 @@ async function loadPool(): Promise<BingoPlayer[]> {
   const statsById = new Map(statRows.map((r) => [r.player_id, r]));
 
   // player_stats has almost no national-team rows — the real international caps/goals live in
-  // player_extra_stats (Wikipedia list ingest). Take the max of both sources.
+  // player_extra_stats. Both come through the shared trusted expressions so a "100+ caps" square
+  // can't be earned on a club-appearance count mislabelled as caps.
   const extraRows = await rows<{ player_id: string; intl_caps: number; intl_goals: number }>(sql`
-    SELECT player_id, intl_caps, intl_goals FROM player_extra_stats WHERE player_id IN (${idList})
+    SELECT e.player_id,
+      ${trustedIntlCapsSql('e')}::int AS intl_caps,
+      ${trustedIntlGoalsSql('e')}::int AS intl_goals
+    FROM player_extra_stats e WHERE e.player_id IN (${idList})
   `);
   for (const e of extraRows) {
     const s = statsById.get(e.player_id);
     if (!s) continue;
-    // Ignore tiny / tournament-scrap caps (<30) — same trust floor as intlCapsSub.
-    if (e.intl_caps >= 30) s.intl_caps = Math.max(s.intl_caps, e.intl_caps);
+    // No local trust floor: the shared expression has already zeroed anything untrustworthy, which
+    // keeps this square's threshold identical to the caps number every other mode shows.
+    s.intl_caps = Math.max(s.intl_caps, e.intl_caps);
     s.intl_goals = Math.max(s.intl_goals, e.intl_goals);
   }
 

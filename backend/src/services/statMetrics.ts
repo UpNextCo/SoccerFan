@@ -20,10 +20,80 @@ const careerMetric = (col: 'goals' | 'assists' | 'appearances' | 'yellow_cards')
   sql`(SELECT player_id, SUM(${sql.raw(col)})::int AS value FROM player_stats
        WHERE league_id IN ${CAREER_IN} GROUP BY player_id)`;
 
-export const careerGoalsSub: SQL = careerMetric('goals');
 export const careerAssistsSub: SQL = careerMetric('assists');
-export const careerAppsSub: SQL = careerMetric('appearances');
 export const careerYellowsSub: SQL = careerMetric('yellow_cards');
+
+/** TM's players.csv international_caps is sometimes club appearances or a merged-id artefact.
+ *  Values in 1–29 from TM are often World Cup / tournament scraps (Lampard=10, Beckham=9) —
+ *  TM ingest still refuses those. Wikipedia nation-list / infobox jobs write real senior totals
+ *  at any size ≥1, so scoring trusts the full 1–280 range once stored. */
+export const INTL_CAPS_SANITY_MAX = 280;
+/** Floor used by Transfermarkt ingest only (refuse TM scraps below this). */
+export const INTL_CAPS_TRUST_MIN = 30;
+/** Minimum senior caps we'll display / score once written (Wikipedia-verified values). */
+export const INTL_CAPS_DISPLAY_MIN = 1;
+/**
+ * Ceiling for the FALLBACK sources only. The men's record is around 200 caps, so a stored 220–260 is
+ * always the club-appearance bug rather than a career (Fernando Navarro on 240, Emiliano Moretti on
+ * 240). Transfermarkt values skip this check — Ronaldo really is past 200.
+ */
+export const INTL_CAPS_FALLBACK_MAX = 200;
+
+/**
+ * Senior caps for a `player_extra_stats` row. Transfermarkt's national-team page wins when we have it:
+ * the older players.csv value sometimes held CLUB appearances instead of caps (Iker Muniain 270 -> 2,
+ * Massimo Maccarone 250 -> 2), which put nonsense in front of players. Otherwise fall back to the
+ * stored Wikipedia/players.csv figure with out-of-range values zeroed.
+ *
+ * Several generators read these columns straight out of their own joins, so this is exported as a
+ * snippet rather than a subquery — one definition, whatever the table is aliased as.
+ */
+export const trustedIntlCapsSql = (alias = 'e'): SQL => sql`CASE
+    WHEN ${sql.raw(alias)}.tm_intl_caps IS NOT NULL THEN ${sql.raw(alias)}.tm_intl_caps
+    WHEN ${sql.raw(alias)}.intl_caps BETWEEN ${INTL_CAPS_DISPLAY_MIN} AND ${INTL_CAPS_FALLBACK_MAX}
+      THEN ${sql.raw(alias)}.intl_caps
+    ELSE 0
+  END`;
+
+/**
+ * Senior international goals, Transfermarkt first for the same reason as caps. The Wikipedia ingest
+ * read the caps column as goals for a whole nation's worth of players — it has Courtois on 108
+ * international goals and Vertonghen on 142 — so taking the larger of the two would enshrine that.
+ *
+ * Where Transfermarkt is missing we still fall back, since the list is right far more often than not,
+ * but only when the goals don't exceed the caps: 239 rows fail that (Chadli on 83 goals in 66 caps,
+ * Batshuayi 76 in 55) and they are the same swapped-column bug. No modern career scores more often
+ * than once a game, so the check costs nothing real.
+ */
+export const trustedIntlGoalsSql = (alias = 'e'): SQL => sql`COALESCE(
+    ${sql.raw(alias)}.tm_intl_goals,
+    CASE WHEN COALESCE(${sql.raw(alias)}.intl_goals, 0) <= COALESCE(${sql.raw(alias)}.intl_caps, 0)
+      THEN ${sql.raw(alias)}.intl_goals END,
+    0)`;
+
+export const intlCapsSub: SQL = sql`(SELECT player_id, ${trustedIntlCapsSql('e')}::int AS value
+  FROM player_extra_stats e)`;
+
+/**
+ * Career appearances stay on the tracked-league definition. tm_career_apps holds the true
+ * all-competition figure, but Transfermarkt renders goalkeepers on a different performance grid that
+ * our season scrape can't read, so switching would silently drop every keeper — exactly the players an
+ * appearance ranking wants. Goals don't have that problem (keepers score none).
+ */
+export const careerAppsSub: SQL = careerMetric('appearances');
+
+/**
+ * Career goals: EVERY senior club competition (from the Transfermarkt season scrape) plus senior
+ * international goals — i.e. the number a fan would quote. Summing player_stats instead only covered
+ * the big-5 leagues and CL/EL, so Ronaldo showed ~640 of his 970: his Sporting and Al-Nassr years and
+ * every domestic-cup goal were missing.
+ *
+ * Only players with a scraped club total are ranked. NULL means "we never scraped them", and a partial
+ * total would rank a legend below someone we happen to know completely — better to leave them out.
+ */
+export const careerGoalsSub: SQL = sql`(SELECT player_id,
+  (e.tm_career_goals + ${trustedIntlGoalsSql('e')})::int AS value
+  FROM player_extra_stats e WHERE e.tm_career_goals IS NOT NULL)`;
 
 /** Peak market value in EUR millions (players with a known peak value). */
 export const peakValueSub: SQL = sql`(SELECT id AS player_id, ROUND(peak_market_value_eur / 1000000.0)::int AS value
@@ -43,21 +113,6 @@ export const TROPHY_COMPETITIONS = [
 export const careerTrophiesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM player_honours
   WHERE lower(placement) = 'winner' AND competition IN (${sql.join(TROPHY_COMPETITIONS.map((c) => sql`${c}`), sql`, `)})
   GROUP BY player_id)`;
-
-/** TM's players.csv international_caps is sometimes club appearances or a merged-id artefact.
- *  Values in 1–29 from TM are often World Cup / tournament scraps (Lampard=10, Beckham=9) —
- *  TM ingest still refuses those. Wikipedia nation-list / infobox jobs write real senior totals
- *  at any size ≥1, so scoring trusts the full 1–280 range once stored. */
-export const INTL_CAPS_SANITY_MAX = 280;
-/** Floor used by Transfermarkt ingest only (refuse TM scraps below this). */
-export const INTL_CAPS_TRUST_MIN = 30;
-/** Minimum senior caps we'll display / score once written (Wikipedia-verified values). */
-export const INTL_CAPS_DISPLAY_MIN = 1;
-
-/** International caps from player_extra_stats (Wikipedia + TM), with out-of-range values zeroed. */
-export const intlCapsSub: SQL = sql`(SELECT player_id,
-  CASE WHEN intl_caps BETWEEN ${INTL_CAPS_DISPLAY_MIN} AND ${INTL_CAPS_SANITY_MAX} THEN intl_caps ELSE 0 END::int AS value
-  FROM player_extra_stats)`;
 
 /**
  * Distinct senior clubs played for.

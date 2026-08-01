@@ -99,6 +99,18 @@ test('widens an end when the player kept playing past the stored date', () => {
   assert.equal(formatSpells(out!), '2015-2018');
 });
 
+test('discards a start from before the player was born (Morata at Milan from 1926)', () => {
+  // The transfer feed dates unknown moves 1926-01-01; born 1992, so anything before 2007 is broken.
+  const out = reconcileStints([{ from: 1926, to: 2025 }], [2025], NOTHING_ELSE, ONGOING_FROM, 1992 + 15);
+  assert.equal(formatSpells(out!), '2025-2025');
+});
+
+test('still trusts a real start that predates our stats coverage', () => {
+  // Born 1965, joined in 1985, but player_stats only begins in 1992 — the stored start must survive.
+  const out = reconcileStints([{ from: 1985, to: 1995 }], range(1992, 1995), NOTHING_ELSE, ONGOING_FROM, 1965 + 15);
+  assert.equal(formatSpells(out!), '1985-1995');
+});
+
 test('keeps a stint that has no appearances of its own', () => {
   // Evidence lands on the later stint only; the earlier one must survive as stored.
   const out = reconcileStints(

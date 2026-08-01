@@ -23,6 +23,7 @@ import {
 } from './puzzleValidator.js';
 import type { FactPackPlayer, GeneratedDailyPuzzle } from './dailyPuzzleTypes.js';
 import { blindRankTenKey, recentBlindRankTens } from './puzzleHistory.js';
+import { trustedIntlCapsSql } from './statMetrics.js';
 
 /** Identical tens can't recur inside this window; salted re-draws provide the variety. */
 const BLIND_RANK_REPEAT_WINDOW_DAYS = 240;
@@ -169,7 +170,7 @@ const AGG = sql`
       -- Goals before turning 21, derived from season totals (back to 1992) + DOB so it covers
       -- ALL eras, not just the TM-event window. Counts club seasons up to the one they turn 21.
       COALESCE(SUM(s.goals) FILTER (WHERE s.league_id <> 1 AND p.birth_date IS NOT NULL AND s.season <= EXTRACT(YEAR FROM p.birth_date) + 20), 0)::int AS goals_u21,
-      COALESCE(MAX(CASE WHEN e.intl_caps >= 1 AND e.intl_caps <= 280 THEN e.intl_caps ELSE 0 END), 0)::int AS intl_caps,
+      COALESCE(MAX(${trustedIntlCapsSql('e')}), 0)::int AS intl_caps,
       EXISTS (SELECT 1 FROM final_appearances f WHERE f.player_id = p.id AND f.competition = 'World Cup') AS wc
     FROM players p
       LEFT JOIN player_stats s ON s.player_id = p.id
