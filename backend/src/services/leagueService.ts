@@ -5,6 +5,12 @@ import { avatarPublicUrl } from '../utils/avatarUrl.js';
 
 const COHORT_SIZE = 30;
 
+/**
+ * How deep the global boards go. Rank is the row's position in this list, so anyone past the cut
+ * doesn't appear at all rather than showing a real rank — keep it well clear of the player count.
+ */
+const LEADERBOARD_LIMIT = 500;
+
 export interface PlayerStanding {
   userId: string;
   displayName: string;
@@ -133,7 +139,7 @@ function rankRows(
   }));
 }
 
-export async function dailyLeaderboard(date: string, limit = 50): Promise<PlayerStanding[]> {
+export async function dailyLeaderboard(date: string, limit = LEADERBOARD_LIMIT): Promise<PlayerStanding[]> {
   const rows = (await db.execute(sql`
     SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
            (u.avatar_jpeg IS NOT NULL) AS has_avatar,
@@ -154,7 +160,7 @@ export async function dailyLeaderboard(date: string, limit = 50): Promise<Player
   return rankRows(rows);
 }
 
-export async function weeklyLeaderboard(weekStart: string, limit = 50): Promise<PlayerStanding[]> {
+export async function weeklyLeaderboard(weekStart: string, limit = LEADERBOARD_LIMIT): Promise<PlayerStanding[]> {
   const weekEnd = weekEndFor(weekStart);
   const rows = (await db.execute(sql`
     SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
@@ -176,7 +182,7 @@ export async function weeklyLeaderboard(weekStart: string, limit = 50): Promise<
   return rankRows(rows);
 }
 
-export async function overallLeaderboard(limit = 50): Promise<PlayerStanding[]> {
+export async function overallLeaderboard(limit = LEADERBOARD_LIMIT): Promise<PlayerStanding[]> {
   const rows = (await db.execute(sql`
     SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
            (u.avatar_jpeg IS NOT NULL) AS has_avatar,
@@ -198,7 +204,7 @@ export async function overallLeaderboard(limit = 50): Promise<PlayerStanding[]> 
 /**
  * Team league: every club with ≥1 fan, ranked by combined all-time XP of supporters.
  */
-export async function teamLeaderboard(_weekStart?: string, limit = 50): Promise<TeamStanding[]> {
+export async function teamLeaderboard(_weekStart?: string, limit = LEADERBOARD_LIMIT): Promise<TeamStanding[]> {
   const rows = (await db.execute(sql`
     SELECT u.favorite_team_id AS team_id,
            t.name,
@@ -236,7 +242,7 @@ export async function teamLeaderboard(_weekStart?: string, limit = 50): Promise<
 }
 
 /** Fans of a club, ranked by all-time XP. */
-export async function teamFans(teamId: number, limit = 100): Promise<PlayerStanding[]> {
+export async function teamFans(teamId: number, limit = LEADERBOARD_LIMIT): Promise<PlayerStanding[]> {
   const rows = (await db.execute(sql`
     SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
            (u.avatar_jpeg IS NOT NULL) AS has_avatar,
