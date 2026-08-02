@@ -23,6 +23,7 @@ type LineupPick = {
   constraintLabel?: string
   playerName?: string
   playerId?: string
+  headshotUrl?: string | null
   statValue?: number
   [k: string]: unknown
 }
@@ -54,6 +55,24 @@ function normalizeConstraintType(value: string | undefined | null): ConstraintTy
   if (value === 'natLeague') return 'nat_league'
   if (value === 'natClub') return 'nat_club'
   return CONSTRAINT_TYPES.some((type) => type === value) ? (value as ConstraintType) : null
+}
+
+const LEAGUE_LOGO_CDN = 'https://media.api-sports.io/football/leagues'
+
+function leagueBadgeUrl(leagueId: number | null | undefined): string | undefined {
+  return typeof leagueId === 'number' ? `${LEAGUE_LOGO_CDN}/${leagueId}.png` : undefined
+}
+
+/** Club crest or league badge for EntityPicker thumbs. */
+function constraintImageUrl(c: Constraint): string | undefined {
+  const type = normalizeConstraintType(c.type)
+  if (type === 'league' || type === 'nat_league') {
+    return c.logoUrl ?? leagueBadgeUrl(c.leagueId) ?? undefined
+  }
+  if (type === 'club' || type === 'nat_club') {
+    return c.logoUrl ?? undefined
+  }
+  return undefined
 }
 
 const POSITION_COMPATIBILITY: Record<string, readonly string[]> = {
@@ -182,6 +201,9 @@ export function DraftEditor({
     updateConstraint(idx, {
       leagueId: league.id,
       leagueName: league.name,
+      // For league / nat_league chips, logoUrl is the league badge (not a club crest).
+      logoUrl: league.logoUrl || leagueBadgeUrl(league.id) || null,
+      teamId: null,
     })
   }
 
@@ -191,20 +213,37 @@ export function DraftEditor({
 
   async function pickLineupPlayer(
     idx: number,
-    hit: { id: string; name: string }
+    hit: { id: string; name: string; headshotUrl?: string }
   ) {
     const slotId = puzzleRef.current.optimalLineup?.[idx]?.slotId
-    let resolved = { id: hit.id, name: hit.name }
+    let resolved: { id: string; name: string; headshotUrl?: string | null } = {
+      id: hit.id,
+      name: hit.name,
+      headshotUrl: hit.headshotUrl,
+    }
     try {
-      const full = (await api.resolvePlayer(hit.id, 'card')) as typeof resolved
-      resolved = { id: full.id || hit.id, name: full.name || hit.name }
+      const full = (await api.resolvePlayer(hit.id, 'card')) as {
+        id?: string
+        name?: string
+        headshotUrl?: string | null
+      }
+      resolved = {
+        id: full.id || hit.id,
+        name: full.name || hit.name,
+        headshotUrl: full.headshotUrl ?? hit.headshotUrl,
+      }
     } catch {
       // search hit is enough
     }
     const current = puzzleRef.current
     const nextLineup = (current.optimalLineup ?? []).map((pick, i) =>
       (slotId ? pick.slotId === slotId : i === idx)
-        ? { ...pick, playerId: resolved.id, playerName: resolved.name }
+        ? {
+            ...pick,
+            playerId: resolved.id,
+            playerName: resolved.name,
+            headshotUrl: resolved.headshotUrl,
+          }
         : pick
     )
     commit({ ...current, optimalLineup: nextLineup })
@@ -351,7 +390,7 @@ export function DraftEditor({
                   kind="team"
                   label="Club"
                   valueLabel={c.club ?? undefined}
-                  imageUrl={c.logoUrl}
+                  imageUrl={constraintImageUrl(c)}
                   disabled={locked}
                   onPickTeam={(hit) => pickClub(idx, hit)}
                 />
@@ -361,6 +400,7 @@ export function DraftEditor({
                   kind="league"
                   label="League"
                   valueLabel={c.leagueName ?? undefined}
+                  imageUrl={constraintImageUrl(c)}
                   disabled={locked}
                   onPickLeague={(hit) => pickLeague(idx, hit)}
                 />
@@ -412,10 +452,11 @@ export function DraftEditor({
                 )}
                 <p className="muted tiny">{pick.constraintLabel || 'No constraint label'}</p>
                 <EntityPicker
-                  key={`${pick.slotId ?? i}-${pick.playerId ?? ''}-${pick.playerName ?? ''}`}
+                  key={`${pick.slotId ?? i}-${pick.playerId ?? ''}-${pick.playerName ?? ''}-${pick.headshotUrl ?? ''}`}
                   kind="player"
                   label="Player"
                   valueLabel={pick.playerName || 'Unknown player'}
+                  imageUrl={pick.headshotUrl}
                   disabled={locked}
                   onPickPlayer={(hit) => pickLineupPlayer(i, hit)}
                 />

@@ -61,6 +61,9 @@ function hitSub(h: Hit): string {
 function hitImage(h: Hit): string | undefined {
   if (h.kind === 'player') return h.item.headshotUrl ?? h.item.teamLogoUrl
   if (h.kind === 'team') return h.item.logoUrl
+  if (h.kind === 'league') {
+    return h.item.logoUrl || `https://media.api-sports.io/football/leagues/${h.item.id}.png`
+  }
   return undefined
 }
 

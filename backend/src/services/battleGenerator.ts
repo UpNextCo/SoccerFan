@@ -15,7 +15,7 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { lookupTeamLogo } from './teamService.js';
-import { resolveHeadshot } from '../constants/footballMedia.js';
+import { leagueLogoUrl, resolveHeadshot } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import {
   DRAFT_POSITION_COMPATIBILITY_VERSION,
@@ -565,7 +565,7 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
     if (!feasible) continue;
     const optimalLineup: BattleOptimalPick[] = pickBySlot.map((p) => p!);
 
-    // Decorate club/nat_club chips with crest logos.
+    // Decorate chips: club/nat_club → crest; league/nat_league → league badge CDN URL.
     const constraintsOut: BattleConstraintJson[] = await Promise.all(constraints.map(async (c) => {
       let teamId: number | null = null;
       let logoUrl: string | null = null;
@@ -574,6 +574,8 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
         const logo = await lookupTeamLogo(c.club, leagueName != null ? (LEAGUE_NAME[leagueName] ?? '') : '');
         teamId = logo?.teamId ?? null;
         logoUrl = logo?.logoUrl ?? null;
+      } else if ((c.type === 'league' || c.type === 'nat_league') && c.leagueId != null) {
+        logoUrl = leagueLogoUrl(c.leagueId);
       }
       return {
         id: c.id, type: c.type, label: c.label,

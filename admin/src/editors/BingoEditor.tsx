@@ -91,6 +91,12 @@ function categoryIcon(category: Cat) {
     const nationality = category.flag || String(category.matchingRule ?? '')
     return <span className="bingo-preview-flag">{nationalityFlag(nationality)}</span>
   }
+  if (category.iconType === 'trophy' || category.type === 'wonCompetition') {
+    return <span className="bingo-preview-fallback">🏆</span>
+  }
+  if (category.iconType === 'award' || category.type === 'award') {
+    return <span className="bingo-preview-fallback">🏅</span>
+  }
   // Show the full label (e.g. "100+", "€80M"). Truncating to 2 chars made "100+" render as "10".
   const label = String(category.iconValue ?? '●').trim() || '●'
   return <span className="bingo-preview-fallback">{label}</span>

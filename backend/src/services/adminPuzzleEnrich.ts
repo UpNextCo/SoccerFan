@@ -1,4 +1,4 @@
-import { resolveHeadshot } from '../constants/footballMedia.js';
+import { leagueLogoUrl, resolveHeadshot } from '../constants/footballMedia.js';
 import { db } from '../db/index.js';
 import { players } from '../db/schema.js';
 import { inArray } from 'drizzle-orm';
@@ -414,6 +414,71 @@ export async function enrichAdminBingoPuzzle(puzzleJson: unknown): Promise<unkno
   return puzzle;
 }
 
+/**
+ * Re-hydrate Draft XI media: club crests, league badges, and optimal-lineup headshots.
+ */
+export async function enrichAdminDraftPuzzle(puzzleJson: unknown): Promise<unknown> {
+  const puzzle = structuredClone(puzzleJson) as {
+    constraints?: Array<{
+      type?: string;
+      club?: string | null;
+      teamId?: number | null;
+      logoUrl?: string | null;
+      leagueId?: number | null;
+      leagueName?: string | null;
+      nationality?: string | null;
+      [k: string]: unknown;
+    }>;
+    optimalLineup?: Array<{
+      playerId?: string | null;
+      playerName?: string | null;
+      headshotUrl?: string | null;
+      [k: string]: unknown;
+    }>;
+  };
+
+  if (Array.isArray(puzzle.constraints)) {
+    puzzle.constraints = await Promise.all(
+      puzzle.constraints.map(async (c) => {
+        const type = String(c.type ?? '');
+        if ((type === 'club' || type === 'nat_club' || type === 'natClub') && c.club) {
+          const logo = await lookupTeamLogo(c.club, c.leagueName ?? '');
+          return {
+            ...c,
+            teamId: logo?.teamId ?? c.teamId ?? null,
+            logoUrl: logo?.logoUrl ?? c.logoUrl ?? null,
+          };
+        }
+        if (
+          (type === 'league' || type === 'nat_league' || type === 'natLeague') &&
+          c.leagueId != null
+        ) {
+          return { ...c, logoUrl: leagueLogoUrl(c.leagueId), teamId: null };
+        }
+        return c;
+      })
+    );
+  }
+
+  if (Array.isArray(puzzle.optimalLineup)) {
+    puzzle.optimalLineup = await Promise.all(
+      puzzle.optimalLineup.map(async (pick) => {
+        const id = typeof pick.playerId === 'string' ? pick.playerId : null;
+        if (!id || !UUID_RE.test(id)) return pick;
+        const resolved = await resolveAdminPlayer(id);
+        if (!resolved) return pick;
+        return {
+          ...pick,
+          playerName: resolved.name || pick.playerName,
+          headshotUrl: resolved.headshotUrl ?? pick.headshotUrl ?? null,
+        };
+      })
+    );
+  }
+
+  return puzzle;
+}
+
 export async function enrichAdminPuzzleForSave(
   modeId: string,
   puzzleJson: unknown,
@@ -432,6 +497,8 @@ export async function enrichAdminPuzzleForSave(
       return { puzzleJson: await enrichAdminBingoPuzzle(puzzleJson), answerJson };
     case 'football_golf':
       return { puzzleJson: await enrichAdminGolfPuzzle(puzzleJson), answerJson };
+    case 'draft_master':
+      return { puzzleJson: await enrichAdminDraftPuzzle(puzzleJson), answerJson };
     default:
       return { puzzleJson, answerJson };
   }

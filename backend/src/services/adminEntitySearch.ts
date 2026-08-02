@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { resolveHeadshot } from '../constants/footballMedia.js';
+import { leagueLogoUrl, resolveHeadshot } from '../constants/footballMedia.js';
 import { db } from '../db/index.js';
 import { players } from '../db/schema.js';
 import { getPhotoOverrides } from './photoOverrides.js';
@@ -24,8 +24,12 @@ const COMMON_LEAGUES = [
   { id: 1, name: 'International' },
 ] as const;
 
-export type AdminLeagueHit = { id: number; name: string };
+export type AdminLeagueHit = { id: number; name: string; logoUrl: string };
 export type AdminNationalityHit = { name: string };
+
+function withLeagueLogo(league: { id: number; name: string }): AdminLeagueHit {
+  return { id: league.id, name: league.name, logoUrl: leagueLogoUrl(league.id) };
+}
 
 export async function adminSearchPlayers(q: string): Promise<PlayerSearchResult[]> {
   return searchPlayers(q, 20);
@@ -37,8 +41,10 @@ export async function adminSearchTeams(q: string): Promise<TeamSearchResult[]> {
 
 export async function adminSearchLeagues(q: string): Promise<AdminLeagueHit[]> {
   const needle = q.trim().toLowerCase();
-  if (!needle) return [...COMMON_LEAGUES];
-  return COMMON_LEAGUES.filter((l) => l.name.toLowerCase().includes(needle));
+  const matches = !needle
+    ? [...COMMON_LEAGUES]
+    : COMMON_LEAGUES.filter((l) => l.name.toLowerCase().includes(needle));
+  return matches.map(withLeagueLogo);
 }
 
 export async function adminSearchNationalities(q: string): Promise<AdminNationalityHit[]> {

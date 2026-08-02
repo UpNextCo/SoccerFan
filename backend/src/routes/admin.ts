@@ -18,7 +18,14 @@ import {
   setPuzzleStatus,
 } from '../services/puzzleOps.js';
 import { validatePuzzlePayload } from '../services/adminPuzzleValidation.js';
-import { enrichAdminClubChainPuzzle, enrichAdminGolfPuzzle } from '../services/adminPuzzleEnrich.js';
+import {
+  enrichAdminBingoPuzzle,
+  enrichAdminClubChainPuzzle,
+  enrichAdminDraftPuzzle,
+  enrichAdminGolfPuzzle,
+  enrichAdminLMSPuzzle,
+  enrichAdminOneMorePuzzle,
+} from '../services/adminPuzzleEnrich.js';
 import {
   adminSearchLeagues,
   adminSearchNationalities,
@@ -144,19 +151,30 @@ adminRouter.get('/puzzle', requireAdmin, async (req, res) => {
     sendError(res, 'Not found', 404);
     return;
   }
-  const puzzleJson =
-    modeId === 'football_golf'
-      ? await enrichAdminGolfPuzzle(row.puzzleJson)
-      : modeId === 'club_chain'
-        ? await enrichAdminClubChainPuzzle(row.puzzleJson)
-        : row.puzzleJson;
+  let puzzleJson = row.puzzleJson;
+  let answerJson = row.answerJson;
+  if (modeId === 'football_golf') {
+    puzzleJson = await enrichAdminGolfPuzzle(row.puzzleJson);
+  } else if (modeId === 'club_chain') {
+    puzzleJson = await enrichAdminClubChainPuzzle(row.puzzleJson);
+  } else if (modeId === 'draft_master') {
+    puzzleJson = await enrichAdminDraftPuzzle(row.puzzleJson);
+  } else if (modeId === 'football_bingo') {
+    puzzleJson = await enrichAdminBingoPuzzle(row.puzzleJson);
+  } else if (modeId === 'one_more') {
+    puzzleJson = await enrichAdminOneMorePuzzle(row.puzzleJson);
+  } else if (modeId === 'last_man_standing') {
+    const enriched = await enrichAdminLMSPuzzle(row.puzzleJson, row.answerJson);
+    puzzleJson = enriched.puzzleJson;
+    answerJson = enriched.answerJson;
+  }
   sendSuccess(res, {
     id: row.id,
     date: row.date,
     modeId: row.modeId,
     status: row.status,
     puzzleJson,
-    answerJson: row.answerJson,
+    answerJson,
     contentHash: row.contentHash,
     reviewNote: row.reviewNote,
     reviewedAt: row.reviewedAt,

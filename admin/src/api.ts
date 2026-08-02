@@ -621,7 +621,7 @@ export type AdminTeamHit = {
   country: string | null
 }
 
-export type AdminLeagueHit = { id: number; name: string }
+export type AdminLeagueHit = { id: number; name: string; logoUrl: string }
 export type AdminNationalityHit = { name: string }
 
 export type AdminTeamResolved = {
