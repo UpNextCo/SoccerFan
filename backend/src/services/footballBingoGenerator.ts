@@ -75,7 +75,8 @@ for (const trophy of TROPHY_CANONICAL) {
   TROPHY_CANONICAL_SET.add(trophy.name);
   for (const alias of trophy.aliases) TROPHY_ALIAS_LOOKUP.set(norm(alias), trophy.name);
 }
-function canonicalTrophy(raw: string): string | null {
+/** Map raw honour competition names onto bingo tile labels (or null if not a curated trophy). */
+export function canonicalBingoTrophy(raw: string): string | null {
   return TROPHY_ALIAS_LOOKUP.get(norm(raw)) ?? null;
 }
 
@@ -263,7 +264,7 @@ async function loadPool(): Promise<BingoPlayer[]> {
   const statRows = await rows<{
     player_id: string; pl_apps: number; pl_goals: number; laliga_apps: number; seriea_apps: number;
     bundes_apps: number; ligue1_apps: number; top_apps: number; top_goals: number; club_apps: number;
-    cl_apps: number; cl_goals: number; intl_caps: number; intl_goals: number; top5_leagues: number;
+    cl_apps: number; cl_goals: number; top5_leagues: number;
   }>(sql`
     SELECT player_id,
       COALESCE(SUM(appearances) FILTER (WHERE league_id = 39), 0)::int AS pl_apps,
@@ -277,17 +278,17 @@ async function loadPool(): Promise<BingoPlayer[]> {
       COALESCE(SUM(appearances) FILTER (WHERE league_id <> 1), 0)::int AS club_apps,
       COALESCE(SUM(appearances) FILTER (WHERE league_id = 2), 0)::int AS cl_apps,
       COALESCE(SUM(goals) FILTER (WHERE league_id = 2), 0)::int AS cl_goals,
-      COALESCE(SUM(appearances) FILTER (WHERE league_id = 1), 0)::int AS intl_caps,
-      COALESCE(SUM(goals) FILTER (WHERE league_id = 1), 0)::int AS intl_goals,
       COUNT(DISTINCT league_id) FILTER (WHERE league_id IN (39,140,135,78,61))::int AS top5_leagues
     FROM player_stats WHERE player_id IN (${idList})
     GROUP BY player_id
   `);
-  const statsById = new Map(statRows.map((r) => [r.player_id, r]));
+  const statsById = new Map(
+    statRows.map((r) => [r.player_id, { ...r, intl_caps: 0, intl_goals: 0 }])
+  );
 
-  // player_stats has almost no national-team rows — the real international caps/goals live in
-  // player_extra_stats. Both come through the shared trusted expressions so a "100+ caps" square
-  // can't be earned on a club-appearance count mislabelled as caps.
+  // Senior intl caps/goals live in player_extra_stats (TM + trusted fallbacks). Never bake
+  // player_stats league_id=1 World Cup scraps as "caps" — Ops re-enrich used to do that and
+  // made the 100+ International Caps square look empty against the shipped pool.
   const extraRows = await rows<{ player_id: string; intl_caps: number; intl_goals: number }>(sql`
     SELECT e.player_id,
       ${trustedIntlCapsSql('e')}::int AS intl_caps,
@@ -297,10 +298,8 @@ async function loadPool(): Promise<BingoPlayer[]> {
   for (const e of extraRows) {
     const s = statsById.get(e.player_id);
     if (!s) continue;
-    // No local trust floor: the shared expression has already zeroed anything untrustworthy, which
-    // keeps this square's threshold identical to the caps number every other mode shows.
-    s.intl_caps = Math.max(s.intl_caps, e.intl_caps);
-    s.intl_goals = Math.max(s.intl_goals, e.intl_goals);
+    s.intl_caps = e.intl_caps;
+    s.intl_goals = e.intl_goals;
   }
 
   const clubRows = await rows<{ player_id: string; clubs: string[] }>(sql`
@@ -350,7 +349,7 @@ async function loadPool(): Promise<BingoPlayer[]> {
     const s = statsById.get(b.id);
     const clubs = canonicalClubListWith(clubsById.get(b.id) ?? [], clubDisplay);
     const trophies = [
-      ...new Set((trophiesById.get(b.id) ?? []).map((t) => canonicalTrophy(t)).filter((t): t is string => t !== null)),
+      ...new Set((trophiesById.get(b.id) ?? []).map((t) => canonicalBingoTrophy(t)).filter((t): t is string => t !== null)),
     ];
     const stats: Record<string, number> = {
       pl_apps: s?.pl_apps ?? 0, pl_goals: s?.pl_goals ?? 0,

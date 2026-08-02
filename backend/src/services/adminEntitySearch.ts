@@ -4,7 +4,10 @@ import { db } from '../db/index.js';
 import { players } from '../db/schema.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { searchPlayers } from './playerService.js';
+import { canonicalBingoTrophy } from './footballBingoGenerator.js';
+import { trustedIntlCapsSql, trustedIntlGoalsSql } from './statMetrics.js';
 import { lookupTeamLogo, searchTeams, type TeamSearchResult } from './teamService.js';
+import { buildClubDisplayMap, canonicalClubListWith } from '../utils/clubCanonical.js';
 import type { PlayerSearchResult } from '../types.js';
 
 const COMMON_LEAGUES = [
@@ -159,22 +162,34 @@ export async function resolveAdminBingoPlayer(playerId: string) {
       COALESCE(SUM(appearances) FILTER (WHERE league_id <> 1), 0)::int AS club_apps,
       COALESCE(SUM(appearances) FILTER (WHERE league_id = 2), 0)::int AS cl_apps,
       COALESCE(SUM(goals) FILTER (WHERE league_id = 2), 0)::int AS cl_goals,
-      COALESCE(SUM(appearances) FILTER (WHERE league_id = 1), 0)::int AS intl_caps,
-      COALESCE(SUM(goals) FILTER (WHERE league_id = 1), 0)::int AS intl_goals,
       COUNT(DISTINCT league_id) FILTER (WHERE league_id IN (39,140,135,78,61))::int AS top5_leagues
     FROM player_stats WHERE player_id = ${idList}
   `)) as unknown as Array<Record<string, number>>;
   const s = statRows[0] ?? {};
 
+  // Never use player_stats league_id=1 here — those are World Cup/tournament scraps, and baking
+  // them into the pool made "100+ International Caps" squares look empty after every Ops save.
+  const intlRows = (await db.execute(sql`
+    SELECT ${trustedIntlCapsSql('e')}::int AS intl_caps,
+           ${trustedIntlGoalsSql('e')}::int AS intl_goals
+    FROM player_extra_stats e WHERE e.player_id = ${idList}
+  `)) as unknown as Array<{ intl_caps: number; intl_goals: number }>;
+  const intl = intlRows[0] ?? { intl_caps: 0, intl_goals: 0 };
+
+  // Match generator: top-5 league clubs only, with shared display canonicalization.
   const clubRows = (await db.execute(sql`
     SELECT DISTINCT team_name
     FROM player_stats
     WHERE player_id = ${idList}
-      AND league_id <> 1
+      AND league_id IN (39, 140, 135, 78, 61)
       AND team_name IS NOT NULL
       AND team_name <> ''
   `)) as unknown as Array<{ team_name: string }>;
-  const clubs = clubRows.map((r) => r.team_name);
+  const clubDisplay = buildClubDisplayMap(clubRows.map((r) => r.team_name));
+  const clubs = canonicalClubListWith(
+    clubRows.map((r) => r.team_name),
+    clubDisplay
+  );
 
   const leagueRows = (await db.execute(sql`
     SELECT DISTINCT league_name
@@ -188,10 +203,31 @@ export async function resolveAdminBingoPlayer(playerId: string) {
     SELECT DISTINCT competition FROM player_honours
     WHERE player_id = ${idList} AND placement ILIKE '%winner%'
   `)) as unknown as Array<{ competition: string }>;
+  const trophies = [
+    ...new Set(
+      trophyRows
+        .map((r) => canonicalBingoTrophy(r.competition))
+        .filter((t): t is string => t !== null)
+    ),
+  ];
 
+  // Only award placements that count as a win for bingo tiles (Ballon d'Or = 1st only).
   const awardRows = (await db.execute(sql`
-    SELECT DISTINCT award FROM player_awards WHERE player_id = ${idList}
-  `)) as unknown as Array<{ award: string }>;
+    SELECT award, placement FROM player_awards WHERE player_id = ${idList}
+  `)) as unknown as Array<{ award: string; placement: string }>;
+  const awardWins = new Map<string, Set<string>>([
+    ["Ballon d'Or", new Set(['1st'])],
+    ['European Golden Shoe', new Set(['winner'])],
+    ['World Cup Golden Boot', new Set(['winner'])],
+    ['World Cup Golden Ball', new Set(['winner'])],
+  ]);
+  const awards = [
+    ...new Set(
+      awardRows
+        .filter((r) => awardWins.get(r.award)?.has(r.placement))
+        .map((r) => r.award)
+    ),
+  ];
 
   const feeRows = (await db.execute(sql`
     SELECT COALESCE(MAX(fee_eur_m), 0)::int AS max_fee
@@ -210,8 +246,8 @@ export async function resolveAdminBingoPlayer(playerId: string) {
     club_apps: s.club_apps ?? 0,
     cl_apps: s.cl_apps ?? 0,
     cl_goals: s.cl_goals ?? 0,
-    intl_caps: s.intl_caps ?? 0,
-    intl_goals: s.intl_goals ?? 0,
+    intl_caps: intl.intl_caps ?? 0,
+    intl_goals: intl.intl_goals ?? 0,
     top5_leagues: s.top5_leagues ?? 0,
     top5_clubs: clubs.length,
     transfer_eur_m: feeRows[0]?.max_fee ?? 0,
@@ -224,10 +260,10 @@ export async function resolveAdminBingoPlayer(playerId: string) {
     position: base.position,
     clubs,
     leagues: leagueRows.map((r) => r.league_name),
-    trophies: trophyRows.map((r) => r.competition),
+    trophies,
     teammates: [] as string[],
     managers: [] as string[],
-    awards: awardRows.map((r) => r.award),
+    awards,
     stats,
     premierLeagueApps: stats.pl_apps,
     topLeagueGoals: stats.top_goals,
