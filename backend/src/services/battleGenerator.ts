@@ -110,11 +110,32 @@ const STANDALONE_NATIONS = [
   'France', 'Spain', 'England', 'Germany', 'Brazil', 'Italy', 'Netherlands', 'Argentina', 'Portugal', 'Belgium',
 ];
 
+/**
+ * Club membership for Draft chips. player_stats.team_name is the primary signal, but secondary
+ * leagues (Championship etc.) often arrive with blank club names — John Terry's 32 Villa apps in
+ * 2017/18 were invisible that way. Fall back to player_career so a known spell still counts.
+ */
+function playedForClubSql(club: string, playerRef: SQL = sql`p.id`): SQL {
+  return sql`(
+    EXISTS (
+      SELECT 1 FROM player_stats m
+      WHERE m.player_id = ${playerRef} AND m.team_name = ${club} AND m.appearances > 0
+    )
+    OR EXISTS (
+      SELECT 1 FROM player_career c
+      WHERE c.player_id = ${playerRef} AND c.team_name = ${club} AND c.team_id > 0
+    )
+  )`;
+}
+
 /** SQL yielding the set of player_ids that SATISFY a constraint (career-wide membership). */
 function eligibilityIds(c: Constraint): SQL {
   switch (c.type) {
     case 'club':
-      return sql`SELECT DISTINCT player_id FROM player_stats WHERE team_name = ${c.club} AND appearances > 0`;
+      return sql`
+        SELECT DISTINCT player_id FROM player_stats WHERE team_name = ${c.club} AND appearances > 0
+        UNION
+        SELECT DISTINCT player_id FROM player_career WHERE team_name = ${c.club} AND team_id > 0`;
     case 'league':
       return sql`SELECT DISTINCT player_id FROM player_stats WHERE league_id = ${c.leagueId} AND appearances > 0`;
     case 'nationality':
@@ -123,8 +144,12 @@ function eligibilityIds(c: Constraint): SQL {
       return sql`SELECT DISTINCT ps.player_id FROM player_stats ps JOIN players pl ON pl.id = ps.player_id
                  WHERE ps.league_id = ${c.leagueId} AND ps.appearances > 0 AND pl.nationality = ${c.nationality}`;
     case 'nat_club':
-      return sql`SELECT DISTINCT ps.player_id FROM player_stats ps JOIN players pl ON pl.id = ps.player_id
-                 WHERE ps.team_name = ${c.club} AND ps.appearances > 0 AND pl.nationality = ${c.nationality}`;
+      return sql`
+        SELECT DISTINCT ps.player_id FROM player_stats ps JOIN players pl ON pl.id = ps.player_id
+        WHERE ps.team_name = ${c.club} AND ps.appearances > 0 AND pl.nationality = ${c.nationality}
+        UNION
+        SELECT DISTINCT c.player_id FROM player_career c JOIN players pl ON pl.id = c.player_id
+        WHERE c.team_name = ${c.club} AND c.team_id > 0 AND pl.nationality = ${c.nationality}`;
   }
 }
 
@@ -600,7 +625,7 @@ export interface BattlePlayerResult {
 function satisfiesSql(c: BattleConstraintQuery): SQL {
   switch (c.type) {
     case 'club':
-      return sql`EXISTS (SELECT 1 FROM player_stats m WHERE m.player_id = p.id AND m.team_name = ${c.club ?? ''} AND m.appearances > 0)`;
+      return playedForClubSql(c.club ?? '');
     case 'league':
       return sql`EXISTS (SELECT 1 FROM player_stats m WHERE m.player_id = p.id AND m.league_id = ${c.leagueId ?? -1} AND m.appearances > 0)`;
     case 'nationality':
@@ -608,7 +633,7 @@ function satisfiesSql(c: BattleConstraintQuery): SQL {
     case 'nat_league':
       return sql`(p.nationality = ${c.nationality ?? ''} AND EXISTS (SELECT 1 FROM player_stats m WHERE m.player_id = p.id AND m.league_id = ${c.leagueId ?? -1} AND m.appearances > 0))`;
     case 'nat_club':
-      return sql`(p.nationality = ${c.nationality ?? ''} AND EXISTS (SELECT 1 FROM player_stats m WHERE m.player_id = p.id AND m.team_name = ${c.club ?? ''} AND m.appearances > 0))`;
+      return sql`(p.nationality = ${c.nationality ?? ''} AND ${playedForClubSql(c.club ?? '')})`;
   }
 }
 

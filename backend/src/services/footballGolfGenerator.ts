@@ -575,6 +575,25 @@ export async function generateFootballGolfCourse(
       allowDullFilters: true,
     });
   }
+  // Month-length pregeneration saturates the fixed 28-day rule cooldown before the prompt
+  // bank runs out — shrink the rule window the same way we shrink prompt avoidance, rather
+  // than leave Football Golf blank for a stretch of days.
+  if (candidates.length < FOOTBALL_GOLF_HOLE_COUNT && !opts?.recentRuleSignaturesOverride) {
+    for (const window of [14, 7, 0]) {
+      const rules =
+        window > 0 ? await recentGolfRuleSignatures(date, window) : new Set<string>();
+      candidates = await scanCandidates(ordered, new Set<string>(), rules, {
+        allowGeography: true,
+        allowDullFilters: true,
+      });
+      if (candidates.length >= FOOTBALL_GOLF_HOLE_COUNT) {
+        console.warn(
+          `football_golf ${date}: filled course with rule-cooldown window ${window}d (bank was thin under ${GOLF_RULE_REPEAT_WINDOW_DAYS}d)`
+        );
+        break;
+      }
+    }
+  }
 
   if (candidates.length < FOOTBALL_GOLF_HOLE_COUNT) {
     throw new Error(
