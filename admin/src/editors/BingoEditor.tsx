@@ -91,7 +91,9 @@ function categoryIcon(category: Cat) {
     const nationality = category.flag || String(category.matchingRule ?? '')
     return <span className="bingo-preview-flag">{nationalityFlag(nationality)}</span>
   }
-  return <span className="bingo-preview-fallback">{String(category.iconValue ?? '●').slice(0, 2)}</span>
+  // Show the full label (e.g. "100+", "€80M"). Truncating to 2 chars made "100+" render as "10".
+  const label = String(category.iconValue ?? '●').trim() || '●'
+  return <span className="bingo-preview-fallback">{label}</span>
 }
 
 export function BingoEditor({

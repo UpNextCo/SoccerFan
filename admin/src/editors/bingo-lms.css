@@ -73,13 +73,16 @@
 }
 
 .bingo-preview-fallback {
-  width: 34px;
+  min-width: 34px;
   height: 34px;
+  padding: 0 4px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: #e9e2d5;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .bingo-category-card {
