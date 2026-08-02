@@ -1,12 +1,18 @@
 /**
- * Accurate career hat-tricks from Wikipedia's per-competition hat-trick lists (the authoritative,
- * complete record — far better than deriving from match events, which only covered 2012+ league
- * games and undercounted e.g. Harry Kane). Counts one hat-trick per table row and sums across the
- * big-5 leagues + the Champions League, then writes player_extra_stats.career_hattricks.
+ * Career hat-tricks from Wikipedia's per-competition hat-trick lists.
+ *
+ * Earlier we only counted big-5 leagues + Champions League, which undercounted anyone with
+ * hat-tricks elsewhere (Neymar's Brasileirão / Brazil caps, Saka's England caps, Kane's England
+ * caps, Europa League, etc.). Domestic cup lists mostly don't exist on Wikipedia, so cup
+ * hat-tricks are still missing — Neymar will land around the mid-teens rather than the ~22
+ * all-competition figure you see online.
  *
  * Parsing invariant: in every per-hat-trick table the PLAYER is the first wikilink / {{sortname}}
  * in the row, and those tables always have a "Date" column (the by-nationality / by-player summary
- * tables don't), so we only read Date-tables and never double-count.
+ * tables don't), so we only read Date-tables and never double-count within a page.
+ *
+ * National-team lists already include World Cup / continental finals, so we deliberately do NOT
+ * also ingest a separate World Cup page (that would double-count).
  *
  * Usage:
  *   npx tsx src/jobs/ingest-hattricks-wiki.ts --probe   # print counts, no DB write
@@ -17,20 +23,93 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
 
-const PAGES = [
+const PAUSE_MS = 350;
+
+/** Club competitions with complete (or near-complete) Wikipedia hat-trick lists. */
+const CLUB_PAGES = [
   'List of Premier League hat-tricks',
   'List of La Liga hat-tricks',
   'List of Serie A hat-tricks',
   'List of Bundesliga hat-tricks',
   'List of Ligue 1 hat-tricks',
   'List of UEFA Champions League hat-tricks',
+  'List of UEFA Europa League hat-tricks',
+  'List of Campeonato Brasileiro Série A hat-tricks',
+  'List of Primeira Liga hat-tricks',
+  'List of Eredivisie hat-tricks',
+  'List of Major League Soccer hat-tricks',
+  'List of Scottish Professional Football League hat-tricks',
+  'List of FIFA Club World Cup hat-tricks',
 ];
+
+/** Senior international lists — covers friendlies, qualifiers, and finals tournaments. */
+const NATION_PAGES = [
+  'List of England national football team hat-tricks',
+  'List of Brazil national football team hat-tricks',
+  'List of France national football team hat-tricks',
+  'List of Germany national football team hat-tricks',
+  'List of Spain national football team hat-tricks',
+  'List of Italy national football team hat-tricks',
+  'List of Portugal national football team hat-tricks',
+  'List of Netherlands national football team hat-tricks',
+  'List of Belgium national football team hat-tricks',
+  'List of Argentina national football team hat-tricks',
+  'List of Uruguay national football team hat-tricks',
+  'List of Croatia national football team hat-tricks',
+  'List of Sweden national football team hat-tricks',
+  'List of Norway national football team hat-tricks',
+  'List of Denmark national football team hat-tricks',
+  'List of Poland national football team hat-tricks',
+  'List of Serbia national football team hat-tricks',
+  'List of Switzerland national football team hat-tricks',
+  'List of Austria national football team hat-tricks',
+  'List of Turkey national football team hat-tricks',
+  'List of Greece national football team hat-tricks',
+  'List of Czech Republic national football team hat-tricks',
+  'List of Romania national football team hat-tricks',
+  'List of Hungary national football team hat-tricks',
+  'List of Scotland national football team hat-tricks',
+  'List of Wales national football team hat-tricks',
+  'List of Republic of Ireland national football team hat-tricks',
+  'List of Mexico national football team hat-tricks',
+  'List of United States national football team hat-tricks',
+  'List of Colombia national football team hat-tricks',
+  'List of Chile national football team hat-tricks',
+  'List of Paraguay national football team hat-tricks',
+  'List of Peru national football team hat-tricks',
+  'List of Ecuador national football team hat-tricks',
+  'List of Japan national football team hat-tricks',
+  'List of South Korea national football team hat-tricks',
+  'List of Australia national football team hat-tricks',
+  'List of Nigeria national football team hat-tricks',
+  'List of Ghana national football team hat-tricks',
+  'List of Cameroon national football team hat-tricks',
+  'List of Ivory Coast national football team hat-tricks',
+  'List of Senegal national football team hat-tricks',
+  'List of Morocco national football team hat-tricks',
+  'List of Egypt national football team hat-tricks',
+  'List of Algeria national football team hat-tricks',
+  'List of Tunisia national football team hat-tricks',
+];
+
+const PAGES = [...CLUB_PAGES, ...NATION_PAGES];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchWikitext(title: string): Promise<string | null> {
   const url = `https://en.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json&formatversion=2&redirects=1`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'BallKnowledge/1.0 (dev@ballknowledge.app)' } });
-  if (!res.ok) return null;
-  return ((await res.json()) as any)?.parse?.wikitext ?? null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch(url, { headers: { 'User-Agent': 'BallKnowledge/1.0 (dev@ballknowledge.app)' } });
+    if (res.status === 429) {
+      await sleep(Number(res.headers.get('Retry-After') ?? 2) * 1000 * (attempt + 1));
+      continue;
+    }
+    if (!res.ok) return null;
+    const body = (await res.json()) as { parse?: { wikitext?: string }; error?: { code?: string } };
+    if (body.error) return null;
+    return body.parse?.wikitext ?? null;
+  }
+  return null;
 }
 
 /** Split wikitext into top-level table blocks ({| … |}). */
@@ -68,7 +147,7 @@ function countHatTricks(wt: string): Map<string, number> {
       .join(' ')
       .toLowerCase();
     if (!headerText.includes('date')) continue;
-    if (!/player|for|against|home|away/.test(headerText)) continue;
+    if (!/player|for|against|home|away|scorer/.test(headerText)) continue;
 
     const rows = block.split(/\n\|-/).slice(1); // drop the header chunk
     for (const row of rows) {
@@ -102,14 +181,17 @@ async function main() {
   const probe = process.argv.includes('--probe');
 
   const total = new Map<string, number>();
+  let missingPages = 0;
   for (const page of PAGES) {
     const wt = await fetchWikitext(page);
-    if (!wt) { console.warn(`  ! ${page}: not found`); continue; }
+    await sleep(PAUSE_MS);
+    if (!wt) { console.warn(`  ! ${page}: not found`); missingPages += 1; continue; }
     const counts = countHatTricks(wt);
     const sum = [...counts.values()].reduce((a, b) => a + b, 0);
     console.log(`  ${page}: ${counts.size} players, ${sum} hat-tricks`);
     for (const [name, n] of counts) total.set(name, (total.get(name) ?? 0) + n);
   }
+  console.log(`\nPages scraped: ${PAGES.length - missingPages}/${PAGES.length}`);
 
   const index = await loadPlayerIndex();
   const matched = new Map<string, number>(); // player_id -> hat-tricks
@@ -130,15 +212,31 @@ async function main() {
   console.log('\nTop matched hat-trick scorers:');
   for (const [id, n] of topMatched) console.log(`   ${byId.get(id) ?? id}: ${n}`);
 
+  const spot = ['Neymar', 'Bukayo Saka', 'Harry Kane', 'Mohamed Salah', 'Cristiano Ronaldo', 'Lionel Messi'];
+  console.log('\nSpot checks:');
+  for (const name of spot) {
+    const hit = index.get(normalizeSearchText(name));
+    console.log(`   ${name}: ${hit ? (matched.get(hit.id) ?? 0) : '(not in DB)'}`);
+  }
+
   if (probe) { console.log('\n(--probe: no DB write)'); process.exit(0); }
 
+  // Reset then write — otherwise a player who only had cup HTs from the old TM-events pass would
+  // keep a stale positive while everyone else moves to the Wikipedia totals.
+  await db.execute(sql`UPDATE player_extra_stats SET career_hattricks = 0, updated_at = now() WHERE career_hattricks <> 0`);
+
   let written = 0;
-  for (const [id, n] of matched) {
+  const entries = [...matched.entries()];
+  for (let i = 0; i < entries.length; i += 200) {
+    const batch = entries.slice(i, i + 200);
+    const tuples = batch.map(([id, n]) => sql`(${id}::uuid, ${n})`);
     await db.execute(sql`
-      INSERT INTO player_extra_stats (player_id, career_hattricks) VALUES (${id}, ${n})
-      ON CONFLICT (player_id) DO UPDATE SET career_hattricks = ${n}
+      INSERT INTO player_extra_stats (player_id, career_hattricks)
+      VALUES ${sql.join(tuples, sql`, `)}
+      ON CONFLICT (player_id) DO UPDATE
+        SET career_hattricks = EXCLUDED.career_hattricks, updated_at = now()
     `);
-    written += 1;
+    written += batch.length;
   }
   console.log(`\nWrote career_hattricks for ${written} players.`);
   process.exit(0);

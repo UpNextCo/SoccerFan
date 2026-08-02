@@ -57,7 +57,9 @@ const METRICS: OneMoreMetricDefinition[] = [
   { id: 'pl_penalties', title: 'Premier League penalty goals', noun: 'pens', col: 'pl_penalties', part: 'pl_apps', ladder: [10, 15, 20, 30, 40], goalLike: true },
   { id: 'laliga_penalties', title: 'La Liga penalty goals', noun: 'pens', col: 'laliga_penalties', part: 'liga_apps', ladder: [10, 15, 20, 30], goalLike: true },
   { id: 'seriea_penalties', title: 'Serie A penalty goals', noun: 'pens', col: 'seriea_penalties', part: 'seriea_apps', ladder: [10, 15, 20, 30], goalLike: true },
-  { id: 'hattricks', title: 'career hat-tricks', noun: 'hat-tricks', col: 'hattricks', part: 'total_apps', ladder: [3, 5, 8, 10, 15], goalLike: true, eventBased: true },
+  // Wikipedia league + international lists cover every era, so this is NOT eventBased (unlike
+  // weak-foot / CL-knockout which still come from the Transfermarkt match dump).
+  { id: 'hattricks', title: 'career hat-tricks', noun: 'hat-tricks', col: 'hattricks', part: 'total_apps', ladder: [3, 5, 8, 10, 15], goalLike: true },
   { id: 'intl_caps', title: 'international caps', noun: 'caps', col: 'intl_caps', part: 'total_apps', ladder: [30, 50, 75, 100, 125], goalLike: false },
   { id: 'goals_before_21', title: 'goals before turning 21', noun: 'goals', col: 'goals_u21', part: 'total_apps', ladder: [5, 8, 12, 18, 25], goalLike: true },
   { id: 'weak_foot_goals', title: 'weak-foot goals', noun: 'goals', col: 'weak_foot_goals', part: 'total_apps', ladder: [15, 25, 40, 60], goalLike: true, eventBased: true },
@@ -272,8 +274,17 @@ export async function generateOneMorePuzzle(
  * "pick the famous one" or "pick the megastar". Bands widen / fame floor drops only if a tight
  * pairing can't fill the round.
  */
+/** Goalkeepers never belong on goal-like boards. Hat-tricks also drop defenders — a centre-back
+ *  with 0 next to Salah is a giveaway, not a puzzle. */
+function positionOk(metric: OneMoreMetricDefinition, position: string): boolean {
+  if (!metric.goalLike) return true;
+  if (position === 'Goalkeeper') return false;
+  if (metric.id === 'hattricks' && position === 'Defender') return false;
+  return true;
+}
+
 function nearPools(rows: Candidate[], min: number, above: number, below: number, floor: number, metric: OneMoreMetricDefinition) {
-  const ok = (r: Candidate) => r.prestige >= floor && (!metric.goalLike || r.position !== 'Goalkeeper');
+  const ok = (r: Candidate) => r.prestige >= floor && positionOk(metric, r.position);
   const Q = rows.filter((r) => r.value >= min && r.value <= min + above && ok(r));
   // Distractors on event-based metrics must be in the covered era (born >= 1990): we never want to
   // present a pre-2010 legend whose total we've undercounted as a wrong "doesn't qualify".
@@ -317,7 +328,7 @@ export async function previewOneMoreMetric(
   const threshold = requestedThreshold ?? suggested;
   const width = metricBand(threshold);
   const near = nearPools(rows, threshold, width, width, 44, metric);
-  const eligible = rows.filter((row) => !metric.goalLike || row.position !== 'Goalkeeper');
+  const eligible = rows.filter((row) => positionOk(metric, row.position));
   const coveredDistractors = eligible.filter(
     (row) => !metric.eventBased || (row.birth_year ?? 0) >= 1990
   );
