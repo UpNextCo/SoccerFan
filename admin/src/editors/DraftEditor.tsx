@@ -36,15 +36,24 @@ type Puzzle = {
   [k: string]: unknown
 }
 
-const CONSTRAINT_TYPES = ['club', 'league', 'nationality', 'natLeague', 'natClub'] as const
+// Canonical types match the generator / iOS (`nat_league`, `nat_club`). Also accept
+// legacy camelCase from older admin saves when reading.
+const CONSTRAINT_TYPES = ['club', 'league', 'nationality', 'nat_league', 'nat_club'] as const
 type ConstraintType = (typeof CONSTRAINT_TYPES)[number]
 
 const TYPE_LABELS: Record<ConstraintType, string> = {
   club: 'Club',
   league: 'League',
   nationality: 'Nationality',
-  natLeague: 'Nationality + league',
-  natClub: 'Nationality + club',
+  nat_league: 'Nationality + league',
+  nat_club: 'Nationality + club',
+}
+
+function normalizeConstraintType(value: string | undefined | null): ConstraintType | null {
+  if (!value) return null
+  if (value === 'natLeague') return 'nat_league'
+  if (value === 'natClub') return 'nat_club'
+  return CONSTRAINT_TYPES.some((type) => type === value) ? (value as ConstraintType) : null
 }
 
 const POSITION_COMPATIBILITY: Record<string, readonly string[]> = {
@@ -68,19 +77,15 @@ function additionalPositions(position?: string): string[] {
   return [...(POSITION_COMPATIBILITY[position] ?? [position])].filter((candidate) => candidate !== position)
 }
 
-function isConstraintType(value: string): value is ConstraintType {
-  return CONSTRAINT_TYPES.some((type) => type === value)
-}
-
 function rebuildLabel(c: Constraint): string {
-  const type = c.type ?? ''
+  const type = normalizeConstraintType(c.type) ?? c.type ?? ''
   if (type === 'club') return c.club ? `Played for ${c.club}` : c.label ?? 'Club'
   if (type === 'league') return c.leagueName ? `${c.leagueName}` : c.label ?? 'League'
   if (type === 'nationality') return c.nationality ?? c.label ?? 'Nationality'
-  if (type === 'natLeague') {
-    return `${c.nationality ?? '?'} in ${c.leagueName ?? '?'}`
+  if (type === 'nat_league') {
+    return `${c.nationality ?? '?'} · ${c.leagueName ?? '?'}`
   }
-  if (type === 'natClub') {
+  if (type === 'nat_club') {
     return `${c.nationality ?? '?'} · ${c.club ?? '?'}`
   }
   return c.label ?? type
@@ -116,6 +121,8 @@ export function DraftEditor({
     const next = currentConstraints.map((x, i) => {
       if (i !== idx) return x
       const merged = { ...x, ...patch }
+      const normalized = normalizeConstraintType(String(merged.type ?? ''))
+      if (normalized) merged.type = normalized
       return { ...merged, label: rebuildLabel(merged) }
     })
     // Keep optimal lineup constraint labels in sync when possible.
@@ -160,7 +167,7 @@ export function DraftEditor({
       ? currentConstraints.findIndex((constraint) => constraint.id === constraintId)
       : idx
     if (currentIndex < 0) return
-    const currentType = currentConstraints[currentIndex]?.type
+    const currentType = normalizeConstraintType(currentConstraints[currentIndex]?.type)
     updateConstraint(currentIndex, {
       club: team.name,
       teamId: team.id,
@@ -270,17 +277,17 @@ export function DraftEditor({
         </summary>
         <div className="editor-disclosure-content">
         {constraints.map((c, idx) => {
-          const type = c.type ?? ''
-          const needsClub = type === 'club' || type === 'natClub'
-          const needsLeague = type === 'league' || type === 'natLeague'
-          const needsNat = type === 'nationality' || type === 'natLeague' || type === 'natClub'
+          const type = normalizeConstraintType(c.type)
+          const needsClub = type === 'club' || type === 'nat_club'
+          const needsLeague = type === 'league' || type === 'nat_league'
+          const needsNat = type === 'nationality' || type === 'nat_league' || type === 'nat_club'
           return (
             <article key={c.id ?? idx} className="numbered-card">
               <div className="card-heading">
                 <div>
                   <span className="editor-clean-number">Constraint {idx + 1}</span>
                   <strong>{c.label || 'Untitled constraint'}</strong>{' '}
-                  <span className="muted tiny">{isConstraintType(type) ? TYPE_LABELS[type] : 'Custom'}</span>
+                  <span className="muted tiny">{type ? TYPE_LABELS[type] : 'Custom'}</span>
                 </div>
                 <div className="button-row">
                   <button
@@ -306,11 +313,11 @@ export function DraftEditor({
               <label className="field compact">
                 Constraint type
                 <select
-                  value={isConstraintType(type) ? type : 'club'}
+                  value={type ?? 'club'}
                   disabled={locked}
                   onChange={(e) => {
-                    const nextType = e.target.value
-                    if (!isConstraintType(nextType)) return
+                    const nextType = normalizeConstraintType(e.target.value)
+                    if (!nextType) return
                     updateConstraint(idx, {
                       type: nextType,
                       label: TYPE_LABELS[nextType],
