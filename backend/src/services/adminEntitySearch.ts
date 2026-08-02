@@ -77,9 +77,10 @@ export async function resolveAdminPlayer(playerId: string) {
 
   const overrides = await getPhotoOverrides();
   const headshotUrl = resolveHeadshot(overrides.get(row.id), row.apiFootballId) ?? undefined;
-  const logo = await lookupTeamLogo(row.currentClub, row.currentLeague);
 
-  // Top clubs by apps (for One More subtitle).
+  // Top clubs by apps (One More / Club Chain card subtitle). The badge MUST be this primary club —
+  // looking up players.currentClub put Modrić's Real Madrid label under an AC Milan crest, Rooney
+  // under Everton, etc., every time Ops re-enriched a puzzle.
   const clubRows = (await db.execute(sql`
     SELECT s.team_name, SUM(s.appearances)::int AS apps
     FROM player_stats s
@@ -91,7 +92,23 @@ export async function resolveAdminPlayer(playerId: string) {
     ORDER BY apps DESC
     LIMIT 3
   `)) as unknown as Array<{ team_name: string; apps: number }>;
-  const clubs = clubRows.map((c) => c.team_name).join(' · ');
+  const primaryClub = clubRows[0]?.team_name || row.currentClub;
+  const logo =
+    (primaryClub ? await lookupTeamLogo(primaryClub, '') : null)
+    ?? (row.currentClub ? await lookupTeamLogo(row.currentClub, row.currentLeague) : null);
+
+  // Prefer the teams-table spelling for the primary club so the label matches the crest
+  // ("Milan" → "AC Milan", not a second line that says AC Milan under a Milan badge).
+  let clubsNames = clubRows.map((c) => c.team_name);
+  if (logo?.teamId != null && clubsNames.length) {
+    const canon = (await db.execute(sql`
+      SELECT name FROM teams WHERE id = ${logo.teamId} LIMIT 1
+    `)) as unknown as Array<{ name: string }>;
+    if (canon[0]?.name) {
+      clubsNames = [canon[0].name, ...clubsNames.filter((n) => n !== canon[0]!.name && n !== primaryClub)];
+    }
+  }
+  const clubs = clubsNames.join(' · ');
 
   return {
     id: row.id,
