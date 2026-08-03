@@ -450,6 +450,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ date, modeId, force }),
     }),
+  recomputeDraftOptimal: (puzzleJson: unknown) =>
+    request<{ puzzleJson: unknown }>('/puzzle/recompute-draft', {
+      method: 'POST',
+      body: JSON.stringify({ puzzleJson }),
+    }),
 
   oneMoreMetrics: () =>
     request<OneMoreMetricCatalogItem[]>('/question-engine/metrics'),

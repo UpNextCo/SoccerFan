@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, type AdminLeagueHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './game-editors.css'
@@ -123,17 +123,58 @@ export function DraftEditor({
   const constraints = p.constraints ?? []
   const lineup = p.optimalLineup ?? []
   const puzzleRef = useRef(p)
+  const recomputeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const recomputeSeq = useRef(0)
+  const [recomputing, setRecomputing] = useState(false)
+  const [recomputeError, setRecomputeError] = useState<string | null>(null)
 
   useEffect(() => {
     puzzleRef.current = p
   }, [p])
+
+  useEffect(() => {
+    return () => {
+      if (recomputeTimer.current) clearTimeout(recomputeTimer.current)
+    }
+  }, [])
 
   function commit(next: Puzzle) {
     puzzleRef.current = next
     onChange(next)
   }
 
-  function updateConstraint(idx: number, patch: Partial<Constraint>) {
+  async function refreshOptimalLineup() {
+    if (locked) return
+    const seq = ++recomputeSeq.current
+    setRecomputing(true)
+    setRecomputeError(null)
+    try {
+      const { puzzleJson } = await api.recomputeDraftOptimal(puzzleRef.current)
+      if (seq !== recomputeSeq.current) return
+      const next = puzzleJson as Puzzle
+      commit({
+        ...puzzleRef.current,
+        constraints: next.constraints ?? puzzleRef.current.constraints,
+        optimalScore: next.optimalScore,
+        optimalLineup: next.optimalLineup,
+      })
+    } catch (err) {
+      if (seq !== recomputeSeq.current) return
+      setRecomputeError(err instanceof Error ? err.message : 'Could not recompute best lineup')
+    } finally {
+      if (seq === recomputeSeq.current) setRecomputing(false)
+    }
+  }
+
+  function scheduleOptimalRefresh() {
+    if (locked) return
+    if (recomputeTimer.current) clearTimeout(recomputeTimer.current)
+    recomputeTimer.current = setTimeout(() => {
+      void refreshOptimalLineup()
+    }, 450)
+  }
+
+  function updateConstraint(idx: number, patch: Partial<Constraint>, opts?: { refreshOptimal?: boolean }) {
     const current = puzzleRef.current
     const currentConstraints = current.constraints ?? []
     const currentLineup = current.optimalLineup ?? []
@@ -144,7 +185,7 @@ export function DraftEditor({
       if (normalized) merged.type = normalized
       return { ...merged, label: rebuildLabel(merged) }
     })
-    // Keep optimal lineup constraint labels in sync when possible.
+    // Keep optimal lineup constraint labels in sync until the solver replaces the XI.
     const updated = next[idx]!
     const nextLineup = currentLineup.map((pick) =>
       pick.constraintId === updated.id
@@ -152,9 +193,10 @@ export function DraftEditor({
         : pick
     )
     commit({ ...current, constraints: next, optimalLineup: nextLineup })
+    if (opts?.refreshOptimal !== false) scheduleOptimalRefresh()
   }
 
-  function setConstraints(next: Constraint[]) {
+  function setConstraints(next: Constraint[], opts?: { refreshOptimal?: boolean }) {
     const current = puzzleRef.current
     const labels = new Map(next.map((constraint) => [constraint.id, constraint.label]))
     commit({
@@ -167,6 +209,7 @@ export function DraftEditor({
           : pick.constraintLabel,
       })),
     })
+    if (opts?.refreshOptimal !== false) scheduleOptimalRefresh()
   }
 
   function moveConstraint(idx: number, offset: -1 | 1) {
@@ -266,9 +309,17 @@ export function DraftEditor({
         </div>
         <div>
           <span className="muted tiny">Best score</span>
-          <strong>{p.optimalScore ?? '—'}</strong>
+          <strong>{recomputing ? '…' : p.optimalScore ?? '—'}</strong>
         </div>
       </div>
+      {recomputeError && (
+        <p className="muted tiny" style={{ color: '#b42318' }}>
+          Best lineup: {recomputeError}
+        </p>
+      )}
+      {recomputing && !recomputeError && (
+        <p className="muted tiny">Updating best lineup from the current constraints…</p>
+      )}
 
       <div className="editor-clean-section">
         <header>
@@ -432,7 +483,9 @@ export function DraftEditor({
       <details className="editor-clean-section editor-disclosure">
         <summary>
           <strong>Best lineup</strong>
-          <span className="muted tiny">{lineup.length} players</span>
+          <span className="muted tiny">
+            {recomputing ? 'recomputing…' : `${lineup.length} players`}
+          </span>
         </summary>
         <div className="editor-disclosure-content">
         {lineup.length === 0 ? (

@@ -402,6 +402,7 @@ export interface BattleOptimalPick {
   position: string;
   constraintId: string;
   constraintLabel: string;
+  playerId?: string;
   playerName: string;
   statValue: number;
 }
@@ -559,7 +560,7 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
       pickBySlot[si] = {
         slotId: slot.id, position: slot.position,
         constraintId: c.id, constraintLabel: c.label,
-        playerName: pick.name, statValue: pick.stat,
+        playerId: pick.id, playerName: pick.name, statValue: pick.stat,
       };
     }
     if (!feasible) continue;
@@ -600,6 +601,110 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
   }
 
   return null;
+}
+
+function normalizeConstraintType(type: string): ConstraintType | null {
+  if (type === 'natLeague') return 'nat_league';
+  if (type === 'natClub') return 'nat_club';
+  if (
+    type === 'club' ||
+    type === 'league' ||
+    type === 'nationality' ||
+    type === 'nat_league' ||
+    type === 'nat_club'
+  ) {
+    return type;
+  }
+  return null;
+}
+
+/**
+ * Re-solve the optimal XI for an existing Draft puzzle after Ops edits the constraint chips.
+ * Uses the same Hungarian + distinct-player materialisation as generation.
+ */
+export async function recomputeBattleOptimalLineup(
+  puzzle: BattlePuzzleJson
+): Promise<{ optimalScore: number; optimalLineup: BattleOptimalPick[] } | null> {
+  const cat = categoryById(puzzle.category.id);
+  if (!cat) return null;
+
+  const slots = puzzle.slots;
+  const constraints: Constraint[] = [];
+  for (const raw of puzzle.constraints) {
+    const type = normalizeConstraintType(String(raw.type ?? ''));
+    if (!type) return null;
+    constraints.push({
+      id: raw.id,
+      type,
+      label: raw.label,
+      club: raw.club ?? undefined,
+      teamId: raw.teamId,
+      logoUrl: raw.logoUrl,
+      leagueId: raw.leagueId,
+      leagueName: raw.leagueName,
+      nationality: raw.nationality,
+    });
+  }
+  if (constraints.length === 0 || constraints.length !== slots.length) return null;
+
+  const positions = [...new Set(slots.map((s) => s.position))];
+  const perConstraint = await Promise.all(
+    constraints.map((c) => bestCellsForConstraint(cat, c, positions))
+  );
+  const topStat = (ci: number, position: string) =>
+    perConstraint[ci]!.get(position)?.[0]?.stat ?? 0;
+  const weight = constraints.map((_, ci) => slots.map((slot) => topStat(ci, slot.position)));
+  const { total: upperBound, assign } = maxWeightAssignment(weight);
+  if (upperBound <= 0) return null;
+
+  const valid = assign.every(
+    (slotIdx, ci) => slotIdx >= 0 && topStat(ci, slots[slotIdx]!.position) > 0
+  );
+  if (!valid) return null;
+
+  const constraintForSlot = new Array<number>(slots.length).fill(-1);
+  assign.forEach((slotIdx, ci) => {
+    if (slotIdx >= 0) constraintForSlot[slotIdx] = ci;
+  });
+
+  const usedPlayerIds = new Set<string>();
+  const pickBySlot = new Array<BattleOptimalPick | null>(slots.length).fill(null);
+  const order = slots
+    .map((slot, si) => ({
+      si,
+      options: (perConstraint[constraintForSlot[si]!]!.get(slot.position) ?? []).filter(
+        (c) => c.stat > 0
+      ).length,
+    }))
+    .sort((a, b) => a.options - b.options)
+    .map((o) => o.si);
+
+  let optimalScore = 0;
+  for (const si of order) {
+    const slot = slots[si]!;
+    const ci = constraintForSlot[si]!;
+    const c = constraints[ci]!;
+    const pick = (perConstraint[ci]!.get(slot.position) ?? []).find(
+      (cell) => cell.stat > 0 && !usedPlayerIds.has(cell.id)
+    );
+    if (!pick) return null;
+    usedPlayerIds.add(pick.id);
+    optimalScore += pick.stat;
+    pickBySlot[si] = {
+      slotId: slot.id,
+      position: slot.position,
+      constraintId: c.id,
+      constraintLabel: c.label,
+      playerId: pick.id,
+      playerName: pick.name,
+      statValue: pick.stat,
+    };
+  }
+
+  return {
+    optimalScore,
+    optimalLineup: pickBySlot.map((p) => p!),
+  };
 }
 
 // ---------------------------------------------------------------------------

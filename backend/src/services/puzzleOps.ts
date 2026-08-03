@@ -471,7 +471,15 @@ export async function savePuzzleForAdmin(args: {
   if (!existing) return { ok: false, error: 'not found' };
   if (existing.status === 'locked') return { ok: false, error: 'locked' };
 
-  const enriched = await enrichAdminPuzzleForSave(args.modeId, args.puzzleJson, args.answerJson);
+  let enriched: { puzzleJson: unknown; answerJson: unknown };
+  try {
+    enriched = await enrichAdminPuzzleForSave(args.modeId, args.puzzleJson, args.answerJson);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'enrich failed',
+    };
+  }
   const validation = validatePuzzlePayload(
     args.modeId,
     enriched.puzzleJson,

@@ -5,6 +5,10 @@ import { inArray } from 'drizzle-orm';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
 import { resolveAdminBingoPlayer, resolveAdminPlayer } from './adminEntitySearch.js';
+import {
+  recomputeBattleOptimalLineup,
+  type BattlePuzzleJson,
+} from './battleGenerator.js';
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 
 const UUID_RE =
@@ -415,48 +419,58 @@ export async function enrichAdminBingoPuzzle(puzzleJson: unknown): Promise<unkno
 }
 
 /**
- * Re-hydrate Draft XI media: club crests, league badges, and optimal-lineup headshots.
+ * Re-hydrate Draft XI media and re-solve the optimal XI from the current constraint chips.
+ * Ops constraint edits only update labels unless we recompute here — that stale XI would also
+ * ship to the app as the perfect-score reference.
  */
-export async function enrichAdminDraftPuzzle(puzzleJson: unknown): Promise<unknown> {
-  const puzzle = structuredClone(puzzleJson) as {
-    constraints?: Array<{
-      type?: string;
-      club?: string | null;
-      teamId?: number | null;
-      logoUrl?: string | null;
-      leagueId?: number | null;
-      leagueName?: string | null;
-      nationality?: string | null;
-      [k: string]: unknown;
-    }>;
-    optimalLineup?: Array<{
-      playerId?: string | null;
-      playerName?: string | null;
-      headshotUrl?: string | null;
-      [k: string]: unknown;
-    }>;
+export async function enrichAdminDraftPuzzle(
+  puzzleJson: unknown,
+  opts?: { requireOptimal?: boolean }
+): Promise<unknown> {
+  const puzzle = structuredClone(puzzleJson) as BattlePuzzleJson & {
+    constraints: Array<BattlePuzzleJson['constraints'][number] & { type?: string }>;
+    optimalLineup: Array<
+      BattlePuzzleJson['optimalLineup'][number] & { headshotUrl?: string | null }
+    >;
+    optimalScore: number;
   };
 
   if (Array.isArray(puzzle.constraints)) {
     puzzle.constraints = await Promise.all(
       puzzle.constraints.map(async (c) => {
         const type = String(c.type ?? '');
-        if ((type === 'club' || type === 'nat_club' || type === 'natClub') && c.club) {
+        const normalizedType =
+          type === 'natLeague' ? 'nat_league' : type === 'natClub' ? 'nat_club' : type;
+        const base = {
+          ...c,
+          type: normalizedType as BattlePuzzleJson['constraints'][number]['type'],
+        };
+        if ((normalizedType === 'club' || normalizedType === 'nat_club') && c.club) {
           const logo = await lookupTeamLogo(c.club, c.leagueName ?? '');
           return {
-            ...c,
+            ...base,
             teamId: logo?.teamId ?? c.teamId ?? null,
             logoUrl: logo?.logoUrl ?? c.logoUrl ?? null,
           };
         }
         if (
-          (type === 'league' || type === 'nat_league' || type === 'natLeague') &&
+          (normalizedType === 'league' || normalizedType === 'nat_league') &&
           c.leagueId != null
         ) {
-          return { ...c, logoUrl: leagueLogoUrl(c.leagueId), teamId: null };
+          return { ...base, logoUrl: leagueLogoUrl(c.leagueId), teamId: null };
         }
-        return c;
+        return base;
       })
+    );
+  }
+
+  const solved = await recomputeBattleOptimalLineup(puzzle);
+  if (solved) {
+    puzzle.optimalScore = solved.optimalScore;
+    puzzle.optimalLineup = solved.optimalLineup;
+  } else if (opts?.requireOptimal) {
+    throw new Error(
+      'Could not solve an optimal XI for these Draft constraints. Check each chip still has eligible players.'
     );
   }
 
@@ -470,7 +484,10 @@ export async function enrichAdminDraftPuzzle(puzzleJson: unknown): Promise<unkno
         return {
           ...pick,
           playerName: resolved.name || pick.playerName,
-          headshotUrl: resolved.headshotUrl ?? pick.headshotUrl ?? null,
+          headshotUrl:
+            resolved.headshotUrl ??
+            (pick as { headshotUrl?: string | null }).headshotUrl ??
+            null,
         };
       })
     );
@@ -498,7 +515,10 @@ export async function enrichAdminPuzzleForSave(
     case 'football_golf':
       return { puzzleJson: await enrichAdminGolfPuzzle(puzzleJson), answerJson };
     case 'draft_master':
-      return { puzzleJson: await enrichAdminDraftPuzzle(puzzleJson), answerJson };
+      return {
+        puzzleJson: await enrichAdminDraftPuzzle(puzzleJson, { requireOptimal: true }),
+        answerJson,
+      };
     default:
       return { puzzleJson, answerJson };
   }

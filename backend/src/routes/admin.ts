@@ -326,6 +326,23 @@ adminRouter.post('/puzzle/regenerate', requireAdmin, async (req, res) => {
   });
 });
 
+/** Re-solve Draft XI optimal lineup from the editor's current constraint chips (live Ops preview). */
+adminRouter.post('/puzzle/recompute-draft', requireAdmin, async (req, res) => {
+  const body = z.object({ puzzleJson: z.unknown() }).safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 'Invalid body', 400);
+    return;
+  }
+  try {
+    const puzzleJson = await enrichAdminDraftPuzzle(body.data.puzzleJson, {
+      requireOptimal: true,
+    });
+    sendSuccess(res, { puzzleJson });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 400);
+  }
+});
+
 // ---- Entity search / resolve (for structured editors) --------------------
 
 adminRouter.get('/search/players', requireAdmin, async (req, res) => {
