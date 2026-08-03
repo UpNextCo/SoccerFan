@@ -13,6 +13,14 @@ import {
 } from './footballGolfConstants.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js';
+import {
+  BACK_YOURSELF_MAX_XP,
+  generateBackYourselfPuzzle,
+  playerMatchesBackYourselfCategory,
+  resolveBackYourselfPlayerCard,
+  type BackYourselfCategory,
+  type BackYourselfPuzzlePublic,
+} from './backYourselfGenerator.js';
 import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenerator.js';
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 import { startLastManStandingRun, submitLastManStandingAnswer } from './lastManStandingCheck.js';
@@ -31,6 +39,7 @@ const GAME_MODES = [
   { id: 'club_chain', title: 'CLUB CHAIN', subtitle: 'Link them by shared clubs', playerCount: 9200, isAvailable: true },
   { id: 'target_man', title: 'TARGET MAN', subtitle: 'Hit the stat target', playerCount: 15200, isAvailable: true },
   { id: 'last_man_standing', title: 'LAST MAN STANDING', subtitle: 'Survive the field', playerCount: 10100, isAvailable: true },
+  { id: 'back_yourself', title: 'BACK YOURSELF', subtitle: 'Pledge how many you can name', playerCount: 9800, isAvailable: true },
 ];
 
 /** Modes still generated via generateAllDailyPuzzles (legacy Guess Who / Blind Rank retired). */
@@ -47,6 +56,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'club_chain', title: 'CLUB CHAIN' },
   { modeId: 'target_man', title: 'TARGET MAN' },
   { modeId: 'last_man_standing', title: 'LAST MAN STANDING' },
+  { modeId: 'back_yourself', title: 'BACK YOURSELF' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -58,6 +68,7 @@ export const DAILY_PLAYABLE_MODES = [
   'club_chain',
   'target_man',
   'last_man_standing',
+  'back_yourself',
 ] as const;
 
 /**
@@ -103,6 +114,7 @@ export const MAX_XP: Record<string, number> = {
   football_tower: 900,
   football_golf: FOOTBALL_GOLF_MAX_XP,
   last_man_standing: 900,
+  back_yourself: BACK_YOURSELF_MAX_XP,
 };
 
 export function maxXpForMode(modeId: string): number {
@@ -229,6 +241,39 @@ async function ensureDraftMasterPuzzle(date: string): Promise<void> {
     console.log(`Generated draft_master puzzle for ${date} (${puzzle.category.id}, optimal ${puzzle.optimalScore})`);
   } catch (error) {
     console.warn(`Skipped draft_master for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** Generate + store today's Back Yourself puzzle if not present. Valid player ids stay in answerJson. */
+async function ensureBackYourselfPuzzle(date: string): Promise<void> {
+  const existing = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'back_yourself')))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  try {
+    const generated = await generateBackYourselfPuzzle(date);
+    if (!generated) {
+      console.warn(`Skipped back_yourself for ${date}: no viable puzzle`);
+      return;
+    }
+    await db
+      .insert(dailyPuzzles)
+      .values({
+        date,
+        modeId: 'back_yourself',
+        puzzleJson: generated.puzzle,
+        answerPlayerId: null,
+        answerJson: generated.answer,
+      })
+      .onConflictDoNothing();
+    console.log(
+      `Generated back_yourself puzzle for ${date} (${generated.puzzle.category.label}, max ${generated.puzzle.maxPool})`
+    );
+  } catch (error) {
+    console.warn(`Skipped back_yourself for ${date}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -512,6 +557,9 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   if (!existing.has('last_man_standing')) {
     await ensureLastManStandingPuzzle(date);
   }
+  if (!existing.has('back_yourself')) {
+    await ensureBackYourselfPuzzle(date);
+  }
 }
 
 /**
@@ -519,6 +567,46 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
  * seasons)? Optionally also checks whether `toId` links to the puzzle's target, so the client can
  * detect a win in one round-trip. National / same-nationality links never count.
  */
+/**
+ * Validate a Back Yourself guess against today's category. Duplicates are reported without
+ * revealing whether the player fits (client should treat as no-op).
+ */
+export async function validateBackYourselfGuess(input: {
+  date: string;
+  playerId: string;
+  alreadyNamedIds?: string[];
+}): Promise<{
+  ok: boolean;
+  correct: boolean;
+  duplicate: boolean;
+  player?: Awaited<ReturnType<typeof resolveBackYourselfPlayerCard>>;
+}> {
+  const rows = await db
+    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, input.date), eq(dailyPuzzles.modeId, 'back_yourself')))
+    .limit(1);
+  const puzzle = rows[0]?.puzzleJson as BackYourselfPuzzlePublic | undefined;
+  if (!puzzle?.category) {
+    throw new Error('No Back Yourself puzzle for date');
+  }
+
+  const already = new Set(input.alreadyNamedIds ?? []);
+  if (already.has(input.playerId)) {
+    return { ok: true, correct: false, duplicate: true };
+  }
+
+  const correct = await playerMatchesBackYourselfCategory(
+    input.playerId,
+    puzzle.category as BackYourselfCategory
+  );
+  if (!correct) {
+    return { ok: true, correct: false, duplicate: false };
+  }
+  const player = await resolveBackYourselfPlayerCard(input.playerId);
+  return { ok: true, correct: true, duplicate: false, player: player ?? undefined };
+}
+
 export async function validateClubChainLink(
   fromId: string,
   toId: string,

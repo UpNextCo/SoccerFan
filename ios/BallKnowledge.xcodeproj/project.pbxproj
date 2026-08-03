@@ -94,6 +94,8 @@
 		FA6776AED5C7DA3C6291EA66 /* WorldCupXIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB738E61FA78C25E6A33B47F /* WorldCupXIModels.swift */; };
 		FEACEDD7691B688EBDE558E5 /* ProfileXpBreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 414E9ED8B2E0943A2D22C065 /* ProfileXpBreakdownView.swift */; };
 		FEEF00D3BDD7648A935B071D /* FootballBingoSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B42BB208E7E01B1BD110962 /* FootballBingoSeed.swift */; };
+		B9E4D32F0C5E8162F73A9B21 /* BackYourselfModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F3C21E9B4D7051E62F8A10 /* BackYourselfModels.swift */; };
+		D1A6F54B2E709384B95CBD43 /* BackYourselfView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F5E43A1D6F9273A84BAC32 /* BackYourselfView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -186,6 +188,8 @@
 		ECF087E8BC4A2736630E7F1C /* GameModeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModeCatalog.swift; sourceTree = "<group>"; };
 		EF8E55ABF47595B1A2EF4C43 /* BlindRankView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlindRankView.swift; sourceTree = "<group>"; };
 		FB738E61FA78C25E6A33B47F /* WorldCupXIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorldCupXIModels.swift; sourceTree = "<group>"; };
+		A8F3C21E9B4D7051E62F8A10 /* BackYourselfModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackYourselfModels.swift; sourceTree = "<group>"; };
+		C0F5E43A1D6F9273A84BAC32 /* BackYourselfView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackYourselfView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -219,6 +223,7 @@
 			children = (
 				D39C02E1E442AD09EF1F2D15 /* GameIntroView.swift */,
 				EFFB69CC923F7C592BB79AD8 /* BlindRank */,
+				E2B7A65C3F81A495CA6DCE54 /* BackYourself */,
 				FEBB8F19CAC1A772B0F84A5E /* ClubChain */,
 				E4129D0FF790D09F713B2014 /* DraftMaster */,
 				8B0F3EA650B4B306DA2C5004 /* FootballBingo */,
@@ -344,6 +349,7 @@
 			isa = PBXGroup;
 			children = (
 				367D84D89C2E593BFB8289AF /* BlindRankModels.swift */,
+				A8F3C21E9B4D7051E62F8A10 /* BackYourselfModels.swift */,
 				978DCD9BA1FEAF828465ED08 /* ClubChainModels.swift */,
 				BCD20AA2885C8CDFA96F2DB6 /* DailyChallengeResolver.swift */,
 				CFE76CC1EC932BF93085E527 /* DailyDate.swift */,
@@ -468,6 +474,14 @@
 			path = WorldCupXI;
 			sourceTree = "<group>";
 		};
+		E2B7A65C3F81A495CA6DCE54 /* BackYourself */ = {
+			isa = PBXGroup;
+			children = (
+				C0F5E43A1D6F9273A84BAC32 /* BackYourselfView.swift */,
+			);
+			path = BackYourself;
+			sourceTree = "<group>";
+		};
 		FEBB8F19CAC1A772B0F84A5E /* ClubChain */ = {
 			isa = PBXGroup;
 			children = (
@@ -580,6 +594,8 @@
 				8DFB5F6E7D036B5D0DB29D94 /* BallKnowledgeApp.swift in Sources */,
 				D9668C81EED41FE8953CAEF6 /* BlindRankModels.swift in Sources */,
 				EE6672A880D715EB249E491C /* BlindRankView.swift in Sources */,
+				B9E4D32F0C5E8162F73A9B21 /* BackYourselfModels.swift in Sources */,
+				D1A6F54B2E709384B95CBD43 /* BackYourselfView.swift in Sources */,
 				3CC939A70E375FC3A822B18C /* ClubChainModels.swift in Sources */,
 				DF8AC3C3325928807A114128 /* ClubChainView.swift in Sources */,
 				C4F799AF15D7E8C7423B5C7D /* Config.swift in Sources */,

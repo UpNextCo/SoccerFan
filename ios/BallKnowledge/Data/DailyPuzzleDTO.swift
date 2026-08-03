@@ -552,6 +552,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
     case draftMaster(DraftMasterPuzzleDTO)
     case clubChain(ClubChainPuzzleDTO)
     case lastManStanding(LastManStandingPuzzleDTO)
+    case backYourself(BackYourselfPuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
         case modeId
@@ -584,6 +585,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .clubChain(try ClubChainPuzzleDTO(from: decoder))
         case GameModeID.lastManStanding.rawValue:
             self = .lastManStanding(try LastManStandingPuzzleDTO(from: decoder))
+        case GameModeID.backYourself.rawValue:
+            self = .backYourself(try BackYourselfPuzzleDTO(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .modeId,
@@ -617,6 +620,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .lastManStanding(let puzzle):
             try puzzle.encode(to: encoder)
+        case .backYourself(let puzzle):
+            try puzzle.encode(to: encoder)
         }
     }
 
@@ -633,6 +638,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .draftMaster: return GameModeID.draftMaster.rawValue
         case .clubChain: return GameModeID.clubChain.rawValue
         case .lastManStanding: return GameModeID.lastManStanding.rawValue
+        case .backYourself: return GameModeID.backYourself.rawValue
         }
     }
 }
@@ -769,6 +775,11 @@ extension DailyBundleDTO {
 
     var lastManStandingPuzzle: LastManStandingPuzzleDTO? {
         guard case .lastManStanding(let puzzle) = game(for: .lastManStanding)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var backYourselfPuzzle: BackYourselfPuzzleDTO? {
+        guard case .backYourself(let puzzle) = game(for: .backYourself)?.puzzle else { return nil }
         return puzzle
     }
 }

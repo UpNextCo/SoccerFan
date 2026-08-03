@@ -9,6 +9,11 @@ import {
   recomputeBattleOptimalLineup,
   type BattlePuzzleJson,
 } from './battleGenerator.js';
+import {
+  refreshBackYourselfAnswer,
+  type BackYourselfCategory,
+  type BackYourselfPuzzlePublic,
+} from './backYourselfGenerator.js';
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 
 const UUID_RE =
@@ -496,6 +501,34 @@ export async function enrichAdminDraftPuzzle(
   return puzzle;
 }
 
+/**
+ * Refresh Back Yourself logos + valid player pool from the current category chip.
+ */
+export async function enrichAdminBackYourselfPuzzle(
+  puzzleJson: unknown,
+  answerJson: unknown,
+  opts?: { requirePoolBounds?: boolean }
+): Promise<{ puzzleJson: unknown; answerJson: unknown }> {
+  const puzzle = structuredClone(puzzleJson) as BackYourselfPuzzlePublic;
+  if (!puzzle?.category) {
+    throw new Error('Back Yourself puzzle is missing a category');
+  }
+  const refreshed = await refreshBackYourselfAnswer(puzzle.category as BackYourselfCategory);
+  if (opts?.requirePoolBounds && (refreshed.maxPool < 8 || refreshed.maxPool > 25)) {
+    throw new Error(
+      `Player pool size ${refreshed.maxPool} is outside 8–25. Pick a different category.`
+    );
+  }
+  puzzle.category = refreshed.category;
+  puzzle.maxPool = refreshed.maxPool;
+  const answer = {
+    modeId: 'back_yourself' as const,
+    validPlayerIds: refreshed.validPlayerIds,
+    ...((answerJson && typeof answerJson === 'object' ? answerJson : {}) as object),
+  };
+  return { puzzleJson: puzzle, answerJson: { ...answer, validPlayerIds: refreshed.validPlayerIds } };
+}
+
 export async function enrichAdminPuzzleForSave(
   modeId: string,
   puzzleJson: unknown,
@@ -519,6 +552,8 @@ export async function enrichAdminPuzzleForSave(
         puzzleJson: await enrichAdminDraftPuzzle(puzzleJson, { requireOptimal: true }),
         answerJson,
       };
+    case 'back_yourself':
+      return enrichAdminBackYourselfPuzzle(puzzleJson, answerJson, { requirePoolBounds: true });
     default:
       return { puzzleJson, answerJson };
   }

@@ -460,8 +460,8 @@ struct GamesOnboardingPage: View {
 
             OnboardingTitleBlock(
                 eyebrow: nil,
-                title: "Seven different football games",
-                subtitle: "Build teams, connect players, hit targets and answer questions across seven game modes."
+                title: "Eight different football games",
+                subtitle: "Build teams, connect players, hit targets and answer questions across eight game modes."
             )
             .padding(.horizontal, 24)
             .padding(.bottom, 16)

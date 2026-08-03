@@ -170,6 +170,24 @@ const clubChainAnswer = z.object({
   shortestPathLength: z.number().int().positive(),
 }).passthrough();
 
+const backYourselfCategory = z.object({
+  type: z.enum(['nat_club', 'club', 'nationality', 'nat_league']),
+  label: text,
+  club: text.nullable().optional(),
+  leagueId: z.number().int().nullable().optional(),
+  leagueName: text.nullable().optional(),
+  nationality: text.nullable().optional(),
+  logoUrl: text.nullable().optional(),
+}).passthrough();
+const backYourselfPuzzle = z.object({
+  category: backYourselfCategory,
+  maxPool: z.number().int().min(1).max(50),
+  mistakesAllowed: z.number().int().positive().optional(),
+}).passthrough();
+const backYourselfAnswer = z.object({
+  validPlayerIds: z.array(id).min(1),
+}).passthrough();
+
 const targetManPuzzle = z.object({
   categoryId: id,
   categoryLabel: text,
@@ -396,6 +414,22 @@ function validateDraft(puzzleJson: unknown, issues: AdminPuzzleValidationIssue[]
   if (Math.abs(score - puzzle.optimalScore) > 0.001) issue(issues, 'puzzleJson.optimalScore', `Optimal score must equal lineup total ${score}.`);
 }
 
+function validateBackYourself(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzzleValidationIssue[]) {
+  const puzzle = parse(backYourselfPuzzle, puzzleJson, 'puzzleJson', issues);
+  const answer = parse(backYourselfAnswer, answerJson, 'answerJson', issues);
+  if (!puzzle || !answer) return;
+  if (answer.validPlayerIds.length !== puzzle.maxPool) {
+    issue(
+      issues,
+      'puzzleJson.maxPool',
+      `maxPool (${puzzle.maxPool}) must equal validPlayerIds length (${answer.validPlayerIds.length}). Recalculate the pool.`
+    );
+  }
+  if (!unique(answer.validPlayerIds)) {
+    issue(issues, 'answerJson.validPlayerIds', 'Valid player ids must be unique.');
+  }
+}
+
 function validateClubChain(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzzleValidationIssue[]) {
   const puzzle = parse(clubChainPuzzle, puzzleJson, 'puzzleJson', issues);
   const answer = parse(clubChainAnswer, answerJson, 'answerJson', issues);
@@ -448,6 +482,7 @@ export function validatePuzzleReport(modeId: string, puzzleJson: unknown, answer
     case 'draft_master': validateDraft(puzzleJson, issues); break;
     case 'club_chain': validateClubChain(puzzleJson, answerJson, issues); break;
     case 'target_man': validateTargetMan(puzzleJson, answerJson, issues); break;
+    case 'back_yourself': validateBackYourself(puzzleJson, answerJson, issues); break;
     default: issue(issues, 'modeId', `Unknown mode ${modeId}.`);
   }
   return { ok: !issues.some((entry) => entry.severity === 'error'), issues };

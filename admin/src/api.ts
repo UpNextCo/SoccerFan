@@ -34,6 +34,7 @@ export const PLAYABLE_MODES = [
   'club_chain',
   'target_man',
   'last_man_standing',
+  'back_yourself',
 ] as const
 
 export type PlayableMode = (typeof PLAYABLE_MODES)[number]
@@ -455,6 +456,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ puzzleJson }),
     }),
+  recomputeBackYourself: (body: { puzzleJson: unknown; answerJson?: unknown }) =>
+    request<{ puzzleJson: unknown; answerJson: unknown }>('/puzzle/recompute-back-yourself', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   oneMoreMetrics: () =>
     request<OneMoreMetricCatalogItem[]>('/question-engine/metrics'),
@@ -646,4 +652,5 @@ export const MODE_LABELS: Record<string, string> = {
   club_chain: 'Club Chain',
   target_man: 'Target Man',
   last_man_standing: 'LMS',
+  back_yourself: 'Back Yourself',
 }

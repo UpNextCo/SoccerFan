@@ -129,6 +129,15 @@ struct GameIntroContent {
                     "Survive every round to be the Last Man Standing.",
                 ]
             )
+        case .backYourself:
+            return GameIntroContent(
+                tagline: "Pledge how many you can name.",
+                steps: [
+                    "See today's category and how many famous players fit it.",
+                    "Set your pledge on the slider — higher number, more XP if you deliver.",
+                    "Search and name that many players with three lives. Miss the pledge and you get 0 XP.",
+                ]
+            )
         }
     }
 }

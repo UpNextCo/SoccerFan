@@ -229,6 +229,24 @@ actor APIClient {
         )
     }
 
+    /// Validate a Back Yourself pick against today's category. Wrong fits cost a life on the client.
+    func backYourselfGuess(
+        date: String,
+        playerId: String,
+        alreadyNamedIds: [String]
+    ) async throws -> BackYourselfGuessResultDTO {
+        struct Body: Encodable {
+            let date: String
+            let playerId: String
+            let alreadyNamedIds: [String]
+        }
+        return try await request(
+            "daily/backyourself/guess",
+            method: "POST",
+            body: Body(date: date, playerId: playerId, alreadyNamedIds: alreadyNamedIds)
+        )
+    }
+
     func lastManStandingStart(date: String, resumePicks: [String] = []) async throws -> LMSStartResultDTO {
         struct Body: Encodable {
             let date: String

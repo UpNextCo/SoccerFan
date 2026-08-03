@@ -11,6 +11,12 @@ import { matches as bingoMatches, type BingoCategory, type BingoPlayer } from '.
 import { playerValuesForCategory } from './targetManCategories.js';
 import { clubChainLink } from './clubChainGenerator.js';
 import {
+  playerMatchesBackYourselfCategory,
+  scoreBackYourself,
+  type BackYourselfCategory,
+  type BackYourselfPuzzlePublic,
+} from './backYourselfGenerator.js';
+import {
   FOOTBALL_GOLF_HOLE_COUNT,
   FOOTBALL_GOLF_MAX_XP,
 } from './footballGolfConstants.js';
@@ -418,6 +424,47 @@ async function scoreClubChain(row: PuzzleRow, answer: unknown): Promise<ServerSc
  * Recompute {score, won} for a completion from the submitted answer. Returns null for modes we don't
  * (yet) recompute or when the answer shape doesn't parse — the caller then clamps the client score.
  */
+async function scoreBackYourselfMode(row: PuzzleRow, answer: unknown): Promise<ServerScore | null> {
+  const body = answer as {
+    pledge?: unknown;
+    namedPlayerIds?: unknown;
+    mistakes?: unknown;
+  };
+  if (typeof body.pledge !== 'number' || !Number.isFinite(body.pledge)) return null;
+  if (!Array.isArray(body.namedPlayerIds) || body.namedPlayerIds.some((id) => typeof id !== 'string')) {
+    return null;
+  }
+  const mistakes = typeof body.mistakes === 'number' && Number.isFinite(body.mistakes) ? body.mistakes : 0;
+
+  const puzzle = row.puzzleJson as BackYourselfPuzzlePublic;
+  if (!puzzle?.category || typeof puzzle.maxPool !== 'number') return null;
+
+  // Unique named ids, preserve order of first occurrence.
+  const seen = new Set<string>();
+  const namedIds: string[] = [];
+  for (const id of body.namedPlayerIds as string[]) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    namedIds.push(id);
+  }
+
+  let validNamedCount = 0;
+  for (const id of namedIds) {
+    if (await playerMatchesBackYourselfCategory(id, puzzle.category as BackYourselfCategory)) {
+      validNamedCount += 1;
+    }
+  }
+
+  return scoreBackYourself({
+    pledge: Math.floor(body.pledge),
+    namedPlayerIds: namedIds,
+    mistakes: Math.floor(mistakes),
+    maxPool: puzzle.maxPool,
+    mistakesAllowed: puzzle.mistakesAllowed,
+    validNamedCount,
+  });
+}
+
 export async function computeServerScore(
   modeId: string,
   row: PuzzleRow,
@@ -435,6 +482,7 @@ export async function computeServerScore(
       case 'football_golf': return scoreFootballGolf(row, answer);
       case 'target_man': return await scoreTargetMan(row, answer);
       case 'club_chain': return await scoreClubChain(row, answer);
+      case 'back_yourself': return await scoreBackYourselfMode(row, answer);
       default: return null;
     }
   } catch {

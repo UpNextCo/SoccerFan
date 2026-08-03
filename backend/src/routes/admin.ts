@@ -19,6 +19,7 @@ import {
 } from '../services/puzzleOps.js';
 import { validatePuzzlePayload } from '../services/adminPuzzleValidation.js';
 import {
+  enrichAdminBackYourselfPuzzle,
   enrichAdminBingoPuzzle,
   enrichAdminClubChainPuzzle,
   enrichAdminDraftPuzzle,
@@ -167,6 +168,14 @@ adminRouter.get('/puzzle', requireAdmin, async (req, res) => {
     const enriched = await enrichAdminLMSPuzzle(row.puzzleJson, row.answerJson);
     puzzleJson = enriched.puzzleJson;
     answerJson = enriched.answerJson;
+  } else if (modeId === 'back_yourself') {
+    try {
+      const enriched = await enrichAdminBackYourselfPuzzle(row.puzzleJson, row.answerJson);
+      puzzleJson = enriched.puzzleJson;
+      answerJson = enriched.answerJson;
+    } catch {
+      // Keep stored copy if pool refresh fails (e.g. offline media).
+    }
   }
   sendSuccess(res, {
     id: row.id,
@@ -324,6 +333,26 @@ adminRouter.post('/puzzle/regenerate', requireAdmin, async (req, res) => {
         }
       : null,
   });
+});
+
+/** Refresh Back Yourself valid player pool from the editor's current category. */
+adminRouter.post('/puzzle/recompute-back-yourself', requireAdmin, async (req, res) => {
+  const body = z
+    .object({ puzzleJson: z.unknown(), answerJson: z.unknown().optional() })
+    .safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 'Invalid body', 400);
+    return;
+  }
+  try {
+    const enriched = await enrichAdminBackYourselfPuzzle(
+      body.data.puzzleJson,
+      body.data.answerJson ?? null
+    );
+    sendSuccess(res, enriched);
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 400);
+  }
 });
 
 /** Re-solve Draft XI optimal lineup from the editor's current constraint chips (live Ops preview). */

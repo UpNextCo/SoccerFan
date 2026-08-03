@@ -13,6 +13,7 @@ import { BingoEditor } from './editors/BingoEditor'
 import { OneMoreEditor } from './editors/OneMoreEditor'
 import { DraftEditor } from './editors/DraftEditor'
 import { ClubChainEditor } from './editors/ClubChainEditor'
+import { BackYourselfEditor } from './editors/BackYourselfEditor'
 import { TargetManEditor } from './editors/TargetManEditor'
 import { JsonFallbackEditor } from './editors/JsonFallbackEditor'
 import './editors/editor-clean.css'
@@ -555,6 +556,18 @@ function EditorBody({
     case 'club_chain':
       return (
         <ClubChainEditor
+          puzzle={puzzleJson}
+          answer={answerJson}
+          locked={locked}
+          onChange={(p, a) => {
+            onPuzzle(p)
+            onAnswer(a)
+          }}
+        />
+      )
+    case 'back_yourself':
+      return (
+        <BackYourselfEditor
           puzzle={puzzleJson}
           answer={answerJson}
           locked={locked}

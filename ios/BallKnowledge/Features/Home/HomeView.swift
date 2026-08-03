@@ -898,6 +898,7 @@ struct DailyGameCard: View {
         case .blindRank: return "Blind Rank"
         case .footballTower: return "Football Tower"
         case .lastManStanding: return "Last Man Standing"
+        case .backYourself: return "Back Yourself"
         }
     }
 
@@ -928,6 +929,8 @@ struct DailyGameCard: View {
             return "Climb the tower"
         case .lastManStanding:
             return "Survive the field"
+        case .backYourself:
+            return "Pledge how many you can name"
         }
     }
 }
@@ -1097,6 +1100,12 @@ struct DailyGameHost: View {
                 } else {
                     DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
                         .onAppear { Self.logLMSUnavailable(bundle: dailyBundle) }
+                }
+            case .backYourself:
+                if let bundle = dailyBundle, let puzzle = DailyChallengeResolver.backYourselfPuzzle(from: bundle) {
+                    BackYourselfView(dailyDate: bundle.date, puzzle: puzzle, allowReplay: allowReplay, onComplete: onFinished)
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
                 }
             }
         }

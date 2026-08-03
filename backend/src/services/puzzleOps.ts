@@ -9,6 +9,7 @@ import { generateFootballGolfCourse } from './footballGolfGenerator.js';
 import { FOOTBALL_GOLF_HOLE_COUNT } from './footballGolfConstants.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle } from './clubChainGenerator.js';
+import { generateBackYourselfPuzzle } from './backYourselfGenerator.js';
 import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
@@ -34,6 +35,7 @@ export const OPS_PLAYABLE_MODES = [
   'club_chain',
   'target_man',
   'last_man_standing',
+  'back_yourself',
 ] as const;
 
 export const OPS_MODE_TITLES: Record<string, string> = {
@@ -44,6 +46,7 @@ export const OPS_MODE_TITLES: Record<string, string> = {
   club_chain: 'CLUB CHAIN',
   target_man: 'TARGET MAN',
   last_man_standing: 'LAST MAN STANDING',
+  back_yourself: 'BACK YOURSELF',
 };
 
 export function contentHash(puzzleJson: unknown, answerJson: unknown): string {
@@ -276,6 +279,12 @@ export async function generateOnePuzzle(
       case 'club_chain': {
         const generated = await generateClubChainPuzzle(date);
         if (!generated) return { ok: false, error: 'club_chain not viable' };
+        await insertGenerated(date, modeId, generated.puzzle, generated.answer);
+        break;
+      }
+      case 'back_yourself': {
+        const generated = await generateBackYourselfPuzzle(date);
+        if (!generated) return { ok: false, error: 'back_yourself not viable' };
         await insertGenerated(date, modeId, generated.puzzle, generated.answer);
         break;
       }

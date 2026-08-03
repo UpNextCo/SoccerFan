@@ -17,6 +17,7 @@ const PLAYABLE = [
   'club_chain',
   'target_man',
   'last_man_standing',
+  'back_yourself',
 ] as const;
 
 function datesInclusive(from: string, to: string): string[] {
@@ -54,7 +55,7 @@ async function main() {
   for (const date of dates) {
     const before = new Set(await modesFor(date));
     const missingBefore = PLAYABLE.filter((m) => !before.has(m));
-    console.log(`\n=== ${date} (have ${before.size}/7, missing: ${missingBefore.join(', ') || 'none'}) ===`);
+    console.log(`\n=== ${date} (have ${before.size}/${PLAYABLE.length}, missing: ${missingBefore.join(', ') || 'none'}) ===`);
     const started = Date.now();
     try {
       // Triggers ensureDailyPuzzles for every playable mode.

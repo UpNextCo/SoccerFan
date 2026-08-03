@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 // DEFUNCT modes (code retained, hidden from homepage daily): guessWho, worldCupXI, blindRank, footballTower.
@@ -13,6 +14,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
     case clubChain = "club_chain"
     case footballTower = "football_tower" // DEFUNCT
     case lastManStanding = "last_man_standing"
+    case backYourself = "back_yourself"
 
     var title: String {
         switch self {
@@ -27,6 +29,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .clubChain: return "CLUB CHAIN"
         case .footballTower: return "FOOTBALL TOWER"
         case .lastManStanding: return "LAST MAN STANDING"
+        case .backYourself: return "BACK YOURSELF"
         }
     }
 
@@ -43,6 +46,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .clubChain: return "link"
         case .footballTower: return "building.2.fill"
         case .lastManStanding: return "person.3.sequence.fill"
+        case .backYourself: return "hand.raised.fill"
         }
     }
 }
@@ -61,6 +65,7 @@ enum DailyPlayOrder {
         .clubChain,
         .targetMan,
         .lastManStanding,
+        .backYourself,
     ]
 
     static func availableModes(in bundle: DailyBundleDTO) -> [GameModeID] {
@@ -334,7 +339,7 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1100). Live seven-game total 6800. A full loss
+    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1500). Live eight-game total 8300. A full loss
     /// earns 0 (no participation floor). Every game's on-screen score IS this XP.
     static let maxByMode: [String: Int] = [
         "guess_who": 800,
@@ -348,6 +353,7 @@ enum DailyXP {
         "football_tower": 900,
         "football_golf": 800,
         "last_man_standing": 900,
+        "back_yourself": 1500,
     ]
     static let defaultMax = 1000
 
@@ -467,5 +473,12 @@ enum DailyXP {
     /// Last Man Standing: 90 XP per question survived (partial credit on loss); full clear = 900.
     static func lastManStanding(survived: Int) -> Int {
         min(900, max(0, survived) * 90)
+    }
+
+    /// Back Yourself: hit the pledge with lives left → `round(1500 * (pledge/maxPool)^1.41)`; else 0.
+    static func backYourself(pledge: Int, maxPool: Int, won: Bool) -> Int {
+        guard won, maxPool > 0, pledge > 0 else { return 0 }
+        let ratio = min(1, max(0, Double(pledge) / Double(maxPool)))
+        return max(0, min(1500, Int((1500.0 * pow(ratio, 1.41)).rounded())))
     }
 }

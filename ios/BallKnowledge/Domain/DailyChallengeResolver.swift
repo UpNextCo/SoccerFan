@@ -43,6 +43,20 @@ enum DailyChallengeResolver {
         )
     }
 
+    /// Map the server Back Yourself puzzle into the game model. nil when there's no usable server
+    /// puzzle — the daily is server-only (no local fallback), so the caller shows "unavailable".
+    static func backYourselfPuzzle(from bundle: DailyBundleDTO?) -> BackYourselfPuzzle? {
+        guard let bundle, let dto = bundle.backYourselfPuzzle,
+              dto.maxPool >= 1, !dto.category.label.isEmpty else { return nil }
+        return BackYourselfPuzzle(
+            id: dto.puzzleId,
+            date: bundle.date,
+            category: dto.category,
+            maxPool: dto.maxPool,
+            mistakesAllowed: dto.mistakesAllowed
+        )
+    }
+
     /// Map the server Battle Mode challenge into the game model (nil → caller uses local seed).
     /// Goals categories ship an all-outfield XI (10 slots, no GK), appearances ship 11 — accept both.
     static func battleChallenge(from bundle: DailyBundleDTO?) -> BattleChallenge? {

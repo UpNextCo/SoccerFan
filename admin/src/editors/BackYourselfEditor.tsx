@@ -1,0 +1,220 @@
+import { useRef, useState } from 'react'
+import { api, type AdminLeagueHit, type AdminTeamHit } from '../api'
+import { EntityPicker } from '../components/EntityPicker'
+import './game-editors.css'
+
+type CategoryType = 'nat_club' | 'club' | 'nationality' | 'nat_league'
+
+type Category = {
+  type?: CategoryType | string
+  label?: string
+  club?: string | null
+  leagueId?: number | null
+  leagueName?: string | null
+  nationality?: string | null
+  logoUrl?: string | null
+}
+
+type Puzzle = {
+  category?: Category
+  maxPool?: number
+  mistakesAllowed?: number
+  [k: string]: unknown
+}
+
+type Answer = {
+  modeId?: string
+  validPlayerIds?: string[]
+  [k: string]: unknown
+}
+
+const TYPE_LABELS: Record<CategoryType, string> = {
+  nat_club: 'Nationality + club',
+  club: 'Club',
+  nationality: 'Nationality',
+  nat_league: 'Nationality + league',
+}
+
+function rebuildLabel(c: Category): string {
+  const type = c.type
+  if (type === 'club') return c.club ? `${c.club} players` : 'Club players'
+  if (type === 'nationality') return c.nationality ? `${c.nationality} internationals` : 'Nationality'
+  if (type === 'nat_league') {
+    return `${c.nationality ?? '?'} ${c.leagueName ?? 'league'} players`
+  }
+  if (type === 'nat_club') {
+    return `${c.nationality ?? '?'} ${c.club ?? '?'} players`
+  }
+  return c.label ?? 'Category'
+}
+
+export function BackYourselfEditor({
+  puzzle,
+  answer,
+  locked,
+  onChange,
+}: {
+  puzzle: unknown
+  answer: unknown
+  locked: boolean
+  onChange: (puzzle: Puzzle, answer: Answer) => void
+}) {
+  const p = puzzle as Puzzle
+  const a = (answer && typeof answer === 'object' ? answer : {}) as Answer
+  const category = p.category ?? {}
+  const type = (category.type as CategoryType) || 'nat_club'
+  const needsClub = type === 'club' || type === 'nat_club'
+  const needsLeague = type === 'nat_league'
+  const needsNat = type === 'nationality' || type === 'nat_league' || type === 'nat_club'
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const latestRef = useRef({ p, a })
+  latestRef.current = { p, a }
+
+  function commit(nextPuzzle: Puzzle, nextAnswer: Answer) {
+    latestRef.current = { p: nextPuzzle, a: nextAnswer }
+    onChange(nextPuzzle, nextAnswer)
+  }
+
+  function updateCategory(patch: Partial<Category>) {
+    const merged = { ...category, ...patch }
+    const nextCat = { ...merged, label: rebuildLabel(merged) }
+    commit({ ...p, category: nextCat }, a)
+  }
+
+  async function pickClub(hit: AdminTeamHit) {
+    const team = await api.resolveTeam(hit.id)
+    updateCategory({
+      club: team.name,
+      logoUrl: team.logoUrl,
+      leagueId: type === 'club' ? team.leagueId : category.leagueId,
+      leagueName: type === 'club' ? team.leagueName : category.leagueName,
+    })
+  }
+
+  function pickLeague(league: AdminLeagueHit) {
+    updateCategory({
+      leagueId: league.id,
+      leagueName: league.name,
+      logoUrl: league.logoUrl,
+      club: null,
+    })
+  }
+
+  async function recalculatePool() {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await api.recomputeBackYourself({
+        puzzleJson: latestRef.current.p,
+        answerJson: latestRef.current.a,
+      })
+      commit(result.puzzleJson as Puzzle, result.answerJson as Answer)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to recalculate pool')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mode-editor">
+      <div className="editor-clean-summary">
+        <div>
+          <span className="muted tiny">Category</span>
+          <strong>{category.label || 'Untitled'}</strong>
+        </div>
+        <div>
+          <span className="muted tiny">Max pool</span>
+          <strong>{p.maxPool ?? '—'}</strong>
+        </div>
+        <div>
+          <span className="muted tiny">Valid ids</span>
+          <strong>{a.validPlayerIds?.length ?? 0}</strong>
+        </div>
+        <div>
+          <span className="muted tiny">Lives</span>
+          <strong>{p.mistakesAllowed ?? 3}</strong>
+        </div>
+      </div>
+
+      <div className="editor-clean-section">
+        <header>
+          <strong>Category</strong>
+          <span className="muted tiny">Players name people who match this chip</span>
+        </header>
+        <label className="field compact">
+          Type
+          <select
+            value={type}
+            disabled={locked}
+            onChange={(e) => {
+              const nextType = e.target.value as CategoryType
+              updateCategory({
+                type: nextType,
+                club: null,
+                logoUrl: null,
+                leagueId: null,
+                leagueName: null,
+                nationality: null,
+                label: TYPE_LABELS[nextType],
+              })
+            }}
+          >
+            {(Object.keys(TYPE_LABELS) as CategoryType[]).map((key) => (
+              <option key={key} value={key}>
+                {TYPE_LABELS[key]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {needsNat && (
+          <EntityPicker
+            kind="nationality"
+            label="Nationality"
+            valueLabel={category.nationality ?? undefined}
+            disabled={locked}
+            onPickNationality={(hit) => updateCategory({ nationality: hit.name })}
+          />
+        )}
+        {needsClub && (
+          <EntityPicker
+            kind="team"
+            label="Club"
+            valueLabel={category.club ?? undefined}
+            imageUrl={category.logoUrl}
+            disabled={locked}
+            onPickTeam={(hit) => void pickClub(hit)}
+          />
+        )}
+        {needsLeague && (
+          <EntityPicker
+            kind="league"
+            label="League"
+            valueLabel={category.leagueName ?? undefined}
+            imageUrl={category.logoUrl ?? undefined}
+            disabled={locked}
+            onPickLeague={(hit) => pickLeague(hit)}
+          />
+        )}
+        <label className="field">
+          Display label
+          <input
+            value={category.label ?? ''}
+            disabled={locked}
+            onChange={(e) => updateCategory({ label: e.target.value })}
+          />
+        </label>
+        <div className="button-row">
+          <button type="button" className="ghost" disabled={locked || busy} onClick={() => void recalculatePool()}>
+            {busy ? 'Recalculating…' : 'Recalculate player pool'}
+          </button>
+        </div>
+        {error && <p className="muted tiny" style={{ color: '#b42318' }}>{error}</p>}
+        <p className="muted tiny">
+          Pool size must stay between 8 and 25 for a fair slider. Recalculate after every category change before approving.
+        </p>
+      </div>
+    </div>
+  )
+}

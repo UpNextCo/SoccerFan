@@ -337,7 +337,7 @@ struct DailyCompleteCelebrationView: View {
                 .foregroundStyle(BKTheme.textPrimary)
                 .tracking(0.5)
 
-            Text("All 7 games cleared")
+            Text("All \(DailyPlayOrder.playableModes.count) games cleared")
                 .font(BKFont.body(15))
                 .foregroundStyle(BKTheme.textSecondary)
         }

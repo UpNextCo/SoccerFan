@@ -8,6 +8,7 @@ import {
   guessWhoHint,
   revealGuessWhoAnswer,
   startLastManStanding,
+  validateBackYourselfGuess,
   validateClubChainLink,
   validateGuess,
   validateLastManStandingCheck,
@@ -164,6 +165,25 @@ dailyRouter.post('/clubchain/link', requireAuth, async (req, res) => {
     sendSuccess(res, result);
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Club Chain validation failed', 400);
+  }
+});
+
+const backYourselfGuessSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  playerId: z.string().uuid(),
+  alreadyNamedIds: z.array(z.string().uuid()).optional(),
+});
+dailyRouter.post('/backyourself/guess', requireAuth, async (req, res) => {
+  const parsed = backYourselfGuessSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    const result = await validateBackYourselfGuess(parsed.data);
+    sendSuccess(res, result);
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Back Yourself validation failed', 400);
   }
 });
 
