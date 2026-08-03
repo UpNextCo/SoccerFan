@@ -44,13 +44,17 @@ function demonym(nation: string): string {
 
 export type BackYourselfCategoryType = 'nat_club' | 'club' | 'nationality' | 'nat_league';
 
-export interface BackYourselfCategory {
+/** Fields needed for SQL matching — label/logo are display-only. */
+export type BackYourselfCategorySpec = {
   type: BackYourselfCategoryType;
-  label: string;
   club?: string | null;
   leagueId?: number | null;
   leagueName?: string | null;
   nationality?: string | null;
+};
+
+export interface BackYourselfCategory extends BackYourselfCategorySpec {
+  label: string;
   logoUrl?: string | null;
 }
 
@@ -111,7 +115,7 @@ function playedForClubSql(club: string, playerRef: SQL = sql`p.id`): SQL {
 }
 
 /** Predicate: player row `p` satisfies the category (same SQL for count + validation). */
-export function categorySatisfiesSql(category: BackYourselfCategory): SQL {
+export function categorySatisfiesSql(category: BackYourselfCategorySpec): SQL {
   switch (category.type) {
     case 'club':
       return playedForClubSql(category.club ?? '');
@@ -135,7 +139,7 @@ export function categorySatisfiesSql(category: BackYourselfCategory): SQL {
   }
 }
 
-export async function listMatchingPlayerIds(category: BackYourselfCategory): Promise<string[]> {
+export async function listMatchingPlayerIds(category: BackYourselfCategorySpec): Promise<string[]> {
   const rows = (await db.execute(sql`
     SELECT p.id
     FROM players p
@@ -146,7 +150,7 @@ export async function listMatchingPlayerIds(category: BackYourselfCategory): Pro
   return rows.map((r) => r.id);
 }
 
-export async function countMatchingPlayers(category: BackYourselfCategory): Promise<number> {
+export async function countMatchingPlayers(category: BackYourselfCategorySpec): Promise<number> {
   const rows = (await db.execute(sql`
     SELECT COUNT(*)::int AS n
     FROM players p
@@ -158,7 +162,7 @@ export async function countMatchingPlayers(category: BackYourselfCategory): Prom
 
 export async function playerMatchesBackYourselfCategory(
   playerId: string,
-  category: BackYourselfCategory
+  category: BackYourselfCategorySpec
 ): Promise<boolean> {
   const rows = (await db.execute(sql`
     SELECT 1 AS ok
@@ -196,7 +200,7 @@ export function scoreBackYourself(input: {
   return { score: backYourselfXp(pledge, input.maxPool), won: true };
 }
 
-function categoryLabel(cat: Omit<BackYourselfCategory, 'label' | 'logoUrl'>): string {
+function categoryLabel(cat: BackYourselfCategorySpec): string {
   switch (cat.type) {
     case 'club':
       return `${cat.club ?? '?'} players`;
