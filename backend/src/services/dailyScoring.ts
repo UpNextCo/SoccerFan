@@ -448,9 +448,17 @@ async function scoreBackYourselfMode(row: PuzzleRow, answer: unknown): Promise<S
     namedIds.push(id);
   }
 
+  const stored = row.answerJson as { validPlayerIds?: string[] } | undefined;
+  const validSet =
+    Array.isArray(stored?.validPlayerIds) && stored.validPlayerIds.length > 0
+      ? new Set(stored.validPlayerIds)
+      : null;
+
   let validNamedCount = 0;
   for (const id of namedIds) {
-    if (await playerMatchesBackYourselfCategory(id, puzzle.category as BackYourselfCategory)) {
+    if (validSet) {
+      if (validSet.has(id)) validNamedCount += 1;
+    } else if (await playerMatchesBackYourselfCategory(id, puzzle.category as BackYourselfCategory)) {
       validNamedCount += 1;
     }
   }

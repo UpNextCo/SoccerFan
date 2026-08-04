@@ -582,7 +582,7 @@ export async function validateBackYourselfGuess(input: {
   player?: Awaited<ReturnType<typeof resolveBackYourselfPlayerCard>>;
 }> {
   const rows = await db
-    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .select({ puzzleJson: dailyPuzzles.puzzleJson, answerJson: dailyPuzzles.answerJson })
     .from(dailyPuzzles)
     .where(and(eq(dailyPuzzles.date, input.date), eq(dailyPuzzles.modeId, 'back_yourself')))
     .limit(1);
@@ -596,10 +596,16 @@ export async function validateBackYourselfGuess(input: {
     return { ok: true, correct: false, duplicate: true };
   }
 
-  const correct = await playerMatchesBackYourselfCategory(
-    input.playerId,
-    puzzle.category as BackYourselfCategory
-  );
+  // Prefer the stored pool (clipped top-N) so maxPool and validation stay in lockstep.
+  const answer = rows[0]?.answerJson as { validPlayerIds?: string[] } | undefined;
+  const validIds = Array.isArray(answer?.validPlayerIds) ? answer.validPlayerIds : [];
+  const correct =
+    validIds.length > 0
+      ? validIds.includes(input.playerId)
+      : await playerMatchesBackYourselfCategory(
+          input.playerId,
+          puzzle.category as BackYourselfCategory
+        );
   if (!correct) {
     return { ok: true, correct: false, duplicate: false };
   }

@@ -269,6 +269,16 @@ struct BackYourselfView: View {
         } else if let nationality = cat.nationality, !nationality.isEmpty {
             Text(GuessWhoDisplay.nationalityFlag(nationality))
                 .font(.system(size: 34))
+        } else if cat.type == "award" {
+            Image(systemName: "trophy.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(BKTheme.accent)
+                .frame(width: 44, height: 44)
+        } else if cat.type == "stat" {
+            Image(systemName: "chart.bar.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(BKTheme.accent)
+                .frame(width: 44, height: 44)
         } else {
             Image(systemName: "person.3.fill")
                 .font(.system(size: 22, weight: .semibold))
@@ -410,14 +420,21 @@ struct BackYourselfView: View {
                     get: { viewModel.searchText },
                     set: { viewModel.updateSearch($0) }
                 ))
+                .font(BKFont.body())
+                .foregroundStyle(BKTheme.textPrimary)
                 .focused($isSearchFocused)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
+                .submitLabel(.search)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(Color.white)
+            .background(BKTheme.card)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+            )
 
             if !viewModel.searchResults.isEmpty {
                 PlayerSearchResultsList(

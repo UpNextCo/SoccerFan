@@ -171,12 +171,15 @@ const clubChainAnswer = z.object({
 }).passthrough();
 
 const backYourselfCategory = z.object({
-  type: z.enum(['nat_club', 'club', 'nationality', 'nat_league']),
+  type: z.enum(['nat_club', 'club', 'nationality', 'nat_league', 'award', 'stat']),
   label: text,
   club: text.nullable().optional(),
   leagueId: z.number().int().nullable().optional(),
   leagueName: text.nullable().optional(),
   nationality: text.nullable().optional(),
+  award: text.nullable().optional(),
+  statKey: text.nullable().optional(),
+  statMin: z.number().int().nullable().optional(),
   logoUrl: text.nullable().optional(),
 }).passthrough();
 const backYourselfPuzzle = z.object({

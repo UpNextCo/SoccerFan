@@ -9,7 +9,48 @@ struct BackYourselfCategory: Codable, Equatable {
     let leagueId: Int?
     let leagueName: String?
     let nationality: String?
+    let award: String?
+    let statKey: String?
+    let statMin: Int?
     let logoUrl: String?
+
+    init(
+        type: String,
+        label: String,
+        club: String? = nil,
+        leagueId: Int? = nil,
+        leagueName: String? = nil,
+        nationality: String? = nil,
+        award: String? = nil,
+        statKey: String? = nil,
+        statMin: Int? = nil,
+        logoUrl: String? = nil
+    ) {
+        self.type = type
+        self.label = label
+        self.club = club
+        self.leagueId = leagueId
+        self.leagueName = leagueName
+        self.nationality = nationality
+        self.award = award
+        self.statKey = statKey
+        self.statMin = statMin
+        self.logoUrl = logoUrl
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        type = try c.decode(String.self, forKey: .type)
+        label = try c.decode(String.self, forKey: .label)
+        club = try c.decodeIfPresent(String.self, forKey: .club)
+        leagueId = try c.decodeIfPresent(Int.self, forKey: .leagueId)
+        leagueName = try c.decodeIfPresent(String.self, forKey: .leagueName)
+        nationality = try c.decodeIfPresent(String.self, forKey: .nationality)
+        award = try c.decodeIfPresent(String.self, forKey: .award)
+        statKey = try c.decodeIfPresent(String.self, forKey: .statKey)
+        statMin = try c.decodeIfPresent(Int.self, forKey: .statMin)
+        logoUrl = try c.decodeIfPresent(String.self, forKey: .logoUrl)
+    }
 }
 
 struct BackYourselfPuzzle: Codable, Equatable {
