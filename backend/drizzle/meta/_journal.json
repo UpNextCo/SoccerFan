@@ -120,6 +120,13 @@
       "when": 1785456000000,
       "tag": "0022_tm_career_totals",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785600000000,
+      "tag": "0023_vs_challenges",
+      "breakpoints": true
     }
   ]
 }

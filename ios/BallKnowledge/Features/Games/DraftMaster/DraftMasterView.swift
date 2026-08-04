@@ -206,13 +206,25 @@ struct DraftMasterView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: DraftMasterViewModel
     private let allowReplay: Bool
+    private let showsXp: Bool
     private let dailyDate: String?
+    /// When set, replaces daily XP completion (used by VS challenges).
+    private let onSubmit: ((BattleGameState) async -> (lineup: [BattleOptimalSlotDTO], optimalScore: Int?)?)?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, challenge: BattleChallenge, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
+    init(
+        dailyDate: String? = nil,
+        challenge: BattleChallenge,
+        allowReplay: Bool = false,
+        showsXp: Bool = true,
+        onSubmit: ((BattleGameState) async -> (lineup: [BattleOptimalSlotDTO], optimalScore: Int?)?)? = nil,
+        onComplete: @escaping () -> Void
+    ) {
         _viewModel = State(initialValue: DraftMasterViewModel(challenge: challenge))
         self.allowReplay = allowReplay
+        self.showsXp = showsXp
         self.dailyDate = dailyDate
+        self.onSubmit = onSubmit
         self.onComplete = onComplete
     }
 
@@ -225,6 +237,7 @@ struct DraftMasterView: View {
                     if viewModel.state.phase == .intro {
                         BattleCategoryOverlay(
                             challenge: viewModel.challenge,
+                            eyebrow: showsXp ? "TODAY'S CATEGORY" : "VS · DRAFT XI",
                             onStart: viewModel.start
                         )
                         .transition(.opacity)
@@ -275,6 +288,7 @@ struct DraftMasterView: View {
                 BattleResultView(
                     state: viewModel.state,
                     result: result,
+                    showsXp: showsXp,
                     onShare: { viewModel.showShare = true },
                     onHome: {
                         viewModel.showResult = false
@@ -283,6 +297,15 @@ struct DraftMasterView: View {
                     }
                 )
                 .task {
+                    if let onSubmit {
+                        if let reveal = await onSubmit(viewModel.state), !reveal.lineup.isEmpty {
+                            viewModel.applyOptimalReveal(
+                                lineup: reveal.lineup,
+                                optimalScore: reveal.optimalScore
+                            )
+                        }
+                        return
+                    }
                     guard !allowReplay, let dailyDate else { return }
                     let response = await DailyCompletionService.recordCompletion(
                         modeId: GameModeID.draftMaster.rawValue,
@@ -328,7 +351,7 @@ struct DraftMasterView: View {
                 onDropConstraint: { id, slot in viewModel.assignConstraint(id: id, toSlot: slot.id); viewModel.openSlot(slot) }
             )
             .xpPop(
-                amount: viewModel.lastDraftXpPop,
+                amount: showsXp ? viewModel.lastDraftXpPop : 0,
                 trigger: viewModel.draftXpPopTrigger,
                 alignment: .center
             )
@@ -364,6 +387,7 @@ private struct ShakeEffect: GeometryEffect {
 
 private struct BattleCategoryOverlay: View {
     let challenge: BattleChallenge
+    var eyebrow: String = "TODAY'S CATEGORY"
     var onStart: () -> Void
 
     var body: some View {
@@ -373,7 +397,7 @@ private struct BattleCategoryOverlay: View {
 
             VStack(spacing: 20) {
                 VStack(spacing: 8) {
-                    Text("TODAY'S CATEGORY")
+                    Text(eyebrow)
                         .font(BKFont.caption(11)).tracking(1.2).foregroundStyle(BKTheme.accent)
                     Text(challenge.category.title)
                         .font(BKFont.title(26)).foregroundStyle(BKTheme.textPrimary)
@@ -1023,6 +1047,7 @@ private struct BattleSearchSheet: View {
 private struct BattleResultView: View {
     let state: BattleGameState
     let result: BattleResult
+    var showsXp: Bool = true
     var onShare: () -> Void
     var onHome: () -> Void
 
@@ -1050,7 +1075,9 @@ private struct BattleResultView: View {
                             Text("OF THE PERFECT XI")
                                 .font(BKFont.caption(10)).tracking(1).foregroundStyle(BKTheme.textMuted)
                         }
-                        XPResultSummary(earned: result.xp, max: DailyXP.maxXP(.draftMaster))
+                        if showsXp {
+                            XPResultSummary(earned: result.xp, max: DailyXP.maxXP(.draftMaster))
+                        }
                     }
                     .transition(.scale.combined(with: .opacity))
                 }

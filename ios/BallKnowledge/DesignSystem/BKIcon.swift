@@ -12,6 +12,10 @@ enum BKIcon {
         switch tab {
         case .today:
             Ph.soccerBall.weight(selected ? .fill : .regular)
+        case .vs:
+            // Only the fill asset ships today — use it for both states.
+            Ph.users.weight(.fill)
+                .opacity(selected ? 1 : 0.72)
         case .leagues:
             Ph.chartBar.weight(selected ? .fill : .regular)
         case .you:
@@ -33,6 +37,7 @@ struct BKTabBar: View {
 
     private let items: [Item] = [
         Item(tab: .today, title: "Today"),
+        Item(tab: .vs, title: "VS"),
         Item(tab: .leagues, title: "Leagues"),
         Item(tab: .you, title: "You"),
     ]

@@ -18,6 +18,7 @@ import {
 } from './services/adminMonthGeneration.js';
 import { getOpsImage } from './services/opsMedia.js';
 import { legalRouter } from './routes/legal.js';
+import { vsRouter } from './routes/vs.js';
 
 const app = express();
 const port = Number(process.env.PORT) || 3000;
@@ -63,6 +64,7 @@ app.use('/players', playersRouter);
 app.use('/stats', statsRouter);
 app.use('/teams', teamsRouter);
 app.use('/games', gamesRouter);
+app.use('/vs', vsRouter);
 app.use('/admin/api', adminRouter);
 
 // Built admin SPA (vite build → public/admin). In dev, run `npm run dev` in admin/.

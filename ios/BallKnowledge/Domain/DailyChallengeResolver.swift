@@ -60,7 +60,12 @@ enum DailyChallengeResolver {
     /// Map the server Battle Mode challenge into the game model (nil → caller uses local seed).
     /// Goals categories ship an all-outfield XI (10 slots, no GK), appearances ship 11 — accept both.
     static func battleChallenge(from bundle: DailyBundleDTO?) -> BattleChallenge? {
-        guard let dto = bundle?.draftMasterPuzzle, dto.constraints.count >= 10, dto.slots.count >= 10 else { return nil }
+        guard let dto = bundle?.draftMasterPuzzle else { return nil }
+        return battleChallenge(from: dto)
+    }
+
+    static func battleChallenge(from dto: DraftMasterPuzzleDTO) -> BattleChallenge? {
+        guard dto.constraints.count >= 10, dto.slots.count >= 10 else { return nil }
         return BattleChallenge(
             id: dto.puzzleId,
             date: dto.date,

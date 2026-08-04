@@ -96,6 +96,7 @@
 		FEEF00D3BDD7648A935B071D /* FootballBingoSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B42BB208E7E01B1BD110962 /* FootballBingoSeed.swift */; };
 		B9E4D32F0C5E8162F73A9B21 /* BackYourselfModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F3C21E9B4D7051E62F8A10 /* BackYourselfModels.swift */; };
 		D1A6F54B2E709384B95CBD43 /* BackYourselfView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F5E43A1D6F9273A84BAC32 /* BackYourselfView.swift */; };
+		F9A0B1C2D3E4F50617283A4B /* VsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8F1A2B3C4D5E6F708192A3B /* VsTabView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -190,6 +191,7 @@
 		FB738E61FA78C25E6A33B47F /* WorldCupXIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorldCupXIModels.swift; sourceTree = "<group>"; };
 		A8F3C21E9B4D7051E62F8A10 /* BackYourselfModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackYourselfModels.swift; sourceTree = "<group>"; };
 		C0F5E43A1D6F9273A84BAC32 /* BackYourselfView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackYourselfView.swift; sourceTree = "<group>"; };
+		E8F1A2B3C4D5E6F708192A3B /* VsTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VsTabView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -266,8 +268,17 @@
 				E2BA3A30654820196186D7A6 /* Home */,
 				5EDF564B7C28AD453B363F0B /* Onboarding */,
 				78BBE681B1639C106749A57A /* Profile */,
+				D0E1F2A3B4C5D6E708192A3B /* VS */,
 			);
 			path = Features;
+			sourceTree = "<group>";
+		};
+		D0E1F2A3B4C5D6E708192A3B /* VS */ = {
+			isa = PBXGroup;
+			children = (
+				E8F1A2B3C4D5E6F708192A3B /* VsTabView.swift */,
+			);
+			path = VS;
 			sourceTree = "<group>";
 		};
 		2A6E904C2BC1CCA7EED4E69F /* WinPics */ = {
@@ -596,6 +607,7 @@
 				EE6672A880D715EB249E491C /* BlindRankView.swift in Sources */,
 				B9E4D32F0C5E8162F73A9B21 /* BackYourselfModels.swift in Sources */,
 				D1A6F54B2E709384B95CBD43 /* BackYourselfView.swift in Sources */,
+				F9A0B1C2D3E4F50617283A4B /* VsTabView.swift in Sources */,
 				3CC939A70E375FC3A822B18C /* ClubChainModels.swift in Sources */,
 				DF8AC3C3325928807A114128 /* ClubChainView.swift in Sources */,
 				C4F799AF15D7E8C7423B5C7D /* Config.swift in Sources */,

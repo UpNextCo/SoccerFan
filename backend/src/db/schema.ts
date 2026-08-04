@@ -727,10 +727,41 @@ export const leagueMemberships = pgTable(
   ]
 );
 
+/** 1v1 VS challenges (Draft XI first). Scores are raw XI totals — no XP. */
+export const vsChallenges = pgTable(
+  'vs_challenges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull(),
+    modeId: text('mode_id').notNull().default('draft_master'),
+    hostUserId: uuid('host_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    guestUserId: uuid('guest_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /** waiting | active | complete */
+    status: text('status').notNull().default('waiting'),
+    puzzleJson: jsonb('puzzle_json').notNull(),
+    hostScore: integer('host_score'),
+    guestScore: integer('guest_score'),
+    hostAnswerJson: jsonb('host_answer_json'),
+    guestAnswerJson: jsonb('guest_answer_json'),
+    hostCompletedAt: timestamp('host_completed_at', { withTimezone: true }),
+    guestCompletedAt: timestamp('guest_completed_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('vs_challenges_code_unique').on(table.code),
+    index('vs_challenges_host_idx').on(table.hostUserId),
+    index('vs_challenges_guest_idx').on(table.guestUserId),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type XpLedgerEntry = typeof xpLedger.$inferSelect;
 export type LeagueCohort = typeof leagueCohorts.$inferSelect;
 export type LeagueMembership = typeof leagueMemberships.$inferSelect;
+export type VsChallenge = typeof vsChallenges.$inferSelect;
 export type Player = typeof players.$inferSelect;
 export type PlayerStat = typeof playerStats.$inferSelect;
 export type PlayerTransfer = typeof playerTransfers.$inferSelect;

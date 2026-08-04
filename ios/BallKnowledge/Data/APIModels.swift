@@ -311,3 +311,62 @@ struct DailyGuessRequestDTO: Encodable {
     let modeId: String
     let playerId: String
 }
+
+// MARK: - VS (1v1)
+
+struct VsPlayerDTO: Codable, Equatable {
+    let userId: String
+    let displayName: String
+    let score: Int?
+    let completed: Bool
+}
+
+struct VsResultDTO: Codable, Equatable {
+    let bothDone: Bool
+    let winner: String?
+    let yourScore: Int?
+    let theirScore: Int?
+}
+
+struct VsChallengeDTO: Codable, Equatable {
+    let id: String
+    let code: String
+    let modeId: String
+    let status: String
+    let expiresAt: String
+    let youAreHost: Bool
+    let host: VsPlayerDTO
+    let guest: VsPlayerDTO?
+    let puzzle: DraftMasterPuzzleDTO
+    let optimalLineup: [BattleOptimalSlotDTO]?
+    let optimalScore: Int?
+    let categoryNoun: String
+    let result: VsResultDTO
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        code = try c.decode(String.self, forKey: .code)
+        modeId = try c.decode(String.self, forKey: .modeId)
+        status = try c.decode(String.self, forKey: .status)
+        expiresAt = try c.decode(String.self, forKey: .expiresAt)
+        youAreHost = try c.decode(Bool.self, forKey: .youAreHost)
+        host = try c.decode(VsPlayerDTO.self, forKey: .host)
+        guest = try c.decodeIfPresent(VsPlayerDTO.self, forKey: .guest)
+        puzzle = try c.decode(DraftMasterPuzzleDTO.self, forKey: .puzzle)
+        optimalLineup = try c.decodeIfPresent([BattleOptimalSlotDTO].self, forKey: .optimalLineup)
+        optimalScore = try c.decodeIfPresent(Int.self, forKey: .optimalScore)
+        categoryNoun = try c.decodeIfPresent(String.self, forKey: .categoryNoun) ?? "pts"
+        result = try c.decode(VsResultDTO.self, forKey: .result)
+    }
+}
+
+struct VsPickDTO: Encodable {
+    let slotId: String
+    let constraintId: String
+    let playerId: String
+}
+
+struct VsSubmitRequestDTO: Encodable {
+    let picks: [VsPickDTO]
+}

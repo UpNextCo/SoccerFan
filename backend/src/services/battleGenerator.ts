@@ -224,8 +224,8 @@ function includeGk(cat: Category): boolean {
     cat.id === 'league_titles' || cat.id === 'intl_caps' || cat.id === 'most_clubs';
 }
 
-function formationFor(cat: Category, date: string): { id: string; slots: Slot[] } {
-  const base = ROTATING_FORMATIONS[dayNumber(date) % ROTATING_FORMATIONS.length]!;
+function formationFor(cat: Category, rotationSeed: number): { id: string; slots: Slot[] } {
+  const base = ROTATING_FORMATIONS[Math.abs(rotationSeed) % ROTATING_FORMATIONS.length]!;
   const template = FORMATION_TEMPLATES[base]!;
   const withGk = includeGk(cat);
   const slots = withGk ? template : template.filter((s) => s.id !== 'gk');
@@ -452,9 +452,9 @@ async function buildConstraintPool(
   cat: Category,
   clubs: Array<{ club: string; leagueId: number }>,
   seed: number,
-  date: string,
+  slotCount: number,
 ): Promise<Constraint[]> {
-  const n = formationFor(cat, date).slots.length;
+  const n = slotCount;
   const mix = boardMix(n, cat.scope);
   const isPl = cat.scope === 'pl';
   const clubNames = clubs.map((c) => c.club);
@@ -501,10 +501,42 @@ async function buildConstraintPool(
   return chosen;
 }
 
+/** Daily Draft XI — category/formation keyed off calendar date (stable for the day). */
 export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJson | null> {
-  const baseSeed = hashString(`${date}:battle`);
-  const category = CATEGORIES[dayNumber(date) % CATEGORIES.length]!;
-  const formation = formationFor(category, date);
+  const day = dayNumber(date);
+  return assembleBattlePuzzle({
+    dateLabel: date,
+    puzzleId: `${date}-draft_master`,
+    categoryIndex: day,
+    formationSeed: day,
+    chipSeedKey: `${date}:battle`,
+  });
+}
+
+/** Ad-hoc Draft XI (VS challenges) — category, formation and chips all derived from seedKey. */
+export async function generateBattlePuzzleFromSeed(seedKey: string): Promise<BattlePuzzleJson | null> {
+  const baseSeed = hashString(seedKey);
+  const today = new Date().toISOString().slice(0, 10);
+  return assembleBattlePuzzle({
+    dateLabel: today,
+    puzzleId: `vs-${seedKey.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || baseSeed}`,
+    categoryIndex: baseSeed,
+    formationSeed: baseSeed >>> 8,
+    chipSeedKey: seedKey,
+  });
+}
+
+async function assembleBattlePuzzle(opts: {
+  dateLabel: string;
+  puzzleId: string;
+  categoryIndex: number;
+  formationSeed: number;
+  chipSeedKey: string;
+}): Promise<BattlePuzzleJson | null> {
+  const { dateLabel, puzzleId, categoryIndex, formationSeed, chipSeedKey } = opts;
+  const baseSeed = hashString(chipSeedKey);
+  const category = CATEGORIES[Math.abs(categoryIndex) % CATEGORIES.length]!;
+  const formation = formationFor(category, formationSeed);
   const slots = formation.slots;
   const positions = [...new Set(slots.map((s) => s.position))];
 
@@ -515,7 +547,7 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
   // real eligible player with a positive value). Reshuffle with a new seed on failure.
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const seed = baseSeed + attempt * 101;
-    const constraints = await buildConstraintPool(category, clubs, seed, date);
+    const constraints = await buildConstraintPool(category, clubs, seed, slots.length);
     if (constraints.length !== slots.length) continue;
 
     // Ranked eligible players per (constraint, position). The Hungarian assignment below uses the
@@ -588,8 +620,8 @@ export async function generateBattlePuzzle(date: string): Promise<BattlePuzzleJs
 
     return {
       modeId: 'draft_master',
-      puzzleId: `${date}-draft_master`,
-      date,
+      puzzleId,
+      date: dateLabel,
       positionCompatibilityVersion: DRAFT_POSITION_COMPATIBILITY_VERSION,
       category: { id: category.id, title: category.title, noun: category.noun, unit: category.unit },
       formationId: formation.id,
@@ -753,9 +785,9 @@ function satisfiesSql(c: BattleConstraintQuery): SQL {
 export async function recomputeBattleScore(
   puzzle: BattlePuzzleJson,
   picks: Array<{ slotId: string; constraintId: string; playerId: string }>
-): Promise<{ score: number; won: boolean }> {
+): Promise<{ score: number; won: boolean; total: number }> {
   const cat = categoryById(puzzle.category.id);
-  if (!cat || puzzle.optimalScore <= 0) return { score: 0, won: false };
+  if (!cat || puzzle.optimalScore <= 0) return { score: 0, won: false, total: 0 };
   const slotPosition = new Map(puzzle.slots.map((s) => [s.id, s.position]));
   const constraintById = new Map(puzzle.constraints.map((c) => [c.id, c]));
 
@@ -782,7 +814,7 @@ export async function recomputeBattleScore(
   // Score IS the XP: share of the optimal XI out of the Draft XI max (1100). won at >= 70%.
   const pct = total / puzzle.optimalScore;
   const score = Math.min(1100, Math.round(1100 * pct));
-  return { score, won: pct >= 0.7 };
+  return { score, won: pct >= 0.7, total };
 }
 
 export async function battlePlayers(

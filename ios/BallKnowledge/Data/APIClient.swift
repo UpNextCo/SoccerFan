@@ -111,6 +111,64 @@ actor APIClient {
         return result
     }
 
+    /// Like `request`, but allows `data: null` (used by VS active challenge).
+    private func requestOptional<T: Decodable>(
+        _ path: String,
+        method: String = "GET",
+        queryItems: [URLQueryItem]? = nil,
+        body: Encodable? = nil,
+        authorized: Bool = true
+    ) async throws -> T? {
+        var components = URLComponents(
+            url: AppConfig.apiBaseURL.appendingPathComponent(path),
+            resolvingAgainstBaseURL: false
+        )!
+        if let queryItems, !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+        guard let url = components.url else {
+            throw APIError.invalidResponse
+        }
+
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = method
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if authorized, let token {
+            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        if let body {
+            urlRequest.httpBody = try JSONEncoder().encode(AnyEncodable(body))
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if http.statusCode == 401 {
+            await MainActor.run {
+                NotificationCenter.default.post(name: .sessionUnauthorized, object: nil)
+            }
+            throw APIError.unauthorized
+        }
+
+        guard (200..<300).contains(http.statusCode) else {
+            let decoded = try? JSONDecoder().decode(APIResponse<T>.self, from: data)
+            if let error = decoded?.error {
+                throw APIError.server(error.message)
+            }
+            throw APIError.server("The server is unavailable. Please try again.")
+        }
+
+        let decoded = try JSONDecoder().decode(APIResponse<T>.self, from: data)
+        if let error = decoded.error {
+            throw APIError.server(error.message)
+        }
+        return decoded.data
+    }
+
     func authApple(identityToken: String, displayName: String?) async throws -> AuthResponseDTO {
         try await request(
             "auth/apple",
@@ -452,7 +510,32 @@ actor APIClient {
         struct TeamResult: Decodable { let favoriteTeamId: Int? }
         let _: TeamResult = try await request("leagues/team", method: "PUT", body: TeamBody(teamId: teamId))
     }
+
+    // MARK: VS
+
+    func vsCreate() async throws -> VsChallengeDTO {
+        try await request("vs/create", method: "POST", body: EmptyBody())
+    }
+
+    func vsJoin(code: String) async throws -> VsChallengeDTO {
+        struct Body: Encodable { let code: String }
+        return try await request("vs/join", method: "POST", body: Body(code: code))
+    }
+
+    func vsActive() async throws -> VsChallengeDTO? {
+        try await requestOptional("vs/active")
+    }
+
+    func vsGet(id: String) async throws -> VsChallengeDTO {
+        try await request("vs/\(id)")
+    }
+
+    func vsSubmit(id: String, picks: [VsPickDTO]) async throws -> VsChallengeDTO {
+        try await request("vs/\(id)/submit", method: "POST", body: VsSubmitRequestDTO(picks: picks))
+    }
 }
+
+private struct EmptyBody: Encodable {}
 
 private struct AnyEncodable: Encodable {
     private let encodeFunc: (Encoder) throws -> Void

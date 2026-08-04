@@ -5,7 +5,7 @@ import UserNotifications
 import UIKit
 
 enum AppTab: Hashable {
-    case today, leagues, you
+    case today, vs, leagues, you
 }
 
 struct MainTabView: View {
@@ -17,6 +17,8 @@ struct MainTabView: View {
                 switch selectedTab {
                 case .today:
                     HomeView(selectedTab: $selectedTab)
+                case .vs:
+                    VsTabView()
                 case .leagues:
                     LeaguesTabView()
                 case .you:
