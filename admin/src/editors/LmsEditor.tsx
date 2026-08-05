@@ -158,6 +158,8 @@ export function LmsEditor({
 
   // Keep latest puzzle/answer for async pick handlers (avoid stale closures wiping media).
   const latestRef = useRef({ p, a })
+  const revealSeq = useRef(0)
+  const [revealBusyFor, setRevealBusyFor] = useState<string | null>(null)
   useEffect(() => {
     latestRef.current = { p, a }
   }, [p, a])
@@ -165,6 +167,50 @@ export function LmsEditor({
   function commit(nextPuzzle: Puzzle, nextAnswer: Answer) {
     latestRef.current = { p: nextPuzzle, a: nextAnswer }
     onChange(nextPuzzle, nextAnswer)
+  }
+
+  /** Rebuild the answer explanation from the current options (e.g. Modrić's PL goals). */
+  async function refreshReveal(questionId: string) {
+    const seq = ++revealSeq.current
+    const { p: curP, a: curA } = latestRef.current
+    const question = sortedQuestions(curP).find((item) => item.id === questionId)
+    const answerRow = curA.questions.find((item) => item.questionId === questionId)
+    if (!question || !answerRow?.correctOptionId) return
+
+    setRevealBusyFor(questionId)
+    try {
+      const { answer: nextAnswerRow } = await api.recomputeLmsReveal({
+        question: {
+          id: question.id,
+          type: question.type,
+          prompt: question.prompt,
+          subPrompt: question.subPrompt,
+          options: question.options.map((option) => ({ id: option.id, label: option.label })),
+          presentation: question.presentation ?? null,
+        },
+        answer: {
+          questionId: answerRow.questionId,
+          correctOptionId: answerRow.correctOptionId,
+          reveal: answerRow.reveal,
+        },
+      })
+      if (seq !== revealSeq.current) return
+      const { p: latestP, a: latestA } = latestRef.current
+      const nextAnswers = latestA.questions.map((item) =>
+        item.questionId === questionId
+          ? {
+              ...item,
+              correctOptionId: nextAnswerRow.correctOptionId,
+              reveal: nextAnswerRow.reveal ?? '',
+            }
+          : item
+      )
+      commit(latestP, { questions: nextAnswers })
+    } catch {
+      // Keep the previous explanation if recompute fails.
+    } finally {
+      if (seq === revealSeq.current) setRevealBusyFor(null)
+    }
   }
 
   function updateQuestion(slot: number, patch: Partial<Q>) {
@@ -394,10 +440,10 @@ export function LmsEditor({
         }
       })
       commit({ ...curP, questions: nextQs }, nextAns)
-      return
+    } else {
+      commit(curP, nextAns)
     }
-
-    commit(curP, nextAns)
+    void refreshReveal(question.id)
   }
 
   function updateAnswer(questionId: string, patch: Partial<Ans>) {
@@ -425,6 +471,9 @@ export function LmsEditor({
 
   async function pickPlayer(q: Q, oldOpt: Opt, hit: AdminPlayerHit) {
     const nextId = makeOptionId(q.id, hit.id)
+    const { a: curA } = latestRef.current
+    const ans = curA.questions.find((x) => x.questionId === q.id)
+    const wasCorrect = ans?.correctOptionId === oldOpt.id
     // Optimistic: update name + photo from search hit immediately (fixes stale Raul thumb).
     replaceOption(
       q.id,
@@ -437,8 +486,13 @@ export function LmsEditor({
         nationality: hit.nationality,
         position: hit.position,
       },
-      q.type === 'custom_question'
-        ? { answerPatch: { correctOptionId: nextId, reveal: hit.name } }
+      wasCorrect || q.type === 'custom_question' || q.type === 'higher_lower'
+        ? {
+            answerPatch: {
+              ...(wasCorrect || q.type === 'custom_question' ? { correctOptionId: nextId } : {}),
+              reveal: hit.name,
+            },
+          }
         : undefined
     )
 
@@ -453,6 +507,9 @@ export function LmsEditor({
       }
       const resolvedId = makeOptionId(q.id, full.id || hit.id)
       const resolvedName = full.name || hit.name
+      const stillCorrect =
+        latestRef.current.a.questions.find((x) => x.questionId === q.id)?.correctOptionId === nextId
+        || wasCorrect
       replaceOption(
         q.id,
         nextId,
@@ -464,13 +521,21 @@ export function LmsEditor({
           nationality: full.nationality ?? hit.nationality,
           position: full.position ?? hit.position,
         },
-        q.type === 'custom_question'
-          ? { answerPatch: { correctOptionId: resolvedId, reveal: resolvedName } }
+        stillCorrect || q.type === 'custom_question' || q.type === 'higher_lower'
+          ? {
+              answerPatch: {
+                ...(stillCorrect || q.type === 'custom_question'
+                  ? { correctOptionId: resolvedId }
+                  : {}),
+                reveal: resolvedName,
+              },
+            }
           : undefined
       )
     } catch {
       // optimistic row is enough
     }
+    await refreshReveal(q.id)
   }
 
   async function pickClub(q: Q, oldOpt: Opt, hit: AdminTeamHit) {
@@ -512,6 +577,7 @@ export function LmsEditor({
         : undefined
 
     replaceOption(q.id, oldOpt.id, nextOpt, { presentation, answerPatch })
+    await refreshReveal(q.id)
   }
 
   async function pickCareerClub(q: Q, clubIdx: number, hit: AdminTeamHit) {
@@ -890,6 +956,11 @@ export function LmsEditor({
                 disabled={locked}
                 onChange={(e) => updateAnswer(q.id, { reveal: e.target.value })}
               />
+              <span className="muted tiny">
+                {revealBusyFor === q.id
+                  ? 'Updating explanation from the new answer…'
+                  : 'Auto-updates when you change the answer (stats, career path, etc.).'}
+              </span>
             </label>
             <details className="editor-advanced">
               <summary>Advanced</summary>

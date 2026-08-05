@@ -461,6 +461,39 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  recomputeClubChain: (body: { startPlayerId: string; targetPlayerId: string }) =>
+    request<{ shortestPathPlayerIds: string[]; shortestPathLength: number }>(
+      '/validation/club-chain/recompute',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    ),
+  recomputeLmsReveal: (body: {
+    question: {
+      id: string
+      type: string
+      prompt?: string | null
+      subPrompt?: string | null
+      options: Array<{ id: string; label: string }>
+      presentation?: Record<string, unknown> | null
+    }
+    answer: {
+      questionId: string
+      correctOptionId: string
+      reveal?: string | null
+    }
+  }) =>
+    request<{
+      answer: {
+        questionId: string
+        correctOptionId: string
+        reveal?: string | null
+      }
+    }>('/puzzle/recompute-lms-reveal', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   oneMoreMetrics: () =>
     request<OneMoreMetricCatalogItem[]>('/question-engine/metrics'),

@@ -36,6 +36,8 @@ type PathPlayer = {
 }
 
 const EMPTY_ANSWER: Answer = {}
+/** Keep in sync with backend clubChainGenerator EXTRA_MOVES. */
+const EXTRA_MOVES = 4
 
 export function ClubChainEditor({
   puzzle,
@@ -53,7 +55,10 @@ export function ClubChainEditor({
   const pathIds = a.shortestPathPlayerIds ?? []
   const pathKey = pathIds.join('|')
   const [pathPlayers, setPathPlayers] = useState<Record<string, PathPlayer>>({})
+  const [recomputing, setRecomputing] = useState(false)
+  const [recomputeError, setRecomputeError] = useState<string | null>(null)
   const latestRef = useRef({ p, a })
+  const recomputeSeq = useRef(0)
 
   useEffect(() => {
     latestRef.current = { p, a }
@@ -62,6 +67,52 @@ export function ClubChainEditor({
   function commit(nextPuzzle: Puzzle, nextAnswer: Answer) {
     latestRef.current = { p: nextPuzzle, a: nextAnswer }
     onChange(nextPuzzle, nextAnswer)
+  }
+
+  async function recomputeBestPath(startId: string, targetId: string) {
+    if (!startId || !targetId || startId === targetId) return
+    const seq = ++recomputeSeq.current
+    setRecomputing(true)
+    setRecomputeError(null)
+    try {
+      const path = await api.recomputeClubChain({
+        startPlayerId: startId,
+        targetPlayerId: targetId,
+      })
+      if (seq !== recomputeSeq.current) return
+      const { p: currentPuzzle, a: currentAnswer } = latestRef.current
+      commit(
+        {
+          ...currentPuzzle,
+          shortestPathLength: path.shortestPathLength,
+          maxMoves: path.shortestPathLength + EXTRA_MOVES,
+        },
+        {
+          ...currentAnswer,
+          shortestPathPlayerIds: path.shortestPathPlayerIds,
+          shortestPathLength: path.shortestPathLength,
+        }
+      )
+    } catch (err) {
+      if (seq !== recomputeSeq.current) return
+      // Keep endpoints honest even when the graph has no path — clear the middle steps.
+      const { p: currentPuzzle, a: currentAnswer } = latestRef.current
+      if (currentPuzzle.start?.id && currentPuzzle.target?.id) {
+        commit(
+          { ...currentPuzzle, shortestPathLength: 1 },
+          {
+            ...currentAnswer,
+            shortestPathPlayerIds: [currentPuzzle.start.id, currentPuzzle.target.id],
+            shortestPathLength: 1,
+          }
+        )
+      }
+      setRecomputeError(
+        err instanceof Error ? err.message : 'Could not recompute best solution for these endpoints'
+      )
+    } finally {
+      if (seq === recomputeSeq.current) setRecomputing(false)
+    }
   }
 
   useEffect(() => {
@@ -162,20 +213,7 @@ export function ClubChainEditor({
       headshotUrl: resolved.headshotUrl,
     }
     const { p: currentPuzzle, a: currentAnswer } = latestRef.current
-    const currentPath = currentAnswer.shortestPathPlayerIds ?? []
     const nextPuzzle = { ...currentPuzzle, [which]: nextCard }
-    // Keep answer path endpoints in sync when start/target change.
-    let nextAns = currentAnswer
-    if (currentPath.length >= 2) {
-      const nextPath = [...currentPath]
-      if (which === 'start') nextPath[0] = resolved.id
-      if (which === 'target') nextPath[nextPath.length - 1] = resolved.id
-      nextAns = {
-        ...currentAnswer,
-        shortestPathPlayerIds: nextPath,
-        shortestPathLength: nextPath.length - 1,
-      }
-    }
     setPathPlayers((current) => ({
       ...current,
       [resolved.id]: {
@@ -184,12 +222,15 @@ export function ClubChainEditor({
         headshotUrl: resolved.headshotUrl,
       },
     }))
-    commit(
-      currentPath.length >= 2
-        ? { ...nextPuzzle, shortestPathLength: currentPath.length - 1 }
-        : nextPuzzle,
-      nextAns
-    )
+    // Commit endpoint change immediately, then rebuild the shortest-path example.
+    commit(nextPuzzle, currentAnswer)
+    const startId = which === 'start' ? resolved.id : nextPuzzle.start?.id
+    const targetId = which === 'target' ? resolved.id : nextPuzzle.target?.id
+    if (startId && targetId && startId !== targetId) {
+      await recomputeBestPath(startId, targetId)
+    } else {
+      setRecomputeError('Start and target must be different players.')
+    }
   }
 
   async function pickPathPlayer(
@@ -372,16 +413,36 @@ export function ClubChainEditor({
             ))}
           </div>
         )}
+        {recomputing && (
+          <p className="muted tiny">Recomputing best solution for these endpoints…</p>
+        )}
+        {recomputeError && (
+          <p className="warning-box">{recomputeError}</p>
+        )}
         <div className="editor-toolbar">
-          <span className="muted tiny">Review the full path after making changes.</span>
-          <button
-            type="button"
-            className="ghost"
-            disabled={locked || !p.start?.id || !p.target?.id}
-            onClick={addPathStep}
-          >
-            + Add path step
-          </button>
+          <span className="muted tiny">
+            Changing start/target rebuilds this path automatically.
+          </span>
+          <div className="button-row">
+            <button
+              type="button"
+              className="ghost"
+              disabled={locked || recomputing || !p.start?.id || !p.target?.id}
+              onClick={() => {
+                if (p.start?.id && p.target?.id) void recomputeBestPath(p.start.id, p.target.id)
+              }}
+            >
+              {recomputing ? 'Recomputing…' : 'Recompute best path'}
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              disabled={locked || !p.start?.id || !p.target?.id}
+              onClick={addPathStep}
+            >
+              + Add path step
+            </button>
+          </div>
         </div>
       </section>
     </div>

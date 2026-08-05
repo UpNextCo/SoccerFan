@@ -27,6 +27,7 @@ import {
   enrichAdminLMSPuzzle,
   enrichAdminOneMorePuzzle,
 } from '../services/adminPuzzleEnrich.js';
+import { recomputeLmsQuestionAnswer } from '../services/lastManStanding/recomputeReveal.js';
 import {
   adminSearchLeagues,
   adminSearchNationalities,
@@ -367,6 +368,51 @@ adminRouter.post('/puzzle/recompute-draft', requireAdmin, async (req, res) => {
       requireOptimal: true,
     });
     sendSuccess(res, { puzzleJson });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 400);
+  }
+});
+
+/** Rebuild LMS answer explanation (and higher/lower correct option) after Ops edits. */
+adminRouter.post('/puzzle/recompute-lms-reveal', requireAdmin, async (req, res) => {
+  const body = z
+    .object({
+      question: z.object({
+        id: z.string().min(1),
+        type: z.string().min(1),
+        prompt: z.string().nullable().optional(),
+        subPrompt: z.string().nullable().optional(),
+        options: z.array(
+          z.object({
+            id: z.string().min(1),
+            label: z.string(),
+          }).passthrough()
+        ),
+        presentation: z.record(z.unknown()).nullable().optional(),
+      }).passthrough(),
+      answer: z.object({
+        questionId: z.string().min(1),
+        correctOptionId: z.string().min(1),
+        reveal: z.string().nullable().optional(),
+      }).passthrough(),
+    })
+    .safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 'Invalid body', 400);
+    return;
+  }
+  try {
+    const next = await recomputeLmsQuestionAnswer(
+      {
+        ...body.data.question,
+        presentation: body.data.question.presentation as {
+          careerClubs?: Array<{ name: string; note?: 'loan' | string | null }>;
+          cluePlayers?: Array<{ name: string }>;
+        } | null,
+      },
+      body.data.answer
+    );
+    sendSuccess(res, { answer: next });
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : String(err), 400);
   }
