@@ -99,7 +99,7 @@ const FINAL_OPTIONS = [
   { competition: 'Champions League', mode: 'scored', label: 'Scored in a Champions League final' },
   { competition: 'Europa League', mode: 'scored', label: 'Scored in a Europa League final' },
   { competition: 'Euro', mode: 'won', label: 'Won a European Championship' },
-  { competition: 'World Cup', mode: 'won', label: 'Won a World Cup' },
+  { competition: 'World Cup', mode: 'won', label: 'World Cup winners since 1994' },
 ] as const
 
 /** Keep in sync with backend BACK_YOURSELF_AWARD_DEFS. */
