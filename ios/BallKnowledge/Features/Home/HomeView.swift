@@ -283,7 +283,9 @@ struct HomeHeaderView: View {
     @State private var showNotifications = false
 
     private var hasUnread: Bool {
-        HomeActivity.hasUnread(user: user, streak: streak, dailyComplete: dailyComplete)
+        // Read VsMonitor so the bell badge updates when a VS alert lands.
+        let vsUnread = VsMonitor.shared.hasTabBadge || ActivityFeedStore.unreadVsAlertCount > 0
+        return vsUnread || HomeActivity.hasUnread(user: user, streak: streak, dailyComplete: dailyComplete)
     }
 
     var body: some View {

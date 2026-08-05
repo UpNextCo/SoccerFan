@@ -133,8 +133,8 @@ struct GameIntroContent {
             return GameIntroContent(
                 tagline: "Pledge how many you can name.",
                 steps: [
-                    "See today's category — a club chip, award (Ballon d'Or…), or milestone (100+ PL goals…).",
-                    "Set your pledge on the slider — higher number, more XP if you deliver.",
+                    "See today's category — managed by, WC squads, club combos, awards, and more.",
+                    "Set your pledge — XP scales up to the Max XP threshold (extra names still count for the win).",
                     "Search and name that many players with three lives. Miss the pledge and you get 0 XP.",
                 ]
             )

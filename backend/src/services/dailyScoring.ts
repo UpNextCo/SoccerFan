@@ -468,6 +468,7 @@ async function scoreBackYourselfMode(row: PuzzleRow, answer: unknown): Promise<S
     namedPlayerIds: namedIds,
     mistakes: Math.floor(mistakes),
     maxPool: puzzle.maxPool,
+    xpCap: typeof puzzle.xpCap === 'number' ? puzzle.xpCap : undefined,
     mistakesAllowed: puzzle.mistakesAllowed,
     validNamedCount,
   });

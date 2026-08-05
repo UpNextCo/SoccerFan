@@ -1,16 +1,10 @@
 /**
  * Back Yourself — pledge how many players you can name for a category, then search/select
- * under a 3-life limit. XP scales with the pledge (max 1500).
+ * under a 3-life limit. XP scales with the pledge up to an XP-cap threshold (default 40),
+ * while the slider still runs to the full famous pool (maxPool, up to ~100).
  *
- * Eligibility: Draft-style stats ∪ career for club chips; Bingo-style awards / tight stats
- * for the new types. Countable pool = market_value_tier ≥ 3. Categories are chosen so the
- * NATURAL pool lands in 10…30 — no artificial clipping.
- *
- * Auto-generated types (see scripts/analyze-back-yourself-pools.ts):
- *   - nat_club / nat_league / mid-tier nationality
- *   - award (Ballon d'Or, Golden Shoe, Golden Boy, PFA, …)
- *   - stat (100+ PL goals, 30+ CL goals, 10+ hat-tricks, …)
- * Club-only is Ops-manual only (pools are almost always >30 at tier ≥ 3).
+ * Eligibility: Draft-style stats ∪ career for club chips; Bingo-style awards / stats /
+ * managers / WC squads / finals / teammate intersections. Countable pool = tier ≥ 3.
  */
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -18,11 +12,14 @@ import { leagueLogoUrl, resolveHeadshot } from '../constants/footballMedia.js';
 import { trustedIntlCapsSql } from './statMetrics.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
+import { playersUnderManager } from './managerRules.js';
 
 export const BACK_YOURSELF_MAX_XP = 1500;
 export const BACK_YOURSELF_MISTAKES_ALLOWED = 3;
 export const BACK_YOURSELF_MIN_POOL = 10;
-export const BACK_YOURSELF_MAX_POOL = 30;
+export const BACK_YOURSELF_MAX_POOL = 120;
+/** Pledge at which XP reaches the mode ceiling (even if maxPool is larger). */
+export const BACK_YOURSELF_XP_CAP_PLEDGE = 40;
 const MIN_POOL = BACK_YOURSELF_MIN_POOL;
 const MAX_POOL = BACK_YOURSELF_MAX_POOL;
 /** Align with Bingo's famous pool so club legends still count after value drops. */
@@ -35,7 +32,7 @@ const BIG_NATIONS = [
 ] as const;
 
 /**
- * Mid-tier nations whose standalone famous pool often lands in 10–30.
+ * Mid-tier nations whose standalone famous pool often lands in band.
  * (Spain/England/etc. are far too large for nationality-only.)
  */
 const MID_NATIONS = [
@@ -53,6 +50,55 @@ const BIG5: Array<{ id: number; name: string }> = [
   { id: 61, name: 'Ligue 1' },
 ];
 
+/** Managers whose famous-under-them pool usually lands in 10–100. */
+const CURATED_MANAGERS: Array<{ manager: string; managerNorm: string }> = [
+  { manager: 'Jürgen Klopp', managerNorm: 'jurgen klopp' },
+  { manager: 'Zinedine Zidane', managerNorm: 'zinedine zidane' },
+  { manager: 'Diego Simeone', managerNorm: 'diego simeone' },
+  { manager: 'Sir Alex Ferguson', managerNorm: 'sir alex ferguson' },
+  { manager: 'Arsène Wenger', managerNorm: 'arsene wenger' },
+  { manager: 'Luis Enrique', managerNorm: 'luis enrique' },
+  { manager: 'Louis van Gaal', managerNorm: 'louis van gaal' },
+  { manager: 'Fabio Capello', managerNorm: 'fabio capello' },
+  { manager: 'Marcello Lippi', managerNorm: 'marcello lippi' },
+  { manager: 'Frank Rijkaard', managerNorm: 'frank rijkaard' },
+  { manager: 'Hansi Flick', managerNorm: 'hansi flick' },
+  { manager: 'Mikel Arteta', managerNorm: 'mikel arteta' },
+  { manager: 'Maurizio Sarri', managerNorm: 'maurizio sarri' },
+  { manager: 'Julian Nagelsmann', managerNorm: 'julian nagelsmann' },
+  { manager: 'Erik ten Hag', managerNorm: 'erik ten hag' },
+  { manager: 'Arne Slot', managerNorm: 'arne slot' },
+  { manager: 'Xabi Alonso', managerNorm: 'xabi alonso' },
+  { manager: 'Didier Deschamps', managerNorm: 'didier deschamps' },
+  { manager: 'Vicente del Bosque', managerNorm: 'vicente del bosque' },
+  { manager: 'Claudio Ranieri', managerNorm: 'claudio ranieri' },
+  { manager: 'Guus Hiddink', managerNorm: 'guus hiddink' },
+  { manager: 'Luiz Felipe Scolari', managerNorm: 'luiz felipe scolari' },
+];
+
+/** Curated “played with A and B” pairs (exact player names in DB). */
+const CURATED_TEAMMATE_PAIRS: Array<{ a: string; b: string }> = [
+  { a: 'Lionel Messi', b: 'Luis Suárez' },
+  { a: 'Steven Gerrard', b: 'Fernando Torres' },
+  { a: 'Cristiano Ronaldo', b: 'Karim Benzema' },
+  { a: 'Cristiano Ronaldo', b: 'Sergio Ramos' },
+  { a: 'Andrés Iniesta', b: 'Xavi' },
+  { a: 'Gerard Piqué', b: 'Lionel Messi' },
+  { a: 'Antoine Griezmann', b: 'Luis Suárez' },
+];
+
+/** Finals chips that usually land in 10–100 famous. */
+const FINAL_DEFS: Array<{
+  competition: string;
+  mode: BackYourselfFinalMode;
+  label: string;
+}> = [
+  { competition: 'Champions League', mode: 'scored', label: 'Scored in a Champions League final' },
+  { competition: 'Europa League', mode: 'scored', label: 'Scored in a Europa League final' },
+  { competition: 'Euro', mode: 'won', label: 'Won a European Championship' },
+  { competition: 'World Cup', mode: 'won', label: 'Won a World Cup' },
+];
+
 const DEMONYM: Record<string, string> = {
   Brazil: 'Brazilian', Argentina: 'Argentine', France: 'French', Spain: 'Spanish', Germany: 'German',
   England: 'English', Portugal: 'Portuguese', Netherlands: 'Dutch', Italy: 'Italian', Belgium: 'Belgian',
@@ -68,13 +114,14 @@ function demonym(nation: string): string {
   return DEMONYM[nation] ?? nation;
 }
 
-/** Awards whose famous-pool winners usually land in 10–30. */
+/** Awards whose famous-pool winners usually land in band (or under XP-cap model). */
 export const BACK_YOURSELF_AWARD_DEFS: Array<{
   award: string;
   label: string;
   placements: string[];
 }> = [
   { award: "Ballon d'Or", label: "Ballon d'Or winners", placements: ['1st'] },
+  { award: "Ballon d'Or", label: "Ballon d'Or podium", placements: ['1st', '2nd', '3rd'] },
   { award: 'European Golden Shoe', label: 'European Golden Shoe winners', placements: ['winner'] },
   { award: 'Golden Boy', label: 'Golden Boy winners', placements: ['winner'] },
   { award: "PFA Players' Player of the Year", label: "PFA Players' Player winners", placements: ['winner'] },
@@ -84,7 +131,7 @@ export const BACK_YOURSELF_AWARD_DEFS: Array<{
   { award: "UEFA Men's Player of the Year", label: "UEFA Men's Player of the Year winners", placements: ['winner'] },
 ];
 
-/** Tight stat thresholds that usually land in 10–30 at tier ≥ 3. */
+/** Tight stat thresholds that usually land in band at tier ≥ 3. */
 export const BACK_YOURSELF_STAT_DEFS: Array<{
   key: BackYourselfStatKey;
   min: number;
@@ -109,15 +156,22 @@ export type BackYourselfStatKey =
   | 'season_reds'
   | 'intl_caps';
 
+export type BackYourselfFinalMode = 'scored' | 'won' | 'played';
+
 export type BackYourselfCategoryType =
   | 'nat_club'
   | 'club'
   | 'nationality'
   | 'nat_league'
   | 'award'
-  | 'stat';
+  | 'stat'
+  | 'managed_by'
+  | 'wc_squad'
+  | 'club_combo'
+  | 'played_with_both'
+  | 'final';
 
-/** Fields needed for SQL matching — label/logo are display-only. */
+/** Fields needed for SQL / set matching — label/logo are display-only. */
 export type BackYourselfCategorySpec = {
   type: BackYourselfCategoryType;
   club?: string | null;
@@ -126,10 +180,24 @@ export type BackYourselfCategorySpec = {
   nationality?: string | null;
   /** player_awards.award name when type === 'award' */
   award?: string | null;
+  /** Override placements for award matching (e.g. Ballon podium). */
+  awardPlacements?: string[] | null;
   /** Stat key when type === 'stat' */
   statKey?: BackYourselfStatKey | string | null;
   /** Minimum threshold when type === 'stat' */
   statMin?: number | null;
+  manager?: string | null;
+  managerNorm?: string | null;
+  wcYear?: number | null;
+  wcCountry?: string | null;
+  clubA?: string | null;
+  clubB?: string | null;
+  anchorAId?: string | null;
+  anchorBId?: string | null;
+  anchorAName?: string | null;
+  anchorBName?: string | null;
+  finalCompetition?: string | null;
+  finalMode?: BackYourselfFinalMode | string | null;
 };
 
 export interface BackYourselfCategory extends BackYourselfCategorySpec {
@@ -142,7 +210,10 @@ export interface BackYourselfPuzzlePublic {
   puzzleId: string;
   date: string;
   category: BackYourselfCategory;
+  /** Full famous pool size (slider max). */
   maxPool: number;
+  /** Pledge at which XP hits 1500. Always ≤ maxPool. */
+  xpCap: number;
   mistakesAllowed: number;
 }
 
@@ -158,6 +229,10 @@ export interface BackYourselfPlayerCard {
   nationality: string;
   position: string;
   headshotUrl?: string;
+}
+
+export function backYourselfXpCap(maxPool: number): number {
+  return Math.max(1, Math.min(BACK_YOURSELF_XP_CAP_PLEDGE, Math.floor(maxPool)));
 }
 
 function hashString(input: string): number {
@@ -193,12 +268,36 @@ function playedForClubSql(club: string, playerRef: SQL = sql`p.id`): SQL {
   )`;
 }
 
-function awardPlacements(award: string): string[] {
+function teammatesWithSql(anchorId: string): SQL {
+  return sql`EXISTS (
+    SELECT 1 FROM player_stats sp JOIN player_stats sa
+      ON sp.team_name = sa.team_name AND sp.season = sa.season
+    WHERE sp.player_id = p.id AND sa.player_id = ${anchorId}::uuid
+      AND sp.appearances > 0 AND sa.appearances > 0
+      AND sp.league_id NOT IN (1, 4) AND sa.league_id NOT IN (1, 4)
+  )`;
+}
+
+function finalSatisfiesSql(competition: string, mode: string): SQL {
+  const modeCond =
+    mode === 'scored' ? sql`AND f.goals > 0`
+      : mode === 'won' ? sql`AND f.won`
+        : sql``;
+  return sql`EXISTS (
+    SELECT 1 FROM final_appearances f
+    WHERE f.player_id = p.id
+      AND f.competition = ${competition}
+      ${modeCond}
+  )`;
+}
+
+function awardPlacementsFor(award: string, override?: string[] | null): string[] {
+  if (override && override.length > 0) return override;
   return BACK_YOURSELF_AWARD_DEFS.find((d) => d.award === award)?.placements ?? ['winner', '1st'];
 }
 
-function awardSatisfiesSql(award: string): SQL {
-  const placements = awardPlacements(award);
+function awardSatisfiesSql(award: string, placementsOverride?: string[] | null): SQL {
+  const placements = awardPlacementsFor(award, placementsOverride);
   return sql`EXISTS (
     SELECT 1 FROM player_awards a
     WHERE a.player_id = p.id
@@ -249,7 +348,7 @@ function statSatisfiesSql(statKey: string, statMin: number): SQL {
   }
 }
 
-/** Predicate: player row `p` satisfies the category (same SQL for count + validation). */
+/** Predicate: player row `p` satisfies the category (SQL types only — managed_by is set-based). */
 export function categorySatisfiesSql(category: BackYourselfCategorySpec): SQL {
   switch (category.type) {
     case 'club':
@@ -272,14 +371,62 @@ export function categorySatisfiesSql(category: BackYourselfCategorySpec): SQL {
         AND ${playedForClubSql(category.club ?? '')}
       )`;
     case 'award':
-      return awardSatisfiesSql(category.award ?? '');
+      return awardSatisfiesSql(category.award ?? '', category.awardPlacements);
     case 'stat':
       return statSatisfiesSql(category.statKey ?? '', Math.max(0, category.statMin ?? 0));
+    case 'wc_squad':
+      return sql`EXISTS (
+        SELECT 1 FROM wc_squads s
+        WHERE s.player_id = p.id
+          AND s.year = ${category.wcYear ?? -1}
+          AND s.country = ${category.wcCountry ?? ''}
+      )`;
+    case 'club_combo':
+      return sql`(
+        ${playedForClubSql(category.clubA ?? '')}
+        AND ${playedForClubSql(category.clubB ?? '')}
+      )`;
+    case 'played_with_both':
+      return sql`(
+        p.id <> ${category.anchorAId ?? '00000000-0000-0000-0000-000000000000'}::uuid
+        AND p.id <> ${category.anchorBId ?? '00000000-0000-0000-0000-000000000000'}::uuid
+        AND ${teammatesWithSql(category.anchorAId ?? '00000000-0000-0000-0000-000000000000')}
+        AND ${teammatesWithSql(category.anchorBId ?? '00000000-0000-0000-0000-000000000000')}
+      )`;
+    case 'final':
+      return finalSatisfiesSql(category.finalCompetition ?? '', category.finalMode ?? 'played');
+    case 'managed_by':
+      // Resolved via playersUnderManager — SQL predicate unused.
+      return sql`FALSE`;
   }
+}
+
+async function filterFamousSorted(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  // Chunk large IN lists.
+  const out: string[] = [];
+  const chunkSize = 400;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const rows = (await db.execute(sql`
+      SELECT p.id
+      FROM players p
+      WHERE p.market_value_tier >= ${FAMOUS_TIER}
+        AND p.id IN (${sql.join(chunk.map((id) => sql`${id}::uuid`), sql`, `)})
+      ORDER BY p.name
+    `)) as unknown as Array<{ id: string }>;
+    for (const r of rows) out.push(r.id);
+  }
+  out.sort();
+  return out;
 }
 
 /** Famous players matching the category (past ∪ present). Full list — never clipped. */
 export async function listMatchingPlayerIds(category: BackYourselfCategorySpec): Promise<string[]> {
+  if (category.type === 'managed_by') {
+    const set = await playersUnderManager(category.managerNorm ?? '');
+    return filterFamousSorted([...set]);
+  }
   const rows = (await db.execute(sql`
     SELECT p.id
     FROM players p
@@ -295,6 +442,9 @@ function inPoolBand(n: number): boolean {
 }
 
 export async function countMatchingPlayers(category: BackYourselfCategorySpec): Promise<number> {
+  if (category.type === 'managed_by') {
+    return (await listMatchingPlayerIds(category)).length;
+  }
   const rows = (await db.execute(sql`
     SELECT COUNT(*)::int AS n
     FROM players p
@@ -308,6 +458,10 @@ export async function playerMatchesBackYourselfCategory(
   playerId: string,
   category: BackYourselfCategorySpec
 ): Promise<boolean> {
+  if (category.type === 'managed_by') {
+    const ids = await listMatchingPlayerIds(category);
+    return ids.includes(playerId);
+  }
   const rows = (await db.execute(sql`
     SELECT 1 AS ok
     FROM players p
@@ -319,10 +473,11 @@ export async function playerMatchesBackYourselfCategory(
   return rows.length > 0;
 }
 
-/** XP for a successful pledge. Loss / shortfall → 0 (caller). */
-export function backYourselfXp(pledge: number, maxPool: number): number {
-  if (maxPool <= 0 || pledge <= 0) return 0;
-  const ratio = Math.min(1, Math.max(0, pledge / maxPool));
+/** XP for a successful pledge. Uses xpCap (not full maxPool) as the 1500 denominator. */
+export function backYourselfXp(pledge: number, xpCap: number): number {
+  if (xpCap <= 0 || pledge <= 0) return 0;
+  const effective = Math.min(pledge, xpCap);
+  const ratio = Math.min(1, Math.max(0, effective / xpCap));
   return Math.max(0, Math.min(BACK_YOURSELF_MAX_XP, Math.round(BACK_YOURSELF_MAX_XP * ratio ** 1.41)));
 }
 
@@ -331,22 +486,34 @@ export function scoreBackYourself(input: {
   namedPlayerIds: string[];
   mistakes: number;
   maxPool: number;
+  xpCap?: number;
   mistakesAllowed?: number;
   validNamedCount: number;
 }): { score: number; won: boolean } {
   const mistakesAllowed = input.mistakesAllowed ?? BACK_YOURSELF_MISTAKES_ALLOWED;
   const pledge = Math.max(0, Math.floor(input.pledge));
   const mistakes = Math.max(0, Math.floor(input.mistakes));
+  const xpCap = input.xpCap ?? backYourselfXpCap(input.maxPool);
   if (mistakes >= mistakesAllowed) return { score: 0, won: false };
   if (pledge < 1 || pledge > input.maxPool) return { score: 0, won: false };
   if (input.validNamedCount < pledge) return { score: 0, won: false };
-  return { score: backYourselfXp(pledge, input.maxPool), won: true };
+  return { score: backYourselfXp(pledge, xpCap), won: true };
 }
 
 export function categoryLabel(cat: BackYourselfCategorySpec & { label?: string | null }): string {
   if (cat.type === 'award') {
-    return BACK_YOURSELF_AWARD_DEFS.find((d) => d.award === cat.award)?.label
-      ?? (cat.award ? `${cat.award} winners` : 'Award winners');
+    if (cat.awardPlacements && cat.awardPlacements.length > 1) {
+      const hit = BACK_YOURSELF_AWARD_DEFS.find(
+        (d) =>
+          d.award === cat.award
+          && d.placements.length === cat.awardPlacements!.length
+          && d.placements.every((p, i) => p === cat.awardPlacements![i])
+      );
+      if (hit) return hit.label;
+    }
+    return BACK_YOURSELF_AWARD_DEFS.find(
+      (d) => d.award === cat.award && d.placements.length === 1
+    )?.label ?? (cat.award ? `${cat.award} winners` : 'Award winners');
   }
   if (cat.type === 'stat') {
     const hit = BACK_YOURSELF_STAT_DEFS.find(
@@ -365,6 +532,20 @@ export function categoryLabel(cat: BackYourselfCategorySpec & { label?: string |
       return `${demonym(cat.nationality ?? '?')} ${cat.leagueName ?? 'league'} players`;
     case 'nat_club':
       return `${demonym(cat.nationality ?? '?')} ${cat.club ?? '?'} players`;
+    case 'managed_by':
+      return `Managed by ${cat.manager ?? '?'}`;
+    case 'wc_squad':
+      return `${cat.wcCountry ?? '?'} World Cup ${cat.wcYear ?? '?'}`;
+    case 'club_combo':
+      return `Played for ${cat.clubA ?? '?'} and ${cat.clubB ?? '?'}`;
+    case 'played_with_both':
+      return `Played with ${cat.anchorAName ?? '?'} and ${cat.anchorBName ?? '?'}`;
+    case 'final': {
+      const hit = FINAL_DEFS.find(
+        (d) => d.competition === cat.finalCompetition && d.mode === cat.finalMode
+      );
+      return hit?.label ?? `${cat.finalCompetition ?? 'Final'} (${cat.finalMode ?? 'played'})`;
+    }
   }
 }
 
@@ -387,6 +568,16 @@ async function eliteClubs(): Promise<Array<{ club: string; leagueId: number }>> 
   return rows.map((r) => ({ club: r.club, leagueId: r.league_id }));
 }
 
+async function resolvePlayerIdByName(name: string): Promise<{ id: string; name: string } | null> {
+  const rows = (await db.execute(sql`
+    SELECT id, name FROM players
+    WHERE name = ${name} AND market_value_tier >= ${FAMOUS_TIER}
+    ORDER BY market_value_tier DESC
+    LIMIT 1
+  `)) as unknown as Array<{ id: string; name: string }>;
+  return rows[0] ?? null;
+}
+
 type Candidate = BackYourselfCategory & { maxPool: number; validPlayerIds: string[] };
 
 async function buildCandidates(): Promise<Candidate[]> {
@@ -403,8 +594,6 @@ async function buildCandidates(): Promise<Candidate[]> {
       validPlayerIds: ids,
     });
   };
-
-  // Club-only is almost never 10–30 at tier ≥ 3. Skip auto-gen (Ops can set manually).
 
   for (const nationality of MID_NATIONS) {
     await pushCandidate({
@@ -459,6 +648,39 @@ async function buildCandidates(): Promise<Candidate[]> {
         leagueName: null,
       });
     }
+
+    // Club combos — sample pairs among elite clubs with in-band famous intersection.
+    const comboRows = (await db.execute(sql`
+      WITH club_players AS (
+        SELECT DISTINCT player_id, team_name AS club FROM (
+          SELECT player_id, team_name FROM player_stats
+          WHERE appearances > 0 AND team_name IS NOT NULL
+            AND team_name IN (${sql.join(clubNames.map((c) => sql`${c}`), sql`, `)})
+          UNION
+          SELECT player_id, team_name FROM player_career
+          WHERE team_id > 0 AND team_name IS NOT NULL
+            AND team_name IN (${sql.join(clubNames.map((c) => sql`${c}`), sql`, `)})
+        ) u
+      )
+      SELECT a.club AS club_a, b.club AS club_b, COUNT(DISTINCT p.id)::int AS n
+      FROM club_players a
+      JOIN club_players b ON a.player_id = b.player_id AND a.club < b.club
+      JOIN players p ON p.id = a.player_id AND p.market_value_tier >= ${FAMOUS_TIER}
+      GROUP BY a.club, b.club
+      HAVING COUNT(DISTINCT p.id) BETWEEN ${MIN_POOL} AND ${MAX_POOL}
+    `)) as unknown as Array<{ club_a: string; club_b: string; n: number }>;
+
+    for (const r of comboRows) {
+      await pushCandidate({
+        type: 'club_combo',
+        clubA: r.club_a,
+        clubB: r.club_b,
+        club: null,
+        leagueId: null,
+        leagueName: null,
+        nationality: null,
+      });
+    }
   }
 
   for (const def of BACK_YOURSELF_AWARD_DEFS) {
@@ -466,6 +688,7 @@ async function buildCandidates(): Promise<Candidate[]> {
       {
         type: 'award',
         award: def.award,
+        awardPlacements: def.placements,
         club: null,
         leagueId: null,
         leagueName: null,
@@ -490,6 +713,78 @@ async function buildCandidates(): Promise<Candidate[]> {
     );
   }
 
+  for (const m of CURATED_MANAGERS) {
+    await pushCandidate({
+      type: 'managed_by',
+      manager: m.manager,
+      managerNorm: m.managerNorm,
+      club: null,
+      leagueId: null,
+      leagueName: null,
+      nationality: null,
+    });
+  }
+
+  const squadRows = (await db.execute(sql`
+    SELECT s.year, s.country, COUNT(DISTINCT p.id)::int AS n
+    FROM wc_squads s
+    JOIN players p ON p.id = s.player_id
+    WHERE p.market_value_tier >= ${FAMOUS_TIER}
+      AND s.year BETWEEN 2006 AND 2022
+      AND s.country IN (${sql.join(
+        [...BIG_NATIONS, 'Croatia', 'Uruguay', 'Mexico', 'Japan', 'USA', 'Senegal', 'Morocco', 'Denmark', 'Switzerland', 'Sweden', 'Poland', 'Serbia', 'Nigeria', 'Cameroon', 'Ghana', 'South Korea', 'Chile', 'Colombia'].map(
+          (c) => sql`${c}`
+        ),
+        sql`, `
+      )})
+    GROUP BY s.year, s.country
+    HAVING COUNT(DISTINCT p.id) BETWEEN ${MIN_POOL} AND ${MAX_POOL}
+  `)) as unknown as Array<{ year: number; country: string; n: number }>;
+
+  for (const r of squadRows) {
+    await pushCandidate({
+      type: 'wc_squad',
+      wcYear: r.year,
+      wcCountry: r.country,
+      club: null,
+      leagueId: null,
+      leagueName: null,
+      nationality: r.country,
+    });
+  }
+
+  for (const pair of CURATED_TEAMMATE_PAIRS) {
+    const a = await resolvePlayerIdByName(pair.a);
+    const b = await resolvePlayerIdByName(pair.b);
+    if (!a || !b) continue;
+    await pushCandidate({
+      type: 'played_with_both',
+      anchorAId: a.id,
+      anchorBId: b.id,
+      anchorAName: a.name,
+      anchorBName: b.name,
+      club: null,
+      leagueId: null,
+      leagueName: null,
+      nationality: null,
+    });
+  }
+
+  for (const def of FINAL_DEFS) {
+    await pushCandidate(
+      {
+        type: 'final',
+        finalCompetition: def.competition,
+        finalMode: def.mode,
+        club: null,
+        leagueId: null,
+        leagueName: null,
+        nationality: null,
+      },
+      def.label
+    );
+  }
+
   return out;
 }
 
@@ -505,9 +800,18 @@ async function getCandidates(): Promise<Candidate[]> {
   return items;
 }
 
+/** Clear generator cache (tests / regen jobs). */
+export function clearBackYourselfCandidateCache(): void {
+  candidateCache = null;
+}
+
 async function decorateCategory(cat: BackYourselfCategory): Promise<BackYourselfCategory> {
   if ((cat.type === 'club' || cat.type === 'nat_club') && cat.club) {
     const logo = await lookupTeamLogo(cat.club, cat.leagueName ?? '');
+    return { ...cat, logoUrl: logo?.logoUrl ?? null };
+  }
+  if (cat.type === 'club_combo' && cat.clubA) {
+    const logo = await lookupTeamLogo(cat.clubA, '');
     return { ...cat, logoUrl: logo?.logoUrl ?? null };
   }
   if (cat.type === 'nat_league' && cat.leagueId != null) {
@@ -516,29 +820,53 @@ async function decorateCategory(cat: BackYourselfCategory): Promise<BackYourself
   return { ...cat, logoUrl: cat.logoUrl ?? null };
 }
 
-export async function generateBackYourselfPuzzle(
-  date: string
-): Promise<{ puzzle: BackYourselfPuzzlePublic; answer: BackYourselfPuzzleAnswer } | null> {
-  const candidates = await getCandidates();
-  if (candidates.length === 0) return null;
-
-  // Weight: nat_club 40%, nat_league 20%, award 20%, stat 15%, nationality 5%.
+function pickWeightedPool(candidates: Candidate[], seed: number): Candidate[] {
   const byType = {
     nat_club: candidates.filter((c) => c.type === 'nat_club'),
     nat_league: candidates.filter((c) => c.type === 'nat_league'),
     award: candidates.filter((c) => c.type === 'award'),
     stat: candidates.filter((c) => c.type === 'stat'),
     nationality: candidates.filter((c) => c.type === 'nationality'),
+    managed_by: candidates.filter((c) => c.type === 'managed_by'),
+    wc_squad: candidates.filter((c) => c.type === 'wc_squad'),
+    club_combo: candidates.filter((c) => c.type === 'club_combo'),
+    played_with_both: candidates.filter((c) => c.type === 'played_with_both'),
+    final: candidates.filter((c) => c.type === 'final'),
   };
-  const seed = hashString(`${date}:back_yourself`);
+  // Weights: new families get solid share under the widened XP-cap model.
   const roll = seed % 100;
-  let pool: Candidate[];
-  if (roll < 40 && byType.nat_club.length > 0) pool = byType.nat_club;
-  else if (roll < 60 && byType.nat_league.length > 0) pool = byType.nat_league;
-  else if (roll < 80 && byType.award.length > 0) pool = byType.award;
-  else if (roll < 95 && byType.stat.length > 0) pool = byType.stat;
-  else if (byType.nationality.length > 0) pool = byType.nationality;
-  else pool = candidates;
+  const buckets: Array<{ weight: number; pool: Candidate[] }> = [
+    { weight: 18, pool: byType.managed_by },
+    { weight: 16, pool: byType.wc_squad },
+    { weight: 12, pool: byType.club_combo },
+    { weight: 10, pool: byType.played_with_both },
+    { weight: 8, pool: byType.final },
+    { weight: 12, pool: byType.nat_club },
+    { weight: 8, pool: byType.nat_league },
+    { weight: 8, pool: byType.award },
+    { weight: 6, pool: byType.stat },
+    { weight: 2, pool: byType.nationality },
+  ];
+  let cursor = 0;
+  for (const b of buckets) {
+    if (b.pool.length === 0) continue;
+    cursor += b.weight;
+    if (roll < cursor) return b.pool;
+  }
+  for (const b of buckets) {
+    if (b.pool.length > 0) return b.pool;
+  }
+  return candidates;
+}
+
+export async function generateBackYourselfPuzzle(
+  date: string
+): Promise<{ puzzle: BackYourselfPuzzlePublic; answer: BackYourselfPuzzleAnswer } | null> {
+  const candidates = await getCandidates();
+  if (candidates.length === 0) return null;
+
+  const seed = hashString(`${date}:back_yourself`);
+  let pool = pickWeightedPool(candidates, seed);
   if (pool.length === 0) pool = candidates;
   const chosen = seededShuffle(pool, seed)[0]!;
 
@@ -550,16 +878,31 @@ export async function generateBackYourselfPuzzle(
     leagueName: chosen.leagueName ?? null,
     nationality: chosen.nationality ?? null,
     award: chosen.award ?? null,
+    awardPlacements: chosen.awardPlacements ?? null,
     statKey: chosen.statKey ?? null,
     statMin: chosen.statMin ?? null,
+    manager: chosen.manager ?? null,
+    managerNorm: chosen.managerNorm ?? null,
+    wcYear: chosen.wcYear ?? null,
+    wcCountry: chosen.wcCountry ?? null,
+    clubA: chosen.clubA ?? null,
+    clubB: chosen.clubB ?? null,
+    anchorAId: chosen.anchorAId ?? null,
+    anchorBId: chosen.anchorBId ?? null,
+    anchorAName: chosen.anchorAName ?? null,
+    anchorBName: chosen.anchorBName ?? null,
+    finalCompetition: chosen.finalCompetition ?? null,
+    finalMode: chosen.finalMode ?? null,
   });
 
+  const xpCap = backYourselfXpCap(chosen.maxPool);
   const puzzle: BackYourselfPuzzlePublic = {
     modeId: 'back_yourself',
     puzzleId: `${date}-back_yourself`,
     date,
     category,
     maxPool: chosen.maxPool,
+    xpCap,
     mistakesAllowed: BACK_YOURSELF_MISTAKES_ALLOWED,
   };
   const answer: BackYourselfPuzzleAnswer = {
@@ -596,10 +939,15 @@ export async function resolveBackYourselfPlayerCard(
   };
 }
 
-/** Recalculate maxPool + valid ids for Ops after category edits (full pool, no clip). */
+/** Recalculate maxPool + xpCap + valid ids for Ops after category edits (full pool, no clip). */
 export async function refreshBackYourselfAnswer(
   category: BackYourselfCategory
-): Promise<{ maxPool: number; validPlayerIds: string[]; category: BackYourselfCategory }> {
+): Promise<{
+  maxPool: number;
+  xpCap: number;
+  validPlayerIds: string[];
+  category: BackYourselfCategory;
+}> {
   const decorated = await decorateCategory({
     ...category,
     label: category.label || categoryLabel(category),
@@ -607,6 +955,7 @@ export async function refreshBackYourselfAnswer(
   const validPlayerIds = await listMatchingPlayerIds(decorated);
   return {
     maxPool: validPlayerIds.length,
+    xpCap: backYourselfXpCap(validPlayerIds.length),
     validPlayerIds,
     category: { ...decorated, label: decorated.label || categoryLabel(decorated) },
   };

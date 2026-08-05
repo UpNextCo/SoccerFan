@@ -5,6 +5,8 @@
 import 'dotenv/config';
 import {
   backYourselfXp,
+  backYourselfXpCap,
+  clearBackYourselfCandidateCache,
   generateBackYourselfPuzzle,
   playerMatchesBackYourselfCategory,
   scoreBackYourself,
@@ -13,23 +15,26 @@ import {
 async function main() {
   const date = process.argv[2] ?? '2026-08-10';
 
-  console.log('XP formula checks:');
-  for (const [pledge, maxPool] of [
-    [20, 20],
-    [18, 20],
-    [15, 20],
-    [10, 20],
-    [1, 20],
+  console.log('XP formula checks (xpCap=40):');
+  for (const [pledge, xpCap] of [
+    [40, 40],
+    [80, 40],
+    [30, 40],
+    [20, 40],
+    [10, 40],
+    [1, 40],
   ] as const) {
-    console.log(`  pledge=${pledge}/${maxPool} -> ${backYourselfXp(pledge, maxPool)} XP`);
+    console.log(`  pledge=${pledge} xpCap=${xpCap} -> ${backYourselfXp(pledge, xpCap)} XP`);
   }
+  console.log('xpCap helpers:', { pool20: backYourselfXpCap(20), pool80: backYourselfXpCap(80) });
   console.log(
     'score lose:',
     scoreBackYourself({
       pledge: 10,
       namedPlayerIds: ['a'],
       mistakes: 3,
-      maxPool: 20,
+      maxPool: 80,
+      xpCap: 40,
       validNamedCount: 1,
     })
   );
@@ -39,21 +44,35 @@ async function main() {
       pledge: 10,
       namedPlayerIds: ['a'],
       mistakes: 1,
-      maxPool: 20,
+      maxPool: 80,
+      xpCap: 40,
       validNamedCount: 5,
     })
   );
   console.log(
-    'score win:',
+    'score win at cap:',
     scoreBackYourself({
-      pledge: 10,
+      pledge: 40,
       namedPlayerIds: ['a'],
       mistakes: 1,
-      maxPool: 20,
-      validNamedCount: 10,
+      maxPool: 80,
+      xpCap: 40,
+      validNamedCount: 40,
+    })
+  );
+  console.log(
+    'score win past cap (same XP):',
+    scoreBackYourself({
+      pledge: 60,
+      namedPlayerIds: ['a'],
+      mistakes: 1,
+      maxPool: 80,
+      xpCap: 40,
+      validNamedCount: 60,
     })
   );
 
+  clearBackYourselfCandidateCache();
   console.log(`\nGenerating puzzle for ${date}...`);
   const t0 = Date.now();
   const result = await generateBackYourselfPuzzle(date);
@@ -68,6 +87,7 @@ async function main() {
         label: result.puzzle.category.label,
         type: result.puzzle.category.type,
         maxPool: result.puzzle.maxPool,
+        xpCap: result.puzzle.xpCap,
         validIds: result.answer.validPlayerIds.length,
         mistakesAllowed: result.puzzle.mistakesAllowed,
       },
@@ -80,11 +100,27 @@ async function main() {
   const match = await playerMatchesBackYourselfCategory(sampleId, result.puzzle.category);
   console.log('sample player matches:', match, sampleId);
 
-  // Wrong player: pick a random high-profile id unlikely to fit — just ensure false for empty uuid shape fails.
-  // Use a second valid id from a different category if possible by checking a nonsense id.
   const nonsense = '00000000-0000-0000-0000-000000000001';
   const noMatch = await playerMatchesBackYourselfCategory(nonsense, result.puzzle.category);
   console.log('nonsense player matches:', noMatch);
+
+  // Sample a few more dates for type diversity.
+  console.log('\nSample week:');
+  for (let d = 10; d <= 16; d += 1) {
+    const day = `2026-08-${String(d).padStart(2, '0')}`;
+    const r = await generateBackYourselfPuzzle(day);
+    if (!r) {
+      console.log(day, 'NONE');
+      continue;
+    }
+    console.log(
+      day,
+      r.puzzle.category.type.padEnd(18),
+      String(r.puzzle.maxPool).padStart(3),
+      `cap=${r.puzzle.xpCap}`,
+      r.puzzle.category.label
+    );
+  }
 }
 
 main()

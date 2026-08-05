@@ -15,6 +15,7 @@ final class VsViewModel {
         defer { isLoading = false }
         do {
             challenge = try await APIClient.shared.vsActive()
+            VsMonitor.shared.track(challenge)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -26,6 +27,7 @@ final class VsViewModel {
         defer { isBusy = false }
         do {
             challenge = try await APIClient.shared.vsCreate()
+            VsMonitor.shared.track(challenge)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -42,6 +44,7 @@ final class VsViewModel {
         defer { isBusy = false }
         do {
             challenge = try await APIClient.shared.vsJoin(code: code)
+            VsMonitor.shared.track(challenge)
             joinCode = ""
             errorMessage = nil
         } catch {
@@ -53,6 +56,7 @@ final class VsViewModel {
         guard let id = challenge?.id else { return }
         do {
             challenge = try await APIClient.shared.vsGet(id: id)
+            VsMonitor.shared.track(challenge)
         } catch {
             // Keep last known state while polling.
         }
@@ -66,6 +70,7 @@ final class VsViewModel {
         do {
             let updated = try await APIClient.shared.vsSubmit(id: id, picks: picks)
             challenge = updated
+            VsMonitor.shared.track(challenge)
             errorMessage = nil
             let lineup = updated.optimalLineup ?? []
             return (lineup, updated.optimalScore)
@@ -79,6 +84,7 @@ final class VsViewModel {
         challenge = nil
         playing = false
         errorMessage = nil
+        VsMonitor.shared.track(nil)
     }
 
     var youHavePlayed: Bool {

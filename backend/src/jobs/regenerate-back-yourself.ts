@@ -8,12 +8,16 @@ import 'dotenv/config';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { dailyPuzzles } from '../db/schema.js';
-import { generateBackYourselfPuzzle } from '../services/backYourselfGenerator.js';
+import {
+  clearBackYourselfCandidateCache,
+  generateBackYourselfPuzzle,
+} from '../services/backYourselfGenerator.js';
 import { contentHash } from '../services/puzzleOps.js';
 
 async function main() {
   const date = process.argv[2] ?? new Date().toISOString().slice(0, 10);
   const force = process.argv.includes('--force');
+  clearBackYourselfCandidateCache();
 
   const existing = await db
     .select()
@@ -58,9 +62,8 @@ async function main() {
         category: result.puzzle.category.label,
         type: result.puzzle.category.type,
         maxPool: result.puzzle.maxPool,
+        xpCap: result.puzzle.xpCap,
         validCount: result.answer.validPlayerIds.length,
-        xpAtFull: Math.round(1500 * (1) ** 1.41),
-        xpAt75: Math.round(1500 * (0.75) ** 1.41),
       },
       null,
       2

@@ -10,8 +10,19 @@ struct BackYourselfCategory: Codable, Equatable {
     let leagueName: String?
     let nationality: String?
     let award: String?
+    let awardPlacements: [String]?
     let statKey: String?
     let statMin: Int?
+    let manager: String?
+    let managerNorm: String?
+    let wcYear: Int?
+    let wcCountry: String?
+    let clubA: String?
+    let clubB: String?
+    let anchorAName: String?
+    let anchorBName: String?
+    let finalCompetition: String?
+    let finalMode: String?
     let logoUrl: String?
 
     init(
@@ -22,8 +33,19 @@ struct BackYourselfCategory: Codable, Equatable {
         leagueName: String? = nil,
         nationality: String? = nil,
         award: String? = nil,
+        awardPlacements: [String]? = nil,
         statKey: String? = nil,
         statMin: Int? = nil,
+        manager: String? = nil,
+        managerNorm: String? = nil,
+        wcYear: Int? = nil,
+        wcCountry: String? = nil,
+        clubA: String? = nil,
+        clubB: String? = nil,
+        anchorAName: String? = nil,
+        anchorBName: String? = nil,
+        finalCompetition: String? = nil,
+        finalMode: String? = nil,
         logoUrl: String? = nil
     ) {
         self.type = type
@@ -33,8 +55,19 @@ struct BackYourselfCategory: Codable, Equatable {
         self.leagueName = leagueName
         self.nationality = nationality
         self.award = award
+        self.awardPlacements = awardPlacements
         self.statKey = statKey
         self.statMin = statMin
+        self.manager = manager
+        self.managerNorm = managerNorm
+        self.wcYear = wcYear
+        self.wcCountry = wcCountry
+        self.clubA = clubA
+        self.clubB = clubB
+        self.anchorAName = anchorAName
+        self.anchorBName = anchorBName
+        self.finalCompetition = finalCompetition
+        self.finalMode = finalMode
         self.logoUrl = logoUrl
     }
 
@@ -47,8 +80,19 @@ struct BackYourselfCategory: Codable, Equatable {
         leagueName = try c.decodeIfPresent(String.self, forKey: .leagueName)
         nationality = try c.decodeIfPresent(String.self, forKey: .nationality)
         award = try c.decodeIfPresent(String.self, forKey: .award)
+        awardPlacements = try c.decodeIfPresent([String].self, forKey: .awardPlacements)
         statKey = try c.decodeIfPresent(String.self, forKey: .statKey)
         statMin = try c.decodeIfPresent(Int.self, forKey: .statMin)
+        manager = try c.decodeIfPresent(String.self, forKey: .manager)
+        managerNorm = try c.decodeIfPresent(String.self, forKey: .managerNorm)
+        wcYear = try c.decodeIfPresent(Int.self, forKey: .wcYear)
+        wcCountry = try c.decodeIfPresent(String.self, forKey: .wcCountry)
+        clubA = try c.decodeIfPresent(String.self, forKey: .clubA)
+        clubB = try c.decodeIfPresent(String.self, forKey: .clubB)
+        anchorAName = try c.decodeIfPresent(String.self, forKey: .anchorAName)
+        anchorBName = try c.decodeIfPresent(String.self, forKey: .anchorBName)
+        finalCompetition = try c.decodeIfPresent(String.self, forKey: .finalCompetition)
+        finalMode = try c.decodeIfPresent(String.self, forKey: .finalMode)
         logoUrl = try c.decodeIfPresent(String.self, forKey: .logoUrl)
     }
 }
@@ -57,7 +101,10 @@ struct BackYourselfPuzzle: Codable, Equatable {
     let id: String
     let date: String
     let category: BackYourselfCategory
+    /// Full famous pool (slider max).
     let maxPool: Int
+    /// Pledge at which XP hits 1500.
+    let xpCap: Int
     let mistakesAllowed: Int
 }
 
@@ -109,6 +156,7 @@ struct BackYourselfPuzzleDTO: Codable, Equatable {
     let date: String
     let category: BackYourselfCategory
     let maxPool: Int
+    let xpCap: Int
     let mistakesAllowed: Int
 
     init(from decoder: Decoder) throws {
@@ -118,6 +166,8 @@ struct BackYourselfPuzzleDTO: Codable, Equatable {
         date = try c.decode(String.self, forKey: .date)
         category = try c.decode(BackYourselfCategory.self, forKey: .category)
         maxPool = try c.decodeIfPresent(Int.self, forKey: .maxPool) ?? 10
+        let decodedCap = try c.decodeIfPresent(Int.self, forKey: .xpCap)
+        xpCap = max(1, min(maxPool, decodedCap ?? min(40, maxPool)))
         mistakesAllowed = try c.decodeIfPresent(Int.self, forKey: .mistakesAllowed) ?? 3
     }
 }
@@ -159,7 +209,7 @@ struct BackYourselfGuessResultDTO: Codable {
 // MARK: - Game state
 
 struct BackYourselfGameState: Codable, Equatable {
-    static let progressVersion = 1
+    static let progressVersion = 2
 
     enum Phase: String, Codable {
         case pledge
@@ -178,8 +228,8 @@ struct BackYourselfGameState: Codable, Equatable {
     init(puzzle: BackYourselfPuzzle) {
         self.puzzle = puzzle
         self.livesRemaining = puzzle.mistakesAllowed
-        // Default slider around 60% of the pool (still editable before lock).
-        self.pledge = max(1, min(puzzle.maxPool, Int((Double(puzzle.maxPool) * 0.6).rounded())))
+        // Default slider around 60% of the XP-cap threshold (still editable before lock).
+        self.pledge = max(1, min(puzzle.maxPool, Int((Double(puzzle.xpCap) * 0.6).rounded())))
     }
 
     var namedCount: Int { named.count }
@@ -189,11 +239,11 @@ struct BackYourselfGameState: Codable, Equatable {
     var isResumable: Bool { phase == .naming && (!named.isEmpty || pledge > 0) }
 
     var projectedXP: Int {
-        DailyXP.backYourself(pledge: pledge, maxPool: puzzle.maxPool, won: true)
+        DailyXP.backYourself(pledge: pledge, xpCap: puzzle.xpCap, won: true)
     }
 
     var score: Int {
-        DailyXP.backYourself(pledge: pledge, maxPool: puzzle.maxPool, won: won)
+        DailyXP.backYourself(pledge: pledge, xpCap: puzzle.xpCap, won: won)
     }
 
     func answerPayload() -> JSONValue {

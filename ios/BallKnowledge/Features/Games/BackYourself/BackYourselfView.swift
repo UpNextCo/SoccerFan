@@ -240,7 +240,7 @@ struct BackYourselfView: View {
                     Text(state.puzzle.category.label)
                         .font(BKFont.title(22))
                         .foregroundStyle(BKTheme.textPrimary)
-                    Text("\(state.puzzle.maxPool) nameable players in the pool")
+                    Text(poolCaption)
                         .font(BKFont.body(13))
                         .foregroundStyle(BKTheme.textSecondary)
                 }
@@ -269,21 +269,32 @@ struct BackYourselfView: View {
         } else if let nationality = cat.nationality, !nationality.isEmpty {
             Text(GuessWhoDisplay.nationalityFlag(nationality))
                 .font(.system(size: 34))
-        } else if cat.type == "award" {
-            Image(systemName: "trophy.fill")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(BKTheme.accent)
-                .frame(width: 44, height: 44)
-        } else if cat.type == "stat" {
-            Image(systemName: "chart.bar.fill")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(BKTheme.accent)
-                .frame(width: 44, height: 44)
         } else {
-            Image(systemName: "person.3.fill")
+            Image(systemName: categorySymbol(for: cat.type))
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(BKTheme.accent)
                 .frame(width: 44, height: 44)
+        }
+    }
+
+    private var poolCaption: String {
+        let maxPool = state.puzzle.maxPool
+        let xpCap = state.puzzle.xpCap
+        if maxPool > xpCap {
+            return "\(maxPool) possible · Max XP at \(xpCap)+"
+        }
+        return "\(maxPool) nameable players in the pool"
+    }
+
+    private func categorySymbol(for type: String) -> String {
+        switch type {
+        case "award", "final": return "trophy.fill"
+        case "stat": return "chart.bar.fill"
+        case "managed_by": return "person.badge.key.fill"
+        case "wc_squad": return "globe.europe.africa.fill"
+        case "club_combo": return "arrow.left.arrow.right"
+        case "played_with_both": return "person.2.fill"
+        default: return "person.3.fill"
         }
     }
 

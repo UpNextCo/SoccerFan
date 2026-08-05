@@ -171,20 +171,37 @@ const clubChainAnswer = z.object({
 }).passthrough();
 
 const backYourselfCategory = z.object({
-  type: z.enum(['nat_club', 'club', 'nationality', 'nat_league', 'award', 'stat']),
+  type: z.enum([
+    'nat_club', 'club', 'nationality', 'nat_league', 'award', 'stat',
+    'managed_by', 'wc_squad', 'club_combo', 'played_with_both', 'final',
+  ]),
   label: text,
   club: text.nullable().optional(),
   leagueId: z.number().int().nullable().optional(),
   leagueName: text.nullable().optional(),
   nationality: text.nullable().optional(),
   award: text.nullable().optional(),
+  awardPlacements: z.array(text).nullable().optional(),
   statKey: text.nullable().optional(),
   statMin: z.number().int().nullable().optional(),
+  manager: text.nullable().optional(),
+  managerNorm: text.nullable().optional(),
+  wcYear: z.number().int().nullable().optional(),
+  wcCountry: text.nullable().optional(),
+  clubA: text.nullable().optional(),
+  clubB: text.nullable().optional(),
+  anchorAId: id.nullable().optional(),
+  anchorBId: id.nullable().optional(),
+  anchorAName: text.nullable().optional(),
+  anchorBName: text.nullable().optional(),
+  finalCompetition: text.nullable().optional(),
+  finalMode: z.enum(['scored', 'won', 'played']).nullable().optional(),
   logoUrl: text.nullable().optional(),
 }).passthrough();
 const backYourselfPuzzle = z.object({
   category: backYourselfCategory,
-  maxPool: z.number().int().min(1).max(50),
+  maxPool: z.number().int().min(1).max(120),
+  xpCap: z.number().int().min(1).max(120).optional(),
   mistakesAllowed: z.number().int().positive().optional(),
 }).passthrough();
 const backYourselfAnswer = z.object({
@@ -427,6 +444,9 @@ function validateBackYourself(puzzleJson: unknown, answerJson: unknown, issues: 
       'puzzleJson.maxPool',
       `maxPool (${puzzle.maxPool}) must equal validPlayerIds length (${answer.validPlayerIds.length}). Recalculate the pool.`
     );
+  }
+  if (puzzle.xpCap != null && puzzle.xpCap > puzzle.maxPool) {
+    issue(issues, 'puzzleJson.xpCap', `xpCap (${puzzle.xpCap}) cannot exceed maxPool (${puzzle.maxPool}).`);
   }
   if (!unique(answer.validPlayerIds)) {
     issue(issues, 'answerJson.validPlayerIds', 'Valid player ids must be unique.');

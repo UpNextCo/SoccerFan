@@ -53,6 +53,7 @@ enum DailyChallengeResolver {
             date: bundle.date,
             category: dto.category,
             maxPool: dto.maxPool,
+            xpCap: dto.xpCap,
             mistakesAllowed: dto.mistakesAllowed
         )
     }

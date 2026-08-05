@@ -514,13 +514,14 @@ export async function enrichAdminBackYourselfPuzzle(
     throw new Error('Back Yourself puzzle is missing a category');
   }
   const refreshed = await refreshBackYourselfAnswer(puzzle.category as BackYourselfCategory);
-  if (opts?.requirePoolBounds && (refreshed.maxPool < 10 || refreshed.maxPool > 30)) {
+  if (opts?.requirePoolBounds && (refreshed.maxPool < 10 || refreshed.maxPool > 120)) {
     throw new Error(
-      `Player pool size ${refreshed.maxPool} is outside 10–30. Pick a different category.`
+      `Player pool size ${refreshed.maxPool} is outside 10–120. Pick a different category.`
     );
   }
   puzzle.category = refreshed.category;
   puzzle.maxPool = refreshed.maxPool;
+  puzzle.xpCap = refreshed.xpCap;
   const answer = {
     modeId: 'back_yourself' as const,
     validPlayerIds: refreshed.validPlayerIds,

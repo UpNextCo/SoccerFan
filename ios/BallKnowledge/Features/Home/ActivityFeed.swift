@@ -16,6 +16,7 @@ enum ActivityFeedStore {
     private static let todayRankKey = "activityLastTodayRank"
     private static let todayRankDateKey = "activityLastTodayRankDate"
     private static let openedKey = "activityLastOpenedAt"
+    private static let vsAlertsKey = "activityVsAlerts"
 
     static var lastSeenRankTitle: String? {
         get { UserDefaults.standard.string(forKey: rankTitleKey) }
@@ -66,6 +67,47 @@ enum ActivityFeedStore {
         lastTodayRank = todayRank
         lastTodayRankDate = todayDate
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: openedKey)
+        markVsAlertsRead()
+    }
+
+    static var vsAlerts: [VsActivityAlert] {
+        get {
+            guard let data = UserDefaults.standard.data(forKey: vsAlertsKey),
+                  let decoded = try? JSONDecoder().decode([VsActivityAlert].self, from: data) else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                UserDefaults.standard.set(data, forKey: vsAlertsKey)
+            }
+        }
+    }
+
+    static var unreadVsAlertCount: Int {
+        vsAlerts.filter(\.unread).count
+    }
+
+    static func hasVsAlert(id: String) -> Bool {
+        vsAlerts.contains { $0.id == id }
+    }
+
+    static func appendVsAlert(_ alert: VsActivityAlert) {
+        var all = vsAlerts.filter { $0.id != alert.id }
+        all.insert(alert, at: 0)
+        // Keep the feed tidy — last 20 VS alerts.
+        if all.count > 20 { all = Array(all.prefix(20)) }
+        vsAlerts = all
+    }
+
+    static func markVsAlertsRead() {
+        let updated = vsAlerts.map { alert -> VsActivityAlert in
+            var copy = alert
+            copy.unread = false
+            return copy
+        }
+        vsAlerts = updated
     }
 
     static func clear() {
@@ -75,6 +117,7 @@ enum ActivityFeedStore {
             todayRankKey,
             todayRankDateKey,
             openedKey,
+            vsAlertsKey,
         ].forEach { UserDefaults.standard.removeObject(forKey: $0) }
     }
 }
@@ -110,6 +153,18 @@ enum HomeActivity {
         let xp = user?.xp ?? 0
         let rank = PlayerRank.progress(for: xp)
         let today = DailyDate.localToday()
+
+        // 0) VS challenge alerts (opponent finished / results)
+        for alert in ActivityFeedStore.vsAlerts {
+            events.append(ActivityEvent(
+                id: alert.id,
+                icon: "person.2.fill",
+                tint: BKTheme.accent,
+                title: alert.title,
+                message: alert.message,
+                unread: alert.unread
+            ))
+        }
 
         // 1) Daily / streak call-to-action
         if dailyComplete {

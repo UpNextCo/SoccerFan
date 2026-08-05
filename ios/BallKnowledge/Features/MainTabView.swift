@@ -10,6 +10,7 @@ enum AppTab: Hashable {
 
 struct MainTabView: View {
     @State private var selectedTab: AppTab = .today
+    @State private var vsMonitor = VsMonitor.shared
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -29,9 +30,35 @@ struct MainTabView: View {
 
             bottomFadeLayer
 
-            BKTabBar(selection: $selectedTab)
+            BKTabBar(selection: $selectedTab, vsBadge: vsMonitor.hasTabBadge)
+
+            if let banner = vsMonitor.banner {
+                VStack {
+                    VsInAppBanner(banner: banner) {
+                        vsMonitor.dismissBanner()
+                        vsMonitor.markAlertsRead()
+                        selectedTab = .vs
+                    } onDismiss: {
+                        vsMonitor.dismissBanner()
+                    }
+                    Spacer()
+                }
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(20)
+            }
         }
         .background(BKTheme.background.ignoresSafeArea())
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: vsMonitor.banner)
+        .task {
+            vsMonitor.start()
+        }
+        .onChange(of: selectedTab) { _, tab in
+            if tab == .vs {
+                vsMonitor.dismissBanner()
+                vsMonitor.markAlertsRead()
+            }
+        }
     }
 
     private var bottomFadeLayer: some View {
@@ -77,6 +104,60 @@ struct MainTabView: View {
             .flatMap(\.windows)
             .first(where: \.isKeyWindow)?
             .safeAreaInsets.bottom ?? 0
+    }
+}
+
+private struct VsInAppBanner: View {
+    let banner: VsBanner
+    var onOpen: () -> Void
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Button(action: onOpen) {
+                HStack(alignment: .top, spacing: 12) {
+                    Ph.users.weight(.fill)
+                        .color(BKTheme.accent)
+                        .frame(width: 22, height: 22)
+                        .padding(.top, 2)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(banner.title)
+                            .font(BKFont.headline(15))
+                            .foregroundStyle(BKTheme.textPrimary)
+                            .lineLimit(1)
+                        Text(banner.message)
+                            .font(BKFont.body(13))
+                            .foregroundStyle(BKTheme.textSecondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onDismiss) {
+                Ph.x.bold
+                    .color(BKTheme.textMuted)
+                    .frame(width: 12, height: 12)
+                    .padding(8)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(BKTheme.accent.opacity(0.35), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .task {
+            try? await Task.sleep(for: .seconds(6))
+            onDismiss()
+        }
     }
 }
 

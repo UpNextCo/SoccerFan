@@ -475,10 +475,11 @@ enum DailyXP {
         min(900, max(0, survived) * 90)
     }
 
-    /// Back Yourself: hit the pledge with lives left → `round(1500 * (pledge/maxPool)^1.41)`; else 0.
-    static func backYourself(pledge: Int, maxPool: Int, won: Bool) -> Int {
-        guard won, maxPool > 0, pledge > 0 else { return 0 }
-        let ratio = min(1, max(0, Double(pledge) / Double(maxPool)))
+    /// Back Yourself: hit the pledge with lives left → `round(1500 * (min(pledge,xpCap)/xpCap)^1.41)`; else 0.
+    static func backYourself(pledge: Int, xpCap: Int, won: Bool) -> Int {
+        guard won, xpCap > 0, pledge > 0 else { return 0 }
+        let effective = min(pledge, xpCap)
+        let ratio = min(1, max(0, Double(effective) / Double(xpCap)))
         return max(0, min(1500, Int((1500.0 * pow(ratio, 1.41)).rounded())))
     }
 }

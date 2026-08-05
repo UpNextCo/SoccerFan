@@ -26,6 +26,7 @@ enum BKIcon {
 
 struct BKTabBar: View {
     @Binding var selection: AppTab
+    var vsBadge: Bool = false
 
     /// Space to reserve at the bottom of scroll content so the last row can clear the floating bar.
     static let scrollClearance: CGFloat = 88
@@ -49,7 +50,15 @@ struct BKTabBar: View {
                     selection = item.tab
                 } label: {
                     VStack(spacing: 4) {
-                        BKIcon.tabIcon(for: item.tab, selected: selection == item.tab)
+                        ZStack(alignment: .topTrailing) {
+                            BKIcon.tabIcon(for: item.tab, selected: selection == item.tab)
+                            if item.tab == .vs, vsBadge {
+                                Circle()
+                                    .fill(BKTheme.accent)
+                                    .frame(width: 7, height: 7)
+                                    .offset(x: 3, y: -2)
+                            }
+                        }
                         Text(item.title)
                             .font(BKFont.caption(10))
                             .foregroundStyle(selection == item.tab ? BKTheme.accent : BKTheme.textMuted)
