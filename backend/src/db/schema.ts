@@ -563,6 +563,11 @@ export const playerExtraStats = pgTable('player_extra_stats', {
    *  sometimes stored club appearances as caps. NULL means "not scraped". */
   tmIntlCaps: integer('tm_intl_caps'),
   tmIntlGoals: integer('tm_intl_goals'),
+  /**
+   * De-poisoned senior club count for name-collision / merge-smell players only
+   * (`job:compute-verified-club-counts`). NULL = use live career∪stats count.
+   */
+  verifiedClubCount: integer('verified_club_count'),
   plPenalties: integer('pl_penalties').notNull().default(0),
   laligaPenalties: integer('laliga_penalties').notNull().default(0),
   serieaPenalties: integer('seriea_penalties').notNull().default(0),

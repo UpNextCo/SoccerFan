@@ -6,7 +6,7 @@
  * the identical-looking tile disagreed between modes.
  */
 import { sql, type SQL } from 'drizzle-orm';
-import { clubCareerOnlySql } from '../utils/nationalTeam.js';
+import { clubCareerOnlySql, youthOrReserveSideSql } from '../utils/nationalTeam.js';
 
 /** Club competitions counted as "career" everywhere: big-5 leagues + Champions League + Europa League. */
 export const CAREER_LEAGUE_IDS = [39, 140, 135, 78, 61, 2, 3];
@@ -117,34 +117,50 @@ export const careerTrophiesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS va
 /**
  * Distinct senior clubs played for.
  * Unions `player_career` with club names seen in `player_stats` so legends with thin API career
- * rows (Anelka / Verón) still get a real count. National / U21 / Olympic sides are dropped.
+ * rows (Anelka / Verón) still get a real count. National / U21 / Olympic / youth-B sides dropped.
  * Count by lower(team_name) — stats often reuse the same club under several team_id hashes.
+ *
+ * When `player_extra_stats.verified_club_count` is set (merge-smell players only — see
+ * job:compute-verified-club-counts), that value wins. Raw career/stats rows are left untouched;
+ * only the Draft XI / ranking number is corrected.
  */
 export const mostClubsSub: SQL = sql`(
-  SELECT player_id, COUNT(DISTINCT club_key)::int AS value
-  FROM (
-    SELECT pc.player_id, lower(pc.team_name) AS club_key
-    FROM player_career pc
-    WHERE pc.team_id > 0 AND ${clubCareerOnlySql('pc')}
-    UNION
-    SELECT s.player_id, lower(s.team_name) AS club_key
-    FROM player_stats s
-    WHERE COALESCE(s.appearances, 0) > 0
-      AND s.team_name IS NOT NULL
-      AND s.team_name <> ''
-      AND NOT (
-        EXISTS (
-          SELECT 1 FROM players _nat
-          WHERE _nat.nationality <> '' AND _nat.nationality = s.team_name
-        )
-        OR EXISTS (
-          SELECT 1 FROM players _nat
-          WHERE _nat.nationality <> ''
-            AND _nat.nationality = regexp_replace(s.team_name, '\\s+U\\d{1,2}(\\s+W)?$', '', 'i')
-        )
-        OR s.team_name ~* '\\s+(Olympics?|Olympic)$'
-        OR s.team_name ~* '\\s+U\\d{1,2}(\\s+W)?$'
-      )
-  ) clubs
-  GROUP BY player_id
+  SELECT player_id, value FROM (
+    SELECT p.id AS player_id,
+           COALESCE(e.verified_club_count, live.value)::int AS value
+    FROM players p
+    LEFT JOIN player_extra_stats e ON e.player_id = p.id
+    LEFT JOIN (
+      SELECT player_id, COUNT(DISTINCT club_key)::int AS value
+      FROM (
+        SELECT pc.player_id, lower(pc.team_name) AS club_key
+        FROM player_career pc
+        WHERE pc.team_id > 0
+          AND ${clubCareerOnlySql('pc')}
+          AND NOT ${youthOrReserveSideSql(sql`pc.team_name`)}
+        UNION
+        SELECT s.player_id, lower(s.team_name) AS club_key
+        FROM player_stats s
+        WHERE COALESCE(s.appearances, 0) > 0
+          AND s.team_name IS NOT NULL
+          AND s.team_name <> ''
+          AND NOT ${youthOrReserveSideSql(sql`s.team_name`)}
+          AND NOT (
+            EXISTS (
+              SELECT 1 FROM players _nat
+              WHERE _nat.nationality <> '' AND _nat.nationality = s.team_name
+            )
+            OR EXISTS (
+              SELECT 1 FROM players _nat
+              WHERE _nat.nationality <> ''
+                AND _nat.nationality = regexp_replace(s.team_name, '\\s+U\\d{1,2}(\\s+W)?$', '', 'i')
+            )
+            OR s.team_name ~* '\\s+(Olympics?|Olympic)$'
+            OR s.team_name ~* '\\s+U\\d{1,2}(\\s+W)?$'
+          )
+      ) clubs
+      GROUP BY player_id
+    ) live ON live.player_id = p.id
+  ) x
+  WHERE value IS NOT NULL AND value > 0
 )`;

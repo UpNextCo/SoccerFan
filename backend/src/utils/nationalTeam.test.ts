@@ -40,5 +40,6 @@ test('does not match ordinary club sides', () => {
 test('club reserve and youth sides are still recognised as youth setups', () => {
   assert.equal(isYouthOrReserveSide('Southampton U21'), true);
   assert.equal(isYouthOrReserveSide('Real Madrid Castilla'), true);
+  assert.equal(isYouthOrReserveSide('Juventus Next Gen'), true);
   assert.equal(isYouthOrReserveSide('Liverpool'), false);
 });

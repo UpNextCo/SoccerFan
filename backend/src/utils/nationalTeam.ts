@@ -105,8 +105,24 @@ export function isYouthOrReserveSide(name: string): boolean {
     /\s+(II|B)$/i.test(name) ||
     / Castilla$/i.test(name) ||
     /\s+(Women|Ladies|WFC|Reserves?|Academy|Amateurs|Youth)$/i.test(name) ||
+    / Next Gen$/i.test(name) ||
     /\s+W$/i.test(name)
   );
+}
+
+/**
+ * SQL predicate: team name looks like a youth / reserve / academy side.
+ * Keep in sync with `isYouthOrReserveSide`.
+ */
+export function youthOrReserveSideSql(teamName: SQL): SQL {
+  return sql`(
+    ${teamName} ~* '\\mU\\d{1,2}(\\s+W)?\\M'
+    OR ${teamName} ~* '\\s+(II|B)$'
+    OR ${teamName} ~* ' Castilla$'
+    OR ${teamName} ~* '\\s+(Women|Ladies|WFC|Reserves?|Academy|Amateurs|Youth)$'
+    OR ${teamName} ~* ' Next Gen$'
+    OR ${teamName} ~* '\\s+W$'
+  )`;
 }
 
 /**
