@@ -8,6 +8,15 @@
  *
  *   DATABASE_URL=... npx tsx src/jobs/backfill-career-from-transfers.ts
  *   DATABASE_URL=... npx tsx src/jobs/backfill-career-from-transfers.ts --dry-run
+ *   DATABASE_URL=... npx tsx src/jobs/backfill-career-from-transfers.ts --dry-run --elite
+ *   DATABASE_URL=... npx tsx src/jobs/backfill-career-from-transfers.ts --elite --stats-only
+ *
+ * `--elite` limits destinations to Big-5 domestic clubs (PL / La Liga / Serie A /
+ * Bundesliga / Ligue 1) — useful for reviewing Draft-relevant gaps without Saudi /
+ * MLS / China noise.
+ *
+ * `--stats-only` only inserts spells that already have matching player_stats
+ * appearances (safe against namesake transfer pollution).
  */
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
@@ -16,16 +25,21 @@ import { playerCareer } from '../db/schema.js';
 import { clubCareerOnlySql } from '../utils/nationalTeam.js';
 
 const dryRun = process.argv.includes('--dry-run');
+const eliteOnly = process.argv.includes('--elite');
+const statsOnly = process.argv.includes('--stats-only');
 
 /** Transfers dated before this are feed placeholders, not history — see the query below. */
 const MIN_PLAUSIBLE_TRANSFER_DATE = '1970-01-01';
 
 type MissingSpell = {
   player_id: string;
+  player_name: string;
+  market_value_tier: number;
   team_id: number;
   team_name: string;
   season_from: number;
   season_to: number;
+  has_stats: boolean;
 };
 
 async function loadMissingSpells(): Promise<MissingSpell[]> {
@@ -69,19 +83,38 @@ async function loadMissingSpells(): Promise<MissingSpell[]> {
     )
     SELECT
       fj.player_id,
+      p.name AS player_name,
+      p.market_value_tier,
       fj.team_id,
       fj.team_name,
       EXTRACT(YEAR FROM fj.join_date)::int AS season_from,
       COALESCE(
         EXTRACT(YEAR FROM fj.leave_date)::int,
         EXTRACT(YEAR FROM fj.join_date)::int
-      ) AS season_to
+      ) AS season_to,
+      EXISTS (
+        SELECT 1 FROM player_stats s
+        WHERE s.player_id = fj.player_id
+          AND s.appearances > 0
+          AND s.team_name IS NOT NULL
+          AND (
+            lower(s.team_name) = lower(fj.team_name)
+            OR lower(s.team_name) LIKE '%' || lower(fj.team_name) || '%'
+            OR lower(fj.team_name) LIKE '%' || lower(s.team_name) || '%'
+          )
+      ) AS has_stats
     FROM first_join fj
+    JOIN players p ON p.id = fj.player_id
     WHERE NOT EXISTS (
       SELECT 1 FROM player_career pc
       WHERE pc.player_id = fj.player_id AND pc.team_id = fj.team_id
     )
       AND ${clubCareerOnlySql('fj')}
+      ${eliteOnly ? sql`AND EXISTS (
+        SELECT 1 FROM teams tm
+        WHERE tm.id = fj.team_id AND tm.league_id IN (39, 140, 135, 78, 61)
+      )` : sql``}
+    ORDER BY p.market_value_tier DESC, p.name, fj.join_date
   `)) as unknown as MissingSpell[];
 
   return rows.map((r) => ({
@@ -91,19 +124,40 @@ async function loadMissingSpells(): Promise<MissingSpell[]> {
 }
 
 async function main() {
-  const missing = await loadMissingSpells();
-  console.log(`Missing career spells from transfers: ${missing.length}`);
+  const allMissing = await loadMissingSpells();
+  const missing = statsOnly ? allMissing.filter((m) => m.has_stats) : allMissing;
+  const scope = [
+    eliteOnly ? 'elite / Big-5 destinations' : null,
+    statsOnly ? 'stats-backed only' : null,
+  ].filter(Boolean).join(', ');
+  console.log(
+    `Missing career spells from transfers${scope ? ` (${scope})` : ''}: ${missing.length}` +
+      (statsOnly && allMissing.length !== missing.length
+        ? ` (skipped ${allMissing.length - missing.length} transfer-only)`
+        : '')
+  );
 
-  const sample = missing.slice(0, 15);
-  for (const m of sample) {
+  const tier4 = missing.filter((m) => m.market_value_tier >= 4);
+  const withStats = missing.filter((m) => m.has_stats);
+  console.log(`  market_value_tier >= 4: ${tier4.length}`);
+  console.log(`  already have matching stats (safe): ${withStats.length}`);
+  if (!statsOnly) {
+    console.log(`  transfer-only (no stats evidence): ${missing.length - withStats.length}`);
+  }
+
+  for (const m of missing) {
     console.log(
-      `  ${m.player_id.slice(0, 8)}… → ${m.team_name} (${m.season_from}–${m.season_to})`
+      `  [t${m.market_value_tier}] ${m.player_name.padEnd(28)} → ${m.team_name.padEnd(24)} ${m.season_from}–${m.season_to}${m.has_stats ? '  stats✓' : '  stats✗'}`
     );
   }
-  if (missing.length > sample.length) console.log(`  … +${missing.length - sample.length} more`);
 
   if (dryRun) {
     console.log('Dry run — no writes');
+    return;
+  }
+
+  if (missing.length === 0) {
+    console.log('Nothing to backfill');
     return;
   }
 

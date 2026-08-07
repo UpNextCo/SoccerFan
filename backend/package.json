@@ -63,6 +63,7 @@
     "job:ingest-trophies": "tsx src/jobs/ingest-trophies.ts",
     "job:ingest-career": "tsx src/jobs/ingest-career.ts",
     "job:backfill-career-from-transfers": "tsx src/jobs/backfill-career-from-transfers.ts",
+    "job:fix-carvajal-leverkusen": "tsx src/jobs/fix-carvajal-leverkusen.ts",
     "job:backfill-career-from-stats": "tsx src/jobs/backfill-career-from-stats.ts",
     "job:reconcile-career-seasons": "tsx src/jobs/reconcile-career-seasons.ts",
     "job:attribute-stats-clubs": "tsx src/jobs/attribute-stats-clubs.ts",
