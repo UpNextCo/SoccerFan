@@ -137,6 +137,7 @@ interface Row {
 }
 
 const KO_STAGES: Array<[RegExp, string]> = [
+  [/round of 32|round-of-32|last[- ]32/i, 'Round of 32'],
   [/round of 16|first knockout|eighth-?final/i, 'Round of 16'],
   [/quarter/i, 'Quarter-finals'],
   [/semi/i, 'Semi-finals'],
@@ -185,7 +186,11 @@ async function collectYear(year: number): Promise<Row[]> {
   const rows: Row[] = [];
 
   // Group articles → Group Stage.
-  for (const g of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
+  // 32-team tournaments use A–H; 48-team 2026 uses A–L.
+  const groups = year >= 2026
+    ? ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
+    : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  for (const g of groups) {
     const wt = await fetchWikitext(`${year} FIFA World Cup Group ${g}`);
     await new Promise((r) => setTimeout(r, 120));
     if (wt) rows.push(...boxesToRows(wt, year, () => 'Group Stage'));

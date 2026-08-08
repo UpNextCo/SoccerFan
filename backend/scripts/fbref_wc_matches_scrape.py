@@ -34,7 +34,7 @@ from bs4 import BeautifulSoup
 from seleniumbase import Driver
 
 COMP_ID = 1  # FBref World Cup competition id
-YEARS = [2006, 2010, 2014, 2018, 2022]
+YEARS = [2006, 2010, 2014, 2018, 2022, 2026]
 OUT_PATH = "fbref_wc_events.json"
 REQUEST_DELAY_S = 5
 RESTART_EVERY = 12  # restart the browser every N matches to dodge Cloudflare throttling
@@ -45,6 +45,9 @@ def stage_of(round_text: str) -> str:
     t = (round_text or "").lower()
     if "group" in t:
         return "Group Stage"
+    # 48-team 2026 format introduces Round of 32 before Round of 16.
+    if "round of 32" in t or "round-of-32" in t or t.strip() in ("r32", "32"):
+        return "Round of 32"
     if "round of 16" in t or "round-of-16" in t or t.strip() in ("r16", "16"):
         return "Round of 16"
     if "quarter" in t:
@@ -258,6 +261,18 @@ def main():
                     driver = make_driver()
     finally:
         driver.quit()
+
+    # Merge with any previously scraped years so a `2026`-only run doesn't wipe 2006–2022.
+    year_set = set(years)
+    if os.path.exists(OUT_PATH):
+        try:
+            with open(OUT_PATH) as f:
+                prior = json.load(f)
+            kept = [r for r in prior if r.get("year") not in year_set]
+            rows = kept + rows
+            print(f"Merged with existing {OUT_PATH}: kept {len(kept)} prior-year events", file=sys.stderr)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Could not merge existing {OUT_PATH}: {exc}", file=sys.stderr)
 
     with open(OUT_PATH, "w") as f:
         json.dump(rows, f)

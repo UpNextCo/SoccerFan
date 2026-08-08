@@ -12,9 +12,10 @@ World Cup lands as player_stats rows with leagueId=1 / Euro leagueId=4.
 
 Usage:
   source .venv/bin/activate
-  python3 scripts/fbref_intl_scrape.py             # all WCs + Euros 1994-2022
+  python3 scripts/fbref_intl_scrape.py             # all WCs + Euros 1994-2026
   python3 scripts/fbref_intl_scrape.py wc           # World Cups only
   python3 scripts/fbref_intl_scrape.py euro          # Euros only
+  python3 scripts/fbref_intl_scrape.py wc 2026       # one World Cup year only
 
 If every season returns 0 rows (Cloudflare), re-run with a visible browser:
   HEADLESS=0 python3 scripts/fbref_intl_scrape.py
@@ -37,7 +38,7 @@ TOURNAMENTS = {
         "league_id": 1,
         "league_name": "World Cup",
         "slug": "World-Cup-Stats",
-        "years": [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022],
+        "years": [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022, 2026],
     },
     "euro": {
         "comp_id": 676,
@@ -173,9 +174,16 @@ def parse_table(html, lid, lname, year):
 
 
 def main():
-    which = sys.argv[1].lower() if len(sys.argv) > 1 else "all"
+    args = sys.argv[1:]
+    which = args[0].lower() if args else "all"
+    year_filter = {int(a) for a in args[1:] if a.isdigit()}
     keys = ["wc", "euro", "copa", "afcon"] if which == "all" else [which]
     headless = os.environ.get("HEADLESS", "1") != "0"
+    out_path = (
+        f"fbref_intl_{which}_{sorted(year_filter)[0]}.json"
+        if year_filter and len(year_filter) == 1 and which != "all"
+        else OUT_PATH
+    )
 
     driver = Driver(uc=True, headless=headless)
     rows = []
@@ -183,6 +191,8 @@ def main():
         for k in keys:
             t = TOURNAMENTS[k]
             for year in t["years"]:
+                if year_filter and year not in year_filter:
+                    continue
                 url = f"https://fbref.com/en/comps/{t['comp_id']}/{year}/stats/{year}-{t['slug']}"
                 try:
                     driver.uc_open_with_reconnect(url, 6)
@@ -196,9 +206,9 @@ def main():
     finally:
         driver.quit()
 
-    with open(OUT_PATH, "w") as f:
+    with open(out_path, "w") as f:
         json.dump(rows, f)
-    print(f"Wrote {len(rows)} rows to {OUT_PATH}")
+    print(f"Wrote {len(rows)} rows to {out_path}")
 
 
 if __name__ == "__main__":

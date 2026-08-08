@@ -29,7 +29,7 @@ function finalDefs(): FinalDef[] {
   for (let played = 1993; played <= 2026; played += 1) {
     out.push({ comp: 'Champions League', season: played - 1, title: `${played} UEFA Champions League final` });
   }
-  for (const y of [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022]) {
+  for (const y of [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022, 2026]) {
     out.push({ comp: 'World Cup', season: y, title: `${y} FIFA World Cup final` });
   }
   for (const y of [1996, 2000, 2004, 2008, 2012, 2016, 2020, 2024]) {

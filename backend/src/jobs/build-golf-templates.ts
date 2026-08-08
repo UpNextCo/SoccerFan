@@ -278,7 +278,7 @@ async function main(): Promise<void> {
     finalAppearance: { competition: 'Euro', won: true },
   });
 
-  for (const year of [2006, 2010, 2014, 2018, 2022]) {
+  for (const year of [2006, 2010, 2014, 2018, 2022, 2026]) {
     addCandidate(candidates, `Name players who scored at the ${year} World Cup.`, {
       worldCupScorerYear: year,
     });

@@ -20,7 +20,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { polishClues } from '../services/llmCuration.js';
 
-const YEARS = [2006, 2010, 2014, 2018, 2022];
+const YEARS = [2006, 2010, 2014, 2018, 2022, 2026];
 const FAME_MIN = 3; // players.market_value_tier ≥ this — keeps the pool recognisable
 const PREVIEW_FILE = 'wc_datafirst_preview.csv';
 const REVIEW_FILE = 'wc_memorable_review.csv';
@@ -64,6 +64,7 @@ const FINISH: Record<number, { champion: string; runnerUp: string; semi: string[
   2014: { champion: 'Germany', runnerUp: 'Argentina', semi: ['Netherlands', 'Brazil'], quarter: ['France', 'Belgium', 'Costa Rica', 'Colombia'] },
   2018: { champion: 'France', runnerUp: 'Croatia', semi: ['Belgium', 'England'], quarter: ['Uruguay', 'Brazil', 'Russia', 'Sweden'] },
   2022: { champion: 'Argentina', runnerUp: 'France', semi: ['Croatia', 'Morocco'], quarter: ['Netherlands', 'Brazil', 'England', 'Portugal'] },
+  2026: { champion: 'Spain', runnerUp: 'Argentina', semi: ['France', 'England'], quarter: ['Norway', 'Belgium', 'Morocco', 'Switzerland'] },
 };
 /** How to phrase what the captain led the side to, or null for a group-stage exit. */
 function captainedPhrase(country: string, year: number): string {

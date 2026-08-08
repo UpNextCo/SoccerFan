@@ -29,8 +29,21 @@ const COUNTRY_ALIAS: Record<string, string> = {
   'IR Iran': 'Iran',
   China: 'China PR',
   'United States': 'United States',
+  USA: 'United States',
   Czechia: 'Czech Republic',
   Türkiye: 'Turkey',
+  // 2026 FBref spelling variants → wc_squads country
+  'Cabo Verde': 'Cape Verde',
+  'Cape Verde': 'Cape Verde',
+  Curaçao: 'Curaçao',
+  Curacao: 'Curaçao',
+  'Congo DR': 'DR Congo',
+  'DR Congo': 'DR Congo',
+  "Côte d'Ivoire": 'Ivory Coast',
+  'Ivory Coast': 'Ivory Coast',
+  'Bosnia–Herz': 'Bosnia and Herzegovina',
+  'Bosnia-Herz': 'Bosnia and Herzegovina',
+  'Bosnia and Herzegovina': 'Bosnia and Herzegovina',
 };
 
 interface RawEvent {

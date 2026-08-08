@@ -155,12 +155,13 @@ function wantedStage(c: string): string | null {
   // Only treat a stage as the GOAL's stage when it's phrased as the goal happening "in/of/during the
   // {stage}". This avoids incidental mentions that aren't where the goal was scored — e.g. "into the
   // quarter-finals", "round-of-16 exit", "reached the semi-finals", "three consecutive quarter-finals".
-  const m = c.match(/\b(?:in|of|during)\s+(?:the\s+|a\s+)?(?:\d{4}\s+)?(third[- ]place|3rd place|semi-?finals?|quarter-?finals?|round of 16|round-of-16|last[- ]16|group stage|group-stage|final)\b/);
+  const m = c.match(/\b(?:in|of|during)\s+(?:the\s+|a\s+)?(?:\d{4}\s+)?(third[- ]place|3rd place|semi-?finals?|quarter-?finals?|round of 32|round-of-32|last[- ]32|round of 16|round-of-16|last[- ]16|group stage|group-stage|final)\b/);
   if (!m) return null;
   const s = m[1]!;
   if (/third|3rd/.test(s)) return '3rd Place Final';
   if (/semi/.test(s)) return 'Semi-finals';
   if (/quarter/.test(s)) return 'Quarter-finals';
+  if (/32/.test(s)) return 'Round of 32';
   if (/16/.test(s)) return 'Round of 16';
   if (/group/.test(s)) return 'Group Stage';
   return 'Final';
