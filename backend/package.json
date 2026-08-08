@@ -79,6 +79,7 @@
     "job:import-fbref": "tsx src/jobs/import-fbref.ts",
     "job:reconcile-players": "tsx src/jobs/reconcile-players.ts",
     "job:import-transfermarkt": "tsx src/jobs/import-transfermarkt.ts",
+    "job:backfill-peak-values": "tsx src/jobs/backfill-peak-values.ts",
     "job:dedupe-players": "tsx src/jobs/dedupe-players.ts",
     "job:apply-name-overrides": "tsx src/jobs/apply-name-overrides.ts",
     "job:backfill-dob": "tsx src/jobs/backfill-birthdate.ts",
