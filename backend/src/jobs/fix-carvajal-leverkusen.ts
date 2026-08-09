@@ -1,12 +1,13 @@
 /**
- * Fix Daniel Carvajal's polluted / incomplete club history.
+ * Fix Daniel / Dani Carvajal split identity + polluted club history.
  *
- * Problems found 2026-08-07 (Draft XI Bayer Leverkusen chip):
- *   - Real 2012–13 Leverkusen spell present in player_transfers but missing from
- *     player_career + player_stats (API-Football /players/teams omitted the loan).
+ * Problems:
+ *   - Real 2012–13 Leverkusen spell present in player_transfers but historically
+ *     missing from player_career (API-Football /players/teams omitted the loan).
  *   - Namesake junk: Dinamo Zagreb career/stats + transfers Zagreb→Leipzig→Barcelona.
- *   - Duplicate shell "Dani Carvajal" shares api_football_id 733 (kept — it holds
- *     Spain WC/Euro intl rows; not safe to delete blindly).
+ *   - Duplicate shell "Dani Carvajal" (same api_football_id 733) held Spain WC/Euro
+ *     stats + final_appearances while the real "Daniel Carvajal" row held club data.
+ *     LMS odd-one-out then treated the shell as someone who never played in La Liga.
  *
  *   npx tsx src/jobs/fix-carvajal-leverkusen.ts
  *   npx tsx src/jobs/fix-carvajal-leverkusen.ts --apply
@@ -29,7 +30,10 @@ async function main() {
       (SELECT json_agg(json_build_object('date', transfer_date, 'from', from_team_name, 'to', to_team_name, 'type', transfer_type) ORDER BY transfer_date)
        FROM player_transfers WHERE player_id = ${CARVAJAL_ID}::uuid) AS transfers,
       (SELECT json_agg(DISTINCT team_name)
-       FROM player_stats WHERE player_id = ${CARVAJAL_ID}::uuid AND appearances > 0) AS stat_clubs
+       FROM player_stats WHERE player_id = ${CARVAJAL_ID}::uuid AND appearances > 0) AS stat_clubs,
+      (SELECT COUNT(*)::int FROM final_appearances WHERE player_id = ${CARVAJAL_ID}::uuid) AS real_finals,
+      (SELECT COUNT(*)::int FROM final_appearances WHERE player_id = ${STUB_ID}::uuid) AS stub_finals,
+      (SELECT COUNT(*)::int FROM player_stats WHERE player_id = ${STUB_ID}::uuid) AS stub_stats
   `);
   console.log('BEFORE:', JSON.stringify(before, null, 2));
 
@@ -72,17 +76,26 @@ async function main() {
   `)) as unknown as Array<{ ok: boolean }>;
 
   const stub = (await db.execute(sql`
-    SELECT id, name,
+    SELECT id, name, market_value_tier,
       (SELECT COUNT(*)::int FROM player_career c WHERE c.player_id = p.id) AS career,
-      (SELECT COUNT(*)::int FROM player_stats s WHERE s.player_id = p.id) AS stats
+      (SELECT COUNT(*)::int FROM player_stats s WHERE s.player_id = p.id) AS stats,
+      (SELECT COUNT(*)::int FROM final_appearances f WHERE f.player_id = p.id) AS finals
     FROM players p WHERE id = ${STUB_ID}::uuid
-  `)) as unknown as Array<{ id: string; name: string; career: number; stats: number }>;
+  `)) as unknown as Array<{
+    id: string;
+    name: string;
+    market_value_tier: number;
+    career: number;
+    stats: number;
+    finals: number;
+  }>;
 
   console.log(`\nWill delete ${junkCareer.length} junk career row(s):`, junkCareer);
   console.log(`Will delete ${junkStats[0]?.n ?? 0} junk stats row(s)`);
   console.log(`Will delete ${junkTransfers.length} junk transfer(s):`, junkTransfers);
   console.log(`Leverkusen career present: ${hasLeverkusenCareer[0]?.ok}`);
-  console.log(`Empty stub:`, stub);
+  console.log(`Stub to merge/demote:`, stub);
+  console.log('Will: move stub finals + intl stats → real row, rename to Dani Carvajal, demote stub tier');
 
   if (!APPLY) {
     console.log('\nDry run — pass --apply to write');
@@ -133,35 +146,66 @@ async function main() {
     console.log('Inserted Bayer Leverkusen career 2012–2013');
   }
 
-  // Safe stub delete: empty shell, same api id as the real row, no career/stats.
-  if (stub[0] && stub[0].career === 0 && stub[0].stats === 0) {
-    await db.execute(sql`UPDATE daily_puzzles SET answer_player_id = NULL WHERE answer_player_id = ${STUB_ID}`);
-    await db.execute(sql`DELETE FROM players WHERE id = ${STUB_ID}::uuid`);
-    console.log(`Deleted empty stub ${stub[0].name}`);
+  if (stub[0]) {
+    // Move finals onto the club row (unique key is name-based; keep Dani label).
+    await db.execute(sql`
+      UPDATE final_appearances
+      SET player_id = ${CARVAJAL_ID}::uuid, player_name = 'Dani Carvajal'
+      WHERE player_id = ${STUB_ID}::uuid
+    `);
+
+    // Move intl / leftover stats that don't collide on (player, league, season, team).
+    await db.execute(sql`
+      UPDATE player_stats AS s
+      SET player_id = ${CARVAJAL_ID}::uuid
+      WHERE s.player_id = ${STUB_ID}::uuid
+        AND NOT EXISTS (
+          SELECT 1 FROM player_stats r
+          WHERE r.player_id = ${CARVAJAL_ID}::uuid
+            AND r.league_id = s.league_id
+            AND r.season = s.season
+            AND r.team_id = s.team_id
+        )
+    `);
+    await db.execute(sql`DELETE FROM player_stats WHERE player_id = ${STUB_ID}::uuid`);
+
+    await db.execute(sql`
+      UPDATE player_awards
+      SET player_id = ${CARVAJAL_ID}::uuid, player_name = 'Dani Carvajal'
+      WHERE player_id = ${STUB_ID}::uuid
+    `);
+
+    await db.execute(sql`
+      UPDATE players
+      SET name = 'Dani Carvajal'
+      WHERE id = ${CARVAJAL_ID}::uuid
+    `);
+
+    // Demote shell so it cannot re-enter famous / LMS pools.
+    await db.execute(sql`
+      UPDATE players
+      SET market_value_tier = 1, api_football_id = NULL
+      WHERE id = ${STUB_ID}::uuid
+    `);
+
+    await db.execute(sql`
+      UPDATE daily_puzzles SET answer_player_id = NULL
+      WHERE answer_player_id = ${STUB_ID}::uuid
+    `);
+
+    console.log('Merged stub finals/intl into real Dani Carvajal; demoted stub to tier 1');
   }
 
-  const eligibility = await db.execute(sql`
-    SELECT
-      EXISTS (
-        SELECT 1 FROM player_stats m
-        WHERE m.player_id = ${CARVAJAL_ID}::uuid
-          AND m.team_name = 'Bayer Leverkusen' AND m.appearances > 0
-      ) AS stats_ok,
-      EXISTS (
-        SELECT 1 FROM player_career c
-        WHERE c.player_id = ${CARVAJAL_ID}::uuid
-          AND c.team_name = 'Bayer Leverkusen' AND c.team_id > 0
-      ) AS career_ok,
-      (
-        SELECT json_agg(json_build_object('team', team_name, 'from', season_from, 'to', season_to) ORDER BY season_from)
-        FROM player_career WHERE player_id = ${CARVAJAL_ID}::uuid
-      ) AS career,
-      (
-        SELECT json_agg(json_build_object('date', transfer_date, 'from', from_team_name, 'to', to_team_name) ORDER BY transfer_date)
-        FROM player_transfers WHERE player_id = ${CARVAJAL_ID}::uuid
-      ) AS transfers
+  const after = await db.execute(sql`
+    SELECT p.id, p.name, p.market_value_tier, p.api_football_id,
+      (SELECT COUNT(*)::int FROM final_appearances f WHERE f.player_id = p.id) AS finals,
+      (SELECT COALESCE(SUM(s.appearances),0)::int FROM player_stats s WHERE s.player_id = p.id AND s.league_id = 140) AS laliga_apps,
+      (SELECT COUNT(*)::int FROM player_career c WHERE c.player_id = p.id) AS career
+    FROM players p
+    WHERE p.id IN (${CARVAJAL_ID}::uuid, ${STUB_ID}::uuid)
+    ORDER BY p.market_value_tier DESC
   `);
-  console.log('\nAFTER / Draft eligibility:', JSON.stringify(eligibility, null, 2));
+  console.log('\nAFTER:', JSON.stringify(after, null, 2));
 }
 
 main()

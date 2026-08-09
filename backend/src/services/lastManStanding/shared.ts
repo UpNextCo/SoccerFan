@@ -75,6 +75,18 @@ export async function famousPlayers(minTier = 4, limit = 500): Promise<FamousPla
         FROM player_awards GROUP BY player_id
       ) aw ON aw.player_id = p.id
       WHERE p.market_value_tier >= ${minTier}
+        -- Drop intl-only shells (e.g. duplicate Dani Carvajal with WC/Euro rows but no clubs).
+        AND (
+          EXISTS (
+            SELECT 1 FROM player_career c
+            WHERE c.player_id = p.id AND c.team_id > 0
+          )
+          OR EXISTS (
+            SELECT 1 FROM player_stats s2
+            WHERE s2.player_id = p.id AND s2.appearances > 0
+              AND s2.league_id IN (39, 140, 135, 78, 61, 2)
+          )
+        )
       GROUP BY p.id, p.name, p.nationality, p.position, p.market_value_tier
     )
     SELECT id, name, nationality, position, prestige, mvt, pl_apps, ucl_apps
