@@ -5,6 +5,8 @@ export const legalRouter = Router();
 const effectiveDate = '17 July 2026';
 const contactEmail = 'contact@upnextapp.co';
 const appStoreUrl = 'https://apps.apple.com/app/id6791646115';
+/** Native App Store scheme — sometimes escapes TikTok/IG in-app browsers when https is blocked. */
+const appStoreItmsUrl = 'itms-apps://apps.apple.com/app/id6791646115';
 const siteOrigin = 'https://ballknowledge-production.up.railway.app';
 
 function sendPage(res: Response, title: string, content: string): void {
@@ -59,14 +61,15 @@ function sendPage(res: Response, title: string, content: string): void {
 </html>`);
 }
 
-/** Instagram / social link-out — download CTA matching onboarding chrome. */
+/** Instagram / TikTok link-out — download CTA matching onboarding chrome. */
 function sendGetAppPage(res: Response): void {
   res
     .set({
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'public, max-age=3600',
+      // script-src needed so we can escape TikTok/IG in-app browsers (they block apps.apple.com).
       'Content-Security-Policy':
-        "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
       'Referrer-Policy': 'no-referrer',
       'X-Content-Type-Options': 'nosniff',
     })
@@ -85,6 +88,7 @@ function sendGetAppPage(res: Response): void {
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="${siteOrigin}/brand/ball.jpg">
   <meta name="theme-color" content="#0A0A0A">
+  <meta name="apple-itunes-app" content="app-id=6791646115">
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -205,16 +209,34 @@ function sendGetAppPage(res: Response): void {
       max-width: 30ch;
     }
     .copy { margin-top: 4px; }
+    .tip {
+      display: none;
+      width: min(400px, 100%);
+      position: relative;
+      z-index: 1;
+      margin-bottom: 8px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(0,255,102,0.1);
+      border: 1px solid rgba(0,255,102,0.28);
+      color: #e8ffe8;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+      text-align: left;
+    }
+    body.in-app .tip { display: block; }
+    .tip strong { color: #00FF66; font-weight: 800; }
     .cta-wrap {
       position: relative;
       z-index: 1;
       width: min(400px, 100%);
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
       align-items: center;
     }
-    .cta {
+    .cta, .cta-secondary {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -222,26 +244,44 @@ function sendGetAppPage(res: Response): void {
       width: 100%;
       height: 56px;
       border-radius: 18px;
-      background: #00FF66;
-      color: #0A0A0A;
       font-size: 15px;
       font-weight: 800;
       letter-spacing: 0.04em;
       text-decoration: none;
       text-transform: uppercase;
-      box-shadow: 0 8px 28px rgba(0,255,102,0.22);
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
       transition: transform 0.12s ease, opacity 0.12s ease;
     }
-    .cta:active { transform: scale(0.975); opacity: 0.88; }
+    .cta {
+      background: #00FF66;
+      color: #0A0A0A;
+      box-shadow: 0 8px 28px rgba(0,255,102,0.22);
+    }
+    .cta-secondary {
+      display: none;
+      background: #1A1A1A;
+      color: #fff;
+      border: 1px solid #2a2a2a;
+    }
+    body.in-app .cta-secondary { display: flex; }
+    .cta:active, .cta-secondary:active { transform: scale(0.975); opacity: 0.88; }
     .cta svg { width: 16px; height: 16px; }
     .fine {
       color: #666;
       font-size: 12px;
       font-weight: 600;
       text-decoration: none;
+      text-align: center;
+      line-height: 1.45;
+      max-width: 34ch;
     }
     .fine a { color: #666; text-decoration: none; }
     .fine a:hover { color: #00FF66; }
+    body.in-app .fine-default { display: none; }
+    .fine-inapp { display: none; }
+    body.in-app .fine-inapp { display: block; }
     @keyframes float {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-6px); }
@@ -272,13 +312,64 @@ function sendGetAppPage(res: Response): void {
       </div>
     </div>
     <div class="cta-wrap">
-      <a class="cta" href="${appStoreUrl}" rel="noopener">
+      <p class="tip" id="tip">
+        TikTok blocks App Store links in its browser.
+        Tap <strong>···</strong> (top right) → <strong>Open in Browser</strong>, then tap Download.
+      </p>
+      <button type="button" class="cta" id="downloadBtn">
         Download now
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8.6 3.2 13.4 8l-4.8 4.8-.9-.9 3.2-3.2H2.5V7.3h8.4L7.7 4.1l.9-.9z"/></svg>
-      </a>
-      <p class="fine">Free on the <a href="${appStoreUrl}">App Store</a> · <a href="/support">Support</a></p>
+      </button>
+      <button type="button" class="cta-secondary" id="copyBtn">Copy App Store link</button>
+      <p class="fine fine-default">Free on the <a href="${appStoreUrl}" id="storeLink">App Store</a> · <a href="/support">Support</a></p>
+      <p class="fine fine-inapp">After opening in Safari/Chrome, tap Download — or copy the link above.</p>
     </div>
   </div>
+  <script>
+    (function () {
+      var STORE = ${JSON.stringify(appStoreUrl)};
+      var ITMS = ${JSON.stringify(appStoreItmsUrl)};
+      var ua = navigator.userAgent || '';
+      var inApp = /TikTok|ByteDance|BytedanceWebview|TTWebView|musical_ly|Instagram|FBAN|FBAV|FB_IAB|Line\\//i.test(ua)
+        || (/iPhone|iPad|iPod/i.test(ua) && !/Safari/i.test(ua) && /AppleWebKit/i.test(ua));
+
+      if (inApp) document.body.classList.add('in-app');
+
+      function goStore() {
+        // itms-apps can leave some in-app browsers; https works in Safari/Chrome.
+        try { window.location.href = ITMS; } catch (e) {}
+        setTimeout(function () {
+          window.location.href = STORE;
+        }, inApp ? 400 : 0);
+      }
+
+      document.getElementById('downloadBtn').addEventListener('click', function (e) {
+        e.preventDefault();
+        goStore();
+      });
+
+      var copyBtn = document.getElementById('copyBtn');
+      copyBtn.addEventListener('click', function () {
+        function done(ok) {
+          copyBtn.textContent = ok ? 'Link copied' : 'Copy failed — open in browser';
+          setTimeout(function () { copyBtn.textContent = 'Copy App Store link'; }, 2000);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(STORE).then(function () { done(true); }).catch(function () { done(false); });
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = STORE;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try { done(document.execCommand('copy')); } catch (e) { done(false); }
+          document.body.removeChild(ta);
+        }
+      });
+    })();
+  </script>
 </body>
 </html>`);
 }
