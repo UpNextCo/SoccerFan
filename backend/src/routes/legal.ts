@@ -4,6 +4,8 @@ export const legalRouter = Router();
 
 const effectiveDate = '17 July 2026';
 const contactEmail = 'contact@upnextapp.co';
+const appStoreUrl = 'https://apps.apple.com/app/id6791646115';
+const siteOrigin = 'https://ballknowledge-production.up.railway.app';
 
 function sendPage(res: Response, title: string, content: string): void {
   res
@@ -57,17 +59,248 @@ function sendPage(res: Response, title: string, content: string): void {
 </html>`);
 }
 
+/** Instagram / social link-out — download CTA matching onboarding chrome. */
+function sendGetAppPage(res: Response): void {
+  res
+    .set({
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+      'Content-Security-Policy':
+        "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff',
+    })
+    .send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Download Ball Knowledge</title>
+  <meta name="description" content="Seven daily football quiz games. Download Ball Knowledge on the App Store.">
+  <meta property="og:title" content="Ball Knowledge">
+  <meta property="og:description" content="Think you know football? Seven new quiz games every day.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${siteOrigin}/get">
+  <meta name="twitter:card" content="summary">
+  <meta name="theme-color" content="#0A0A0A">
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      min-height: 100%;
+      color: #fff;
+      background: #0A0A0A;
+      font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    .scene {
+      position: relative;
+      min-height: 100%;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: max(28px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+      overflow: hidden;
+    }
+    .glow {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,255,102,0.16), transparent 55%),
+        radial-gradient(ellipse 70% 45% at 80% 30%, rgba(0,204,82,0.08), transparent 50%),
+        radial-gradient(ellipse 60% 40% at 15% 70%, rgba(12,34,24,0.9), transparent 55%);
+    }
+    .spot {
+      position: absolute;
+      width: 280px;
+      height: 280px;
+      top: 18%;
+      left: 50%;
+      translate: -50% 0;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0,255,102,0.14), transparent 68%);
+      filter: blur(8px);
+      animation: pulse 4.2s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .content {
+      position: relative;
+      z-index: 1;
+      width: min(400px, 100%);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 28px;
+    }
+    .brand {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #00FF66;
+    }
+    .mark {
+      position: relative;
+      width: 168px;
+      height: 168px;
+      display: grid;
+      place-items: center;
+      animation: float 3.6s ease-in-out infinite;
+    }
+    .mark::before {
+      content: "";
+      position: absolute;
+      inset: -18px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,255,102,0.14);
+    }
+    .mark::after {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      border-radius: 40px;
+      background: rgba(0,255,102,0.1);
+      filter: blur(28px);
+      z-index: -1;
+    }
+    .tile {
+      width: 148px;
+      height: 148px;
+      border-radius: 40px;
+      background:
+        radial-gradient(circle at 35% 30%, #1f1f1f, #121212 55%, #0d0d0d),
+        #141414;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.45), 0 14px 36px rgba(0,255,102,0.18);
+      display: grid;
+      place-items: center;
+    }
+    .tile svg { width: 78px; height: 78px; }
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 9vw, 42px);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+    }
+    .sub {
+      margin: 12px 0 0;
+      color: #AAAAAA;
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 1.45;
+      max-width: 30ch;
+    }
+    .copy { margin-top: 4px; }
+    .cta-wrap {
+      position: relative;
+      z-index: 1;
+      width: min(400px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      align-items: center;
+    }
+    .cta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      height: 56px;
+      border-radius: 18px;
+      background: #00FF66;
+      color: #0A0A0A;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+      text-transform: uppercase;
+      box-shadow: 0 8px 28px rgba(0,255,102,0.22);
+      transition: transform 0.12s ease, opacity 0.12s ease;
+    }
+    .cta:active { transform: scale(0.975); opacity: 0.88; }
+    .cta svg { width: 16px; height: 16px; }
+    .fine {
+      color: #666;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .fine a { color: #666; text-decoration: none; }
+    .fine a:hover { color: #00FF66; }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.7; transform: translate(-50%, 0) scale(1); }
+      50% { opacity: 1; transform: translate(-50%, 0) scale(1.06); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mark, .spot { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="scene">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="spot" aria-hidden="true"></div>
+    <div class="content">
+      <div class="brand">Ball Knowledge</div>
+      <div class="mark" aria-hidden="true">
+        <div class="tile">
+          <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="40" cy="40" r="30" stroke="#00FF66" stroke-width="2.5"/>
+            <path d="M40 12 L48 28 L66 30 L52 42 L56 60 L40 50 L24 60 L28 42 L14 30 L32 28 Z" fill="#00FF66" fill-opacity="0.92"/>
+          </svg>
+        </div>
+      </div>
+      <div class="copy">
+        <h1>Think you know<br>football?</h1>
+        <p class="sub">Seven new quiz games every day. Download Ball Knowledge and prove it.</p>
+      </div>
+    </div>
+    <div class="cta-wrap">
+      <a class="cta" href="${appStoreUrl}" rel="noopener">
+        Download now
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8.6 3.2 13.4 8l-4.8 4.8-.9-.9 3.2-3.2H2.5V7.3h8.4L7.7 4.1l.9-.9z"/></svg>
+      </a>
+      <p class="fine">Free on the <a href="${appStoreUrl}">App Store</a> · <a href="/support">Support</a></p>
+    </div>
+  </div>
+</body>
+</html>`);
+}
+
 legalRouter.get('/', (_req, res) => {
   sendPage(
     res,
     'Football games, every day',
     `<section class="hero">
       <h1>Know the game.</h1>
-      <p>Seven daily football challenges covering players, clubs, careers and the moments that matter. Ball Knowledge is currently available to invited TestFlight testers.</p>
+      <p>Seven daily football challenges covering players, clubs, careers and the moments that matter. <a href="/get">Download on the App Store</a>.</p>
     </section>
     <h2>About Ball Knowledge</h2>
     <p>Play the daily set, earn XP, build a streak and represent your club on the Teams leaderboard.</p>`
   );
+});
+
+legalRouter.get('/get', (_req, res) => {
+  sendGetAppPage(res);
+});
+
+legalRouter.get('/download', (_req, res) => {
+  res.redirect(302, '/get');
 });
 
 legalRouter.get('/support', (_req, res) => {
