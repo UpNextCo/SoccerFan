@@ -26,6 +26,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '4mb' }));
+// Brand assets for public pages (Instagram /get hero, etc.)
+app.use(
+  '/brand',
+  express.static(path.resolve(__dirname, '../public/brand'), {
+    maxAge: '7d',
+    immutable: true,
+    index: false,
+  })
+);
 app.use(legalRouter);
 
 app.get('/health', (_req, res) => {

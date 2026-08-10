@@ -81,7 +81,9 @@ function sendGetAppPage(res: Response): void {
   <meta property="og:description" content="Think you know football? Seven new quiz games every day.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="${siteOrigin}/get">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="${siteOrigin}/brand/ball.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="${siteOrigin}/brand/ball.jpg">
   <meta name="theme-color" content="#0A0A0A">
   <style>
     :root { color-scheme: dark; }
@@ -118,13 +120,13 @@ function sendGetAppPage(res: Response): void {
     }
     .spot {
       position: absolute;
-      width: 280px;
-      height: 280px;
-      top: 18%;
+      width: 320px;
+      height: 320px;
+      top: 14%;
       left: 50%;
       translate: -50% 0;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(0,255,102,0.14), transparent 68%);
+      background: radial-gradient(circle, rgba(0,255,102,0.16), transparent 68%);
       filter: blur(8px);
       animation: pulse 4.2s ease-in-out infinite;
       pointer-events: none;
@@ -150,8 +152,8 @@ function sendGetAppPage(res: Response): void {
     }
     .mark {
       position: relative;
-      width: 168px;
-      height: 168px;
+      width: 210px;
+      height: 210px;
       display: grid;
       place-items: center;
       animation: float 3.6s ease-in-out infinite;
@@ -159,7 +161,7 @@ function sendGetAppPage(res: Response): void {
     .mark::before {
       content: "";
       position: absolute;
-      inset: -18px;
+      inset: -22px;
       border-radius: 50%;
       border: 1px solid rgba(0,255,102,0.14);
     }
@@ -168,23 +170,25 @@ function sendGetAppPage(res: Response): void {
       position: absolute;
       inset: -2px;
       border-radius: 40px;
-      background: rgba(0,255,102,0.1);
+      background: rgba(0,255,102,0.12);
       filter: blur(28px);
       z-index: -1;
     }
     .tile {
-      width: 148px;
-      height: 148px;
+      width: 190px;
+      height: 190px;
       border-radius: 40px;
-      background:
-        radial-gradient(circle at 35% 30%, #1f1f1f, #121212 55%, #0d0d0d),
-        #141414;
+      overflow: hidden;
+      background: #141414;
       border: 1px solid rgba(255,255,255,0.1);
-      box-shadow: 0 18px 40px rgba(0,0,0,0.45), 0 14px 36px rgba(0,255,102,0.18);
-      display: grid;
-      place-items: center;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.45), 0 14px 36px rgba(0,255,102,0.22);
     }
-    .tile svg { width: 78px; height: 78px; }
+    .tile img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
     h1 {
       margin: 0;
       font-size: clamp(34px, 9vw, 42px);
@@ -257,12 +261,9 @@ function sendGetAppPage(res: Response): void {
     <div class="spot" aria-hidden="true"></div>
     <div class="content">
       <div class="brand">Ball Knowledge</div>
-      <div class="mark" aria-hidden="true">
+      <div class="mark">
         <div class="tile">
-          <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="40" cy="40" r="30" stroke="#00FF66" stroke-width="2.5"/>
-            <path d="M40 12 L48 28 L66 30 L52 42 L56 60 L40 50 L24 60 L28 42 L14 30 L32 28 Z" fill="#00FF66" fill-opacity="0.92"/>
-          </svg>
+          <img src="/brand/ball.jpg" alt="" width="190" height="190">
         </div>
       </div>
       <div class="copy">
