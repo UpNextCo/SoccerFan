@@ -236,7 +236,7 @@ function sendGetAppPage(res: Response): void {
       gap: 12px;
       align-items: center;
     }
-    .cta, .cta-secondary {
+    .cta {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -244,6 +244,8 @@ function sendGetAppPage(res: Response): void {
       width: 100%;
       height: 56px;
       border-radius: 18px;
+      background: #00FF66;
+      color: #0A0A0A;
       font-size: 15px;
       font-weight: 800;
       letter-spacing: 0.04em;
@@ -252,21 +254,10 @@ function sendGetAppPage(res: Response): void {
       border: none;
       cursor: pointer;
       font-family: inherit;
+      box-shadow: 0 8px 28px rgba(0,255,102,0.22);
       transition: transform 0.12s ease, opacity 0.12s ease;
     }
-    .cta {
-      background: #00FF66;
-      color: #0A0A0A;
-      box-shadow: 0 8px 28px rgba(0,255,102,0.22);
-    }
-    .cta-secondary {
-      display: none;
-      background: #1A1A1A;
-      color: #fff;
-      border: 1px solid #2a2a2a;
-    }
-    body.in-app .cta-secondary { display: flex; }
-    .cta:active, .cta-secondary:active { transform: scale(0.975); opacity: 0.88; }
+    .cta:active { transform: scale(0.975); opacity: 0.88; }
     .cta svg { width: 16px; height: 16px; }
     .fine {
       color: #666;
@@ -279,9 +270,7 @@ function sendGetAppPage(res: Response): void {
     }
     .fine a { color: #666; text-decoration: none; }
     .fine a:hover { color: #00FF66; }
-    body.in-app .fine-default { display: none; }
-    .fine-inapp { display: none; }
-    body.in-app .fine-inapp { display: block; }
+    body.in-app .fine { display: none; }
     @keyframes float {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-6px); }
@@ -320,9 +309,7 @@ function sendGetAppPage(res: Response): void {
         Download now
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8.6 3.2 13.4 8l-4.8 4.8-.9-.9 3.2-3.2H2.5V7.3h8.4L7.7 4.1l.9-.9z"/></svg>
       </button>
-      <button type="button" class="cta-secondary" id="copyBtn">Copy App Store link</button>
-      <p class="fine fine-default">Free on the <a href="${appStoreUrl}" id="storeLink">App Store</a> · <a href="/support">Support</a></p>
-      <p class="fine fine-inapp">After opening in Safari/Chrome, tap Download — or copy the link above.</p>
+      <p class="fine">Free on the <a href="${appStoreUrl}">App Store</a> · <a href="/support">Support</a></p>
     </div>
   </div>
   <script>
@@ -336,7 +323,6 @@ function sendGetAppPage(res: Response): void {
       if (inApp) document.body.classList.add('in-app');
 
       function goStore() {
-        // itms-apps can leave some in-app browsers; https works in Safari/Chrome.
         try { window.location.href = ITMS; } catch (e) {}
         setTimeout(function () {
           window.location.href = STORE;
@@ -346,27 +332,6 @@ function sendGetAppPage(res: Response): void {
       document.getElementById('downloadBtn').addEventListener('click', function (e) {
         e.preventDefault();
         goStore();
-      });
-
-      var copyBtn = document.getElementById('copyBtn');
-      copyBtn.addEventListener('click', function () {
-        function done(ok) {
-          copyBtn.textContent = ok ? 'Link copied' : 'Copy failed — open in browser';
-          setTimeout(function () { copyBtn.textContent = 'Copy App Store link'; }, 2000);
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(STORE).then(function () { done(true); }).catch(function () { done(false); });
-        } else {
-          var ta = document.createElement('textarea');
-          ta.value = STORE;
-          ta.setAttribute('readonly', '');
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.select();
-          try { done(document.execCommand('copy')); } catch (e) { done(false); }
-          document.body.removeChild(ta);
-        }
       });
     })();
   </script>

@@ -10,6 +10,7 @@ const COHORT_SIZE = 30;
  * doesn't appear at all rather than showing a real rank — keep it well clear of the player count.
  */
 const LEADERBOARD_LIMIT = 500;
+const OVERALL_LEADERBOARD_LIMIT = 1000;
 
 export interface PlayerStanding {
   userId: string;
@@ -183,7 +184,7 @@ export async function weeklyLeaderboard(weekStart: string, limit = LEADERBOARD_L
   return rankRows(rows);
 }
 
-export async function overallLeaderboard(limit = LEADERBOARD_LIMIT): Promise<PlayerStanding[]> {
+export async function overallLeaderboard(limit = OVERALL_LEADERBOARD_LIMIT): Promise<PlayerStanding[]> {
   const rows = (await db.execute(sql`
     SELECT u.id AS user_id, u.display_name, u.favorite_team_id,
            (u.avatar_jpeg IS NOT NULL) AS has_avatar,
