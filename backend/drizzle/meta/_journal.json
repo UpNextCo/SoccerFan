@@ -127,6 +127,13 @@
       "when": 1785600000000,
       "tag": "0023_vs_challenges",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786478400000,
+      "tag": "0024_weekly_pyramid_league",
+      "breakpoints": true
     }
   ]
 }

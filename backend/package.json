@@ -132,7 +132,10 @@
     "job:refresh-current-club": "tsx src/jobs/refresh-current-club.ts",
     "job:fix-current-league": "tsx src/jobs/fix-current-league.ts",
     "job:backfill-api-football-ids": "tsx src/jobs/backfill-api-football-ids.ts",
-    "job:dedupe-api-id": "tsx src/jobs/dedupe-by-api-id.ts"
+    "job:dedupe-api-id": "tsx src/jobs/dedupe-by-api-id.ts",
+    "job:rollover-weekly-leagues": "tsx src/jobs/rollover-weekly-leagues.ts",
+    "job:seed-weekly-league-divisions": "tsx src/jobs/seed-weekly-league-divisions.ts",
+    "test:weekly-league": "node --import tsx --test src/services/weeklyLeagueDivisions.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

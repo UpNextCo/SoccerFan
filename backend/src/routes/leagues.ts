@@ -6,24 +6,25 @@ import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
 import {
   dailyLeaderboard,
-  myCohortStandings,
+  londonDateString,
   overallLeaderboard,
   teamFans,
   teamLeaderboard,
   weeklyLeaderboard,
+  weeklyLeagueForUser,
   weekStartFor,
   xpByModeBreakdownForUser,
 } from '../services/leagueService.js';
 
 export const leaguesRouter = Router();
 
-function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10);
+function todayLondon(): string {
+  return londonDateString();
 }
 
 leaguesRouter.get('/daily', requireAuth, async (req, res) => {
   try {
-    const date = typeof req.query.date === 'string' ? req.query.date : todayUTC();
+    const date = typeof req.query.date === 'string' ? req.query.date : todayLondon();
     sendSuccess(res, { date, standings: await dailyLeaderboard(date) });
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load daily league', 500);
@@ -32,7 +33,7 @@ leaguesRouter.get('/daily', requireAuth, async (req, res) => {
 
 leaguesRouter.get('/weekly', requireAuth, async (_req, res) => {
   try {
-    const weekStart = weekStartFor(todayUTC());
+    const weekStart = weekStartFor(todayLondon());
     sendSuccess(res, { weekStart, standings: await weeklyLeaderboard(weekStart) });
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load weekly league', 500);
@@ -77,7 +78,7 @@ leaguesRouter.get('/players/:userId/xp-by-mode', requireAuth, async (req, res) =
   const date =
     typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
       ? req.query.date
-      : todayUTC();
+      : todayLondon();
   try {
     sendSuccess(res, await xpByModeBreakdownForUser(userId, date));
   } catch (err) {
@@ -85,10 +86,10 @@ leaguesRouter.get('/players/:userId/xp-by-mode', requireAuth, async (req, res) =
   }
 });
 
+/** Weekly pyramid league for the authenticated user. */
 leaguesRouter.get('/me', requireAuth, async (req, res) => {
   try {
-    const weekStart = weekStartFor(todayUTC());
-    sendSuccess(res, { weekStart, ...(await myCohortStandings(req.auth!.userId, weekStart)) });
+    sendSuccess(res, await weeklyLeagueForUser(req.auth!.userId));
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load your league', 500);
   }

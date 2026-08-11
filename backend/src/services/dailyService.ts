@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 import { dailyCompletions, dailyPuzzles, userProgress } from '../db/schema.js';
 import { computeLevel } from './authService.js';
 import { getPlayerById } from './playerService.js';
-import { ensureWeeklyMembership, recordXp, weekStartFor } from './leagueService.js';
+import { recordXp, syncWeeklyLeagueAfterXp } from './leagueService.js';
 import { generateAllDailyPuzzles, generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
 import { generateFootballBingoPuzzle, isBingoSolvable } from './footballBingoGenerator.js';
 import { generateFootballGolfCourse } from './footballGolfGenerator.js';
@@ -872,9 +872,11 @@ export async function completeDaily(
     })
     .where(eq(userProgress.userId, userId));
 
-  // Feed the league system: append to the XP ledger and ensure a weekly cohort.
-  await recordXp(userId, input.modeId, xpEarned, input.date);
-  await ensureWeeklyMembership(userId, weekStartFor(input.date));
+  // Feed the league system: append to the XP ledger and sync weekly pyramid XP/table.
+  const ledgerWrote = await recordXp(userId, input.modeId, xpEarned, input.date);
+  if (ledgerWrote || xpEarned > 0) {
+    await syncWeeklyLeagueAfterXp(userId, input.date);
+  }
 
   const response: DailyCompleteResponse = {
     xpEarned,

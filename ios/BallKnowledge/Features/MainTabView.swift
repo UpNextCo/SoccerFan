@@ -162,9 +162,8 @@ private struct VsInAppBanner: View {
 }
 
 enum LeagueScope: String, CaseIterable, Identifiable {
+    case weekly = "Weekly League"
     case overall = "Overall"
-    case today = "Today"
-    case teams = "Teams"
     var id: String { rawValue }
 }
 
@@ -172,7 +171,7 @@ enum LeagueScope: String, CaseIterable, Identifiable {
 @Observable
 final class LeaguesViewModel {
     var players: [PlayerStandingDTO] = []
-    var teams: [TeamStandingDTO] = []
+    var weekly: MyLeagueDTO?
     var caption: String = ""
     var isLoading = false
     var loadedScope: LeagueScope?
@@ -182,26 +181,21 @@ final class LeaguesViewModel {
         defer { isLoading = false }
         do {
             switch scope {
+            case .weekly:
+                let result = try await APIClient.shared.leaguesMe()
+                weekly = result
+                players = result.standings.map(\.asPlayerStanding)
+                caption = result.endsLabel ?? "Weekly league · Ends Sunday"
             case .overall:
                 let result = try await APIClient.shared.leaguesOverall()
+                weekly = nil
                 players = result.standings
-                teams = []
                 caption = "All-time XP leaders"
-            case .today:
-                let result = try await APIClient.shared.leaguesDaily()
-                players = result.standings
-                teams = []
-                caption = "Today's XP leaders"
-            case .teams:
-                let result = try await APIClient.shared.leaguesTeams()
-                teams = result.standings
-                players = []
-                caption = "Clubs ranked by combined XP of their fans"
             }
             loadedScope = scope
         } catch {
             players = []
-            teams = []
+            weekly = nil
             caption = ""
             loadedScope = scope
         }
@@ -210,7 +204,7 @@ final class LeaguesViewModel {
 
 struct LeaguesTabView: View {
     @Environment(AuthManager.self) private var auth
-    @State private var scope: LeagueScope = .overall
+    @State private var scope: LeagueScope = .weekly
     @State private var viewModel = LeaguesViewModel()
 
     var body: some View {
@@ -221,12 +215,6 @@ struct LeaguesTabView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
             .padding(.top, 8)
-
-            if !viewModel.caption.isEmpty {
-                Text(viewModel.caption)
-                    .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.textMuted)
-            }
 
             content
         }
@@ -241,51 +229,130 @@ struct LeaguesTabView: View {
             Spacer()
             ProgressView().tint(BKTheme.accent)
             Spacer()
-        } else if scope == .teams {
-            if viewModel.teams.isEmpty {
-                emptyState(
-                    icon: "shield.lefthalf.filled",
-                    title: "No clubs ranked yet",
-                    message: "Pick the team you support, then earn XP to put them on the table."
-                )
-            } else {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 8) {
-                        ForEach(viewModel.teams) { team in
-                            ExpandableTeamStandingRow(
-                                team: team,
-                                currentUserId: auth.user?.id
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, BKTabBar.scrollClearance)
-                }
-            }
+        } else if scope == .weekly {
+            weeklyContent
         } else {
-            if viewModel.players.isEmpty {
-                emptyState(
-                    icon: "trophy.fill",
-                    title: "No standings yet",
-                    message: "Play today's games to earn XP and climb the leaderboard."
-                )
-            } else {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 8) {
-                        ForEach(viewModel.players) { player in
-                            ExpandablePlayerStandingRow(
+            overallContent
+        }
+    }
+
+    @ViewBuilder
+    private var weeklyContent: some View {
+        let weekly = viewModel.weekly
+        let participated = weekly?.participated ?? false
+        let zones = weekly?.zones
+
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text((weekly?.divisionLabel ?? "Sunday League").uppercased())
+                        .font(BKFont.title(28))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .tracking(0.6)
+                    Text(viewModel.caption)
+                        .font(BKFont.caption(12))
+                        .foregroundStyle(BKTheme.textMuted)
+                    if let status = weekly?.statusLine, !status.isEmpty {
+                        Text(status)
+                            .font(BKFont.body(14))
+                            .foregroundStyle(BKTheme.accent)
+                            .padding(.top, 2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+
+                if !participated {
+                    emptyState(
+                        icon: "sportscourt.fill",
+                        title: "Join this week's league",
+                        message: "Play a game to join this week's league."
+                    )
+                    .frame(minHeight: 280)
+                } else if viewModel.players.isEmpty {
+                    emptyState(
+                        icon: "trophy.fill",
+                        title: "No standings yet",
+                        message: "Play a game to join this week's league."
+                    )
+                    .frame(minHeight: 280)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(viewModel.players.enumerated()), id: \.element.id) { index, player in
+                            let rank = player.rank
+                            if let zones, zones.promoteMaxRank > 0, rank == 1 {
+                                zoneLabel("PROMOTION")
+                            }
+                            if let zones, zones.relegateMinRank > 0, rank == zones.relegateMinRank {
+                                zoneLabel("RELEGATION")
+                                    .padding(.top, index == 0 ? 0 : 10)
+                            }
+
+                            WeeklyLeagueStandingRow(
                                 player: player,
-                                scope: scope,
-                                isCurrentUser: player.userId == auth.user?.id
+                                isCurrentUser: player.userId == auth.user?.id,
+                                isChampion: (zones?.isChampionsLeague == true) && rank == 1,
+                                zone: weeklyZone(for: rank, zones: zones)
                             )
-                            .id("\(scope.rawValue)-\(player.userId)")
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 4)
                         }
                     }
-                    .padding(.horizontal, 16)
                     .padding(.bottom, BKTabBar.scrollClearance)
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var overallContent: some View {
+        if !viewModel.caption.isEmpty {
+            Text(viewModel.caption)
+                .font(BKFont.caption(11))
+                .foregroundStyle(BKTheme.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+        }
+        if viewModel.players.isEmpty {
+            emptyState(
+                icon: "trophy.fill",
+                title: "No standings yet",
+                message: "Play today's games to earn XP and climb the leaderboard."
+            )
+        } else {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 8) {
+                    ForEach(viewModel.players) { player in
+                        ExpandablePlayerStandingRow(
+                            player: player,
+                            scope: .overall,
+                            isCurrentUser: player.userId == auth.user?.id
+                        )
+                        .id("overall-\(player.userId)")
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, BKTabBar.scrollClearance)
+            }
+        }
+    }
+
+    private func zoneLabel(_ text: String) -> some View {
+        Text(text)
+            .font(BKFont.caption(10))
+            .tracking(1.2)
+            .foregroundStyle(BKTheme.textMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
+    }
+
+    private func weeklyZone(for rank: Int, zones: WeeklyLeagueZonesDTO?) -> WeeklyRowZone {
+        guard let zones else { return .none }
+        if zones.promoteMaxRank > 0, rank <= zones.promoteMaxRank { return .promotion }
+        if zones.relegateMinRank > 0, rank >= zones.relegateMinRank { return .relegation }
+        return .none
     }
 
     private func emptyState(icon: String, title: String, message: String) -> some View {
@@ -308,6 +375,111 @@ struct LeaguesTabView: View {
     }
 }
 
+private enum WeeklyRowZone {
+    case promotion, relegation, none
+}
+
+private struct WeeklyLeagueStandingRow: View {
+    let player: PlayerStandingDTO
+    var isCurrentUser = false
+    var isChampion = false
+    var zone: WeeklyRowZone = .none
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(player.rank)")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+                .foregroundStyle(rankColor)
+                .frame(width: 28, alignment: .center)
+
+            avatarView
+                .frame(width: 36, height: 36)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(nameText)
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .lineLimit(1)
+                if isChampion {
+                    Text("Champion")
+                        .font(BKFont.caption(10))
+                        .foregroundStyle(BKTheme.accent)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 4) {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(BKTheme.accent)
+                Text("\(player.xp.formatted()) XP")
+                    .font(BKFont.headline(14))
+                    .foregroundStyle(BKTheme.textPrimary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(rowBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(borderColor, lineWidth: isCurrentUser ? 1.5 : 1)
+        )
+    }
+
+    private var rankColor: Color {
+        if isChampion { return BKTheme.accent }
+        switch zone {
+        case .promotion: return BKTheme.accent.opacity(0.9)
+        case .relegation: return BKTheme.wrong.opacity(0.9)
+        case .none: return player.rank <= 3 ? BKTheme.accent : BKTheme.textMuted
+        }
+    }
+
+    private var rowBackground: Color {
+        if isCurrentUser { return BKTheme.cardElevated }
+        switch zone {
+        case .promotion: return BKTheme.accent.opacity(0.06)
+        case .relegation: return BKTheme.wrong.opacity(0.06)
+        case .none: return BKTheme.card
+        }
+    }
+
+    private var borderColor: Color {
+        if isCurrentUser { return BKTheme.accent.opacity(0.6) }
+        switch zone {
+        case .promotion: return BKTheme.accent.opacity(0.18)
+        case .relegation: return BKTheme.wrong.opacity(0.18)
+        case .none: return .clear
+        }
+    }
+
+    @ViewBuilder
+    private var avatarView: some View {
+        if isCurrentUser, let image = LocalProfile.loadAvatar() {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else {
+            PlayerAvatar(urlString: player.avatarUrl, size: 36) {
+                BKTheme.cardElevated
+                    .overlay {
+                        Ph.userCircle.fill
+                            .color(BKTheme.accent)
+                            .frame(width: 22, height: 22)
+                    }
+            }
+        }
+    }
+
+    private var nameText: String {
+        let base = isCurrentUser ? (LocalProfile.nameOverride ?? player.displayName) : player.displayName
+        return isCurrentUser ? "\(base) (You)" : base
+    }
+}
+
 struct ExpandablePlayerStandingRow: View {
     let player: PlayerStandingDTO
     let scope: LeagueScope
@@ -319,7 +491,7 @@ struct ExpandablePlayerStandingRow: View {
     @State private var didLoadModes = false
 
     private var canExpand: Bool {
-        scope == .overall || scope == .today
+        scope == .overall
     }
 
     var body: some View {
@@ -350,7 +522,7 @@ struct ExpandablePlayerStandingRow: View {
                             .tint(BKTheme.accent)
                             .padding(.vertical, 12)
                     } else if displayModes.isEmpty {
-                        Text(scope == .today ? "No XP earned today" : "No game XP yet")
+                        Text("No game XP yet")
                             .font(BKFont.caption(11))
                             .foregroundStyle(BKTheme.textMuted)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -360,7 +532,7 @@ struct ExpandablePlayerStandingRow: View {
                         ForEach(displayModes) { row in
                             LeaguePlayerXpGameRow(
                                 modeId: row.modeId,
-                                xp: scope == .today ? row.todayXp : row.totalXp
+                                xp: row.totalXp
                             )
                         }
                     }
@@ -386,11 +558,9 @@ struct ExpandablePlayerStandingRow: View {
 
     private var displayModes: [XpByModeRowDTO] {
         modes
-            .filter { scope == .today ? $0.todayXp > 0 : $0.totalXp > 0 }
+            .filter { $0.totalXp > 0 }
             .sorted { lhs, rhs in
-                let left = scope == .today ? lhs.todayXp : lhs.totalXp
-                let right = scope == .today ? rhs.todayXp : rhs.totalXp
-                if left != right { return left > right }
+                if lhs.totalXp != rhs.totalXp { return lhs.totalXp > rhs.totalXp }
                 return lhs.modeId < rhs.modeId
             }
     }

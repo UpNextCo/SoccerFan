@@ -28,6 +28,11 @@ export const users = pgTable('users', {
   favoriteTeamId: integer('favorite_team_id'),
   /** Compressed JPEG bytes for the user's profile photo (served via GET /avatars/:userId). */
   avatarJpeg: bytea('avatar_jpeg'),
+  /**
+   * Weekly pyramid division. Promotion/relegation updates this; table assignment is per week.
+   * sunday_league | non_league | league_two | league_one | championship | premier_league | champions_league
+   */
+  currentDivision: text('current_division').notNull().default('sunday_league'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -702,16 +707,45 @@ export const xpLedger = pgTable(
   ]
 );
 
-/** A weekly competition group (Bronze/Silver/Gold tier) of ~30 players. */
+/** One Monday–Sunday Europe/London league week. */
+export const leagueWeeks = pgTable(
+  'league_weeks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    weekStart: date('week_start').notNull(),
+    weekEnd: date('week_end').notNull(),
+    /** active | finalized */
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+  },
+  (table) => [uniqueIndex('league_weeks_week_start_unique').on(table.weekStart)]
+);
+
+/**
+ * A weekly competition table of ≤30 players within one division.
+ * Legacy column `tier` kept for older rows; new code uses `division`.
+ */
 export const leagueCohorts = pgTable(
   'league_cohorts',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    /** @deprecated Use division. */
     tier: text('tier').notNull().default('bronze'),
     weekStart: date('week_start').notNull(),
+    division: text('division').notNull().default('sunday_league'),
+    groupIndex: integer('group_index').notNull().default(0),
+    leagueWeekId: uuid('league_week_id').references(() => leagueWeeks.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('league_cohorts_week_tier_idx').on(table.weekStart, table.tier)]
+  (table) => [
+    index('league_cohorts_week_tier_idx').on(table.weekStart, table.tier),
+    uniqueIndex('league_cohorts_week_division_group_unique').on(
+      table.leagueWeekId,
+      table.division,
+      table.groupIndex
+    ),
+  ]
 );
 
 export const leagueMemberships = pgTable(
@@ -725,12 +759,25 @@ export const leagueMemberships = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     weekStart: date('week_start').notNull(),
+    weeklyXp: integer('weekly_xp').notNull().default(0),
+    weeklyXpReachedAt: timestamp('weekly_xp_reached_at', { withTimezone: true }),
+    joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
+    finalRank: integer('final_rank'),
+    /** promoted | stayed | relegated | champion */
+    outcome: text('outcome'),
   },
   (table) => [
     uniqueIndex('league_memberships_user_week_unique').on(table.userId, table.weekStart),
     index('league_memberships_cohort_idx').on(table.cohortId),
   ]
 );
+
+/** Key/value ops flags (e.g. weekly_league_divisions_seeded). */
+export const appMeta = pgTable('app_meta', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 /** 1v1 VS challenges (Draft XI first). Scores are raw XI totals — no XP. */
 export const vsChallenges = pgTable(

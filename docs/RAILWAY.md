@@ -50,6 +50,22 @@ Add a Railway cron job (or GitHub Action) to run daily at 00:05 UTC:
 npm run job:generate-daily
 ```
 
+## 5b. Weekly league rollover
+
+Add a Railway cron (or GitHub Action) shortly after Monday 00:00 **Europe/London** (e.g. 00:10 London / 00:10 UTC in winter, 23:10 UTC Sunday in BST):
+
+```bash
+npm run job:rollover-weekly-leagues
+```
+
+Idempotent — safe if it runs twice. Finalizes the previous London week (promotion/relegation) and ensures the new week row exists. Tables fill lazily when players earn XP.
+
+One-time launch seed (existing users → divisions by lifetime XP percentile):
+
+```bash
+npm run job:seed-weekly-league-divisions
+```
+
 ## 6. iOS config
 
 Update production URL in [`ios/BallKnowledge/App/Config.swift`](ios/BallKnowledge/App/Config.swift):

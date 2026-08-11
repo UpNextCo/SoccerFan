@@ -73,8 +73,48 @@ struct TeamStandingDTO: Codable, Identifiable {
 
 struct MyLeagueDTO: Codable {
     let weekStart: String
+    let weekEnd: String?
+    let endsLabel: String?
+    let division: String?
+    let divisionLabel: String?
+    let participated: Bool?
     let cohortId: String?
-    let standings: [PlayerStandingDTO]
+    let standings: [WeeklyLeagueStandingDTO]
+    let zones: WeeklyLeagueZonesDTO?
+    let statusLine: String?
+    let viewerRank: Int?
+}
+
+struct WeeklyLeagueStandingDTO: Codable, Identifiable, Equatable {
+    let userId: String
+    let displayName: String
+    let favoriteTeamId: Int?
+    let xp: Int
+    let rank: Int
+    let avatarUrl: String?
+    let isYou: Bool?
+
+    var id: String { userId }
+
+    /// Bridge to the shared row component.
+    var asPlayerStanding: PlayerStandingDTO {
+        PlayerStandingDTO(
+            userId: userId,
+            displayName: displayName,
+            favoriteTeamId: favoriteTeamId,
+            xp: xp,
+            rank: rank,
+            avatarUrl: avatarUrl
+        )
+    }
+}
+
+struct WeeklyLeagueZonesDTO: Codable, Equatable {
+    let promoteMaxRank: Int
+    let relegateMinRank: Int
+    let isChampionsLeague: Bool
+    let isSundayLeague: Bool
+    let tableSize: Int
 }
 
 struct PlayerStandingsDTO: Codable {
