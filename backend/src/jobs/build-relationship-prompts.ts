@@ -16,6 +16,7 @@ import { db } from '../db/index.js';
 import { normalizeSearchText } from '../utils/playerSearch.js';
 import { normClub, playersUnderManager, rankManagersByProminence, topManagerNorms, TOP_MANAGER_PAIR_COUNT, TOP_MANAGER_SINGLE_COUNT } from '../services/managerRules.js';
 import { sampleFamousPlayers } from '../services/towerRules.js';
+import { wonTournamentPlayersSql } from '../services/tournamentWinners.js';
 
 const CLUB_LEAGUES = sql`(39,140,135,78,61,2,3,135)`; // exclude national teams (1,4)
 
@@ -49,6 +50,16 @@ async function teammatesOf(anchorIds: string[]): Promise<string[]> {
 
 type FinalMode = 'scored' | 'started' | 'won' | 'played';
 async function finalsSet(competition: string | null, mode: FinalMode): Promise<string[]> {
+  // WC / Euro / CL “won” = tournament squad / campaign, not only final XI.
+  if (
+    mode === 'won' &&
+    (competition === 'World Cup' || competition === 'Euro' || competition === 'Champions League')
+  ) {
+    const rows = (await db.execute(wonTournamentPlayersSql(competition))) as unknown as Array<{
+      id: string;
+    }>;
+    return rows.map((r) => r.id);
+  }
   const comp = competition ? sql`AND competition = ${competition}` : sql``;
   const cond =
     mode === 'scored' ? sql`AND goals > 0` : mode === 'started' ? sql`AND started` : mode === 'won' ? sql`AND won` : sql``;

@@ -13,6 +13,7 @@ import { trustedIntlCapsSql } from './statMetrics.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
 import { playersUnderManager } from './managerRules.js';
+import { wonTournamentExistsSql } from './tournamentWinners.js';
 
 export const BACK_YOURSELF_MAX_XP = 1500;
 export const BACK_YOURSELF_MISTAKES_ALLOWED = 3;
@@ -279,6 +280,13 @@ function teammatesWithSql(anchorId: string): SQL {
 }
 
 function finalSatisfiesSql(competition: string, mode: string): SQL {
+  if (
+    mode === 'won' &&
+    (competition === 'World Cup' || competition === 'Euro' || competition === 'Champions League')
+  ) {
+    // Squad / campaign winners — not only players who appeared in the final.
+    return wonTournamentExistsSql(competition, 'p.id');
+  }
   const modeCond =
     mode === 'scored' ? sql`AND f.goals > 0`
       : mode === 'won' ? sql`AND f.won`

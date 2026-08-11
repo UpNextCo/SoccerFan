@@ -262,19 +262,19 @@ async function main(): Promise<void> {
   addCandidate(candidates, 'Name players who scored in a Champions League final.', {
     finalAppearance: { competition: 'Champions League', scored: true },
   });
-  addCandidate(candidates, 'Name players who won a Champions League final.', {
+  addCandidate(candidates, 'Name players who won the Champions League.', {
     finalAppearance: { competition: 'Champions League', won: true },
   });
   addCandidate(candidates, 'Name players who scored in a World Cup final.', {
     finalAppearance: { competition: 'World Cup', scored: true },
   });
-  addCandidate(candidates, 'Name players who won a World Cup final.', {
+  addCandidate(candidates, 'Name players who won a World Cup.', {
     finalAppearance: { competition: 'World Cup', won: true },
   });
   addCandidate(candidates, 'Name players who scored in a European Championship final.', {
     finalAppearance: { competition: 'Euro', scored: true },
   });
-  addCandidate(candidates, 'Name players who won a European Championship final.', {
+  addCandidate(candidates, 'Name players who won a European Championship.', {
     finalAppearance: { competition: 'Euro', won: true },
   });
 

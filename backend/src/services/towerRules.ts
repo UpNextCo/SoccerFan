@@ -9,6 +9,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import type { TowerRule } from './towerRuleSchema.js';
+import { wonTournamentExistsSql } from './tournamentWinners.js';
 
 export type { TowerRule } from './towerRuleSchema.js';
 
@@ -64,12 +65,8 @@ function ruleConditions(rule: TowerRule) {
     )`);
   }
   if (rule.uclWinner) {
-    // player_honours is sparse (e.g. Seedorf has 0 rows), so also accept a Champions League
-    // final WIN from final_appearances (Wikipedia finals import) — a far more complete source.
-    c.push(sql`(
-      EXISTS (SELECT 1 FROM player_honours h WHERE h.player_id = a.id AND h.competition ILIKE '%champions league%' AND h.placement ILIKE '%winner%')
-      OR EXISTS (SELECT 1 FROM final_appearances f WHERE f.player_id = a.id AND f.competition = 'Champions League' AND f.won = true)
-    )`);
+    // Full winning-club UCL season squad (plus trophies / final appearances).
+    c.push(wonTournamentExistsSql('Champions League', 'a.id'));
   }
   if (rule.seasonStat) {
     const metric =
@@ -118,14 +115,27 @@ function ruleConditions(rule: TowerRule) {
   }
   if (rule.finalAppearance) {
     const final = rule.finalAppearance;
-    c.push(sql`EXISTS (
-      SELECT 1 FROM final_appearances f
-      WHERE f.player_id = a.id
-        AND f.competition = ${final.competition}
-        ${typeof final.season === 'number' ? sql`AND f.season = ${final.season}` : sql``}
-        ${final.scored ? sql`AND f.goals > 0` : sql``}
-        ${final.won ? sql`AND f.won = true` : sql``}
-    )`);
+    // “Won the WC / Euro / CL” → tournament squad / campaign, not only final XI.
+    // Keep final_appearances for scored-in-final, started, or season-specific final chips.
+    const squadWin =
+      !!final.won &&
+      !final.scored &&
+      typeof final.season !== 'number' &&
+      (final.competition === 'World Cup' ||
+        final.competition === 'Euro' ||
+        final.competition === 'Champions League');
+    if (squadWin) {
+      c.push(wonTournamentExistsSql(final.competition, 'a.id'));
+    } else {
+      c.push(sql`EXISTS (
+        SELECT 1 FROM final_appearances f
+        WHERE f.player_id = a.id
+          AND f.competition = ${final.competition}
+          ${typeof final.season === 'number' ? sql`AND f.season = ${final.season}` : sql``}
+          ${final.scored ? sql`AND f.goals > 0` : sql``}
+          ${final.won ? sql`AND f.won = true` : sql``}
+      )`);
+    }
   }
   if (typeof rule.worldCupScorerYear === 'number') {
     c.push(sql`EXISTS (
