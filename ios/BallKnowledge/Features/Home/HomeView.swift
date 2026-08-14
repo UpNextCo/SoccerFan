@@ -932,7 +932,7 @@ struct DailyGameCard: View {
         case .lastManStanding:
             return "Survive the field"
         case .backYourself:
-            return "Pledge how many you can name"
+            return "How many you can name?"
         }
     }
 }

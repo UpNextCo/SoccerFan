@@ -52,4 +52,6 @@ enum UserDefaultsKeys {
     static let completedPostSignInSetup = "completedPostSignInSetup"
     /// Local calendar date (YYYY-MM-DD) for which the all-7 celebration was already shown.
     static let dailyCompleteCelebratedDate = "dailyCompleteCelebratedDate"
+    /// One-shot weekly pyramid league intro (Leagues → Weekly).
+    static let weeklyLeagueIntroShown = "weeklyLeagueIntroShown"
 }

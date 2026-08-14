@@ -1,13 +1,8 @@
 /**
- * Fix Daniel / Dani Carvajal split identity + polluted club history.
+ * Wipe duplicate Dani Carvajal shell and keep the Real Madrid row as the only identity.
  *
- * Problems:
- *   - Real 2012–13 Leverkusen spell present in player_transfers but historically
- *     missing from player_career (API-Football /players/teams omitted the loan).
- *   - Namesake junk: Dinamo Zagreb career/stats + transfers Zagreb→Leipzig→Barcelona.
- *   - Duplicate shell "Dani Carvajal" (same api_football_id 733) held Spain WC/Euro
- *     stats + final_appearances while the real "Daniel Carvajal" row held club data.
- *     LMS odd-one-out then treated the shell as someone who never played in La Liga.
+ * Real:  579bd71e-fb93-40a9-b4aa-0cadf44aaa00  (club stats, API/TM ids)
+ * Stub:  b37a24c9-edc5-4c8f-9419-b2d449a48a73  (WC squad links, intl extra_stats, 0 clubs)
  *
  *   npx tsx src/jobs/fix-carvajal-leverkusen.ts
  *   npx tsx src/jobs/fix-carvajal-leverkusen.ts --apply
@@ -22,51 +17,47 @@ const CARVAJAL_ID = '579bd71e-fb93-40a9-b4aa-0cadf44aaa00';
 const STUB_ID = 'b37a24c9-edc5-4c8f-9419-b2d449a48a73';
 const LEVERKUSEN_TEAM_ID = 168;
 
-async function main() {
-  const before = await db.execute(sql`
+async function countRefs(id: string) {
+  const rows = (await db.execute(sql`
     SELECT
-      (SELECT json_agg(json_build_object('team', team_name, 'from', season_from, 'to', season_to) ORDER BY season_from)
-       FROM player_career WHERE player_id = ${CARVAJAL_ID}::uuid) AS career,
-      (SELECT json_agg(json_build_object('date', transfer_date, 'from', from_team_name, 'to', to_team_name, 'type', transfer_type) ORDER BY transfer_date)
-       FROM player_transfers WHERE player_id = ${CARVAJAL_ID}::uuid) AS transfers,
-      (SELECT json_agg(DISTINCT team_name)
-       FROM player_stats WHERE player_id = ${CARVAJAL_ID}::uuid AND appearances > 0) AS stat_clubs,
-      (SELECT COUNT(*)::int FROM final_appearances WHERE player_id = ${CARVAJAL_ID}::uuid) AS real_finals,
-      (SELECT COUNT(*)::int FROM final_appearances WHERE player_id = ${STUB_ID}::uuid) AS stub_finals,
-      (SELECT COUNT(*)::int FROM player_stats WHERE player_id = ${STUB_ID}::uuid) AS stub_stats
-  `);
-  console.log('BEFORE:', JSON.stringify(before, null, 2));
+      (SELECT COUNT(*)::int FROM player_stats WHERE player_id = ${id}::uuid) AS stats,
+      (SELECT COUNT(*)::int FROM player_career WHERE player_id = ${id}::uuid) AS career,
+      (SELECT COUNT(*)::int FROM player_transfers WHERE player_id = ${id}::uuid) AS transfers,
+      (SELECT COUNT(*)::int FROM final_appearances WHERE player_id = ${id}::uuid) AS finals,
+      (SELECT COUNT(*)::int FROM player_awards WHERE player_id = ${id}::uuid) AS awards,
+      (SELECT COUNT(*)::int FROM player_extra_stats WHERE player_id = ${id}::uuid) AS extra,
+      (SELECT COUNT(*)::int FROM wc_squads WHERE player_id = ${id}::uuid) AS wc_squads,
+      (SELECT COUNT(*)::int FROM wc_match_events
+        WHERE player_id = ${id}::uuid OR assist_player_id = ${id}::uuid) AS wc_events,
+      (SELECT COUNT(*)::int FROM daily_puzzles WHERE answer_player_id = ${id}::uuid) AS daily_answers,
+      (SELECT COUNT(*)::int FROM daily_puzzles
+        WHERE puzzle_json::text LIKE ${'%' + id + '%'}
+           OR answer_json::text LIKE ${'%' + id + '%'}) AS puzzle_json_refs
+  `)) as unknown as Array<Record<string, number>>;
+  return rows[0]!;
+}
+
+async function main() {
+  const real = (await db.execute(sql`
+    SELECT id, name, current_club, api_football_id, tm_player_id, market_value_tier
+    FROM players WHERE id = ${CARVAJAL_ID}::uuid
+  `)) as unknown as Array<Record<string, unknown>>;
+  const stub = (await db.execute(sql`
+    SELECT id, name, current_club, api_football_id, tm_player_id, market_value_tier
+    FROM players WHERE id = ${STUB_ID}::uuid
+  `)) as unknown as Array<Record<string, unknown>>;
+
+  if (!real[0]) throw new Error('Real Dani Carvajal row missing');
+  console.log('REAL:', real[0]);
+  console.log('STUB:', stub[0] ?? '(already gone)');
+  console.log('REAL refs:', await countRefs(CARVAJAL_ID));
+  if (stub[0]) console.log('STUB refs:', await countRefs(STUB_ID));
 
   const junkCareer = (await db.execute(sql`
     SELECT id, team_name, season_from, season_to FROM player_career
     WHERE player_id = ${CARVAJAL_ID}::uuid
       AND (lower(team_name) LIKE '%zagreb%' OR team_id IN (620, 173, 529))
-  `)) as unknown as Array<{ id: string; team_name: string; season_from: number; season_to: number }>;
-
-  const junkStats = (await db.execute(sql`
-    SELECT COUNT(*)::int AS n FROM player_stats
-    WHERE player_id = ${CARVAJAL_ID}::uuid
-      AND (
-        lower(COALESCE(team_name, '')) LIKE '%zagreb%'
-        OR team_id IN (620, 173, 529)
-      )
-  `)) as unknown as Array<{ n: number }>;
-
-  const junkTransfers = (await db.execute(sql`
-    SELECT id, transfer_date, from_team_name, to_team_name FROM player_transfers
-    WHERE player_id = ${CARVAJAL_ID}::uuid
-      AND (
-        lower(COALESCE(from_team_name, '')) LIKE '%zagreb%'
-        OR lower(COALESCE(to_team_name, '')) LIKE '%zagreb%'
-        OR to_team_id IN (173, 529)
-        OR from_team_id IN (620, 173)
-      )
-  `)) as unknown as Array<{
-    id: string;
-    transfer_date: string;
-    from_team_name: string;
-    to_team_name: string;
-  }>;
+  `)) as unknown as Array<{ id: string; team_name: string }>;
 
   const hasLeverkusenCareer = (await db.execute(sql`
     SELECT EXISTS (
@@ -75,33 +66,26 @@ async function main() {
     ) AS ok
   `)) as unknown as Array<{ ok: boolean }>;
 
-  const stub = (await db.execute(sql`
-    SELECT id, name, market_value_tier,
-      (SELECT COUNT(*)::int FROM player_career c WHERE c.player_id = p.id) AS career,
-      (SELECT COUNT(*)::int FROM player_stats s WHERE s.player_id = p.id) AS stats,
-      (SELECT COUNT(*)::int FROM final_appearances f WHERE f.player_id = p.id) AS finals
-    FROM players p WHERE id = ${STUB_ID}::uuid
-  `)) as unknown as Array<{
-    id: string;
-    name: string;
-    market_value_tier: number;
-    career: number;
-    stats: number;
-    finals: number;
-  }>;
+  const stubExtra = stub[0]
+    ? ((await db.execute(sql`
+        SELECT intl_caps, tm_intl_caps, intl_goals, tm_intl_goals, tm_career_goals, tm_career_apps
+        FROM player_extra_stats WHERE player_id = ${STUB_ID}::uuid
+      `)) as unknown as Array<Record<string, number | null>>)
+    : [];
 
-  console.log(`\nWill delete ${junkCareer.length} junk career row(s):`, junkCareer);
-  console.log(`Will delete ${junkStats[0]?.n ?? 0} junk stats row(s)`);
-  console.log(`Will delete ${junkTransfers.length} junk transfer(s):`, junkTransfers);
+  console.log(`\nJunk Zagreb career rows on real: ${junkCareer.length}`);
   console.log(`Leverkusen career present: ${hasLeverkusenCareer[0]?.ok}`);
-  console.log(`Stub to merge/demote:`, stub);
-  console.log('Will: move stub finals + intl stats → real row, rename to Dani Carvajal, demote stub tier');
+  console.log('Stub extra_stats:', stubExtra[0] ?? null);
+  console.log(
+    '\nPlan: move stub refs → real, rewrite puzzle JSON ids, clean junk, ensure Leverkusen, DELETE stub'
+  );
 
   if (!APPLY) {
     console.log('\nDry run — pass --apply to write');
     return;
   }
 
+  // --- clean polluted clubs on the real row ---
   if (junkCareer.length > 0) {
     await db.execute(sql`
       DELETE FROM player_career
@@ -109,30 +93,24 @@ async function main() {
         AND (lower(team_name) LIKE '%zagreb%' OR team_id IN (620, 173, 529))
     `);
   }
-
-  if ((junkStats[0]?.n ?? 0) > 0) {
-    await db.execute(sql`
-      DELETE FROM player_stats
-      WHERE player_id = ${CARVAJAL_ID}::uuid
-        AND (
-          lower(COALESCE(team_name, '')) LIKE '%zagreb%'
-          OR team_id IN (620, 173, 529)
-        )
-    `);
-  }
-
-  if (junkTransfers.length > 0) {
-    await db.execute(sql`
-      DELETE FROM player_transfers
-      WHERE player_id = ${CARVAJAL_ID}::uuid
-        AND (
-          lower(COALESCE(from_team_name, '')) LIKE '%zagreb%'
-          OR lower(COALESCE(to_team_name, '')) LIKE '%zagreb%'
-          OR to_team_id IN (173, 529)
-          OR from_team_id IN (620, 173)
-        )
-    `);
-  }
+  await db.execute(sql`
+    DELETE FROM player_stats
+    WHERE player_id = ${CARVAJAL_ID}::uuid
+      AND (
+        lower(COALESCE(team_name, '')) LIKE '%zagreb%'
+        OR team_id IN (620, 173, 529)
+      )
+  `);
+  await db.execute(sql`
+    DELETE FROM player_transfers
+    WHERE player_id = ${CARVAJAL_ID}::uuid
+      AND (
+        lower(COALESCE(from_team_name, '')) LIKE '%zagreb%'
+        OR lower(COALESCE(to_team_name, '')) LIKE '%zagreb%'
+        OR to_team_id IN (173, 529)
+        OR from_team_id IN (620, 173)
+      )
+  `);
 
   if (!hasLeverkusenCareer[0]?.ok) {
     await db.insert(playerCareer).values({
@@ -147,14 +125,27 @@ async function main() {
   }
 
   if (stub[0]) {
-    // Move finals onto the club row (unique key is name-based; keep Dani label).
+    // Finals / awards
     await db.execute(sql`
       UPDATE final_appearances
       SET player_id = ${CARVAJAL_ID}::uuid, player_name = 'Dani Carvajal'
       WHERE player_id = ${STUB_ID}::uuid
+        AND NOT EXISTS (
+          SELECT 1 FROM final_appearances r
+          WHERE r.player_id = ${CARVAJAL_ID}::uuid
+            AND r.competition = final_appearances.competition
+            AND r.season = final_appearances.season
+        )
+    `);
+    await db.execute(sql`DELETE FROM final_appearances WHERE player_id = ${STUB_ID}::uuid`);
+
+    await db.execute(sql`
+      UPDATE player_awards
+      SET player_id = ${CARVAJAL_ID}::uuid, player_name = 'Dani Carvajal'
+      WHERE player_id = ${STUB_ID}::uuid
     `);
 
-    // Move intl / leftover stats that don't collide on (player, league, season, team).
+    // Club / intl stats that don't collide
     await db.execute(sql`
       UPDATE player_stats AS s
       SET player_id = ${CARVAJAL_ID}::uuid
@@ -164,48 +155,147 @@ async function main() {
           WHERE r.player_id = ${CARVAJAL_ID}::uuid
             AND r.league_id = s.league_id
             AND r.season = s.season
-            AND r.team_id = s.team_id
+            AND COALESCE(r.team_id, -1) = COALESCE(s.team_id, -1)
         )
     `);
     await db.execute(sql`DELETE FROM player_stats WHERE player_id = ${STUB_ID}::uuid`);
 
     await db.execute(sql`
-      UPDATE player_awards
-      SET player_id = ${CARVAJAL_ID}::uuid, player_name = 'Dani Carvajal'
+      UPDATE player_career SET player_id = ${CARVAJAL_ID}::uuid
+      WHERE player_id = ${STUB_ID}::uuid
+        AND NOT EXISTS (
+          SELECT 1 FROM player_career r
+          WHERE r.player_id = ${CARVAJAL_ID}::uuid
+            AND COALESCE(r.team_id, -1) = COALESCE(player_career.team_id, -1)
+            AND r.season_from = player_career.season_from
+        )
+    `);
+    await db.execute(sql`DELETE FROM player_career WHERE player_id = ${STUB_ID}::uuid`);
+
+    await db.execute(sql`
+      UPDATE player_transfers SET player_id = ${CARVAJAL_ID}::uuid
       WHERE player_id = ${STUB_ID}::uuid
     `);
 
+    // WC / events
+    await db.execute(sql`
+      UPDATE wc_squads SET player_id = ${CARVAJAL_ID}::uuid
+      WHERE player_id = ${STUB_ID}::uuid
+        AND NOT EXISTS (
+          SELECT 1 FROM wc_squads r
+          WHERE r.player_id = ${CARVAJAL_ID}::uuid
+            AND r.year = wc_squads.year
+            AND r.country = wc_squads.country
+        )
+    `);
+    await db.execute(sql`UPDATE wc_squads SET player_id = NULL WHERE player_id = ${STUB_ID}::uuid`);
+
+    await db.execute(sql`
+      UPDATE wc_match_events SET player_id = ${CARVAJAL_ID}::uuid
+      WHERE player_id = ${STUB_ID}::uuid
+    `);
+    await db.execute(sql`
+      UPDATE wc_match_events SET assist_player_id = ${CARVAJAL_ID}::uuid
+      WHERE assist_player_id = ${STUB_ID}::uuid
+    `);
+
+    // Merge intl / TM extra_stats onto real (prefer non-null from either side)
+    const realExtra = (await db.execute(sql`
+      SELECT player_id FROM player_extra_stats WHERE player_id = ${CARVAJAL_ID}::uuid
+    `)) as unknown as Array<{ player_id: string }>;
+
+    if (stubExtra[0]) {
+      if (!realExtra[0]) {
+        await db.execute(sql`
+          UPDATE player_extra_stats SET player_id = ${CARVAJAL_ID}::uuid
+          WHERE player_id = ${STUB_ID}::uuid
+        `);
+      } else {
+        await db.execute(sql`
+          UPDATE player_extra_stats AS real
+          SET
+            intl_caps = COALESCE(real.intl_caps, stub.intl_caps),
+            tm_intl_caps = COALESCE(real.tm_intl_caps, stub.tm_intl_caps),
+            intl_goals = COALESCE(real.intl_goals, stub.intl_goals),
+            tm_intl_goals = COALESCE(real.tm_intl_goals, stub.tm_intl_goals),
+            tm_career_goals = COALESCE(real.tm_career_goals, stub.tm_career_goals),
+            tm_career_apps = COALESCE(real.tm_career_apps, stub.tm_career_apps)
+          FROM player_extra_stats AS stub
+          WHERE real.player_id = ${CARVAJAL_ID}::uuid
+            AND stub.player_id = ${STUB_ID}::uuid
+        `);
+        await db.execute(sql`DELETE FROM player_extra_stats WHERE player_id = ${STUB_ID}::uuid`);
+      }
+    }
+
+    // Rewrite puzzle / answer JSON that still embeds the stub UUID
+    await db.execute(sql`
+      UPDATE daily_puzzles
+      SET
+        puzzle_json = replace(puzzle_json::text, ${STUB_ID}, ${CARVAJAL_ID})::jsonb,
+        answer_json = CASE
+          WHEN answer_json IS NULL THEN NULL
+          ELSE replace(answer_json::text, ${STUB_ID}, ${CARVAJAL_ID})::jsonb
+        END,
+        answer_player_id = CASE
+          WHEN answer_player_id = ${STUB_ID}::uuid THEN ${CARVAJAL_ID}::uuid
+          ELSE answer_player_id
+        END
+      WHERE puzzle_json::text LIKE ${'%' + STUB_ID + '%'}
+         OR answer_json::text LIKE ${'%' + STUB_ID + '%'}
+         OR answer_player_id = ${STUB_ID}::uuid
+    `);
+
+    // Canonical name / search on real
     await db.execute(sql`
       UPDATE players
-      SET name = 'Dani Carvajal'
+      SET
+        name = 'Dani Carvajal',
+        aliases = '["Daniel Carvajal","Dani Carvajal","Carvajal"]'::jsonb,
+        search_text = lower('Dani Carvajal Daniel Carvajal Carvajal Real Madrid Spain Defender'),
+        current_club = 'Real Madrid',
+        current_league = 'La Liga'
       WHERE id = ${CARVAJAL_ID}::uuid
     `);
 
-    // Demote shell so it cannot re-enter famous / LMS pools.
-    await db.execute(sql`
-      UPDATE players
-      SET market_value_tier = 1, api_football_id = NULL
-      WHERE id = ${STUB_ID}::uuid
-    `);
-
-    await db.execute(sql`
-      UPDATE daily_puzzles SET answer_player_id = NULL
-      WHERE answer_player_id = ${STUB_ID}::uuid
-    `);
-
-    console.log('Merged stub finals/intl into real Dani Carvajal; demoted stub to tier 1');
+    // Wipe stub (cascades dependent FKs; nulls set-null WC leftovers)
+    await db.execute(sql`DELETE FROM players WHERE id = ${STUB_ID}::uuid`);
+    console.log('Deleted stub player', STUB_ID);
   }
 
-  const after = await db.execute(sql`
-    SELECT p.id, p.name, p.market_value_tier, p.api_football_id,
-      (SELECT COUNT(*)::int FROM final_appearances f WHERE f.player_id = p.id) AS finals,
-      (SELECT COALESCE(SUM(s.appearances),0)::int FROM player_stats s WHERE s.player_id = p.id AND s.league_id = 140) AS laliga_apps,
-      (SELECT COUNT(*)::int FROM player_career c WHERE c.player_id = p.id) AS career
-    FROM players p
-    WHERE p.id IN (${CARVAJAL_ID}::uuid, ${STUB_ID}::uuid)
-    ORDER BY p.market_value_tier DESC
+  const afterPlayers = await db.execute(sql`
+    SELECT id, name, current_club, current_league, api_football_id, tm_player_id, market_value_tier
+    FROM players
+    WHERE id = ${CARVAJAL_ID}::uuid
+       OR name ILIKE ${'%carvajal%'}
+    ORDER BY name, id
   `);
-  console.log('\nAFTER:', JSON.stringify(after, null, 2));
+  console.log('\nPlayers after:', afterPlayers);
+  console.log('REAL refs after:', await countRefs(CARVAJAL_ID));
+
+  const health = await db.execute(sql`
+    SELECT
+      (SELECT COALESCE(SUM(appearances),0)::int FROM player_stats
+        WHERE player_id = ${CARVAJAL_ID}::uuid AND league_id = 140) AS liga_apps,
+      (SELECT COALESCE(SUM(appearances),0)::int FROM player_stats
+        WHERE player_id = ${CARVAJAL_ID}::uuid AND league_id = 2) AS cl_apps,
+      (SELECT COALESCE(SUM(appearances),0)::int FROM player_stats
+        WHERE player_id = ${CARVAJAL_ID}::uuid) AS total_apps,
+      (SELECT COUNT(*)::int FROM final_appearances WHERE player_id = ${CARVAJAL_ID}::uuid) AS finals,
+      (SELECT COUNT(*)::int FROM wc_squads WHERE player_id = ${CARVAJAL_ID}::uuid) AS wc_squads,
+      (SELECT intl_caps FROM player_extra_stats WHERE player_id = ${CARVAJAL_ID}::uuid) AS intl_caps,
+      (SELECT tm_intl_caps FROM player_extra_stats WHERE player_id = ${CARVAJAL_ID}::uuid) AS tm_intl_caps,
+      (SELECT json_agg(json_build_object('team', team_name, 'from', season_from, 'to', season_to) ORDER BY season_from)
+        FROM player_career WHERE player_id = ${CARVAJAL_ID}::uuid) AS career
+  `);
+  console.log('Health:', JSON.stringify(health, null, 2));
+
+  const sat = await db.execute(sql`
+    SELECT date, puzzle_json->'rounds'->4 AS round4
+    FROM daily_puzzles
+    WHERE mode_id = 'one_more' AND date = '2026-08-15'
+  `);
+  console.log('Sat one_more round4 after rewrite:', JSON.stringify(sat, null, 2));
 }
 
 main()

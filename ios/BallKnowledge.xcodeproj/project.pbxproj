@@ -58,6 +58,7 @@
 		97B7A592988DD02E168C095B /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A36DF66C77EDAE47F240AEB4 /* AuthManager.swift */; };
 		988F464045F91747F79679EB /* GameModeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF087E8BC4A2736630E7F1C /* GameModeCatalog.swift */; };
 		9AFB441312928D842545A886 /* DailyCompleteCelebrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9576DA59744E1B2023CA1144 /* DailyCompleteCelebrationView.swift */; };
+		A8F3C1D02E7B4A9C8D1E5F60 /* WeeklyLeagueIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F3C1D02E7B4A9C8D1E5F61 /* WeeklyLeagueIntroView.swift */; };
 		9FB86F0EEA7D92139B5A4E28 /* TargetManView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68FA75A0F34C332CA2C9D571 /* TargetManView.swift */; };
 		A095F84730973428EB97DF1F /* LastManStandingSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474D79C577D4F62766E87EC7 /* LastManStandingSeed.swift */; };
 		A0DE9140F90AC3DC171E6D59 /* FootballBingoModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 037F594EC5D10F8641A796B6 /* FootballBingoModels.swift */; };
@@ -156,6 +157,7 @@
 		932DE25228164846B41BF22F /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9475EA8DDA597CE44BCD022E /* BallKnowledge.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BallKnowledge.entitlements; sourceTree = "<group>"; };
 		9576DA59744E1B2023CA1144 /* DailyCompleteCelebrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyCompleteCelebrationView.swift; sourceTree = "<group>"; };
+		A8F3C1D02E7B4A9C8D1E5F61 /* WeeklyLeagueIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyLeagueIntroView.swift; sourceTree = "<group>"; };
 		9764E36265E687FB154CB2F7 /* PlayerSearchResultsList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSearchResultsList.swift; sourceTree = "<group>"; };
 		978DCD9BA1FEAF828465ED08 /* ClubChainModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClubChainModels.swift; sourceTree = "<group>"; };
 		98789033A80A23ABB3024A8B /* win7.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = win7.png; sourceTree = "<group>"; };
@@ -460,6 +462,7 @@
 				89413FFF0304FFD7F1E83476 /* ActivityFeed.swift */,
 				9576DA59744E1B2023CA1144 /* DailyCompleteCelebrationView.swift */,
 				932DE25228164846B41BF22F /* HomeView.swift */,
+				A8F3C1D02E7B4A9C8D1E5F61 /* WeeklyLeagueIntroView.swift */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -617,6 +620,7 @@
 				C4F799AF15D7E8C7423B5C7D /* Config.swift in Sources */,
 				3A0297A08B6E104DA7807595 /* DailyChallengeResolver.swift in Sources */,
 				9AFB441312928D842545A886 /* DailyCompleteCelebrationView.swift in Sources */,
+				A8F3C1D02E7B4A9C8D1E5F60 /* WeeklyLeagueIntroView.swift in Sources */,
 				8CECA361FF0FE450D94B16F8 /* DailyDate.swift in Sources */,
 				046B77DFB3F7062D4E4A64D2 /* DailyPuzzleDTO.swift in Sources */,
 				5EC83A87135A943A90837588 /* DraftMasterModels.swift in Sources */,

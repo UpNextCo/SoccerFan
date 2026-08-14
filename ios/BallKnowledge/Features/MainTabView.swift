@@ -162,8 +162,10 @@ private struct VsInAppBanner: View {
 }
 
 enum LeagueScope: String, CaseIterable, Identifiable {
-    case weekly = "Weekly League"
+    case weekly = "Weekly"
     case overall = "Overall"
+    case today = "Today"
+    case teams = "Teams"
     var id: String { rawValue }
 }
 
@@ -171,6 +173,7 @@ enum LeagueScope: String, CaseIterable, Identifiable {
 @Observable
 final class LeaguesViewModel {
     var players: [PlayerStandingDTO] = []
+    var teams: [TeamStandingDTO] = []
     var weekly: MyLeagueDTO?
     var caption: String = ""
     var isLoading = false
@@ -185,16 +188,31 @@ final class LeaguesViewModel {
                 let result = try await APIClient.shared.leaguesMe()
                 weekly = result
                 players = result.standings.map(\.asPlayerStanding)
+                teams = []
                 caption = result.endsLabel ?? "Weekly league · Ends Sunday"
             case .overall:
                 let result = try await APIClient.shared.leaguesOverall()
                 weekly = nil
                 players = result.standings
+                teams = []
                 caption = "All-time XP leaders"
+            case .today:
+                let result = try await APIClient.shared.leaguesDaily()
+                weekly = nil
+                players = result.standings
+                teams = []
+                caption = "Today's XP leaders"
+            case .teams:
+                let result = try await APIClient.shared.leaguesTeams()
+                weekly = nil
+                teams = result.standings
+                players = []
+                caption = "Clubs ranked by combined XP of their fans"
             }
             loadedScope = scope
         } catch {
             players = []
+            teams = []
             weekly = nil
             caption = ""
             loadedScope = scope
@@ -206,6 +224,7 @@ struct LeaguesTabView: View {
     @Environment(AuthManager.self) private var auth
     @State private var scope: LeagueScope = .weekly
     @State private var viewModel = LeaguesViewModel()
+    @State private var weeklyIntroPayload: WeeklyLeagueIntroPayload?
 
     var body: some View {
         VStack(spacing: 14) {
@@ -220,7 +239,26 @@ struct LeaguesTabView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(BKTheme.background)
-        .task(id: scope) { await viewModel.load(scope) }
+        .task(id: scope) {
+            await viewModel.load(scope)
+            presentWeeklyIntroIfNeeded()
+        }
+        .fullScreenCover(item: $weeklyIntroPayload) { payload in
+            WeeklyLeagueIntroView(payload: payload) {
+                weeklyIntroPayload = nil
+            }
+        }
+    }
+
+    private func presentWeeklyIntroIfNeeded() {
+        guard scope == .weekly else { return }
+        guard !WeeklyLeagueIntro.hasShown else { return }
+        guard let weekly = viewModel.weekly else { return }
+        WeeklyLeagueIntro.markShown()
+        weeklyIntroPayload = WeeklyLeagueIntroPayload(
+            division: weekly.division ?? "sunday_league",
+            divisionLabel: weekly.divisionLabel ?? "Sunday League"
+        )
     }
 
     @ViewBuilder
@@ -231,8 +269,10 @@ struct LeaguesTabView: View {
             Spacer()
         } else if scope == .weekly {
             weeklyContent
+        } else if scope == .teams {
+            teamsContent
         } else {
-            overallContent
+            playerBoardContent
         }
     }
 
@@ -305,7 +345,7 @@ struct LeaguesTabView: View {
     }
 
     @ViewBuilder
-    private var overallContent: some View {
+    private var playerBoardContent: some View {
         if !viewModel.caption.isEmpty {
             Text(viewModel.caption)
                 .font(BKFont.caption(11))
@@ -325,10 +365,41 @@ struct LeaguesTabView: View {
                     ForEach(viewModel.players) { player in
                         ExpandablePlayerStandingRow(
                             player: player,
-                            scope: .overall,
+                            scope: scope,
                             isCurrentUser: player.userId == auth.user?.id
                         )
-                        .id("overall-\(player.userId)")
+                        .id("\(scope.rawValue)-\(player.userId)")
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, BKTabBar.scrollClearance)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var teamsContent: some View {
+        if !viewModel.caption.isEmpty {
+            Text(viewModel.caption)
+                .font(BKFont.caption(11))
+                .foregroundStyle(BKTheme.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+        }
+        if viewModel.teams.isEmpty {
+            emptyState(
+                icon: "shield.lefthalf.filled",
+                title: "No clubs ranked yet",
+                message: "Pick the team you support, then earn XP to put them on the table."
+            )
+        } else {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 8) {
+                    ForEach(viewModel.teams) { team in
+                        ExpandableTeamStandingRow(
+                            team: team,
+                            currentUserId: auth.user?.id
+                        )
                     }
                 }
                 .padding(.horizontal, 16)
@@ -491,7 +562,7 @@ struct ExpandablePlayerStandingRow: View {
     @State private var didLoadModes = false
 
     private var canExpand: Bool {
-        scope == .overall
+        scope == .overall || scope == .today
     }
 
     var body: some View {
@@ -522,7 +593,7 @@ struct ExpandablePlayerStandingRow: View {
                             .tint(BKTheme.accent)
                             .padding(.vertical, 12)
                     } else if displayModes.isEmpty {
-                        Text("No game XP yet")
+                        Text(scope == .today ? "No XP earned today" : "No game XP yet")
                             .font(BKFont.caption(11))
                             .foregroundStyle(BKTheme.textMuted)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -532,7 +603,7 @@ struct ExpandablePlayerStandingRow: View {
                         ForEach(displayModes) { row in
                             LeaguePlayerXpGameRow(
                                 modeId: row.modeId,
-                                xp: row.totalXp
+                                xp: scope == .today ? row.todayXp : row.totalXp
                             )
                         }
                     }
@@ -558,9 +629,11 @@ struct ExpandablePlayerStandingRow: View {
 
     private var displayModes: [XpByModeRowDTO] {
         modes
-            .filter { $0.totalXp > 0 }
+            .filter { scope == .today ? $0.todayXp > 0 : $0.totalXp > 0 }
             .sorted { lhs, rhs in
-                if lhs.totalXp != rhs.totalXp { return lhs.totalXp > rhs.totalXp }
+                let left = scope == .today ? lhs.todayXp : lhs.totalXp
+                let right = scope == .today ? rhs.todayXp : rhs.totalXp
+                if left != right { return left > right }
                 return lhs.modeId < rhs.modeId
             }
     }
@@ -1417,6 +1490,7 @@ struct ProfileTabView: View {
             rowDivider
             SettingsRow(icon: "questionmark.circle.fill", title: "Show game intros again") {
                 GameIntroPreferences.reset()
+                WeeklyLeagueIntro.reset()
                 showIntrosResetAlert = true
             }
         }
