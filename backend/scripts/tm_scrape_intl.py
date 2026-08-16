@@ -12,6 +12,7 @@ tm_scrape_seasons.py has to drive Chrome for. Resumable: players already in the 
 
 Usage:
   ./.venv/bin/python scripts/tm_scrape_intl.py [--limit N] [--delay SECONDS] [--workers N]
+  ./.venv/bin/python scripts/tm_scrape_intl.py --targets transferdata/tm_targets_missing_intl_tier3.json
 """
 import json
 import os
@@ -31,7 +32,11 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
 # "Current international: Portugal" / "Former International: England". A youth-only player shows a
 # U-team here (e.g. "Germany U21"), which must not be stored as senior caps — the importer decides.
 TEAM_RE = re.compile(r'(Current international|Former International|Former international)\s*:.*?<a title="([^"]+)"', re.S)
-CAPS_RE = re.compile(r'Caps/Goals:.*?highlight"[^>]*>\s*([\d.,]+)\s*</a>\s*/\s*<a[^>]*>\s*([\d.,]+)', re.S)
+# TM wraps both numbers in data-header__content--highlight anchors; keep the pattern loose.
+CAPS_RE = re.compile(
+    r'Caps/Goals:.*?>([\d.,]+)\s*</a>\s*/\s*<a[^>]*>\s*([\d.,]+)',
+    re.S,
+)
 
 # Every national team the player is on record for, e.g. {"19753":"French Guiana","3377":"France",...}.
 # The header above describes only ONE of them — the latest — so for anyone who represented two senior
@@ -57,7 +62,8 @@ def fetch(url, attempts=3):
                 return None
             print(f"  HTTP {e.code} — retry {i + 1}", flush=True)
         except Exception as e:
-            print(f"  {type(e).__name__} — retry {i + 1}", flush=True)
+            msg = f"  {type(e).__name__} — retry {i + 1}"
+            print(msg.encode("ascii", "replace").decode("ascii"), flush=True)
         time.sleep(3 * (i + 1))
     return None
 
@@ -75,7 +81,13 @@ def team_list(html):
 
 
 def scrape_one(t):
-    code = t.get("code") or "x"
+    # TM routes on spieler/{id}; the slug is cosmetic but must be ASCII for urllib on some hosts.
+    raw = (t.get("code") or "x")
+    code = (
+        raw.encode("ascii", "ignore").decode("ascii")
+        or "x"
+    )
+    code = re.sub(r"[^a-zA-Z0-9\-]+", "", code) or "x"
     html = fetch(f"https://www.transfermarkt.com/{code}/nationalmannschaft/spieler/{t['tmId']}")
     rec = {"ourId": t["ourId"], "tmId": t["tmId"], "team": None, "caps": None, "goals": None, "teams": []}
     if html:
@@ -96,19 +108,27 @@ def main():
     limit = int(args[args.index("--limit") + 1]) if "--limit" in args else None
     delay = float(args[args.index("--delay") + 1]) if "--delay" in args else 2.0
     workers = int(args[args.index("--workers") + 1]) if "--workers" in args else 1
+    targets_path = args[args.index("--targets") + 1] if "--targets" in args else TARGETS
 
-    done = set()
+    done_tm = set()
     if os.path.exists(OUT):
         for line in open(OUT):
             try:
-                done.add(json.loads(line)["ourId"])
+                row = json.loads(line)
+                # Only treat as done when we already have a usable Caps/Goals parse.
+                if row.get("caps") is not None and row.get("tmId") is not None:
+                    done_tm.add(str(row["tmId"]))
             except Exception:
                 pass
 
-    targets = [t for t in json.load(open(TARGETS)) if t["ourId"] not in done]
+    targets = [
+        t for t in json.load(open(targets_path))
+        if str(t.get("tmId") or "") not in done_tm
+    ]
     if limit:
         targets = targets[:limit]
-    print(f"{len(targets)} players to fetch ({len(done)} already done), {workers} worker(s)", flush=True)
+    print(f"{len(targets)} players to fetch from {targets_path} "
+          f"({len(done_tm)} already done), {workers} worker(s)", flush=True)
 
     out = open(OUT, "a")
     lock = threading.Lock()

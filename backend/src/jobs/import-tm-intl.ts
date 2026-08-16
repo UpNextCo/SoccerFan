@@ -7,12 +7,13 @@
  * opposite directions: players.csv sometimes stored CLUB appearances as caps (Iker Muniain 270, really
  * 2), while the Wikipedia lists miss real scorers entirely (Gareth Bale 0, really 40).
  *
- * Two kinds of row are refused:
- *   - youth: a header reading "Portugal U21" is not a senior total.
- *   - ambiguous: the header describes only the player's LATEST national team, so anyone with two senior
- *     sides can be described by the wrong one — Malouda's 4 French Guiana caps standing in for his 80
- *     for France, Šuker's 2 for Yugoslavia for his 69 for Croatia. Per-team splits aren't in the HTML,
- *     so those players keep whatever we already hold (which is usually the main-team figure).
+ * Matching is by Transfermarkt id (players.tm_player_id), so remapped player UUIDs still get the scrape.
+ *
+ * Refused:
+ *   - youth header ("Portugal U21")
+ *   - true dual internationals where the header team is not the player's stored nationality
+ *     (Malouda French Guiana vs France). Successor-state careers (Serbia / Serbia and Montenegro /
+ *     Yugoslavia) count as one side.
  *
  * Usage: npx tsx src/jobs/import-tm-intl.ts [transferdataDir] [--apply]
  */
@@ -22,6 +23,7 @@ import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { isYouthOrReserveSide } from '../utils/nationalTeam.js';
+import { canonicalNationality } from '../utils/nationality.js';
 import { INTL_CAPS_FALLBACK_MAX, INTL_CAPS_SANITY_MAX } from '../services/statMetrics.js';
 
 const DIR = process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : 'transferdata';
@@ -31,10 +33,22 @@ const APPLY = process.argv.includes('--apply');
  * Sides that are neither youth nor the senior national team: Olympic squads ("Brazil Olympic",
  * "Uruguay Olympia") and the second-string setups Transfermarkt keeps as separate teams
  * ("Deutschland A2 (1999-2001)", "Germany B (1951-1986)", "Germany Team 2006 (2001-2005)").
- * Counting these as senior would make a one-nation player look like a dual international and cost
- * them the correction.
  */
 const SECONDARY_SIDE = /\bolympi(?:a|c|cs)\b|\bA2\b|\bB\s*\(|\bteam\s+\d{4}\b/i;
+
+/** Historical predecessors / alternate labels that still describe one senior career. */
+const SUCCESSOR_CLUSTERS: string[][] = [
+  ['serbia', 'serbia and montenegro', 'yugoslavia', 'serbia-montenegro'],
+  ['montenegro', 'serbia and montenegro', 'yugoslavia', 'serbia-montenegro'],
+  ['czech republic', 'czechia', 'czechoslovakia'],
+  ['slovakia', 'czechoslovakia'],
+  ['russia', 'cis', 'soviet union', 'ussr'],
+  ['ukraine', 'soviet union', 'ussr'],
+  ['germany', 'east germany', 'west germany', 'germany dr', 'german democratic republic'],
+  ['yemen', 'south yemen', 'north yemen', 'yemen ar', 'yemen pdr'],
+  ['congo', 'zaire', 'dr congo', 'congo dr', 'democratic republic of the congo'],
+  ['indonesia', 'dutch east indies'],
+];
 
 interface Line {
   ourId: string;
@@ -42,79 +56,161 @@ interface Line {
   team: string | null;
   caps: number | null;
   goals: number | null;
-  /** Every national team on the player's record, senior and youth. */
   teams?: string[];
 }
 
 const isSeniorSide = (team: string): boolean => !isYouthOrReserveSide(team) && !SECONDARY_SIDE.test(team);
 
+function nationKey(name: string): string {
+  return canonicalNationality(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function clusterId(name: string): string {
+  const key = nationKey(name);
+  for (let i = 0; i < SUCCESSOR_CLUSTERS.length; i += 1) {
+    if (SUCCESSOR_CLUSTERS[i]!.some((alias) => key === alias || key.includes(alias))) {
+      return `cluster:${i}`;
+    }
+  }
+  return `solo:${key}`;
+}
+
+/** Collapse Serbia+Yugoslavia etc. into one identity for ambiguity checks. */
+function distinctSeniorCareers(teams: string[]): string[] {
+  const ids = new Set<string>();
+  for (const team of teams.filter(isSeniorSide)) {
+    ids.add(clusterId(team));
+  }
+  return [...ids];
+}
+
+function nationalityMatchesHeader(playerNationality: string | null, headerTeam: string): boolean {
+  if (!playerNationality) return false;
+  return clusterId(playerNationality) === clusterId(headerTeam)
+    || nationKey(playerNationality) === nationKey(headerTeam);
+}
+
 async function main() {
   const text = readFileSync(join(DIR, 'tm_intl.jsonl'), 'utf8').trim();
   const lines = text ? text.split('\n').map((l) => JSON.parse(l) as Line) : [];
 
-  const keep = new Map<string, { caps: number; goals: number; team: string }>();
-  const ambiguous = new Map<string, { caps: number; goals: number; team: string; teams: string[] }>();
+  // Prefer the latest scrape per TM id (file may contain remapped ourIds over time).
+  const byTm = new Map<string, Line>();
+  for (const ln of lines) {
+    if (!ln.tmId) continue;
+    byTm.set(String(ln.tmId), ln);
+  }
+
+  const tmIds = [...byTm.keys()];
+  console.log(`scraped rows      : ${lines.length}`);
+  console.log(`unique tm ids     : ${tmIds.length}`);
+
+  const players = (await db.execute(sql`
+    SELECT p.id, p.name, p.nationality, p.tm_player_id,
+           COALESCE(e.intl_caps, 0)::int AS caps,
+           COALESCE(e.intl_goals, 0)::int AS goals,
+           e.tm_intl_caps
+    FROM players p
+    LEFT JOIN player_extra_stats e ON e.player_id = p.id
+    WHERE p.tm_player_id = ANY(${sql`ARRAY[${sql.join(tmIds.map((id) => sql`${id}`), sql`, `)}]`})
+  `)) as unknown as Array<{
+    id: string;
+    name: string;
+    nationality: string | null;
+    tm_player_id: string;
+    caps: number;
+    goals: number;
+    tm_intl_caps: number | null;
+  }>;
+
+  const byTmPlayer = new Map(players.map((p) => [String(p.tm_player_id), p]));
+  console.log(`matched in DB     : ${byTmPlayer.size}`);
+
+  const keep = new Map<string, { caps: number; goals: number; team: string; name: string; was: number }>();
   let noCaps = 0;
   let youth = 0;
   let insane = 0;
-  for (const ln of lines) {
-    if (ln.caps === null || ln.team === null) { noCaps++; continue; }
-    if (!isSeniorSide(ln.team)) { youth++; continue; }
+  let unmatched = 0;
+  let ambiguousSkipped = 0;
+  let successorCollapsed = 0;
+  let nationalityRescued = 0;
+  let impossibleRescued = 0;
+
+  for (const [tmId, ln] of byTm) {
+    const player = byTmPlayer.get(tmId);
+    if (!player) { unmatched++; continue; }
+    if (ln.caps === null) { noCaps++; continue; }
     if (ln.caps < 0 || ln.caps > INTL_CAPS_SANITY_MAX) { insane++; continue; }
-    const value = { caps: ln.caps, goals: Math.max(0, ln.goals ?? 0), team: ln.team };
-    const seniorSides = (ln.teams ?? []).filter(isSeniorSide);
-    if (seniorSides.length > 1) ambiguous.set(ln.ourId, { ...value, teams: seniorSides });
-    else keep.set(ln.ourId, value);
+
+    // Header team is sometimes missing from older scrapes even when Caps/Goals parsed.
+    // Fall back to the senior side list (prefer the player's stored nationality).
+    const seniors = (ln.teams ?? []).filter(isSeniorSide);
+    let team = ln.team && isSeniorSide(ln.team) ? ln.team : null;
+    if (!team) {
+      team = seniors.find((t) => nationalityMatchesHeader(player.nationality, t))
+        ?? seniors[0]
+        ?? null;
+    }
+    if (!team) { youth++; continue; }
+
+    const value = {
+      caps: ln.caps,
+      goals: Math.max(0, ln.goals ?? 0),
+      team,
+      name: player.name,
+      was: player.caps,
+    };
+
+    const careers = distinctSeniorCareers(ln.teams ?? [team]);
+    if (careers.length <= 1) {
+      if ((ln.teams ?? []).filter(isSeniorSide).length > 1) successorCollapsed += 1;
+      keep.set(player.id, value);
+      continue;
+    }
+
+    // True multi-nation record: accept only when the header matches our stored nationality,
+    // or when wiki caps are impossible (club-appearance bug).
+    if (nationalityMatchesHeader(player.nationality, team)) {
+      nationalityRescued += 1;
+      keep.set(player.id, value);
+      continue;
+    }
+    if (player.caps > INTL_CAPS_FALLBACK_MAX) {
+      impossibleRescued += 1;
+      keep.set(player.id, value);
+      continue;
+    }
+    ambiguousSkipped += 1;
   }
 
-  console.log(`scraped rows      : ${lines.length}`);
-  console.log(`no caps on page   : ${noCaps}   (uncapped players, or a fetch that failed)`);
+  console.log(`no caps on page   : ${noCaps}`);
   console.log(`youth/Olympic side: ${youth}`);
   console.log(`out of sane range : ${insane}`);
-  console.log(`two senior sides  : ${ambiguous.size}   (header names only the latest of them)`);
-
-  // Stored values for everything in play, so ambiguous players can be judged against what we hold.
-  const ids = [...keep.keys(), ...ambiguous.keys()];
-  if (!ids.length) process.exit(0);
-  const idArr = sql`ARRAY[${sql.join(ids.map((i) => sql`${i}::uuid`), sql`, `)}]`;
-  const stored = (await db.execute(sql`
-    SELECT p.id, p.name, COALESCE(e.intl_caps, 0)::int AS caps, COALESCE(e.intl_goals, 0)::int AS goals
-    FROM players p LEFT JOIN player_extra_stats e ON e.player_id = p.id
-    WHERE p.id = ANY(${idArr})
-  `)) as unknown as Array<{ id: string; name: string; caps: number; goals: number }>;
-  const storedById = new Map(stored.map((s) => [s.id, s]));
-
-  // A dual international normally keeps their stored caps, because the header may describe the minor
-  // team. But when the stored figure is beyond any real career it's the club-appearance bug (Iñaki
-  // Williams on 230), and even an ambiguous Transfermarkt number beats known nonsense.
-  const rescued: string[] = [];
-  for (const [id, value] of ambiguous) {
-    if ((storedById.get(id)?.caps ?? 0) <= INTL_CAPS_FALLBACK_MAX) continue;
-    keep.set(id, value);
-    ambiguous.delete(id);
-    rescued.push(storedById.get(id)?.name ?? id);
-  }
-  if (rescued.length) console.log(`  of those, ${rescued.length} had impossible stored caps and take the TM value: ${rescued.join(', ')}`);
+  console.log(`unmatched tm ids  : ${unmatched}`);
+  console.log(`successor collapsed: ${successorCollapsed}`);
+  console.log(`nationality rescue: ${nationalityRescued}`);
+  console.log(`impossible wiki rescue: ${impossibleRescued}`);
+  console.log(`true dual skipped : ${ambiguousSkipped}`);
   console.log(`to write          : ${keep.size}`);
 
-  const current = stored.filter((s) => keep.has(s.id));
-  const diffs = current
-    .map((c) => ({ name: c.name, was: c, now: keep.get(c.id)! }))
-    .filter((d) => d.was.caps !== d.now.caps || d.was.goals !== d.now.goals);
-  const capDrops = diffs.filter((d) => d.was.caps - d.now.caps >= 20).sort((a, b) => (b.was.caps - b.now.caps) - (a.was.caps - a.now.caps));
-  const goalGains = diffs.filter((d) => d.now.goals - d.was.goals >= 10).sort((a, b) => (b.now.goals - b.was.goals) - (a.now.goals - a.was.goals));
-  console.log(`\ndisagreements     : ${diffs.length} of ${current.length}`);
-  console.log(`\n--- caps we were overstating by 20+ (players.csv club-appearance bug) ---`);
-  for (const d of capDrops.slice(0, 15)) console.log(`  ${String(d.was.caps).padStart(4)} -> ${String(d.now.caps).padEnd(4)} ${d.name}`);
-  console.log(`\n--- international goals we were missing (10+) ---`);
-  for (const d of goalGains.slice(0, 15)) console.log(`  ${String(d.was.goals).padStart(4)} -> ${String(d.now.goals).padEnd(4)} ${d.name}`);
-
-  if (ambiguous.size) {
-    console.log(`\n--- skipped: two senior national teams, keeping our stored caps ---`);
-    for (const [id, a] of [...ambiguous].slice(0, 12)) {
-      const row = storedById.get(id);
-      if (row) console.log(`  ${String(row.caps).padStart(4)} caps kept  ${row.name}  (${a.teams.join(' / ')})`);
-    }
+  const capDrops = [...keep.values()]
+    .filter((d) => d.was - d.caps >= 20)
+    .sort((a, b) => (b.was - b.caps) - (a.was - a.caps));
+  const capGains = [...keep.values()]
+    .filter((d) => d.caps - d.was >= 20)
+    .sort((a, b) => (b.caps - a.was) - (a.caps - a.was));
+  console.log(`\n--- wiki was 20+ higher (likely club-apps bug) ---`);
+  for (const d of capDrops.slice(0, 15)) {
+    console.log(`  ${String(d.was).padStart(4)} -> ${String(d.caps).padEnd(4)} ${d.name} (${d.team})`);
+  }
+  console.log(`\n--- TM is 20+ higher (wiki undercount) ---`);
+  for (const d of capGains.slice(0, 20)) {
+    console.log(`  ${String(d.was).padStart(4)} -> ${String(d.caps).padEnd(4)} ${d.name} (${d.team})`);
   }
 
   if (!APPLY) {
@@ -137,7 +233,7 @@ async function main() {
     `);
     written += batch.length;
   }
-  console.log(`\nWrote international caps/goals for ${written} players.`);
+  console.log(`\nWrote tm_intl_caps/goals for ${written} players.`);
   process.exit(0);
 }
 
