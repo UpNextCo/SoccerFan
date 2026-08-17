@@ -22,6 +22,8 @@ import {
   type BackYourselfPuzzlePublic,
 } from './backYourselfGenerator.js';
 import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenerator.js';
+import { generateDarts501Puzzle } from './darts501Generator.js';
+import { DARTS501_MAX_XP } from './darts501Scoring.js';
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 import { startLastManStandingRun, submitLastManStandingAnswer } from './lastManStandingCheck.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
@@ -40,6 +42,7 @@ const GAME_MODES = [
   { id: 'target_man', title: 'TARGET MAN', subtitle: 'Hit the stat target', playerCount: 15200, isAvailable: true },
   { id: 'last_man_standing', title: 'LAST MAN STANDING', subtitle: 'Survive the field', playerCount: 10100, isAvailable: true },
   { id: 'back_yourself', title: 'BACK YOURSELF', subtitle: 'Pledge how many you can name', playerCount: 9800, isAvailable: true },
+  { id: 'darts_501', title: 'DARTS 501', subtitle: 'Name players, check out from 501', playerCount: 8700, isAvailable: true },
 ];
 
 /** Modes still generated via generateAllDailyPuzzles (legacy Guess Who / Blind Rank retired). */
@@ -57,6 +60,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'target_man', title: 'TARGET MAN' },
   { modeId: 'last_man_standing', title: 'LAST MAN STANDING' },
   { modeId: 'back_yourself', title: 'BACK YOURSELF' },
+  { modeId: 'darts_501', title: 'DARTS 501' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). */
@@ -69,6 +73,7 @@ export const DAILY_PLAYABLE_MODES = [
   'target_man',
   'last_man_standing',
   'back_yourself',
+  'darts_501',
 ] as const;
 
 /**
@@ -115,6 +120,7 @@ export const MAX_XP: Record<string, number> = {
   football_golf: FOOTBALL_GOLF_MAX_XP,
   last_man_standing: 900,
   back_yourself: BACK_YOURSELF_MAX_XP,
+  darts_501: DARTS501_MAX_XP,
 };
 
 export function maxXpForMode(modeId: string): number {
@@ -274,6 +280,37 @@ async function ensureBackYourselfPuzzle(date: string): Promise<void> {
     );
   } catch (error) {
     console.warn(`Skipped back_yourself for ${date}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/** Generate + store today's Darts 501 formula if not present. Best-effort. */
+async function ensureDarts501Puzzle(date: string): Promise<void> {
+  const existing = await db
+    .select({ modeId: dailyPuzzles.modeId })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, 'darts_501')))
+    .limit(1);
+  if (existing.length > 0) return;
+
+  try {
+    const generated = await generateDarts501Puzzle(date);
+    if (!generated) {
+      console.warn(`Skipped darts_501 for ${date}: no viable formula`);
+      return;
+    }
+    await db
+      .insert(dailyPuzzles)
+      .values({
+        date,
+        modeId: 'darts_501',
+        puzzleJson: generated.puzzle,
+        answerPlayerId: null,
+        answerJson: generated.answer,
+      })
+      .onConflictDoNothing();
+    console.log(`Generated darts_501 puzzle for ${date} (${generated.puzzle.formulaLabel})`);
+  } catch (error) {
+    console.warn(`Skipped darts_501 for ${date}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -559,6 +596,9 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   }
   if (!existing.has('back_yourself')) {
     await ensureBackYourselfPuzzle(date);
+  }
+  if (!existing.has('darts_501')) {
+    await ensureDarts501Puzzle(date);
   }
 }
 

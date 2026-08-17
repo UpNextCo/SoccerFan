@@ -18,6 +18,7 @@ const PLAYABLE = [
   'target_man',
   'last_man_standing',
   'back_yourself',
+  'darts_501',
 ] as const;
 
 function datesInclusive(from: string, to: string): string[] {

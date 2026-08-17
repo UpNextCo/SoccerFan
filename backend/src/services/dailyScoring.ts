@@ -17,6 +17,12 @@ import {
   type BackYourselfPuzzlePublic,
 } from './backYourselfGenerator.js';
 import {
+  darts501FormulaById,
+  parseDarts501Puzzle,
+  playerValuesForDarts501,
+} from './darts501Generator.js';
+import { darts501Xp, resolveDarts501Throw } from './darts501Scoring.js';
+import {
   FOOTBALL_GOLF_HOLE_COUNT,
   FOOTBALL_GOLF_MAX_XP,
 } from './footballGolfConstants.js';
@@ -474,6 +480,68 @@ async function scoreBackYourselfMode(row: PuzzleRow, answer: unknown): Promise<S
   });
 }
 
+async function scoreDarts501(row: PuzzleRow, answer: unknown): Promise<ServerScore | null> {
+  const body = answer as { playerIds?: unknown };
+  if (!Array.isArray(body.playerIds) || body.playerIds.some((id) => typeof id !== 'string')) {
+    return null;
+  }
+
+  const puzzle = parseDarts501Puzzle(row.puzzleJson);
+  const formula = puzzle ? darts501FormulaById(puzzle.formulaId) : undefined;
+  if (!puzzle || !formula) return null;
+
+  const seen = new Set<string>();
+  const playerIds: string[] = [];
+  for (const id of body.playerIds as string[]) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    playerIds.push(id);
+  }
+
+  const values = await playerValuesForDarts501(formula, playerIds);
+  let remaining = puzzle.startScore;
+  let inCheckout = false;
+  let checkoutBusts = 0;
+  let busts = 0;
+  let won = false;
+  let perfect = false;
+
+  for (const id of playerIds) {
+    const resolved = values.get(id);
+    if (!resolved?.eligible) {
+      throw new InvalidCompletionAnswerError('Darts 501 answer includes an ineligible player');
+    }
+    const result = resolveDarts501Throw({
+      remaining,
+      score: resolved.score,
+      inCheckout,
+      checkoutBusts,
+    });
+    remaining = result.remaining;
+    inCheckout = result.inCheckout;
+    checkoutBusts = result.checkoutBusts;
+    if (result.kind === 'bust' || result.kind === 'game_over') busts += 1;
+    if (result.kind === 'perfect') {
+      won = true;
+      perfect = true;
+      break;
+    }
+    if (result.kind === 'checkout') {
+      won = true;
+      break;
+    }
+    if (result.kind === 'game_over') {
+      won = false;
+      break;
+    }
+  }
+
+  return {
+    score: darts501Xp({ won, perfect, throws: playerIds.length, busts }),
+    won,
+  };
+}
+
 export async function computeServerScore(
   modeId: string,
   row: PuzzleRow,
@@ -492,6 +560,7 @@ export async function computeServerScore(
       case 'target_man': return await scoreTargetMan(row, answer);
       case 'club_chain': return await scoreClubChain(row, answer);
       case 'back_yourself': return await scoreBackYourselfMode(row, answer);
+      case 'darts_501': return await scoreDarts501(row, answer);
       default: return null;
     }
   } catch {

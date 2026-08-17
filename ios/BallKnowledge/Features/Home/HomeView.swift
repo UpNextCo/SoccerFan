@@ -901,6 +901,7 @@ struct DailyGameCard: View {
         case .footballTower: return "Football Tower"
         case .lastManStanding: return "Last Man Standing"
         case .backYourself: return "Back Yourself"
+        case .darts501: return "Darts 501"
         }
     }
 
@@ -933,6 +934,8 @@ struct DailyGameCard: View {
             return "Survive the field"
         case .backYourself:
             return "How many you can name?"
+        case .darts501:
+            return "Check out from 501"
         }
     }
 }
@@ -1106,6 +1109,12 @@ struct DailyGameHost: View {
             case .backYourself:
                 if let bundle = dailyBundle, let puzzle = DailyChallengeResolver.backYourselfPuzzle(from: bundle) {
                     BackYourselfView(dailyDate: bundle.date, puzzle: puzzle, allowReplay: allowReplay, onComplete: onFinished)
+                } else {
+                    DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
+                }
+            case .darts501:
+                if let bundle = dailyBundle, let puzzle = DailyChallengeResolver.darts501Puzzle(from: bundle) {
+                    Darts501View(dailyDate: bundle.date, puzzle: puzzle, allowReplay: allowReplay, onComplete: onFinished)
                 } else {
                     DailyUnavailablePlaceholder(modeTitle: mode.title, onClose: onFinished)
                 }

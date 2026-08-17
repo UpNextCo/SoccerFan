@@ -1,5 +1,32 @@
 import Foundation
 
+struct Darts501PuzzleDTO: Codable, Equatable {
+    let modeId: String
+    let puzzleId: String
+    let date: String
+    let formulaId: String
+    let formulaLabel: String
+    let startScore: Int
+    let checkoutWindow: Int
+    let checkoutLives: Int
+
+    enum CodingKeys: String, CodingKey {
+        case modeId, puzzleId, date, formulaId, formulaLabel, startScore, checkoutWindow, checkoutLives
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        modeId = try c.decode(String.self, forKey: .modeId)
+        puzzleId = try c.decode(String.self, forKey: .puzzleId)
+        date = try c.decode(String.self, forKey: .date)
+        formulaId = try c.decodeIfPresent(String.self, forKey: .formulaId) ?? ""
+        formulaLabel = try c.decodeIfPresent(String.self, forKey: .formulaLabel) ?? ""
+        startScore = try c.decodeIfPresent(Int.self, forKey: .startScore) ?? 501
+        checkoutWindow = try c.decodeIfPresent(Int.self, forKey: .checkoutWindow) ?? 10
+        checkoutLives = try c.decodeIfPresent(Int.self, forKey: .checkoutLives) ?? 3
+    }
+}
+
 struct TargetManPuzzleDTO: Codable, Equatable {
     let modeId: String
     let puzzleId: String
@@ -553,6 +580,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
     case clubChain(ClubChainPuzzleDTO)
     case lastManStanding(LastManStandingPuzzleDTO)
     case backYourself(BackYourselfPuzzleDTO)
+    case darts501(Darts501PuzzleDTO)
 
     private enum CodingKeys: String, CodingKey {
         case modeId
@@ -587,6 +615,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             self = .lastManStanding(try LastManStandingPuzzleDTO(from: decoder))
         case GameModeID.backYourself.rawValue:
             self = .backYourself(try BackYourselfPuzzleDTO(from: decoder))
+        case GameModeID.darts501.rawValue:
+            self = .darts501(try Darts501PuzzleDTO(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .modeId,
@@ -622,6 +652,8 @@ enum DailyPuzzleDTO: Codable, Equatable {
             try puzzle.encode(to: encoder)
         case .backYourself(let puzzle):
             try puzzle.encode(to: encoder)
+        case .darts501(let puzzle):
+            try puzzle.encode(to: encoder)
         }
     }
 
@@ -639,6 +671,7 @@ enum DailyPuzzleDTO: Codable, Equatable {
         case .clubChain: return GameModeID.clubChain.rawValue
         case .lastManStanding: return GameModeID.lastManStanding.rawValue
         case .backYourself: return GameModeID.backYourself.rawValue
+        case .darts501: return GameModeID.darts501.rawValue
         }
     }
 }
@@ -780,6 +813,11 @@ extension DailyBundleDTO {
 
     var backYourselfPuzzle: BackYourselfPuzzleDTO? {
         guard case .backYourself(let puzzle) = game(for: .backYourself)?.puzzle else { return nil }
+        return puzzle
+    }
+
+    var darts501Puzzle: Darts501PuzzleDTO? {
+        guard case .darts501(let puzzle) = game(for: .darts501)?.puzzle else { return nil }
         return puzzle
     }
 }

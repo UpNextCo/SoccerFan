@@ -5,6 +5,7 @@ import { isConfiguredOpsMediaUrl } from './opsMediaValidation.js';
 import { FOOTBALL_GOLF_HOLE_COUNT } from './footballGolfConstants.js';
 import { DRAFT_POSITION_COMPATIBILITY_VERSION } from './playerPositionService.js';
 import { targetCategoryById } from './targetManCategories.js';
+import { darts501FormulaById } from './darts501Generator.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 export interface AdminPuzzleValidationIssue {
@@ -465,6 +466,26 @@ function validateClubChain(puzzleJson: unknown, answerJson: unknown, issues: Adm
   if (puzzle.maxMoves < puzzle.shortestPathLength) issue(issues, 'puzzleJson.maxMoves', 'maxMoves cannot be shorter than the shortest path.');
 }
 
+function validateDarts501(puzzleJson: unknown, _answerJson: unknown, issues: AdminPuzzleValidationIssue[]) {
+  if (!puzzleJson || typeof puzzleJson !== 'object') {
+    issue(issues, 'puzzleJson', 'Darts 501 puzzle is missing.');
+    return;
+  }
+  const puzzle = puzzleJson as { formulaId?: unknown; formulaLabel?: unknown };
+  if (typeof puzzle.formulaId !== 'string' || !puzzle.formulaId) {
+    issue(issues, 'puzzleJson.formulaId', 'Formula id is required.');
+    return;
+  }
+  const formula = darts501FormulaById(puzzle.formulaId);
+  if (!formula) {
+    issue(issues, 'puzzleJson.formulaId', 'Choose a supported Darts 501 formula.');
+    return;
+  }
+  if (typeof puzzle.formulaLabel !== 'string' || puzzle.formulaLabel !== formula.label) {
+    issue(issues, 'puzzleJson.formulaLabel', `Formula label must be “${formula.label}”.`);
+  }
+}
+
 function validateTargetMan(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzzleValidationIssue[]) {
   const puzzle = parse(targetManPuzzle, puzzleJson, 'puzzleJson', issues);
   const rawAnswer = parse(targetManAnswer, answerJson, 'answerJson', issues);
@@ -506,6 +527,7 @@ export function validatePuzzleReport(modeId: string, puzzleJson: unknown, answer
     case 'club_chain': validateClubChain(puzzleJson, answerJson, issues); break;
     case 'target_man': validateTargetMan(puzzleJson, answerJson, issues); break;
     case 'back_yourself': validateBackYourself(puzzleJson, answerJson, issues); break;
+    case 'darts_501': validateDarts501(puzzleJson, answerJson, issues); break;
     default: issue(issues, 'modeId', `Unknown mode ${modeId}.`);
   }
   return { ok: !issues.some((entry) => entry.severity === 'error'), issues };

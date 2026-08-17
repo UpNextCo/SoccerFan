@@ -226,6 +226,7 @@ const PLAYABLE_MODE_IDS = [
   'target_man',
   'last_man_standing',
   'back_yourself',
+  'darts_501',
 ] as const;
 
 /** Playable modes first (zeros filled), then any legacy modes with XP. */

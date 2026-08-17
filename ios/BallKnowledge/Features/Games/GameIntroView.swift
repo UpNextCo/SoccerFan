@@ -138,6 +138,15 @@ struct GameIntroContent {
                     "Search and name that many players with three lives. Miss the pledge and you get 0 XP.",
                 ]
             )
+        case .darts501:
+            return GameIntroContent(
+                tagline: "Start on 501.",
+                steps: [
+                    "Name players to score points based on today's stat.",
+                    "Work your way down and finish between 0 and -10.",
+                    "Some scores are impossible in darts and will bust.",
+                ]
+            )
         }
     }
 }

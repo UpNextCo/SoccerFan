@@ -172,4 +172,18 @@ enum DailyChallengeResolver {
         guard let bundle, let dto = bundle.lastManStandingPuzzle else { return nil }
         return LastManStandingSeed.makeServerPrompt(from: dto)
     }
+
+    static func darts501Puzzle(from bundle: DailyBundleDTO?) -> Darts501Puzzle? {
+        guard let bundle, let dto = bundle.darts501Puzzle,
+              !dto.formulaLabel.isEmpty, dto.startScore > 0 else { return nil }
+        return Darts501Puzzle(
+            id: dto.puzzleId,
+            date: bundle.date,
+            formulaId: dto.formulaId,
+            formulaLabel: dto.formulaLabel,
+            startScore: dto.startScore,
+            checkoutWindow: dto.checkoutWindow,
+            checkoutLives: dto.checkoutLives
+        )
+    }
 }

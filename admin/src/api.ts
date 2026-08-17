@@ -35,6 +35,7 @@ export const PLAYABLE_MODES = [
   'target_man',
   'last_man_standing',
   'back_yourself',
+  'darts_501',
 ] as const
 
 export type PlayableMode = (typeof PLAYABLE_MODES)[number]
@@ -691,4 +692,5 @@ export const MODE_LABELS: Record<string, string> = {
   target_man: 'Target Man',
   last_man_standing: 'LMS',
   back_yourself: 'Back Yourself',
+  darts_501: 'Darts 501',
 }

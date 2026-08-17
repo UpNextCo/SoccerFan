@@ -254,6 +254,17 @@ export async function recentGolfPrompts(date: string, days: number): Promise<Set
   return out;
 }
 
+/** Darts 501: formula ids used in the window. */
+export async function recentDarts501Formulas(date: string, days: number): Promise<Set<string>> {
+  const rows = await recentRows('darts_501', date, days);
+  const out = new Set<string>();
+  for (const { pj } of rows) {
+    const formulaId = pj['formulaId'];
+    if (typeof formulaId === 'string' && formulaId) out.add(formulaId);
+  }
+  return out;
+}
+
 /** Football Golf: semantic structured rules used in the window. Legacy holes are ignored. */
 export async function recentGolfRuleSignatures(date: string, days: number): Promise<Set<string>> {
   const rows = await recentRows('football_golf', date, days);

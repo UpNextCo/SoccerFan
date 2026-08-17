@@ -168,6 +168,25 @@ dailyRouter.post('/clubchain/link', requireAuth, async (req, res) => {
   }
 });
 
+const darts501ThrowSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  playerId: z.string().uuid(),
+  alreadyUsedIds: z.array(z.string().uuid()).optional(),
+});
+dailyRouter.post('/darts501/throw', requireAuth, async (req, res) => {
+  const parsed = darts501ThrowSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    const { evaluateDarts501Throw } = await import('../services/darts501Generator.js');
+    sendSuccess(res, await evaluateDarts501Throw(parsed.data));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Darts 501 throw failed', 400);
+  }
+});
+
 const backYourselfGuessSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   playerId: z.string().uuid(),

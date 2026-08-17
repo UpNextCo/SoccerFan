@@ -10,6 +10,7 @@ import { FOOTBALL_GOLF_HOLE_COUNT } from './footballGolfConstants.js';
 import { generateOneMorePuzzle } from './oneMoreGenerator.js';
 import { generateClubChainPuzzle } from './clubChainGenerator.js';
 import { generateBackYourselfPuzzle } from './backYourselfGenerator.js';
+import { generateDarts501Puzzle } from './darts501Generator.js';
 import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenerator.js';
 import { generateBattlePuzzle } from './battleGenerator.js';
 import { generateDailyPuzzleForMode } from './dailyPuzzleGenerator.js';
@@ -36,6 +37,7 @@ export const OPS_PLAYABLE_MODES = [
   'target_man',
   'last_man_standing',
   'back_yourself',
+  'darts_501',
 ] as const;
 
 export const OPS_MODE_TITLES: Record<string, string> = {
@@ -285,6 +287,12 @@ export async function generateOnePuzzle(
       case 'back_yourself': {
         const generated = await generateBackYourselfPuzzle(date);
         if (!generated) return { ok: false, error: 'back_yourself not viable' };
+        await insertGenerated(date, modeId, generated.puzzle, generated.answer);
+        break;
+      }
+      case 'darts_501': {
+        const generated = await generateDarts501Puzzle(date);
+        if (!generated) return { ok: false, error: 'darts_501 not viable' };
         await insertGenerated(date, modeId, generated.puzzle, generated.answer);
         break;
       }

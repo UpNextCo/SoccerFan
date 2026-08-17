@@ -15,6 +15,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
     case footballTower = "football_tower" // DEFUNCT
     case lastManStanding = "last_man_standing"
     case backYourself = "back_yourself"
+    case darts501 = "darts_501"
 
     var title: String {
         switch self {
@@ -30,6 +31,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .footballTower: return "FOOTBALL TOWER"
         case .lastManStanding: return "LAST MAN STANDING"
         case .backYourself: return "BACK YOURSELF"
+        case .darts501: return "DARTS 501"
         }
     }
 
@@ -47,6 +49,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .footballTower: return "building.2.fill"
         case .lastManStanding: return "person.3.sequence.fill"
         case .backYourself: return "hand.raised.fill"
+        case .darts501: return "target"
         }
     }
 }
@@ -66,6 +69,7 @@ enum DailyPlayOrder {
         .targetMan,
         .lastManStanding,
         .backYourself,
+        .darts501,
     ]
 
     static func availableModes(in bundle: DailyBundleDTO) -> [GameModeID] {
@@ -339,7 +343,7 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1500). Live eight-game total 8300. A full loss
+    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1500). Live nine-game total 9300. A full loss
     /// earns 0 (no participation floor). Every game's on-screen score IS this XP.
     static let maxByMode: [String: Int] = [
         "guess_who": 800,
@@ -354,6 +358,7 @@ enum DailyXP {
         "football_golf": 800,
         "last_man_standing": 900,
         "back_yourself": 1500,
+        "darts_501": 1000,
     ]
     static let defaultMax = 1000
 
@@ -481,5 +486,15 @@ enum DailyXP {
         let effective = min(pledge, xpCap)
         let ratio = min(1, max(0, Double(effective) / Double(xpCap)))
         return max(0, min(1500, Int((1500.0 * pow(ratio, 1.41)).rounded())))
+    }
+
+    /// Darts 501: checkout 820 / perfect 1000, then −40 XP per throw over 4 and −30 XP per bust.
+    /// A loss (three checkout busts) is 0. Win floor 280.
+    static func darts501(won: Bool, perfect: Bool, throwCount: Int, busts: Int) -> Int {
+        guard won else { return 0 }
+        let base = perfect ? 1000 : 820
+        let throwPenalty = max(0, throwCount - 4) * 40
+        let bustPenalty = max(0, busts) * 30
+        return max(280, min(1000, base - throwPenalty - bustPenalty))
     }
 }
