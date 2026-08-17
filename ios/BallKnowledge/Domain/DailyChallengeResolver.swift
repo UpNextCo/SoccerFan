@@ -181,6 +181,9 @@ enum DailyChallengeResolver {
             date: bundle.date,
             formulaId: dto.formulaId,
             formulaLabel: dto.formulaLabel,
+            nationality: dto.nationality,
+            audience: dto.audience,
+            formulaDetail: dto.formulaDetail,
             startScore: dto.startScore,
             checkoutWindow: dto.checkoutWindow,
             checkoutLives: dto.checkoutLives

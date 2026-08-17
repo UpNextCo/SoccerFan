@@ -22,7 +22,7 @@ import {
   type BackYourselfPuzzlePublic,
 } from './backYourselfGenerator.js';
 import { generateAndPersistLastManStandingPuzzle } from './lastManStandingGenerator.js';
-import { generateDarts501Puzzle } from './darts501Generator.js';
+import { generateDarts501Puzzle, parseDarts501Puzzle } from './darts501Generator.js';
 import { DARTS501_MAX_XP } from './darts501Scoring.js';
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
 import { startLastManStandingRun, submitLastManStandingAnswer } from './lastManStandingCheck.js';
@@ -778,6 +778,10 @@ export function sanitizePublicPuzzle(modeId: string, puzzleJson: unknown): unkno
         options: (round.options ?? []).map(({ value: _v, ...opt }) => opt),
       })),
     };
+  }
+
+  if (modeId === 'darts_501') {
+    return parseDarts501Puzzle(puzzleJson) ?? puzzleJson;
   }
 
   if (modeId === 'last_man_standing') {

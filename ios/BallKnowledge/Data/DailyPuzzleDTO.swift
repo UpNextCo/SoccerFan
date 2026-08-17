@@ -6,12 +6,16 @@ struct Darts501PuzzleDTO: Codable, Equatable {
     let date: String
     let formulaId: String
     let formulaLabel: String
+    let nationality: String?
+    let audience: String?
+    let formulaDetail: String?
     let startScore: Int
     let checkoutWindow: Int
     let checkoutLives: Int
 
     enum CodingKeys: String, CodingKey {
-        case modeId, puzzleId, date, formulaId, formulaLabel, startScore, checkoutWindow, checkoutLives
+        case modeId, puzzleId, date, formulaId, formulaLabel, nationality, audience, formulaDetail
+        case startScore, checkoutWindow, checkoutLives
     }
 
     init(from decoder: Decoder) throws {
@@ -21,6 +25,9 @@ struct Darts501PuzzleDTO: Codable, Equatable {
         date = try c.decode(String.self, forKey: .date)
         formulaId = try c.decodeIfPresent(String.self, forKey: .formulaId) ?? ""
         formulaLabel = try c.decodeIfPresent(String.self, forKey: .formulaLabel) ?? ""
+        nationality = try c.decodeIfPresent(String.self, forKey: .nationality)
+        audience = try c.decodeIfPresent(String.self, forKey: .audience)
+        formulaDetail = try c.decodeIfPresent(String.self, forKey: .formulaDetail)
         startScore = try c.decodeIfPresent(Int.self, forKey: .startScore) ?? 501
         checkoutWindow = try c.decodeIfPresent(Int.self, forKey: .checkoutWindow) ?? 10
         checkoutLives = try c.decodeIfPresent(Int.self, forKey: .checkoutLives) ?? 3

@@ -144,7 +144,7 @@ struct GameIntroContent {
                 steps: [
                     "Name players to score points based on today's stat.",
                     "Work your way down and finish between 0 and -10.",
-                    "Some scores are impossible in darts and will bust.",
+                    "You have three hearts. A bust costs a heart — lose all three and it's game over.",
                 ]
             )
         }

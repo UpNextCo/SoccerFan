@@ -7,9 +7,81 @@ struct Darts501Puzzle: Equatable, Codable {
     let date: String
     let formulaId: String
     let formulaLabel: String
+    var nationality: String? = nil
+    var audience: String? = nil
+    var formulaDetail: String? = nil
     let startScore: Int
     let checkoutWindow: Int
     let checkoutLives: Int
+
+    var category: Darts501CategoryDisplay {
+        Darts501CategoryDisplay.make(from: self)
+    }
+}
+
+struct Darts501CategoryDisplay: Equatable {
+    let nationality: String?
+    let audience: String
+    let formula: String
+
+    var flag: String {
+        guard let nationality, !nationality.isEmpty else { return "" }
+        return GuessWhoDisplay.nationalityFlag(nationality)
+    }
+
+    var hasNationFilter: Bool {
+        nationality != nil && !(nationality ?? "").isEmpty
+    }
+
+    static func make(from puzzle: Darts501Puzzle) -> Darts501CategoryDisplay {
+        if let known = catalog[puzzle.formulaId] {
+            return known
+        }
+        if let audience = puzzle.audience, let detail = puzzle.formulaDetail,
+           !audience.isEmpty, !detail.isEmpty {
+            return Darts501CategoryDisplay(
+                nationality: puzzle.nationality,
+                audience: audience,
+                formula: detail
+            )
+        }
+        return Darts501CategoryDisplay(
+            nationality: puzzle.nationality,
+            audience: puzzle.audience ?? "Today's stat",
+            formula: puzzle.formulaDetail ?? puzzle.formulaLabel
+        )
+    }
+
+    private static let catalog: [String: Darts501CategoryDisplay] = [
+        "pl_apps_minus_goals_wales": .init(nationality: "Wales", audience: "Welsh Players", formula: "Premier League appearances − career goals"),
+        "cl_apps_plus_intl_goals": .init(nationality: nil, audience: "Any player", formula: "Champions League appearances + international goals"),
+        "pl_goals_plus_england_caps": .init(nationality: "England", audience: "English Players", formula: "Premier League goals + international caps"),
+        "pl_apps_minus_goals_scotland": .init(nationality: "Scotland", audience: "Scottish Players", formula: "Premier League appearances − career goals"),
+        "pl_apps_minus_goals_ireland": .init(nationality: "Ireland", audience: "Irish Players", formula: "Premier League appearances − career goals"),
+        "pl_apps_minus_pl_goals_nireland": .init(nationality: "Northern Ireland", audience: "Northern Irish Players", formula: "Premier League appearances − Premier League goals"),
+        "laliga_goals_plus_spain_caps": .init(nationality: "Spain", audience: "Spanish Players", formula: "La Liga goals + international caps"),
+        "seriea_goals_plus_italy_caps": .init(nationality: "Italy", audience: "Italian Players", formula: "Serie A goals + international caps"),
+        "bundesliga_goals_plus_germany_caps": .init(nationality: "Germany", audience: "German Players", formula: "Bundesliga goals + international caps"),
+        "ligue1_goals_plus_france_caps": .init(nationality: "France", audience: "French Players", formula: "Ligue 1 goals + international caps"),
+        "pl_goals_plus_france_caps": .init(nationality: "France", audience: "French Players", formula: "Premier League goals + international caps"),
+        "pl_goals_plus_brazil_caps": .init(nationality: "Brazil", audience: "Brazilian Players", formula: "Premier League goals + international caps"),
+        "pl_assists_plus_england_caps": .init(nationality: "England", audience: "English Players", formula: "Premier League assists + international caps"),
+        "cl_goals_plus_intl_goals": .init(nationality: nil, audience: "Any player", formula: "Champions League goals + international goals"),
+        "pl_goals_plus_cl_goals": .init(nationality: nil, audience: "Any player", formula: "Premier League goals + Champions League goals"),
+        "cl_apps_minus_cl_goals": .init(nationality: nil, audience: "Any player", formula: "Champions League appearances − Champions League goals"),
+        "pl_goals_plus_intl_goals": .init(nationality: nil, audience: "Any player", formula: "Premier League goals + international goals"),
+        "laliga_goals_plus_cl_goals": .init(nationality: nil, audience: "Any player", formula: "La Liga goals + Champions League goals"),
+        "career_trophies_plus_intl_goals": .init(nationality: nil, audience: "Any player", formula: "Career trophies + international goals"),
+        "cl_apps_plus_portugal_caps": .init(nationality: "Portugal", audience: "Portuguese Players", formula: "Champions League appearances + international caps"),
+        "cl_apps_plus_netherlands_caps": .init(nationality: "Netherlands", audience: "Dutch Players", formula: "Champions League appearances + international caps"),
+        "seriea_goals_plus_cl_goals": .init(nationality: nil, audience: "Any player", formula: "Serie A goals + Champions League goals"),
+        "pl_assists_plus_cl_assists": .init(nationality: nil, audience: "Any player", formula: "Premier League assists + Champions League assists"),
+        "wc_goals_plus_cl_goals": .init(nationality: nil, audience: "Any player", formula: "World Cup goals + Champions League goals"),
+        "intl_caps_minus_intl_goals_brazil": .init(nationality: "Brazil", audience: "Brazilian Players", formula: "International caps − international goals"),
+        "intl_caps_minus_intl_goals_argentina": .init(nationality: "Argentina", audience: "Argentine Players", formula: "International caps − international goals"),
+        "pl_goals_plus_scotland_caps": .init(nationality: "Scotland", audience: "Scottish Players", formula: "Premier League goals + international caps"),
+        "pl_apps_minus_pl_goals_wales": .init(nationality: "Wales", audience: "Welsh Players", formula: "Premier League appearances − Premier League goals"),
+    ]
 }
 
 struct Darts501ThrowResultDTO: Codable {
@@ -195,12 +267,12 @@ enum Darts501Scoring {
     ) -> Resolution {
         let checkout = inCheckout || isCheckoutRemaining(remaining)
         if let reason = bustReason(for: score) {
-            let nextBusts = checkout ? checkoutBusts + 1 : checkoutBusts
-            if checkout && nextBusts >= checkoutLives {
+            let nextBusts = checkoutBusts + 1
+            if nextBusts >= checkoutLives {
                 return Resolution(
                     kind: .gameOver,
                     remaining: remaining,
-                    inCheckout: true,
+                    inCheckout: checkout,
                     checkoutBusts: nextBusts,
                     bustReason: reason
                 )

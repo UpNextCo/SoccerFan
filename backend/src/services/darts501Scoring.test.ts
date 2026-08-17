@@ -50,7 +50,19 @@ test('impossible score busts without changing remaining', () => {
   assert.equal(result.kind, 'bust');
   assert.equal(result.remaining, 327);
   assert.equal(result.bustReason, 'impossible');
-  assert.equal(result.checkoutBusts, 0);
+  assert.equal(result.checkoutBusts, 1);
+});
+
+test('third bust at any stage is game over', () => {
+  const result = resolveDarts501Throw({
+    remaining: 400,
+    score: 169,
+    inCheckout: false,
+    checkoutBusts: 2,
+  });
+  assert.equal(result.kind, 'game_over');
+  assert.equal(result.remaining, 400);
+  assert.equal(result.checkoutBusts, 3);
 });
 
 test('entering checkout at 180 remaining', () => {

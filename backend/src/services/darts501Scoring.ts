@@ -69,12 +69,12 @@ export function resolveDarts501Throw(input: {
   const scoreBust = bustReasonForScore(input.score);
 
   if (scoreBust) {
-    const nextBusts = inCheckout ? checkoutBusts + 1 : checkoutBusts;
-    if (inCheckout && nextBusts >= DARTS501_CHECKOUT_LIVES) {
+    const nextBusts = checkoutBusts + 1;
+    if (nextBusts >= DARTS501_CHECKOUT_LIVES) {
       return {
         kind: 'game_over',
         remaining,
-        inCheckout: true,
+        inCheckout,
         checkoutBusts: nextBusts,
         bustReason: scoreBust,
       };

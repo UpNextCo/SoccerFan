@@ -23,6 +23,7 @@ final class Darts501ViewModel {
     var scorePunch = false
     var boardShake = false
     var finishLabel: String?
+    var heartLossToken = 0
     var selectedThrow: Darts501Throw?
     private var searchTask: Task<Void, Never>?
     private var feedbackTask: Task<Void, Never>?
@@ -165,6 +166,7 @@ final class Darts501ViewModel {
                 boardShake = true
             }
             HapticManager.error()
+            heartLossToken += 1
             commit(row, resolution: resolution)
             try? await Task.sleep(for: .milliseconds(420))
             clearReveal()
@@ -283,6 +285,7 @@ struct Darts501View: View {
                         inCheckout: viewModel.inCheckout,
                         lives: viewModel.state.checkoutRemaining,
                         totalLives: viewModel.state.puzzle.checkoutLives,
+                        heartLossToken: viewModel.heartLossToken,
                         revealName: viewModel.revealName,
                         revealScore: viewModel.revealScore,
                         revealIs180: viewModel.revealIs180,
@@ -294,12 +297,9 @@ struct Darts501View: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
 
-                    Text(viewModel.state.puzzle.formulaLabel)
-                        .font(BKFont.headline(15))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
+                    Darts501CategoryCard(category: viewModel.state.puzzle.category)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
                         .padding(.bottom, 12)
 
                     Darts501SearchSection(
@@ -364,7 +364,7 @@ struct Darts501View: View {
             Darts501RulesSheet()
         }
         .sheet(item: $viewModel.selectedThrow) { row in
-            Darts501ThrowDetailSheet(row: row, formula: viewModel.state.puzzle.formulaLabel)
+            Darts501ThrowDetailSheet(row: row, category: viewModel.state.puzzle.category)
         }
         .fullScreenCover(isPresented: $viewModel.showResult) {
             Darts501ResultView(
@@ -398,6 +398,7 @@ private struct Darts501Scoreboard: View {
     let inCheckout: Bool
     let lives: Int
     let totalLives: Int
+    let heartLossToken: Int
     let revealName: String?
     let revealScore: Int?
     let revealIs180: Bool
@@ -407,7 +408,7 @@ private struct Darts501Scoreboard: View {
     let finishLabel: String?
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             if inCheckout || finishLabel != nil {
                 Text(finishLabel ?? "CHECKOUT")
                     .font(BKFont.caption(12))
@@ -416,66 +417,51 @@ private struct Darts501Scoreboard: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.94)))
             }
 
-            VStack(spacing: 6) {
-                ZStack {
-                    Color.clear.frame(height: 58)
-                    if let revealScore, let revealName {
-                        VStack(spacing: 3) {
-                            Text(revealName)
-                                .font(BKFont.caption(11))
-                                .foregroundStyle(BKTheme.textSecondary)
-                                .lineLimit(1)
-                            Text(revealIs180 ? "180!" : "\(revealScore)")
-                                .font(BKFont.title(revealIs180 ? 32 : 26))
-                                .foregroundStyle(revealIsBust ? BKTheme.wrong : (revealIs180 ? BKTheme.accent : BKTheme.textPrimary))
-                                .scaleEffect(scorePunch ? 1 : 0.72)
-                                .opacity(scorePunch ? 1 : 0)
-                            if revealIsBust {
-                                Text("BUST")
-                                    .font(BKFont.headline(14))
-                                    .tracking(1.2)
-                                    .foregroundStyle(BKTheme.wrong)
-                            }
-                        }
-                        .allowsHitTesting(false)
-                    }
-                }
+            Text("\(remaining)")
+                .font(BKFont.title(inCheckout ? 76 : 72))
+                .foregroundStyle(BKTheme.textPrimary)
+                .contentTransition(.numericText())
+                .scaleEffect(finishLabel == "PERFECT CHECKOUT" ? 1.08 : 1)
+                .shadow(
+                    color: revealIs180 ? BKTheme.accent.opacity(0.35) : .clear,
+                    radius: revealIs180 ? 18 : 0
+                )
+                .offset(x: shake ? -7 : 0)
+            Text("REMAINING")
+                .font(BKFont.caption(11))
+                .tracking(1.4)
+                .foregroundStyle(BKTheme.textMuted)
 
-                Text("\(remaining)")
-                    .font(BKFont.title(inCheckout ? 76 : 72))
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .contentTransition(.numericText())
-                    .scaleEffect(finishLabel == "PERFECT CHECKOUT" ? 1.08 : 1)
-                    .shadow(
-                        color: revealIs180 ? BKTheme.accent.opacity(0.35) : .clear,
-                        radius: revealIs180 ? 18 : 0
-                    )
-                    .offset(x: shake ? -7 : 0)
-                Text("REMAINING")
-                    .font(BKFont.caption(11))
-                    .tracking(1.4)
-                    .foregroundStyle(BKTheme.textMuted)
-            }
-            .frame(maxWidth: .infinity)
-
-            if inCheckout {
-                HStack(spacing: 8) {
-                    ForEach(0..<totalLives, id: \.self) { index in
-                        Circle()
-                            .fill(index < lives ? BKTheme.textPrimary : BKTheme.cardElevated)
-                            .frame(width: 8, height: 8)
-                            .overlay(
-                                Circle().strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                            )
-                    }
-                }
-                .padding(.top, 2)
-            }
+            Darts501HeartsRow(total: totalLives, remaining: lives, lossToken: heartLossToken)
+                .padding(.top, 4)
         }
-        .padding(.vertical, 18)
+        .padding(.vertical, 20)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
         .background(BKTheme.card)
+        .overlay(alignment: .top) {
+            if let revealScore, let revealName {
+                VStack(spacing: 2) {
+                    Text(revealName)
+                        .font(BKFont.caption(11))
+                        .foregroundStyle(BKTheme.textSecondary)
+                        .lineLimit(1)
+                    Text(revealIs180 ? "180!" : "\(revealScore)")
+                        .font(BKFont.title(revealIs180 ? 28 : 22))
+                        .foregroundStyle(revealIsBust ? BKTheme.wrong : (revealIs180 ? BKTheme.accent : BKTheme.textPrimary))
+                        .scaleEffect(scorePunch ? 1 : 0.72)
+                    if revealIsBust {
+                        Text("BUST")
+                            .font(BKFont.headline(13))
+                            .tracking(1.2)
+                            .foregroundStyle(BKTheme.wrong)
+                    }
+                }
+                .opacity(scorePunch ? 1 : 0)
+                .padding(.top, 10)
+                .allowsHitTesting(false)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .overlay(
             RoundedRectangle(cornerRadius: 20)
@@ -485,6 +471,91 @@ private struct Darts501Scoreboard: View {
                 )
         )
         .animation(.easeInOut(duration: 0.22), value: inCheckout)
+    }
+}
+
+private struct Darts501HeartsRow: View {
+    let total: Int
+    let remaining: Int
+    let lossToken: Int
+
+    @State private var breakingIndex: Int?
+    @State private var breakScale: CGFloat = 1
+    @State private var breakOpacity: Double = 1
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<total, id: \.self) { index in
+                let filled = index < remaining
+                let isBreaking = breakingIndex == index
+                Image(systemName: filled || isBreaking ? "heart.fill" : "heart")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(
+                        filled || isBreaking
+                            ? Color(red: 0.95, green: 0.28, blue: 0.38)
+                            : BKTheme.textMuted.opacity(0.35)
+                    )
+                    .scaleEffect(isBreaking ? breakScale : 1)
+                    .opacity(isBreaking ? breakOpacity : 1)
+                    .offset(y: isBreaking ? -6 : 0)
+                    .accessibilityLabel(filled ? "Life remaining" : "Life lost")
+            }
+        }
+        .onChange(of: lossToken) { _, _ in
+            guard remaining < total else { return }
+            let index = remaining
+            breakingIndex = index
+            breakScale = 1.35
+            breakOpacity = 1
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.45)) {
+                breakScale = 0.35
+                breakOpacity = 0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                breakingIndex = nil
+                breakScale = 1
+                breakOpacity = 1
+            }
+        }
+    }
+}
+
+private struct Darts501CategoryCard: View {
+    let category: Darts501CategoryDisplay
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if category.hasNationFilter {
+                Text(category.flag)
+                    .font(.system(size: 28))
+                Text(category.audience)
+                    .font(BKFont.headline(16))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+                Text(category.formula)
+                    .font(BKFont.body(13))
+                    .foregroundStyle(BKTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+            } else {
+                Text("TODAY'S STAT")
+                    .font(BKFont.caption(11))
+                    .tracking(1.2)
+                    .foregroundStyle(BKTheme.textMuted)
+                Text(category.formula)
+                    .font(BKFont.headline(15))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+        )
     }
 }
 
@@ -598,13 +669,16 @@ private struct Darts501HistoryRow: View {
                 .foregroundStyle(isBust ? BKTheme.wrong : BKTheme.textPrimary)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            Text("\(row.score)")
-                .font(BKFont.headline(13))
-                .foregroundStyle(isBust ? BKTheme.wrong : BKTheme.textSecondary)
-            Text(isBust ? "BUST" : "\(row.remainingAfter)")
-                .font(BKFont.caption(11))
-                .foregroundStyle(isBust ? BKTheme.wrong : BKTheme.textMuted)
-                .frame(minWidth: 36, alignment: .trailing)
+            Darts501HistoryValue(
+                value: "\(row.score)",
+                label: "Score",
+                color: isBust ? BKTheme.wrong : BKTheme.textPrimary
+            )
+            Darts501HistoryValue(
+                value: isBust ? "BUST" : "\(row.remainingAfter)",
+                label: "Left",
+                color: isBust ? BKTheme.wrong : BKTheme.textMuted
+            )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, isLatest ? 12 : 9)
@@ -617,11 +691,31 @@ private struct Darts501HistoryRow: View {
     }
 }
 
+private struct Darts501HistoryValue: View {
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(BKFont.headline(13))
+                .foregroundStyle(color)
+                .monospacedDigit()
+            Text(label.uppercased())
+                .font(BKFont.caption(8))
+                .tracking(0.6)
+                .foregroundStyle(BKTheme.textMuted)
+        }
+        .frame(minWidth: 40)
+    }
+}
+
 // MARK: - Throw detail
 
 private struct Darts501ThrowDetailSheet: View {
     let row: Darts501Throw
-    let formula: String
+    let category: Darts501CategoryDisplay
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -639,9 +733,14 @@ private struct Darts501ThrowDetailSheet: View {
                         .font(BKFont.headline(14))
                         .foregroundStyle(BKTheme.wrong)
                 }
-                Text(formula)
-                    .font(BKFont.caption(12))
-                    .foregroundStyle(BKTheme.textMuted)
+                if category.hasNationFilter {
+                    Text("\(category.flag)  \(category.audience)")
+                        .font(BKFont.headline(14))
+                        .foregroundStyle(BKTheme.textPrimary)
+                }
+                Text(category.formula)
+                    .font(BKFont.body(13))
+                    .foregroundStyle(BKTheme.textSecondary)
                     .multilineTextAlignment(.center)
                 if let left = row.leftValue, let right = row.rightValue {
                     Text("\(left)  ·  \(right)")
@@ -678,7 +777,7 @@ private struct Darts501RulesSheet: View {
         "Players cannot be reused.",
         "Finish between 0 and -10.",
         "Exactly 0 is a Perfect Checkout.",
-        "You have three busts while attempting checkout.",
+        "You have three hearts. Every bust costs a heart. Lose all three and it's game over.",
     ]
 
     var body: some View {
@@ -738,10 +837,7 @@ private struct Darts501ResultView: View {
                             .font(BKFont.headline(16))
                             .foregroundStyle(BKTheme.textSecondary)
                     }
-                    Text(state.puzzle.formulaLabel)
-                        .font(BKFont.body(14))
-                        .foregroundStyle(BKTheme.textSecondary)
-                        .multilineTextAlignment(.center)
+                    Darts501CategoryCard(category: state.puzzle.category)
                 }
                 .padding(.top, 24)
 

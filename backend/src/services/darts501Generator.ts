@@ -37,12 +37,21 @@ export interface Darts501Formula {
   nationalityAliases?: string[];
 }
 
+export interface Darts501Presentation {
+  nationality: string | null;
+  audience: string;
+  formulaDetail: string;
+}
+
 export interface Darts501PuzzlePublic {
   modeId: typeof DARTS501_MODE_ID;
   puzzleId: string;
   date: string;
   formulaId: string;
   formulaLabel: string;
+  nationality: string | null;
+  audience: string;
+  formulaDetail: string;
   startScore: number;
   checkoutWindow: number;
   checkoutLives: number;
@@ -69,6 +78,70 @@ type MetricDef = { id: string; label: string; sub: SQL };
 
 const intlGoalsSub: SQL = sql`(SELECT player_id, ${trustedIntlGoalsSql('e')}::int AS value
   FROM player_extra_stats e)`;
+
+const METRIC_COPY: Record<string, string> = {
+  pl_apps: 'Premier League appearances',
+  pl_goals: 'Premier League goals',
+  pl_assists: 'Premier League assists',
+  laliga_goals: 'La Liga goals',
+  seriea_goals: 'Serie A goals',
+  bundesliga_goals: 'Bundesliga goals',
+  ligue1_goals: 'Ligue 1 goals',
+  cl_apps: 'Champions League appearances',
+  cl_goals: 'Champions League goals',
+  cl_assists: 'Champions League assists',
+  wc_goals: 'World Cup goals',
+  career_goals: 'career goals',
+  career_trophies: 'career trophies',
+  intl_caps: 'international caps',
+  intl_goals: 'international goals',
+};
+
+const AUDIENCE_COPY: Record<string, string> = {
+  Wales: 'Welsh Players',
+  England: 'English Players',
+  Scotland: 'Scottish Players',
+  Ireland: 'Irish Players',
+  'Northern Ireland': 'Northern Irish Players',
+  Spain: 'Spanish Players',
+  Italy: 'Italian Players',
+  Germany: 'German Players',
+  France: 'French Players',
+  Brazil: 'Brazilian Players',
+  Portugal: 'Portuguese Players',
+  Netherlands: 'Dutch Players',
+  Argentina: 'Argentine Players',
+};
+
+export function presentDarts501Formula(formula: Darts501Formula): Darts501Presentation {
+  const left = METRIC_COPY[formula.left] ?? formula.left.replaceAll('_', ' ');
+  const right = METRIC_COPY[formula.right] ?? formula.right.replaceAll('_', ' ');
+  const op = formula.op === '+' ? '+' : '−';
+  return {
+    nationality: formula.nationality ?? null,
+    audience: formula.nationality
+      ? (AUDIENCE_COPY[formula.nationality] ?? `${formula.nationality} Players`)
+      : 'Any player',
+    formulaDetail: `${left} ${op} ${right}`,
+  };
+}
+
+function publicPuzzle(date: string, formula: Darts501Formula): Darts501PuzzlePublic {
+  const presentation = presentDarts501Formula(formula);
+  return {
+    modeId: DARTS501_MODE_ID,
+    puzzleId: `${DARTS501_MODE_ID}_${date}`,
+    date,
+    formulaId: formula.id,
+    formulaLabel: formula.label,
+    nationality: presentation.nationality,
+    audience: presentation.audience,
+    formulaDetail: presentation.formulaDetail,
+    startScore: DARTS501_START,
+    checkoutWindow: DARTS501_CHECKOUT_WINDOW,
+    checkoutLives: DARTS501_CHECKOUT_LIVES,
+  };
+}
 
 function metricDef(id: string): MetricDef | undefined {
   if (id === 'intl_goals') {
@@ -431,16 +504,7 @@ export async function generateDarts501Puzzle(date: string): Promise<{
       if (!fallback || quality.valid > fallback.valid) fallback = quality;
       if (!isHealthy(quality)) continue;
       return {
-        puzzle: {
-          modeId: DARTS501_MODE_ID,
-          puzzleId: `${DARTS501_MODE_ID}_${date}`,
-          date,
-          formulaId: formula.id,
-          formulaLabel: formula.label,
-          startScore: DARTS501_START,
-          checkoutWindow: DARTS501_CHECKOUT_WINDOW,
-          checkoutLives: DARTS501_CHECKOUT_LIVES,
-        },
+        puzzle: publicPuzzle(date, formula),
         answer: { formulaId: formula.id },
       };
     }
@@ -448,16 +512,7 @@ export async function generateDarts501Puzzle(date: string): Promise<{
 
   if (fallback && fallback.valid >= 8) {
     return {
-      puzzle: {
-        modeId: DARTS501_MODE_ID,
-        puzzleId: `${DARTS501_MODE_ID}_${date}`,
-        date,
-        formulaId: fallback.formula.id,
-        formulaLabel: fallback.formula.label,
-        startScore: DARTS501_START,
-        checkoutWindow: DARTS501_CHECKOUT_WINDOW,
-        checkoutLives: DARTS501_CHECKOUT_LIVES,
-      },
+      puzzle: publicPuzzle(date, fallback.formula),
       answer: { formulaId: fallback.formula.id },
     };
   }
@@ -470,12 +525,26 @@ export function parseDarts501Puzzle(puzzleJson: unknown): Darts501PuzzlePublic |
   const puzzle = puzzleJson as Partial<Darts501PuzzlePublic>;
   if (typeof puzzle.formulaId !== 'string' || !puzzle.formulaId) return null;
   if (typeof puzzle.formulaLabel !== 'string' || !puzzle.formulaLabel) return null;
+  const formula = darts501FormulaById(puzzle.formulaId);
+  const presentation = formula ? presentDarts501Formula(formula) : null;
   return {
     modeId: DARTS501_MODE_ID,
     puzzleId: typeof puzzle.puzzleId === 'string' ? puzzle.puzzleId : `${DARTS501_MODE_ID}`,
     date: typeof puzzle.date === 'string' ? puzzle.date : '',
     formulaId: puzzle.formulaId,
     formulaLabel: puzzle.formulaLabel,
+    nationality:
+      typeof puzzle.nationality === 'string'
+        ? puzzle.nationality
+        : (presentation?.nationality ?? null),
+    audience:
+      typeof puzzle.audience === 'string' && puzzle.audience
+        ? puzzle.audience
+        : (presentation?.audience ?? 'Any player'),
+    formulaDetail:
+      typeof puzzle.formulaDetail === 'string' && puzzle.formulaDetail
+        ? puzzle.formulaDetail
+        : (presentation?.formulaDetail ?? puzzle.formulaLabel),
     startScore: typeof puzzle.startScore === 'number' ? puzzle.startScore : DARTS501_START,
     checkoutWindow:
       typeof puzzle.checkoutWindow === 'number' ? puzzle.checkoutWindow : DARTS501_CHECKOUT_WINDOW,
