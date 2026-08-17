@@ -456,6 +456,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ puzzleJson }),
     }),
+  draftPlayerValues: (categoryId: string, playerIds: string[]) =>
+    request<{ values: Record<string, number> }>('/puzzle/draft-player-values', {
+      method: 'POST',
+      body: JSON.stringify({ categoryId, playerIds }),
+    }),
   recomputeBackYourself: (body: { puzzleJson: unknown; answerJson?: unknown }) =>
     request<{ puzzleJson: unknown; answerJson: unknown }>('/puzzle/recompute-back-yourself', {
       method: 'POST',

@@ -817,6 +817,26 @@ export async function recomputeBattleScore(
   return { score, won: pct >= 0.7, total };
 }
 
+/** Category scalar for each player id (Draft XI Ops when a lineup pick is swapped manually). */
+export async function battleCategoryValues(
+  categoryId: string,
+  playerIds: string[]
+): Promise<Record<string, number>> {
+  const cat = categoryById(categoryId);
+  if (!cat || playerIds.length === 0) return {};
+  const rows = (await db.execute(sql`
+    WITH val AS ${cat.sub}
+    SELECT p.id::text AS id, COALESCE(val.value, 0)::int AS stat
+    FROM players p
+    LEFT JOIN val ON val.player_id = p.id
+    WHERE p.id IN (${sql.join(
+      playerIds.map((id) => sql`${id}::uuid`),
+      sql`, `
+    )})
+  `)) as unknown as Array<{ id: string; stat: number }>;
+  return Object.fromEntries(rows.map((r) => [r.id, r.stat]));
+}
+
 export async function battlePlayers(
   categoryId: string,
   constraint: BattleConstraintQuery,

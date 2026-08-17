@@ -364,10 +364,33 @@ adminRouter.post('/puzzle/recompute-draft', requireAdmin, async (req, res) => {
     return;
   }
   try {
+    // Live preview: skip logo/headshot hydration so Best score + pts update quickly while editing.
     const puzzleJson = await enrichAdminDraftPuzzle(body.data.puzzleJson, {
       requireOptimal: true,
+      skipMedia: true,
     });
     sendSuccess(res, { puzzleJson });
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 400);
+  }
+});
+
+/** Look up category stat values for Draft XI lineup players (manual Ops overrides). */
+adminRouter.post('/puzzle/draft-player-values', requireAdmin, async (req, res) => {
+  const body = z
+    .object({
+      categoryId: z.string().min(1),
+      playerIds: z.array(z.string().uuid()).min(1).max(11),
+    })
+    .safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 'Invalid body', 400);
+    return;
+  }
+  try {
+    const { battleCategoryValues } = await import('../services/battleGenerator.js');
+    const values = await battleCategoryValues(body.data.categoryId, body.data.playerIds);
+    sendSuccess(res, { values });
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : String(err), 400);
   }

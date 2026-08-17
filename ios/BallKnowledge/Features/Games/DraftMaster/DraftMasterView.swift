@@ -59,6 +59,13 @@ final class DraftMasterViewModel {
 
     var unusedConstraints: [BattleConstraint] { challenge.constraints.filter { !state.usedConstraintIds.contains($0.id) } }
 
+    /// Mutate a copy then reassign so @Observable always publishes nested dictionary/struct edits.
+    private func mutate(_ body: (inout BattleGameState) -> Void) {
+        var next = state
+        body(&next)
+        state = next
+    }
+
     func assignConstraint(id: String, toSlot slotId: String) {
         guard let constraint = challenge.constraints.first(where: { $0.id == id }) else { return }
         assignConstraint(constraint, toSlot: slotId)
@@ -69,13 +76,18 @@ final class DraftMasterViewModel {
         // can't be moved/reused elsewhere.
         if state.isLocked(slotId) { return }
         if state.assignments.contains(where: { $0.value.id == constraint.id && state.isLocked($0.key) }) { return }
-        // A chip can only sit on one slot: pull it off any other (unlocked) slot first.
-        for (sid, c) in state.assignments where c.id == constraint.id && sid != slotId {
-            state.assignments[sid] = nil
-            state.picks[sid] = nil
+        mutate { next in
+            // A chip can only sit on one slot: pull it off any other (unlocked) slot first.
+            let staleSlots = next.assignments
+                .filter { $0.value.id == constraint.id && $0.key != slotId }
+                .map(\.key)
+            for sid in staleSlots {
+                next.assignments[sid] = nil
+                next.picks[sid] = nil
+            }
+            if next.assignments[slotId]?.id != constraint.id { next.picks[slotId] = nil }
+            next.assignments[slotId] = constraint
         }
-        if state.assignments[slotId]?.id != constraint.id { state.picks[slotId] = nil }
-        state.assignments[slotId] = constraint
         HapticManager.light()
     }
 
@@ -91,7 +103,7 @@ final class DraftMasterViewModel {
 
     func closeSlot() {
         if let slot = activeSlot, !state.isLocked(slot.id) {
-            state.assignments[slot.id] = nil
+            mutate { $0.assignments[slot.id] = nil }
         }
         activeSlot = nil
         searchQuery = ""
@@ -106,11 +118,16 @@ final class DraftMasterViewModel {
         selectionError = nil
     }
 
-    func removePick(_ slotId: String) { state.picks[slotId] = nil; HapticManager.light() }
+    func removePick(_ slotId: String) {
+        mutate { $0.picks[slotId] = nil }
+        HapticManager.light()
+    }
 
     func clearSlot(_ slotId: String) {
-        state.picks[slotId] = nil
-        state.assignments[slotId] = nil
+        mutate { next in
+            next.picks[slotId] = nil
+            next.assignments[slotId] = nil
+        }
         HapticManager.light()
     }
 
@@ -142,7 +159,9 @@ final class DraftMasterViewModel {
         let player = BattlePlayer(id: dto.id, name: dto.name, statValue: dto.statValue, headshotUrl: dto.headshotUrl)
         let correct = dto.satisfiesConstraint ?? true
         let priorXP = DailyXP.draft(total: state.yourTotal, optimal: challenge.optimalScore)
-        state.picks[slot.id] = BattlePick(constraint: constraint, player: player, correct: correct)
+        mutate {
+            $0.picks[slot.id] = BattlePick(constraint: constraint, player: player, correct: correct)
+        }
         selectionError = nil
         closeSlot()
         if correct {
@@ -169,8 +188,10 @@ final class DraftMasterViewModel {
     func submit() {
         guard state.isComplete, state.phase != .complete else { return }
         let result = BattleResult(yourTotal: state.yourTotal, optimalScore: challenge.optimalScore)
-        state.result = result
-        state.phase = .complete
+        mutate { next in
+            next.result = result
+            next.phase = .complete
+        }
         if result.percentage >= BattleTiming.confettiThreshold { confettiBurstToken += 1 }
         Task {
             try? await Task.sleep(for: .seconds(BattleTiming.resultReveal))
@@ -180,20 +201,22 @@ final class DraftMasterViewModel {
 
     /// Apply the Perfect XI revealed by the server after completion (stripped from the live puzzle).
     func applyOptimalReveal(lineup: [BattleOptimalSlotDTO], optimalScore: Int?) {
-        state.challenge.optimalLineup = lineup.map {
-            BattleOptimalPick(
-                slotId: $0.slotId,
-                position: $0.position,
-                constraintId: $0.constraintId,
-                constraintLabel: $0.constraintLabel,
-                playerName: $0.playerName,
-                statValue: $0.statValue
-            )
-        }
-        if let optimalScore {
-            state.challenge.optimalScore = optimalScore
-            if let prior = state.result {
-                state.result = BattleResult(yourTotal: prior.yourTotal, optimalScore: optimalScore)
+        mutate { next in
+            next.challenge.optimalLineup = lineup.map {
+                BattleOptimalPick(
+                    slotId: $0.slotId,
+                    position: $0.position,
+                    constraintId: $0.constraintId,
+                    constraintLabel: $0.constraintLabel,
+                    playerName: $0.playerName,
+                    statValue: $0.statValue
+                )
+            }
+            if let optimalScore {
+                next.challenge.optimalScore = optimalScore
+                if let prior = next.result {
+                    next.result = BattleResult(yourTotal: prior.yourTotal, optimalScore: optimalScore)
+                }
             }
         }
     }
@@ -439,18 +462,6 @@ private struct BattleCategoryOverlay: View {
 
 // MARK: - Build header
 
-/// Animates an integer rolling up/down when the value changes inside an animation transaction.
-private struct CountingNumber: AnimatableModifier {
-    var value: Double
-    var animatableData: Double {
-        get { value }
-        set { value = newValue }
-    }
-    func body(content: Content) -> some View {
-        Text("\(Int(value.rounded()))")
-    }
-}
-
 private struct BattleBuildHeader: View {
     let category: BattleCategory
     let formationId: String
@@ -465,10 +476,10 @@ private struct BattleBuildHeader: View {
             Text(BattleFormations.displayName(for: formationId))
                 .font(BKFont.caption(11)).tracking(1.1)
                 .foregroundStyle(BKTheme.textMuted)
-            Text("")
-                .modifier(CountingNumber(value: Double(total)))
+            Text("\(total)")
                 .font(BKFont.title(44)).foregroundStyle(BKTheme.accent)
-                .animation(.easeOut(duration: 0.5), value: total)
+                .contentTransition(.numericText())
+                .animation(.easeOut(duration: 0.35), value: total)
         }
         .frame(maxWidth: .infinity)
         .multilineTextAlignment(.center)

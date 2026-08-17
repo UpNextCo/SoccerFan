@@ -110,6 +110,22 @@ function rebuildLabel(c: Constraint): string {
   return c.label ?? type
 }
 
+/** True when a chip has every field the solver needs — avoid firing expensive recomputes mid-edit. */
+function constraintIsComplete(c: Constraint): boolean {
+  const type = normalizeConstraintType(c.type)
+  if (!type) return false
+  if (type === 'club') return Boolean(c.club)
+  if (type === 'league') return typeof c.leagueId === 'number'
+  if (type === 'nationality') return Boolean(c.nationality)
+  if (type === 'nat_league') return Boolean(c.nationality) && typeof c.leagueId === 'number'
+  if (type === 'nat_club') return Boolean(c.nationality) && Boolean(c.club)
+  return false
+}
+
+function lineupTotal(lineup: LineupPick[]): number {
+  return lineup.reduce((sum, pick) => sum + (typeof pick.statValue === 'number' ? pick.statValue : 0), 0)
+}
+
 export function DraftEditor({
   puzzle,
   locked,
@@ -145,6 +161,10 @@ export function DraftEditor({
 
   async function refreshOptimalLineup() {
     if (locked) return
+    const currentConstraints = puzzleRef.current.constraints ?? []
+    if (currentConstraints.length === 0 || !currentConstraints.every(constraintIsComplete)) {
+      return
+    }
     const seq = ++recomputeSeq.current
     setRecomputing(true)
     setRecomputeError(null)
@@ -152,11 +172,20 @@ export function DraftEditor({
       const { puzzleJson } = await api.recomputeDraftOptimal(puzzleRef.current)
       if (seq !== recomputeSeq.current) return
       const next = puzzleJson as Puzzle
+      // Preserve chip media already chosen in the editor; only take score + solved XI.
+      const solvedLineup = (next.optimalLineup ?? []).map((pick) => {
+        const prior = (puzzleRef.current.optimalLineup ?? []).find(
+          (row) => row.slotId === pick.slotId && row.playerId === pick.playerId
+        )
+        return {
+          ...pick,
+          headshotUrl: pick.headshotUrl ?? prior?.headshotUrl ?? null,
+        }
+      })
       commit({
         ...puzzleRef.current,
-        constraints: next.constraints ?? puzzleRef.current.constraints,
         optimalScore: next.optimalScore,
-        optimalLineup: next.optimalLineup,
+        optimalLineup: solvedLineup,
       })
     } catch (err) {
       if (seq !== recomputeSeq.current) return
@@ -278,6 +307,20 @@ export function DraftEditor({
     } catch {
       // search hit is enough
     }
+
+    let statValue: number | undefined
+    const categoryId = puzzleRef.current.category?.id
+    if (typeof categoryId === 'string' && categoryId.length > 0) {
+      try {
+        const { values } = await api.draftPlayerValues(categoryId, [resolved.id])
+        if (typeof values[resolved.id] === 'number') {
+          statValue = values[resolved.id]
+        }
+      } catch {
+        // Keep prior pts if the lookup fails; name/photo still update.
+      }
+    }
+
     const current = puzzleRef.current
     const nextLineup = (current.optimalLineup ?? []).map((pick, i) =>
       (slotId ? pick.slotId === slotId : i === idx)
@@ -286,10 +329,15 @@ export function DraftEditor({
             playerId: resolved.id,
             playerName: resolved.name,
             headshotUrl: resolved.headshotUrl,
+            ...(statValue != null ? { statValue } : {}),
           }
         : pick
     )
-    commit({ ...current, optimalLineup: nextLineup })
+    commit({
+      ...current,
+      optimalLineup: nextLineup,
+      ...(statValue != null ? { optimalScore: lineupTotal(nextLineup) } : {}),
+    })
   }
 
   return (
@@ -319,6 +367,23 @@ export function DraftEditor({
       )}
       {recomputing && !recomputeError && (
         <p className="muted tiny">Updating best lineup from the current constraints…</p>
+      )}
+      {!recomputing && !recomputeError && constraints.some((c) => !constraintIsComplete(c)) && (
+        <p className="muted tiny">
+          Finish every constraint (club / league / nationality fields) to refresh Best score and pts.
+        </p>
+      )}
+      {!locked && (
+        <div className="button-row" style={{ marginBottom: 8 }}>
+          <button
+            type="button"
+            className="ghost tiny-btn"
+            disabled={recomputing || !constraints.every(constraintIsComplete)}
+            onClick={() => void refreshOptimalLineup()}
+          >
+            {recomputing ? 'Updating…' : 'Refresh best XI'}
+          </button>
+        </div>
       )}
 
       <div className="editor-clean-section">

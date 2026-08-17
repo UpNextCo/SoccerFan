@@ -427,10 +427,13 @@ export async function enrichAdminBingoPuzzle(puzzleJson: unknown): Promise<unkno
  * Re-hydrate Draft XI media and re-solve the optimal XI from the current constraint chips.
  * Ops constraint edits only update labels unless we recompute here — that stale XI would also
  * ship to the app as the perfect-score reference.
+ *
+ * `skipMedia: true` is for the live Ops preview: solve score/lineup only, without per-chip logo
+ * lookups or per-player headshot resolution (those make each keystroke/edit feel stuck).
  */
 export async function enrichAdminDraftPuzzle(
   puzzleJson: unknown,
-  opts?: { requireOptimal?: boolean }
+  opts?: { requireOptimal?: boolean; skipMedia?: boolean }
 ): Promise<unknown> {
   const puzzle = structuredClone(puzzleJson) as BattlePuzzleJson & {
     constraints: Array<BattlePuzzleJson['constraints'][number] & { type?: string }>;
@@ -451,6 +454,9 @@ export async function enrichAdminDraftPuzzle(
           type: normalizedType as BattlePuzzleJson['constraints'][number]['type'],
         };
         if ((normalizedType === 'club' || normalizedType === 'nat_club') && c.club) {
+          if (opts?.skipMedia) {
+            return base;
+          }
           const logo = await lookupTeamLogo(c.club, c.leagueName ?? '');
           return {
             ...base,
@@ -479,7 +485,7 @@ export async function enrichAdminDraftPuzzle(
     );
   }
 
-  if (Array.isArray(puzzle.optimalLineup)) {
+  if (!opts?.skipMedia && Array.isArray(puzzle.optimalLineup)) {
     puzzle.optimalLineup = await Promise.all(
       puzzle.optimalLineup.map(async (pick) => {
         const id = typeof pick.playerId === 'string' ? pick.playerId : null;
