@@ -38,7 +38,7 @@ const big6Sql = sql.join(BIG6.map((t) => sql`${t}`), sql`, `);
 
 export interface OneMoreMetricDefinition {
   id: string;
-  title: string;   // shown as "WHO HAS {min}+ {title}?"
+  title: string;   // shown as "WHO HAS {min}+ {title}?" or "Who has more {title}?"
   noun: string;    // reveal unit, e.g. "goals", "pens", "caps"
   col: string;     // value column in AGG
   part: string;    // participation column (must be > 0 to appear) in AGG
@@ -89,6 +89,7 @@ export interface OneMorePuzzle {
   title: string;
   valueNoun: string;
   minimum: number;
+  compareMode?: boolean;
   rounds: OneMoreRound[];
 }
 
@@ -433,29 +434,86 @@ function selectCandidatePairs(input: {
     || (b.q.value - b.d.value) - (a.q.value - a.d.value));
 }
 
+/** Close, famous pairs with different totals — the higher one is the answer. */
+function selectComparePairs(input: {
+  metric: OneMoreMetricDefinition;
+  rows: Candidate[];
+  target: number;
+  recentPairs: Set<string>;
+}): SelectedCandidatePair[] {
+  let floor = 44;
+  const eligible = () => input.rows.filter((row) =>
+    positionOk(input.metric, row.position) && row.prestige >= floor && row.value > 0
+  );
+  let pool = eligible();
+  for (let guard = 0; pool.length < input.target * 2 && guard < 4; guard += 1) {
+    floor = Math.max(floor - 6, 28);
+    pool = eligible();
+  }
+  pool.sort((a, b) => b.prestige - a.prestige || b.value - a.value);
+  const maxGap = (left: number, right: number) => Math.max(8, Math.round(Math.max(left, right) * 0.35));
+  const used = new Set<string>();
+  const pairs: SelectedCandidatePair[] = [];
+  for (let i = 0; i < pool.length && pairs.length < input.target; i += 1) {
+    const first = pool[i]!;
+    if (used.has(first.id)) continue;
+    let best: Candidate | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (let j = i + 1; j < Math.min(pool.length, i + 20); j += 1) {
+      const second = pool[j]!;
+      if (used.has(second.id) || first.value === second.value) continue;
+      if (input.recentPairs.has(oneMorePairKey(input.metric.title, first.id, second.id))) continue;
+      const gap = Math.abs(first.value - second.value);
+      if (gap > maxGap(first.value, second.value)) continue;
+      const score = gap * 3 + Math.abs(first.prestige - second.prestige);
+      if (score < bestScore) {
+        bestScore = score;
+        best = second;
+      }
+    }
+    if (!best) continue;
+    used.add(first.id);
+    used.add(best.id);
+    const qualifier = first.value > best.value ? first : best;
+    const distractor = first.value > best.value ? best : first;
+    pairs.push({ q: qualifier, d: distractor });
+  }
+  return pairs;
+}
+
 export async function generateOneMoreCandidatePairs(input: {
   metricId: string;
   threshold: number;
+  compareMode?: boolean;
   count?: number;
   seed?: string;
 }): Promise<{
   metric: OneMoreMetricCatalogItem;
   threshold: number;
+  compareMode: boolean;
   pairs: OneMoreVerifiedCandidatePair[];
   warnings: string[];
 }> {
   const metric = requireMetric(input.metricId);
   const rows = await loadMetricCandidates(metric);
   const count = Math.min(Math.max(input.count ?? ROUND_TARGET, 1), 50);
-  const seed = input.seed ?? `${input.metricId}:${input.threshold}`;
-  const selected = selectCandidatePairs({
-    metric,
-    rows,
-    minimum: input.threshold,
-    seed,
-    target: count,
-    recentPairs: new Set(),
-  });
+  const compareMode = Boolean(input.compareMode);
+  const seed = input.seed ?? `${input.metricId}:${compareMode ? 'compare' : input.threshold}`;
+  const selected = compareMode
+    ? selectComparePairs({
+      metric,
+      rows,
+      target: count,
+      recentPairs: new Set(),
+    })
+    : selectCandidatePairs({
+      metric,
+      rows,
+      minimum: input.threshold,
+      seed,
+      target: count,
+      recentPairs: new Set(),
+    });
   const pairs: OneMoreVerifiedCandidatePair[] = selected.map(({ q: qualifier, d: distractor }, index) => {
     const qualifierFirst = hashStr(`${seed}:side:${index}`) % 2 === 0;
     return {
@@ -466,7 +524,7 @@ export async function generateOneMoreCandidatePairs(input: {
   });
   const warnings = pairs.length < count ? [`Requested ${count} pairs but only ${pairs.length} verified pairs were available.`] : [];
   if (metric.eventBased) warnings.push('Event-based distractors are coverage-gated to players born in 1990 or later.');
-  return { metric: catalogItem(metric), threshold: input.threshold, pairs, warnings };
+  return { metric: catalogItem(metric), threshold: input.threshold, compareMode, pairs, warnings };
 }
 
 export async function lookupOneMorePlayerMetricValue(
@@ -500,23 +558,34 @@ export interface OneMoreCandidatePairVerification {
 export async function verifyOneMoreCandidateValues(
   metricId: string,
   threshold: number,
-  pairs: Array<[OneMoreCandidateValueInput, OneMoreCandidateValueInput]>
+  pairs: Array<[OneMoreCandidateValueInput, OneMoreCandidateValueInput]>,
+  opts?: { compareMode?: boolean }
 ): Promise<OneMoreCandidatePairVerification[]> {
   const metric = requireMetric(metricId);
   const uniqueIds = [...new Set(pairs.flatMap((pair) => pair.map((option) => option.playerId)))];
   const facts = await loadMetricVerificationFacts(metric, uniqueIds);
   return pairs.map((pair) => {
-    const options = pair.map((option) => {
+    const raw = pair.map((option) => {
       const fact = facts.get(option.playerId);
       const actualValue = fact?.value ?? null;
       return {
         playerId: option.playerId,
         expectedValue: option.expectedValue,
         actualValue,
-        qualifies: actualValue === null ? null : actualValue >= threshold,
         valueMatches: actualValue !== null && (option.expectedValue === undefined || option.expectedValue === actualValue),
       };
     });
+    const known = raw.map((option) => option.actualValue).filter((value): value is number => typeof value === 'number');
+    const best = known.length === raw.length ? Math.max(...known) : null;
+    const uniqueWinner = best !== null && known.filter((value) => value === best).length === 1;
+    const options = raw.map((option) => ({
+      ...option,
+      qualifies: option.actualValue === null
+        ? null
+        : opts?.compareMode
+          ? uniqueWinner && option.actualValue === best
+          : option.actualValue >= threshold,
+    }));
     const errors: string[] = [];
     if (options.some((option) => option.actualValue === null)) errors.push('A player was not found.');
     if (options.some((option) => !option.valueMatches)) errors.push('A supplied value does not match the database.');
@@ -528,11 +597,17 @@ export async function verifyOneMoreCandidateValues(
         position: fact.position,
         birthYear: fact.birth_year,
         value: fact.value,
-      }, threshold)) {
+      }, opts?.compareMode ? 0 : threshold)) {
         errors.push(`Option ${index + 1}: ${message}`);
       }
     });
-    if (options.filter((option) => option.qualifies).length !== 1) errors.push('Pair must contain exactly one qualifying player.');
+    if (opts?.compareMode) {
+      if (known.length === raw.length && !uniqueWinner) {
+        errors.push('Pair must have two different totals — the higher one is the answer.');
+      }
+    } else if (options.filter((option) => option.qualifies).length !== 1) {
+      errors.push('Pair must contain exactly one qualifying player.');
+    }
     return { valid: errors.length === 0, options, errors };
   });
 }

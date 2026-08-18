@@ -71,6 +71,7 @@ adminQuestionEngineRouter.post('/metrics/candidates', async (req, res) => {
   const body = z.object({
     metricId: metricIdSchema,
     threshold: thresholdSchema,
+    compareMode: z.boolean().optional(),
     count: z.number().int().min(1).max(50).optional(),
     seed: z.string().min(1).max(200).optional(),
   }).safeParse(req.body);
@@ -114,6 +115,7 @@ adminQuestionEngineRouter.post('/metrics/verify', async (req, res) => {
   const body = z.object({
     metricId: metricIdSchema,
     threshold: thresholdSchema,
+    compareMode: z.boolean().optional(),
     pairs: z.array(z.tuple([option, option])).min(1).max(50),
   }).safeParse(req.body);
   if (!body.success) {
@@ -124,7 +126,8 @@ adminQuestionEngineRouter.post('/metrics/verify', async (req, res) => {
     const pairs = await verifyOneMoreCandidateValues(
       body.data.metricId,
       body.data.threshold,
-      body.data.pairs
+      body.data.pairs,
+      { compareMode: body.data.compareMode }
     );
     sendSuccess(res, { valid: pairs.every((pair) => pair.valid), pairs });
   } catch (error) {

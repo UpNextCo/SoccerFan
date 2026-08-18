@@ -130,7 +130,7 @@ final class OneMoreViewModel {
                 state.phase = .playing
             }
         } else {
-            let correct = round.options.first { state.prompt.qualifies($0) }
+            let correct = round.options.first { state.prompt.qualifies($0, in: round) }
             state.bustPick = OneMorePick(
                 name: option.name,
                 optionId: option.id,
@@ -431,7 +431,7 @@ private struct OneMoreChoiceSection: View {
     private func card(_ option: OneMoreOption) -> some View {
         OneMoreChoiceCard(
             option: option,
-            qualifies: prompt.qualifies(option),
+            qualifies: prompt.qualifies(option, in: round),
             statNoun: prompt.statNoun,
             revealed: phase == .revealing,
             isChosen: chosenId == option.id,

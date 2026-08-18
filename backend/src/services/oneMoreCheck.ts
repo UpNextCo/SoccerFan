@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { dailyPuzzles } from '../db/schema.js';
+import { oneMorePickIsCorrect } from './oneMoreJudge.js';
 
 /**
  * Sequential One More run tokens — same pattern as LMS.
@@ -54,6 +55,7 @@ async function loadOneMore(date: string) {
     .limit(1);
   const puzzle = rows[0]?.puzzleJson as {
     minimum?: number;
+    compareMode?: boolean;
     rounds?: Array<{ options?: Array<{ id: string; value?: number }> }>;
   } | null;
   if (!puzzle || !Array.isArray(puzzle.rounds) || typeof puzzle.minimum !== 'number') {
@@ -90,7 +92,10 @@ export async function startOneMoreRun(
   for (let i = 0; i < resumePicks.length; i += 1) {
     const values = valuesForRound(puzzle, answerValues, i);
     const v = values[resumePicks[i]!];
-    if (typeof v !== 'number' || v < puzzle.minimum!) {
+    if (typeof v !== 'number' || !oneMorePickIsCorrect(v, Object.values(values), {
+      compareMode: puzzle.compareMode,
+      minimum: puzzle.minimum!,
+    })) {
       throw new Error('One More resume picks do not match');
     }
   }
@@ -125,7 +130,10 @@ export async function submitOneMorePick(
   const picked = values[optionId];
   if (typeof picked !== 'number') throw new Error('Option not found');
 
-  const correct = picked >= puzzle.minimum!;
+  const correct = oneMorePickIsCorrect(picked, Object.values(values), {
+    compareMode: puzzle.compareMode,
+    minimum: puzzle.minimum!,
+  });
   if (!correct) {
     return { correct: false, values, status: 'busted' };
   }

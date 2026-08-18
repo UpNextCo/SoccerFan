@@ -81,9 +81,45 @@
 
 .om-config-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 1.2fr) minmax(240px, 1.5fr) minmax(120px, 0.65fr) minmax(100px, 0.55fr);
+  grid-template-columns: minmax(220px, 1.2fr) minmax(240px, 1.5fr) minmax(120px, 0.65fr) minmax(180px, 0.85fr) minmax(100px, 0.55fr);
   gap: 0.7rem;
   margin-top: 0.85rem;
+}
+
+.om-win-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.om-format-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f4f6f9;
+}
+
+.om-format-toggle button {
+  min-height: 36px;
+  padding: 0.4rem 0.85rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.om-format-toggle button.selected {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(21, 25, 34, 0.08);
+}
+
+.om-format-toggle button:disabled {
+  opacity: 0.6;
 }
 
 .om-title-field {

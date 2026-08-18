@@ -34,29 +34,72 @@ struct OneMorePrompt: Equatable, Codable {
     let metricTitle: String   // e.g. "Premier League goals", "career penalty goals"
     let valueNoun: String     // reveal unit, e.g. "goals", "pens", "caps"
     let minimum: Int
+    var compareMode: Bool
     var rounds: [OneMoreRound]
     let isDaily: Bool
     let date: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, metricTitle, valueNoun, minimum, compareMode, rounds, isDaily, date
+    }
+
+    init(
+        id: String,
+        metricTitle: String,
+        valueNoun: String,
+        minimum: Int,
+        compareMode: Bool = false,
+        rounds: [OneMoreRound],
+        isDaily: Bool,
+        date: String?
+    ) {
+        self.id = id
+        self.metricTitle = metricTitle
+        self.valueNoun = valueNoun
+        self.minimum = minimum
+        self.compareMode = compareMode
+        self.rounds = rounds
+        self.isDaily = isDaily
+        self.date = date
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        metricTitle = try c.decode(String.self, forKey: .metricTitle)
+        valueNoun = try c.decode(String.self, forKey: .valueNoun)
+        minimum = try c.decode(Int.self, forKey: .minimum)
+        compareMode = try c.decodeIfPresent(Bool.self, forKey: .compareMode) ?? false
+        rounds = try c.decode([OneMoreRound].self, forKey: .rounds)
+        isDaily = try c.decode(Bool.self, forKey: .isDaily)
+        date = try c.decodeIfPresent(String.self, forKey: .date)
+    }
 
     var statNoun: String { valueNoun }
 
     /// Full prompt line, e.g. "Players with 50+ Premier League goals".
     var title: String {
-        "Players with \(minimum)+ \(metricTitle)"
+        compareMode ? "Who has more \(metricTitle)" : "Players with \(minimum)+ \(metricTitle)"
     }
 
     /// Big card headline, e.g. "Who has 50+ Premier League goals?"
     var question: String {
-        "Who has \(minimum)+ \(metricTitle)?"
+        compareMode ? "Who has more \(metricTitle)?" : "Who has \(minimum)+ \(metricTitle)?"
     }
 
     var ruleLine: String {
         "One wrong pick loses everything"
     }
 
-    /// Whether an option clears the day's threshold. Requires a revealed value from the server.
-    func qualifies(_ option: OneMoreOption) -> Bool {
-        option.valueRevealed && option.value >= minimum
+    /// Whether an option is the correct pick. Requires a revealed value from the server.
+    func qualifies(_ option: OneMoreOption, in round: OneMoreRound) -> Bool {
+        guard option.valueRevealed else { return false }
+        if compareMode {
+            let values = round.options.filter(\.valueRevealed).map(\.value)
+            guard values.count == round.options.count, let best = values.max() else { return false }
+            return option.value == best && values.filter { $0 == best }.count == 1
+        }
+        return option.value >= minimum
     }
 }
 

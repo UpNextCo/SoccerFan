@@ -148,6 +148,7 @@ export type OneMoreCandidatePair = {
 export type OneMoreCandidateResponse = {
   metric: OneMoreMetricCatalogItem
   threshold: number
+  compareMode?: boolean
   pairs: OneMoreCandidatePair[]
   warnings: string[]
 }
@@ -533,6 +534,7 @@ export const api = {
   generateOneMoreCandidates: (body: {
     metricId: string
     threshold: number
+    compareMode?: boolean
     count?: number
     seed?: string
   }) =>
@@ -547,6 +549,7 @@ export const api = {
   verifyOneMorePairs: (body: {
     metricId: string
     threshold: number
+    compareMode?: boolean
     pairs: Array<[
       { playerId: string; expectedValue?: number },
       { playerId: string; expectedValue?: number },

@@ -3,6 +3,7 @@ import test from 'node:test';
 import { validatePuzzleReport } from './adminPuzzleValidation.js';
 import { monthLockStatusError, workflowTransitionError } from './adminWorkflow.js';
 import { oneMoreEligibilityErrors } from './oneMoreEligibility.js';
+import { oneMorePickIsCorrect } from './oneMoreJudge.js';
 import { validateQuestionTemplateActivation } from './questionTemplateValidation.js';
 import { towerRuleSchema } from './towerRuleSchema.js';
 import {
@@ -405,6 +406,40 @@ test('requires One More threshold sides and aligned hidden values', () => {
   const report = validatePuzzleReport('one_more', puzzle, { valuesByRound });
   assert.equal(report.ok, false);
   assert.ok(report.issues.some((entry) => entry.path === 'puzzleJson.rounds.3'));
+});
+
+test('allows One More compare rounds that sit on the same side of a leftover threshold', () => {
+  const rounds = Array.from({ length: 10 }, (_, index) => ({
+    options: [
+      { id: `high-${index}`, name: 'High', value: 40 + index },
+      { id: `low-${index}`, name: 'Low', value: 30 + index },
+    ],
+  }));
+  const valuesByRound = rounds.map((round) => Object.fromEntries(
+    round.options.map((option) => [option.id, option.value])
+  ));
+  const puzzle = {
+    metricId: 'metric',
+    minimum: 0,
+    compareMode: true,
+    title: 'Test metric',
+    valueNoun: 'goals',
+    rounds,
+  };
+  assert.equal(validatePuzzleReport('one_more', puzzle, { valuesByRound }).ok, true);
+
+  valuesByRound[2]![`low-2`] = valuesByRound[2]![`high-2`]!;
+  const report = validatePuzzleReport('one_more', puzzle, { valuesByRound });
+  assert.equal(report.ok, false);
+  assert.ok(report.issues.some((entry) => entry.path === 'puzzleJson.rounds.2'));
+});
+
+test('One More compare mode picks the unique higher total', () => {
+  assert.equal(oneMorePickIsCorrect(18, [18, 16], { compareMode: true, minimum: 0 }), true);
+  assert.equal(oneMorePickIsCorrect(16, [18, 16], { compareMode: true, minimum: 0 }), false);
+  assert.equal(oneMorePickIsCorrect(12, [12, 12], { compareMode: true, minimum: 0 }), false);
+  assert.equal(oneMorePickIsCorrect(8, [18, 8], { compareMode: false, minimum: 15 }), false);
+  assert.equal(oneMorePickIsCorrect(18, [18, 8], { compareMode: false, minimum: 15 }), true);
 });
 
 test('checks Golf numbering, answer sufficiency, and total par', () => {

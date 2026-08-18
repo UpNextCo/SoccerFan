@@ -139,6 +139,7 @@ const oneMoreOption = z.object({ id, name: text, value: z.number().nonnegative()
 const oneMorePuzzle = z.object({
   metricId: id,
   minimum: z.number().int().nonnegative(),
+  compareMode: z.boolean().optional(),
   valueNoun: text,
   title: text,
   rounds: z.array(z.object({ options: z.array(oneMoreOption).length(2) }).passthrough()).length(10),
@@ -435,7 +436,12 @@ function validateOneMore(puzzleJson: unknown, answerJson: unknown, issues: Admin
     round.options.forEach((option) => {
       if (option.value !== undefined && option.value !== values[option.id]) issue(issues, `puzzleJson.rounds.${index}.options`, 'Visible and answer values must agree.');
     });
-    if (optionIds.filter((optionId) => values[optionId]! >= puzzle.minimum).length !== 1) {
+    const roundValues = optionIds.map((optionId) => values[optionId]!);
+    if (puzzle.compareMode) {
+      if (roundValues[0] === roundValues[1]) {
+        issue(issues, `puzzleJson.rounds.${index}`, 'Each round must have two different totals — the higher one is the answer.');
+      }
+    } else if (optionIds.filter((optionId) => values[optionId]! >= puzzle.minimum).length !== 1) {
       issue(issues, `puzzleJson.rounds.${index}`, 'Each round must have exactly one option on each side of the threshold.');
     }
   });

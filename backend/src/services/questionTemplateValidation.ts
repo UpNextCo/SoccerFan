@@ -9,6 +9,7 @@ const oneMoreConfigSchema = z.object({
   metricId: z.string().trim().min(1),
   threshold: z.number().int().min(0).max(100_000),
   valueNoun: z.string().trim().min(1).max(80),
+  compareMode: z.boolean().optional(),
 }).passthrough();
 
 export function validateQuestionTemplateActivation(

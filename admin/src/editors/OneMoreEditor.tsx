@@ -38,6 +38,7 @@ type Puzzle = {
   title?: string
   valueNoun?: string
   minimum?: number
+  compareMode?: boolean
   rounds: Round[]
   [k: string]: unknown
 }
@@ -167,6 +168,7 @@ export function OneMoreEditor({
     : inferredMetric?.id ?? ''
   const selectedMetric = metrics.find((metric) => metric.id === metricId)
   const minimum = Number.isFinite(p.minimum) ? Math.max(0, Math.round(p.minimum ?? 0)) : 0
+  const compareMode = Boolean(p.compareMode)
 
   useEffect(() => {
     if (!metricId || rounds.length === 0 || rounds.some((round) => round.options.length !== 2)) {
@@ -186,7 +188,7 @@ export function OneMoreEditor({
           { playerId: string; expectedValue?: number },
         ]
       })
-      void api.verifyOneMorePairs({ metricId, threshold: minimum, pairs })
+      void api.verifyOneMorePairs({ metricId, threshold: minimum, compareMode, pairs })
         .then((result) => {
           if (!cancelled) setVerification(result)
         })
@@ -201,7 +203,7 @@ export function OneMoreEditor({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [metricId, minimum, rounds, valuesByRound])
+  }, [metricId, minimum, compareMode, rounds, valuesByRound])
 
   function commit(nextPuzzle: Puzzle, nextAnswer: Answer = answerRef.current) {
     puzzleRef.current = nextPuzzle
@@ -240,8 +242,10 @@ export function OneMoreEditor({
     const templateMetricId = typeof config.metricId === 'string' ? config.metricId : ''
     const threshold = typeof config.threshold === 'number' ? config.threshold : undefined
     const valueNoun = typeof config.valueNoun === 'string' ? config.valueNoun : undefined
+    const templateCompare = config.compareMode === true
     updatePuzzle({
       title: template.prompt,
+      compareMode: templateCompare,
       ...(templateMetricId ? { metricId: templateMetricId } : {}),
       ...(threshold !== undefined ? { minimum: threshold } : {}),
       ...(valueNoun ? { valueNoun } : {}),
@@ -260,7 +264,8 @@ export function OneMoreEditor({
         prompt: p.title?.trim() || selectedMetric?.title || 'One More question',
         config: {
           metricId,
-          threshold: minimum,
+          threshold: compareMode ? 0 : minimum,
+          compareMode,
           valueNoun: p.valueNoun ?? selectedMetric?.noun ?? '',
         },
         status: 'draft',
@@ -343,7 +348,8 @@ export function OneMoreEditor({
     try {
       const result = await api.generateOneMoreCandidates({
         metricId,
-        threshold: minimum,
+        threshold: compareMode ? 0 : minimum,
+        compareMode,
         count: 10,
         seed: `${p.date ?? 'ops'}:${Date.now()}`,
       })
@@ -382,7 +388,8 @@ export function OneMoreEditor({
     try {
       const result = await api.generateOneMoreCandidates({
         metricId,
-        threshold: minimum,
+        threshold: compareMode ? 0 : minimum,
+        compareMode,
         count: 30,
         seed: `${p.date ?? 'ops'}:round-${roundIndex}:${Date.now()}`,
       })
@@ -491,16 +498,20 @@ export function OneMoreEditor({
         seen.add(option.id)
         const verifiedOption = verification?.pairs[roundIndex]?.options.find((item) => item.playerId === option.id)
         const value = verifiedOption?.actualValue ?? valuesByRound[roundIndex]?.[option.id]
-        return typeof value === 'number' ? value >= minimum : null
+        return typeof value === 'number' ? value : null
       })
       if (states.some((state) => state === null)) {
         warnings.push(`Round ${roundIndex + 1} has a player without a verified value.`)
-      } else if (states.filter(Boolean).length !== 1) {
+      } else if (compareMode) {
+        if (states[0] === states[1]) {
+          warnings.push(`Round ${roundIndex + 1} needs two different totals — the higher one is the answer.`)
+        }
+      } else if (states.filter((value) => (value as number) >= minimum).length !== 1) {
         warnings.push(`Round ${roundIndex + 1} needs one qualifier and one distractor.`)
       }
     })
     return [...new Set(warnings)]
-  }, [rounds, verification, valuesByRound, minimum])
+  }, [rounds, verification, valuesByRound, minimum, compareMode])
 
   return (
     <div className="mode-editor one-more-editor">
@@ -508,7 +519,11 @@ export function OneMoreEditor({
         <header>
           <div>
             <strong>Question composer</strong>
-            <p className="muted tiny">Choose what to measure, set the target, then build ten rounds.</p>
+            <p className="muted tiny">
+              {compareMode
+                ? 'Choose what to measure, then build ten “who has more” rounds.'
+                : 'Choose what to measure, set the target, then build ten rounds.'}
+            </p>
           </div>
           {locked && <span className="om-lock-badge">Locked</span>}
         </header>
@@ -607,20 +622,55 @@ export function OneMoreEditor({
               onChange={(event) => updatePuzzle({ valueNoun: event.target.value })}
             />
           </label>
-          <label className="field">
-            Target
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={minimum}
-              disabled={locked}
-              onChange={(event) => updatePuzzle({ minimum: Math.max(0, Math.round(Number(event.target.value))) })}
-            />
-          </label>
+          <div className="field om-win-rule">
+            Win rule
+            <div className="om-format-toggle" role="group" aria-label="Win rule">
+              <button
+                type="button"
+                className={compareMode ? '' : 'selected'}
+                disabled={locked}
+                onClick={() => {
+                  setPreview(null)
+                  updatePuzzle({ compareMode: false })
+                }}
+              >
+                Target
+              </button>
+              <button
+                type="button"
+                className={compareMode ? 'selected' : ''}
+                disabled={locked}
+                onClick={() => {
+                  setPreview(null)
+                  updatePuzzle({ compareMode: true, minimum: 0 })
+                }}
+              >
+                Just more
+              </button>
+            </div>
+          </div>
+          {!compareMode && (
+            <label className="field">
+              Target
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={minimum}
+                disabled={locked}
+                onChange={(event) => updatePuzzle({ minimum: Math.max(0, Math.round(Number(event.target.value))) })}
+              />
+            </label>
+          )}
         </div>
 
-        {selectedMetric && (
+        {compareMode && (
+          <div className="om-notice">
+            The answer is whoever has more {p.valueNoun || 'of this stat'}. Don’t lock this day until the new app is out — older builds still expect a 15+ style target.
+          </div>
+        )}
+
+        {selectedMetric && !compareMode && (
           <div className="om-thresholds">
             <span className="muted tiny">Suggested targets</span>
             {selectedMetric.ladder.map((threshold) => (
@@ -641,9 +691,11 @@ export function OneMoreEditor({
         )}
 
         <div className="om-actions">
-          <button type="button" className="ghost" disabled={!metricId || previewing} onClick={() => void loadPreview()}>
-            {previewing ? 'Checking players…' : 'Check player pool'}
-          </button>
+          {!compareMode && (
+            <button type="button" className="ghost" disabled={!metricId || previewing} onClick={() => void loadPreview()}>
+              {previewing ? 'Checking players…' : 'Check player pool'}
+            </button>
+          )}
           <button type="button" disabled={locked || !metricId || generating} onClick={() => void generateTen()}>
             {generating ? 'Building rounds…' : 'Build 10 rounds'}
           </button>
@@ -656,7 +708,7 @@ export function OneMoreEditor({
         {actionError && <div className="error-box">{actionError}</div>}
         {[...candidateWarnings, ...localWarnings].map((warning) => <div key={warning} className="warning-box">{warning}</div>)}
 
-        {preview && (
+        {preview && !compareMode && (
           <div className="om-preview">
             <div className="om-preview-stats">
               <div><strong>{preview.counts.qualifying}</strong><span>meet the target</span></div>
@@ -686,7 +738,11 @@ export function OneMoreEditor({
         <header>
           <div>
             <strong>Rounds {rounds.length}/10</strong>
-            <p className="muted tiny">Every pair needs exactly one player at or above {minimum}.</p>
+            <p className="muted tiny">
+              {compareMode
+                ? 'Every pair needs two different totals — the higher player is the answer.'
+                : `Every pair needs exactly one player at or above ${minimum}.`}
+            </p>
           </div>
         </header>
         <div className="om-round-list">
@@ -712,11 +768,24 @@ export function OneMoreEditor({
                   {round.options.map((option, optionIndex) => {
                     const verifiedOption = pairVerification?.options.find((item) => item.playerId === option.id)
                     const value = verifiedOption?.actualValue ?? valuesByRound[roundIndex]?.[option.id] ?? option.value
-                    const qualifies = typeof value === 'number' ? value >= minimum : null
+                    const otherId = round.options[optionIndex === 0 ? 1 : 0]?.id
+                    const otherValue = otherId
+                      ? pairVerification?.options.find((item) => item.playerId === otherId)?.actualValue
+                        ?? valuesByRound[roundIndex]?.[otherId]
+                      : undefined
+                    const qualifies = typeof value !== 'number'
+                      ? null
+                      : compareMode
+                        ? (typeof otherValue === 'number' ? value > otherValue : null)
+                        : value >= minimum
                     return (
                       <div key={`${option.id}-${optionIndex}`} className={qualifies === true ? 'om-player qualifies' : qualifies === false ? 'om-player distractor' : 'om-player'}>
                         <div className="om-player-state">
-                          <span>{qualifies ? `At least ${minimum}` : qualifies === false ? `Below ${minimum}` : 'No value'}</span>
+                          <span>
+                            {compareMode
+                              ? (qualifies ? 'More' : qualifies === false ? 'Fewer' : 'No value')
+                              : (qualifies ? `At least ${minimum}` : qualifies === false ? `Below ${minimum}` : 'No value')}
+                          </span>
                           <strong>{value} {p.valueNoun ?? ''}</strong>
                         </div>
                         <EntityPicker

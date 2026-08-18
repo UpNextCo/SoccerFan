@@ -49,6 +49,7 @@ export function summarizeGolfPlayerNames(names: string[], limit = 6): string {
 const oneMoreShape = z.object({
   metricId: z.string().min(1),
   minimum: z.number().int().nonnegative(),
+  compareMode: z.boolean().optional(),
   rounds: z.array(z.object({
     options: z.tuple([
       z.object({ id: z.string(), value: z.number().optional() }).passthrough(),
@@ -155,7 +156,8 @@ async function validateOneMore(
     const verified = await verifyOneMoreCandidateValues(
       puzzle.data.metricId,
       puzzle.data.minimum,
-      pairs
+      pairs,
+      { compareMode: puzzle.data.compareMode }
     );
     verified.forEach((round, index) => {
       round.errors.forEach((message) => issue(issues, `puzzleJson.rounds.${index}`, message));

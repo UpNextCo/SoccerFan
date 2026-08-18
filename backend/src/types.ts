@@ -145,6 +145,7 @@ export interface OneMorePuzzlePublic {
   title: string;
   valueNoun: string;
   minimum: number;
+  compareMode?: boolean;
   rounds: OneMoreRoundPublic[];
 }
 

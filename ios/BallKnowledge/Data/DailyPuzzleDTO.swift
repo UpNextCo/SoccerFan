@@ -312,14 +312,16 @@ struct OneMorePuzzleDTO: Codable, Equatable {
     let title: String
     let valueNoun: String
     let minimum: Int
+    let compareMode: Bool
     let rounds: [OneMoreRoundDTO]
 
     init(
         modeId: String, puzzleId: String, date: String, title: String,
-        valueNoun: String, minimum: Int, rounds: [OneMoreRoundDTO] = []
+        valueNoun: String, minimum: Int, compareMode: Bool = false, rounds: [OneMoreRoundDTO] = []
     ) {
         self.modeId = modeId; self.puzzleId = puzzleId; self.date = date; self.title = title
-        self.valueNoun = valueNoun; self.minimum = minimum; self.rounds = rounds
+        self.valueNoun = valueNoun; self.minimum = minimum; self.compareMode = compareMode
+        self.rounds = rounds
     }
 
     init(from decoder: Decoder) throws {
@@ -330,6 +332,7 @@ struct OneMorePuzzleDTO: Codable, Equatable {
         title = try c.decode(String.self, forKey: .title)
         valueNoun = try c.decodeIfPresent(String.self, forKey: .valueNoun) ?? "goals"
         minimum = try c.decode(Int.self, forKey: .minimum)
+        compareMode = try c.decodeIfPresent(Bool.self, forKey: .compareMode) ?? false
         rounds = try c.decodeIfPresent([OneMoreRoundDTO].self, forKey: .rounds) ?? []
     }
 }

@@ -7,6 +7,7 @@
  * answer payload is supplied, malformed input is rejected rather than falling back to client XP.
  */
 import { maxXpForMode } from './dailyService.js';
+import { oneMorePickIsCorrect } from './oneMoreJudge.js';
 import { matches as bingoMatches, type BingoCategory, type BingoPlayer } from './footballBingoGenerator.js';
 import { normalizeTargetManPool, playerValuesForCategory } from './targetManCategories.js';
 import { clubChainLink } from './clubChainGenerator.js';
@@ -174,6 +175,7 @@ function scoreOneMore(row: PuzzleRow, answer: unknown): ServerScore | null {
   const cashedOut = (answer as { cashedOut?: unknown })?.cashedOut === true;
   const puzzle = row.puzzleJson as {
     minimum?: number;
+    compareMode?: boolean;
     rounds?: Array<{ options?: Array<{ id: string; value?: number }> }>;
   };
   if (!Array.isArray(picks) || !Array.isArray(puzzle?.rounds) || typeof puzzle.minimum !== 'number') return null;
@@ -185,13 +187,20 @@ function scoreOneMore(row: PuzzleRow, answer: unknown): ServerScore | null {
   let busted = false;
   for (let i = 0; i < picks.length; i += 1) {
     const pickId = picks[i] as string;
-    const opt = puzzle.rounds[i]?.options?.find((o) => o.id === pickId);
+    const round = puzzle.rounds[i];
+    const opt = round?.options?.find((o) => o.id === pickId);
     if (!opt) { busted = true; break; }
+    const roundValues = (round?.options ?? []).map((option) => (
+      typeof option.value === 'number' ? option.value : answerValues?.[i]?.[option.id]
+    )).filter((value): value is number => typeof value === 'number');
     const value =
       typeof opt.value === 'number'
         ? opt.value
         : answerValues?.[i]?.[pickId];
-    if (typeof value !== 'number' || value < minimum) { busted = true; break; }
+    if (typeof value !== 'number' || !oneMorePickIsCorrect(value, roundValues, {
+      compareMode: puzzle.compareMode,
+      minimum,
+    })) { busted = true; break; }
     streak += 1;
   }
   if (busted) return { score: 0, won: false };

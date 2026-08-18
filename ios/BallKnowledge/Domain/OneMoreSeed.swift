@@ -29,6 +29,7 @@ enum OneMoreSeed {
             metricTitle: dto.title,
             valueNoun: dto.valueNoun,
             minimum: dto.minimum,
+            compareMode: dto.compareMode,
             rounds: rounds,
             isDaily: true,
             date: dto.date
