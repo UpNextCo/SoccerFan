@@ -776,3 +776,24 @@ test('checks Target Man answer synchronization', () => {
   answer.answer.target = 501;
   assert.equal(validatePuzzleReport('target_man', puzzle, answer).ok, false);
 });
+
+test('Target Man accepts a nationality pool with a matching label', () => {
+  const puzzle = {
+    categoryId: 'pl_goals',
+    categoryLabel: 'Premier League Goals from England players',
+    title: 'Premier League Goals from England players',
+    target: 408,
+    valueNoun: 'goals',
+    offNoun: 'goals off',
+    unit: null,
+    pool: { type: 'nationality', nationality: 'England' },
+  };
+  const answer = {
+    modeId: 'target_man',
+    answer: { categoryId: 'pl_goals', target: 408 },
+  };
+  assert.equal(validatePuzzleReport('target_man', puzzle, answer).ok, true);
+  puzzle.categoryLabel = 'Premier League Goals';
+  puzzle.title = 'Premier League Goals';
+  assert.equal(validatePuzzleReport('target_man', puzzle, answer).ok, false);
+});

@@ -492,6 +492,9 @@ export async function enrichAdminDraftPuzzle(
   if (solved) {
     puzzle.optimalScore = solved.optimalScore;
     puzzle.optimalLineup = solved.optimalLineup;
+    puzzle.slots = solved.slots;
+    puzzle.constraints = solved.constraints;
+    puzzle.formationId = solved.formationId;
   } else if (opts?.requireOptimal) {
     throw new Error(
       'Could not solve an optimal XI for these Draft constraints. Check each chip still has eligible players.'

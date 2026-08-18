@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, type AdminLeagueHit, type AdminTeamHit } from '../api'
+import { useQuery } from '@tanstack/react-query'
+import { api, type AdminLeagueHit, type AdminTeamHit, type DraftCategoryOption } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './game-editors.css'
 
@@ -28,9 +29,16 @@ type LineupPick = {
   [k: string]: unknown
 }
 
+type Slot = {
+  id?: string
+  position?: string
+  [k: string]: unknown
+}
+
 type Puzzle = {
-  category?: { title?: string; id?: string; [k: string]: unknown }
+  category?: { title?: string; id?: string; noun?: string; unit?: 'eur_m' | null; [k: string]: unknown }
   formationId?: string
+  slots?: Slot[]
   constraints?: Constraint[]
   optimalScore?: number
   optimalLineup?: LineupPick[]
@@ -126,6 +134,87 @@ function lineupTotal(lineup: LineupPick[]): number {
   return lineup.reduce((sum, pick) => sum + (typeof pick.statValue === 'number' ? pick.statValue : 0), 0)
 }
 
+function isGoalkeeperSlot(slot: Slot): boolean {
+  return slot.id === 'gk' || slot.position === 'Goalkeeper'
+}
+
+function formationIdForGk(formationId: string | undefined, withGk: boolean): string | undefined {
+  if (!formationId) return formationId
+  const base = formationId.endsWith('-of') ? formationId.slice(0, -3) : formationId
+  if (!base) return formationId
+  return withGk ? base : `${base}-of`
+}
+
+function nextConstraintId(constraints: Constraint[]): string {
+  const used = new Set(constraints.map((constraint) => constraint.id).filter(Boolean))
+  let id = 'c-gk'
+  let n = 0
+  while (used.has(id)) id = `c-gk-${++n}`
+  return id
+}
+
+/** Keep the GK slot in sync with the scoring category so Best XI can recompute. */
+function alignPuzzleToCategory(puzzle: Puzzle, includeGk: boolean): Puzzle {
+  const slots = puzzle.slots ?? []
+  const constraints = puzzle.constraints ?? []
+  const lineup = puzzle.optimalLineup ?? []
+  const gkSlots = slots.filter(isGoalkeeperSlot)
+  const hasGk = gkSlots.length > 0
+  if (includeGk === hasGk) return puzzle
+
+  if (!includeGk) {
+    const gkIds = new Set(gkSlots.map((slot) => slot.id).filter(Boolean))
+    const nextSlots = slots.filter((slot) => !isGoalkeeperSlot(slot))
+    const removedConstraintIds = new Set(
+      lineup
+        .filter((pick) => pick.slotId && gkIds.has(pick.slotId))
+        .map((pick) => pick.constraintId)
+        .filter((id): id is string => Boolean(id))
+    )
+    let nextConstraints = constraints.filter(
+      (constraint) => !constraint.id || !removedConstraintIds.has(constraint.id)
+    )
+    if (nextConstraints.length > nextSlots.length) {
+      nextConstraints = nextConstraints.slice(0, nextSlots.length)
+    }
+    return {
+      ...puzzle,
+      formationId: formationIdForGk(puzzle.formationId, false),
+      slots: nextSlots,
+      constraints: nextConstraints,
+      optimalLineup: lineup.filter((pick) => !pick.slotId || !gkIds.has(pick.slotId)),
+    }
+  }
+
+  const constraintId = nextConstraintId(constraints)
+  const gkConstraint: Constraint = {
+    id: constraintId,
+    type: 'nationality',
+    label: 'Nationality',
+    nationality: null,
+    club: null,
+    teamId: null,
+    logoUrl: null,
+    leagueId: null,
+    leagueName: null,
+  }
+  return {
+    ...puzzle,
+    formationId: formationIdForGk(puzzle.formationId, true),
+    slots: [{ id: 'gk', position: 'Goalkeeper' }, ...slots],
+    constraints: [...constraints, gkConstraint],
+    optimalLineup: [
+      ...lineup,
+      {
+        slotId: 'gk',
+        position: 'Goalkeeper',
+        constraintId,
+        constraintLabel: 'Nationality',
+      },
+    ],
+  }
+}
+
 export function DraftEditor({
   puzzle,
   locked,
@@ -143,6 +232,14 @@ export function DraftEditor({
   const recomputeSeq = useRef(0)
   const [recomputing, setRecomputing] = useState(false)
   const [recomputeError, setRecomputeError] = useState<string | null>(null)
+  const categoriesQuery = useQuery({
+    queryKey: ['draft-categories'],
+    queryFn: api.listDraftCategories,
+    staleTime: Infinity,
+  })
+  const categoryId = p.category?.id ?? ''
+  const selectedCategory =
+    categoriesQuery.data?.find((option) => option.id === categoryId) ?? null
 
   useEffect(() => {
     puzzleRef.current = p
@@ -184,6 +281,9 @@ export function DraftEditor({
       })
       commit({
         ...puzzleRef.current,
+        formationId: next.formationId ?? puzzleRef.current.formationId,
+        slots: next.slots ?? puzzleRef.current.slots,
+        constraints: next.constraints ?? puzzleRef.current.constraints,
         optimalScore: next.optimalScore,
         optimalLineup: solvedLineup,
       })
@@ -193,6 +293,27 @@ export function DraftEditor({
     } finally {
       if (seq === recomputeSeq.current) setRecomputing(false)
     }
+  }
+
+  function selectCategory(category: DraftCategoryOption) {
+    if (locked) return
+    const current = puzzleRef.current
+    const withCategory: Puzzle = {
+      ...current,
+      category: {
+        ...(current.category ?? {}),
+        id: category.id,
+        title: category.title,
+        noun: category.noun,
+        unit: category.unit,
+      },
+    }
+    const next =
+      typeof category.includeGk === 'boolean'
+        ? alignPuzzleToCategory(withCategory, category.includeGk)
+        : withCategory
+    commit(next)
+    scheduleOptimalRefresh()
   }
 
   function scheduleOptimalRefresh() {
@@ -392,18 +513,40 @@ export function DraftEditor({
           <span className="muted tiny">Set the category, formation and best score</span>
         </header>
         <label className="field">
-          Category title
-          <input
-            value={p.category?.title ?? ''}
-            disabled={locked}
-            onChange={(e) =>
-              onChange({
-                ...p,
-                category: { ...(p.category ?? {}), title: e.target.value },
-              })
-            }
-          />
+          Category
+          <select
+            value={categoryId}
+            disabled={locked || categoriesQuery.isLoading}
+            onChange={(event) => {
+              const category = categoriesQuery.data?.find(
+                (option) => option.id === event.target.value
+              )
+              if (category) selectCategory(category)
+            }}
+          >
+            {!categoryId && <option value="">Choose a category</option>}
+            {categoryId &&
+              !categoriesQuery.data?.some((option) => option.id === categoryId) && (
+                <option value={categoryId}>{p.category?.title || categoryId}</option>
+              )}
+            {categoriesQuery.data?.map((category) => (
+              <option value={category.id} key={category.id}>
+                {category.title}
+              </option>
+            ))}
+          </select>
         </label>
+        <p className="muted tiny">
+          This is the stat every pick scores.{' '}
+          {selectedCategory
+            ? selectedCategory.includeGk
+              ? `Players score ${selectedCategory.noun}. The keeper slot stays in the XI.`
+              : `Players score ${selectedCategory.noun}. Outfield only — the keeper is removed automatically.`
+            : 'Changing it refreshes Best score and the suggested XI.'}
+        </p>
+        {categoriesQuery.error && (
+          <p className="error-box">Categories could not be loaded. Refresh and try again.</p>
+        )}
         <div className="row">
           <label className="field">
             Formation
@@ -540,7 +683,8 @@ export function DraftEditor({
           )
         })}
         <p className="muted tiny">
-          Constraint count is fixed because it must match formation slots and the optimal lineup.
+          Constraint count matches the formation. Changing category adds or removes the keeper
+          automatically.
         </p>
         </div>
       </details>

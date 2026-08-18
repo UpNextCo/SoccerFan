@@ -30,15 +30,25 @@ import {
   recordFeeSub,
   careerTrophiesSub,
   intlCapsSub,
+  intlGoalsSub,
   mostClubsSub,
 } from './statMetrics.js';
 
 // ---------------------------------------------------------------------------
-// Categories (13). Each yields a per-player scalar `(player_id, value)`.
-// scope 'pl' = league-scoped to the Premier League, so only PL-based chips are coherent that day.
+// Categories. Each yields a per-player scalar `(player_id, value)`.
+// League scopes (pl / laliga / …) keep chips in that league so a goals day stays coherent.
 // ---------------------------------------------------------------------------
 
-type CategoryScope = 'global' | 'pl';
+type CategoryScope = 'global' | 'pl' | 'laliga' | 'seriea' | 'bundesliga' | 'ligue1';
+
+const SCOPE_LEAGUE_ID: Record<CategoryScope, number | null> = {
+  global: null,
+  pl: 39,
+  laliga: 140,
+  seriea: 135,
+  bundesliga: 78,
+  ligue1: 61,
+};
 
 interface Category {
   id: string;
@@ -46,6 +56,7 @@ interface Category {
   noun: string;
   unit: 'eur_m' | null;
   scope: CategoryScope;
+  includeGk?: boolean;
   sub: SQL; // (player_id, value)
 }
 
@@ -61,21 +72,49 @@ const leagueTitlesSub: SQL = sql`(SELECT player_id, COUNT(*)::int AS value FROM 
 const CATEGORIES: Category[] = [
   { id: 'career_goals', title: 'Career Goals', noun: 'goals', unit: null, scope: 'global', sub: careerGoalsSub },
   { id: 'career_assists', title: 'Career Assists', noun: 'assists', unit: null, scope: 'global', sub: careerAssistsSub },
-  { id: 'career_apps', title: 'Career Appearances', noun: 'apps', unit: null, scope: 'global', sub: careerAppsSub },
-  { id: 'career_yellows', title: 'Career Yellow Cards', noun: 'yellows', unit: null, scope: 'global', sub: careerYellowsSub },
+  { id: 'career_apps', title: 'Career Appearances', noun: 'apps', unit: null, scope: 'global', includeGk: true, sub: careerAppsSub },
+  { id: 'career_yellows', title: 'Career Yellow Cards', noun: 'yellows', unit: null, scope: 'global', includeGk: true, sub: careerYellowsSub },
   { id: 'pl_goals', title: 'Premier League Goals', noun: 'goals', unit: null, scope: 'pl', sub: sumMetric('goals', [39]) },
   { id: 'pl_assists', title: 'Premier League Assists', noun: 'assists', unit: null, scope: 'pl', sub: sumMetric('assists', [39]) },
-  { id: 'cl_apps', title: 'Champions League Appearances', noun: 'apps', unit: null, scope: 'global', sub: sumMetric('appearances', [2]) },
-  { id: 'peak_value', title: 'Peak Market Value', noun: '€m', unit: 'eur_m', scope: 'global', sub: peakValueSub },
-  { id: 'record_fee', title: 'Highest Transfer Fee', noun: '€m', unit: 'eur_m', scope: 'global', sub: recordFeeSub },
-  { id: 'career_trophies', title: 'Total Career Trophies', noun: 'trophies', unit: null, scope: 'global', sub: careerTrophiesSub },
-  { id: 'league_titles', title: 'League Titles', noun: 'titles', unit: null, scope: 'global', sub: leagueTitlesSub },
-  { id: 'intl_caps', title: 'International Caps', noun: 'caps', unit: null, scope: 'global', sub: intlCapsSub },
-  { id: 'most_clubs', title: 'Most Clubs Played For', noun: 'clubs', unit: null, scope: 'global', sub: mostClubsSub },
+  { id: 'pl_apps', title: 'Premier League Appearances', noun: 'apps', unit: null, scope: 'pl', includeGk: true, sub: sumMetric('appearances', [39]) },
+  { id: 'laliga_goals', title: 'La Liga Goals', noun: 'goals', unit: null, scope: 'laliga', sub: sumMetric('goals', [140]) },
+  { id: 'seriea_goals', title: 'Serie A Goals', noun: 'goals', unit: null, scope: 'seriea', sub: sumMetric('goals', [135]) },
+  { id: 'bundesliga_goals', title: 'Bundesliga Goals', noun: 'goals', unit: null, scope: 'bundesliga', sub: sumMetric('goals', [78]) },
+  { id: 'ligue1_goals', title: 'Ligue 1 Goals', noun: 'goals', unit: null, scope: 'ligue1', sub: sumMetric('goals', [61]) },
+  { id: 'cl_apps', title: 'Champions League Appearances', noun: 'apps', unit: null, scope: 'global', includeGk: true, sub: sumMetric('appearances', [2]) },
+  { id: 'cl_goals', title: 'Champions League Goals', noun: 'goals', unit: null, scope: 'global', sub: sumMetric('goals', [2]) },
+  { id: 'cl_assists', title: 'Champions League Assists', noun: 'assists', unit: null, scope: 'global', sub: sumMetric('assists', [2]) },
+  { id: 'wc_apps', title: 'World Cup Appearances', noun: 'apps', unit: null, scope: 'global', includeGk: true, sub: sumMetric('appearances', [1]) },
+  { id: 'peak_value', title: 'Peak Market Value', noun: '€m', unit: 'eur_m', scope: 'global', includeGk: true, sub: peakValueSub },
+  { id: 'record_fee', title: 'Highest Transfer Fee', noun: '€m', unit: 'eur_m', scope: 'global', includeGk: true, sub: recordFeeSub },
+  { id: 'career_trophies', title: 'Total Career Trophies', noun: 'trophies', unit: null, scope: 'global', includeGk: true, sub: careerTrophiesSub },
+  { id: 'league_titles', title: 'League Titles', noun: 'titles', unit: null, scope: 'global', includeGk: true, sub: leagueTitlesSub },
+  { id: 'intl_caps', title: 'International Caps', noun: 'caps', unit: null, scope: 'global', includeGk: true, sub: intlCapsSub },
+  { id: 'intl_goals', title: 'International Goals', noun: 'goals', unit: null, scope: 'global', sub: intlGoalsSub },
+  { id: 'most_clubs', title: 'Most Clubs Played For', noun: 'clubs', unit: null, scope: 'global', includeGk: true, sub: mostClubsSub },
 ];
 
-function categoryById(id: string): Category | undefined {
+export function categoryById(id: string): Category | undefined {
   return CATEGORIES.find((c) => c.id === id);
+}
+
+export type DraftCategoryOption = {
+  id: string;
+  title: string;
+  noun: string;
+  unit: 'eur_m' | null;
+  includeGk: boolean;
+};
+
+/** Canonical Draft XI scoring categories for Quiz Ops. Add rows to CATEGORIES to extend this. */
+export function listDraftCategories(): DraftCategoryOption[] {
+  return CATEGORIES.map(({ id, title, noun, unit, includeGk }) => ({
+    id,
+    title,
+    noun,
+    unit,
+    includeGk: Boolean(includeGk),
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -219,9 +258,7 @@ const ROTATING_FORMATIONS = ['4-3-3', '4-4-2', '4-2-3-1', '3-5-2'] as const;
 
 // Goalkeepers score ~0 for goals/assists, so those categories play an all-outfield XI.
 function includeGk(cat: Category): boolean {
-  return cat.id === 'career_apps' || cat.id === 'cl_apps' || cat.id === 'career_yellows' ||
-    cat.id === 'peak_value' || cat.id === 'record_fee' || cat.id === 'career_trophies' ||
-    cat.id === 'league_titles' || cat.id === 'intl_caps' || cat.id === 'most_clubs';
+  return Boolean(cat.includeGk);
 }
 
 function formationFor(cat: Category, rotationSeed: number): { id: string; slots: Slot[] } {
@@ -265,8 +302,12 @@ const ELITE_OTHER_MIN_FAMOUS = 40; // only the giants elsewhere
 const NAT_LEAGUE_MIN_FAMOUS = 3;
 const NAT_CLUB_MIN_FAMOUS = 2;
 
-/** Elite clubs: every PL club with ≥8 famous alumni, plus non-PL clubs with ≥40. */
-async function eliteClubs(): Promise<Array<{ club: string; leagueId: number }>> {
+/** Elite clubs: every PL club with ≥8 famous alumni, plus non-PL clubs with ≥40.
+ *  League-scoped days also include that league's clubs at the PL (≥8) bar so there are enough chips. */
+async function eliteClubs(scopeLeagueId?: number | null): Promise<Array<{ club: string; leagueId: number }>> {
+  const scoped = typeof scopeLeagueId === 'number'
+    ? sql`OR (league_id = ${scopeLeagueId} AND famous >= ${ELITE_PL_MIN_FAMOUS})`
+    : sql``;
   const rows = (await db.execute(sql`
     SELECT club, league_id FROM (
       SELECT s.team_name AS club, s.league_id,
@@ -277,6 +318,7 @@ async function eliteClubs(): Promise<Array<{ club: string; leagueId: number }>> 
     ) t
     WHERE (league_id = 39 AND famous >= ${ELITE_PL_MIN_FAMOUS})
        OR (league_id <> 39 AND famous >= ${ELITE_OTHER_MIN_FAMOUS})
+       ${scoped}
   `)) as unknown as Array<{ club: string; league_id: number }>;
   return rows.map((r) => ({ club: r.club, leagueId: r.league_id }));
 }
@@ -434,8 +476,8 @@ export interface BattlePuzzleJson {
 
 /** Board composition (chip-type counts) for an n-slot board, scaled and clamped to n. */
 function boardMix(n: number, scope: CategoryScope): { club: number; league: number; nationality: number; natLeague: number; natClub: number } {
-  if (scope === 'pl') {
-    // PL-coherent: mostly PL clubs + a couple "Nationality in the PL" combos.
+  if (scope !== 'global') {
+    // League-coherent: mostly that league's clubs + a couple "Nationality in the league" combos.
     const natLeague = Math.min(3, Math.max(2, n - 8));
     return { club: n - natLeague, league: 0, nationality: 0, natLeague, natClub: 0 };
   }
@@ -456,16 +498,18 @@ async function buildConstraintPool(
 ): Promise<Constraint[]> {
   const n = slotCount;
   const mix = boardMix(n, cat.scope);
-  const isPl = cat.scope === 'pl';
+  const scopeLeagueId = SCOPE_LEAGUE_ID[cat.scope];
   const clubNames = clubs.map((c) => c.club);
-  const plClubNames = clubs.filter((c) => c.leagueId === 39).map((c) => c.club);
+  const scopedClubNames = typeof scopeLeagueId === 'number'
+    ? clubs.filter((c) => c.leagueId === scopeLeagueId).map((c) => c.club)
+    : clubNames;
 
   const chosen: Constraint[] = [];
   let uid = 0;
   const nextId = () => `c${uid++}`;
 
   // Clubs
-  const clubPool = isPl ? plClubNames : clubNames;
+  const clubPool = scopedClubNames;
   for (const club of seededShuffle(clubPool, seed + 1).slice(0, mix.club)) {
     chosen.push({ id: nextId(), type: 'club', label: club, club });
   }
@@ -482,7 +526,7 @@ async function buildConstraintPool(
 
   // Nationality × League
   if (mix.natLeague > 0) {
-    const leagueIds = isPl ? [39] : BIG5.map((l) => l.id);
+    const leagueIds = typeof scopeLeagueId === 'number' ? [scopeLeagueId] : BIG5.map((l) => l.id);
     const combos = await viableNatLeague(leagueIds);
     for (const cmb of seededShuffle(combos, seed + 4).slice(0, mix.natLeague)) {
       const name = LEAGUE_NAME[cmb.leagueId] ?? '';
@@ -492,7 +536,7 @@ async function buildConstraintPool(
 
   // Nationality × Club
   if (mix.natClub > 0) {
-    const combos = await viableNatClub(isPl ? plClubNames : clubNames);
+    const combos = await viableNatClub(scopedClubNames);
     for (const cmb of seededShuffle(combos, seed + 5).slice(0, mix.natClub)) {
       chosen.push({ id: nextId(), type: 'nat_club', label: `${cmb.nationality} · ${cmb.club}`, nationality: cmb.nationality, club: cmb.club });
     }
@@ -540,7 +584,7 @@ async function assembleBattlePuzzle(opts: {
   const slots = formation.slots;
   const positions = [...new Set(slots.map((s) => s.position))];
 
-  const clubs = await eliteClubs();
+  const clubs = await eliteClubs(SCOPE_LEAGUE_ID[category.scope]);
   if (clubs.length < slots.length) return null;
 
   // Generate-and-validate: build a chip board, verify a solvable optimal XI (every assigned cell has a
@@ -650,19 +694,63 @@ function normalizeConstraintType(type: string): ConstraintType | null {
   return null;
 }
 
+function isGoalkeeperSlot(slot: { id: string; position: string }): boolean {
+  return slot.id === 'gk' || slot.position === 'Goalkeeper';
+}
+
+function formationIdForGk(formationId: string, withGk: boolean): string {
+  const base = formationId.endsWith('-of') ? formationId.slice(0, -3) : formationId;
+  if (!base) return formationId;
+  return withGk ? base : `${base}-of`;
+}
+
+/**
+ * Goals/assists categories have no keeper. Drop the GK slot and its chip so a category
+ * change stays solvable without a manual formation edit.
+ */
+export function alignDraftPuzzleToCategory(puzzle: BattlePuzzleJson): BattlePuzzleJson {
+  const cat = categoryById(puzzle.category.id);
+  if (!cat || cat.includeGk) return puzzle;
+  const gkIds = new Set(puzzle.slots.filter(isGoalkeeperSlot).map((slot) => slot.id));
+  if (gkIds.size === 0) return puzzle;
+
+  const slots = puzzle.slots.filter((slot) => !gkIds.has(slot.id));
+  const removedConstraintIds = new Set(
+    puzzle.optimalLineup.filter((pick) => gkIds.has(pick.slotId)).map((pick) => pick.constraintId)
+  );
+  let constraints = puzzle.constraints.filter((constraint) => !removedConstraintIds.has(constraint.id));
+  if (constraints.length > slots.length) {
+    constraints = constraints.slice(0, slots.length);
+  }
+  return {
+    ...puzzle,
+    formationId: formationIdForGk(puzzle.formationId, false),
+    slots,
+    constraints,
+    optimalLineup: puzzle.optimalLineup.filter((pick) => !gkIds.has(pick.slotId)),
+  };
+}
+
 /**
  * Re-solve the optimal XI for an existing Draft puzzle after Ops edits the constraint chips.
  * Uses the same Hungarian + distinct-player materialisation as generation.
  */
 export async function recomputeBattleOptimalLineup(
   puzzle: BattlePuzzleJson
-): Promise<{ optimalScore: number; optimalLineup: BattleOptimalPick[] } | null> {
-  const cat = categoryById(puzzle.category.id);
+): Promise<{
+  optimalScore: number;
+  optimalLineup: BattleOptimalPick[];
+  slots: BattlePuzzleJson['slots'];
+  constraints: BattlePuzzleJson['constraints'];
+  formationId: string;
+} | null> {
+  const aligned = alignDraftPuzzleToCategory(puzzle);
+  const cat = categoryById(aligned.category.id);
   if (!cat) return null;
 
-  const slots = puzzle.slots;
+  const slots = aligned.slots;
   const constraints: Constraint[] = [];
-  for (const raw of puzzle.constraints) {
+  for (const raw of aligned.constraints) {
     const type = normalizeConstraintType(String(raw.type ?? ''));
     if (!type) return null;
     constraints.push({
@@ -736,6 +824,9 @@ export async function recomputeBattleOptimalLineup(
   return {
     optimalScore,
     optimalLineup: pickBySlot.map((p) => p!),
+    slots: aligned.slots,
+    constraints: aligned.constraints,
+    formationId: aligned.formationId,
   };
 }
 

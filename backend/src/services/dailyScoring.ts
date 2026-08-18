@@ -8,7 +8,7 @@
  */
 import { maxXpForMode } from './dailyService.js';
 import { matches as bingoMatches, type BingoCategory, type BingoPlayer } from './footballBingoGenerator.js';
-import { playerValuesForCategory } from './targetManCategories.js';
+import { normalizeTargetManPool, playerValuesForCategory } from './targetManCategories.js';
 import { clubChainLink } from './clubChainGenerator.js';
 import {
   playerMatchesBackYourselfCategory,
@@ -357,13 +357,17 @@ async function scoreTargetMan(row: PuzzleRow, answer: unknown): Promise<ServerSc
     return null;
   }
 
-  const puzzle = row.puzzleJson as { categoryId?: string; target?: number };
+  const puzzle = row.puzzleJson as { categoryId?: string; target?: number; pool?: unknown };
   const answerMeta = row.answerJson as { answer?: { categoryId?: string; target?: number } } | null;
   const categoryId = puzzle.categoryId ?? answerMeta?.answer?.categoryId;
   const target = puzzle.target ?? answerMeta?.answer?.target;
   if (typeof categoryId !== 'string' || typeof target !== 'number' || target <= 0) return null;
 
-  const values = await playerValuesForCategory(categoryId, playerIds as string[]);
+  const values = await playerValuesForCategory(
+    categoryId,
+    playerIds as string[],
+    normalizeTargetManPool(puzzle.pool)
+  );
   const combined = values.reduce((sum, v) => sum + v.value, 0);
   const difference = combined - target;
   const pctOff = Math.abs(difference) / Math.max(target, 1);

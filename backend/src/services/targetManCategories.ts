@@ -59,6 +59,81 @@ export function targetCategoryById(id: string): TargetCategoryDef | undefined {
   return TARGET_CATEGORIES.find((c) => c.id === id);
 }
 
+/** Optional Quiz Ops pool filter — the stat stays the same; only eligible players change. */
+export type TargetManPool = {
+  type: 'nationality' | 'club';
+  nationality?: string | null;
+  club?: string | null;
+  teamId?: number | null;
+};
+
+export function normalizeTargetManPool(raw: unknown): TargetManPool | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const pool = raw as TargetManPool;
+  if (pool.type === 'nationality') {
+    const nationality = typeof pool.nationality === 'string' ? pool.nationality.trim() : '';
+    return nationality ? { type: 'nationality', nationality } : null;
+  }
+  if (pool.type === 'club') {
+    const club = typeof pool.club === 'string' ? pool.club.trim() : '';
+    const teamId = typeof pool.teamId === 'number' && Number.isInteger(pool.teamId) && pool.teamId > 0
+      ? pool.teamId
+      : null;
+    return club ? { type: 'club', club, teamId } : null;
+  }
+  return null;
+}
+
+export function composeTargetManLabel(baseLabel: string, pool?: TargetManPool | null): string {
+  if (pool?.type === 'nationality' && pool.nationality) {
+    return `${baseLabel} from ${pool.nationality} players`;
+  }
+  if (pool?.type === 'club' && pool.club) {
+    return `${baseLabel} from ${pool.club} players`;
+  }
+  return baseLabel;
+}
+
+function poolFilterSql(pool?: TargetManPool | null): SQL {
+  if (pool?.type === 'nationality' && pool.nationality) {
+    return sql`p.nationality = ${pool.nationality}`;
+  }
+  if (pool?.type === 'club' && pool.club) {
+    const teamId = pool.teamId;
+    const clubMatch = typeof teamId === 'number'
+      ? sql`(s.team_name = ${pool.club} OR s.team_id = ${teamId})`
+      : sql`s.team_name = ${pool.club}`;
+    const careerMatch = typeof teamId === 'number'
+      ? sql`(c.team_name = ${pool.club} OR c.team_id = ${teamId})`
+      : sql`c.team_name = ${pool.club}`;
+    return sql`(
+      EXISTS (
+        SELECT 1 FROM player_stats s
+        WHERE s.player_id = p.id AND s.appearances > 0 AND ${clubMatch}
+      )
+      OR EXISTS (
+        SELECT 1 FROM player_career c
+        WHERE c.player_id = p.id AND c.team_id > 0 AND ${careerMatch}
+      )
+    )`;
+  }
+  return sql`TRUE`;
+}
+
+export function targetManSearchFilterSql(opts?: {
+  nationality?: string;
+  club?: string;
+  teamId?: number;
+}): SQL {
+  return poolFilterSql(normalizeTargetManPool(
+    opts?.nationality
+      ? { type: 'nationality', nationality: opts.nationality }
+      : opts?.club
+        ? { type: 'club', club: opts.club, teamId: opts.teamId ?? null }
+        : null
+  ));
+}
+
 export interface AdminTargetCategoryOption {
   id: string;
   label: string;
@@ -95,7 +170,8 @@ export async function adminTargetCategoryOptions(): Promise<AdminTargetCategoryO
 /** Top players for a category, ranked by value desc — used to seed the daily target. */
 export async function topPlayersForCategory(
   def: TargetCategoryDef,
-  limit = 25
+  limit = 25,
+  pool?: TargetManPool | null
 ): Promise<FactPackPlayer[]> {
   const rows = (await db.execute(sql`
     SELECT v.player_id AS id, v.value::int AS value,
@@ -103,6 +179,7 @@ export async function topPlayersForCategory(
     FROM ${def.sub} v
     JOIN players p ON p.id = v.player_id
     WHERE v.value >= ${def.min} AND p.external_id IS NOT NULL
+      AND ${poolFilterSql(pool)}
     ORDER BY v.value DESC, p.id
     LIMIT ${limit}
   `)) as unknown as Array<{
@@ -120,13 +197,69 @@ export async function topPlayersForCategory(
   }));
 }
 
-/** Value each of `playerIds` for a category (0 if no record) — used to score guesses. */
+export type TargetManPreview = {
+  label: string;
+  suggestedTarget: number;
+  eligibleCount: number;
+  samplePlayers: Array<{ name: string; value: number }>;
+};
+
+export async function previewTargetManCategory(
+  categoryId: string,
+  pool?: TargetManPool | null
+): Promise<TargetManPreview | null> {
+  const def = targetCategoryById(categoryId);
+  if (!def) return null;
+  const normalized = normalizeTargetManPool(pool);
+  const ranked = await topPlayersForCategory(def, 30, normalized);
+  const sample = ranked.length >= 9 ? ranked.slice(4) : ranked;
+  const seedPlayers = sample.slice(0, 5);
+  const combined = seedPlayers.reduce((sum, player) => sum + player.statValue, 0);
+  const suggestedTarget = seedPlayers.length > 0
+    ? Math.max(def.round, Math.round(combined / def.round) * def.round)
+    : def.round;
+  return {
+    label: composeTargetManLabel(def.label, normalized),
+    suggestedTarget,
+    eligibleCount: ranked.length,
+    samplePlayers: ranked.slice(0, 8).map((player) => ({
+      name: player.name,
+      value: player.statValue,
+    })),
+  };
+}
+
+export async function playersMatchTargetManPool(
+  playerIds: string[],
+  pool?: TargetManPool | null
+): Promise<Array<{ id: string; inPool: boolean }>> {
+  const normalized = normalizeTargetManPool(pool);
+  if (!normalized || playerIds.length === 0) {
+    return playerIds.map((id) => ({ id, inPool: true }));
+  }
+  const rows = (await db.execute(sql`
+    SELECT p.id
+    FROM players p
+    WHERE p.id IN (${sql.join(playerIds.map((id) => sql`${id}::uuid`), sql`, `)})
+      AND ${poolFilterSql(normalized)}
+  `)) as unknown as Array<{ id: string }>;
+  const matched = new Set(rows.map((row) => row.id));
+  return playerIds.map((id) => ({ id, inPool: matched.has(id) }));
+}
+
+/** Value each of `playerIds` for a category (0 if no record or outside the pool). */
 export async function playerValuesForCategory(
   categoryId: string,
-  playerIds: string[]
-): Promise<Array<{ id: string; value: number }>> {
+  playerIds: string[],
+  pool?: TargetManPool | null
+): Promise<Array<{ id: string; value: number; inPool: boolean }>> {
   const def = targetCategoryById(categoryId);
-  if (!def || playerIds.length === 0) return playerIds.map((id) => ({ id, value: 0 }));
+  if (!def || playerIds.length === 0) {
+    return playerIds.map((id) => ({ id, value: 0, inPool: true }));
+  }
+  const normalized = normalizeTargetManPool(pool);
+  const membership = await playersMatchTargetManPool(playerIds, normalized);
+  const inPoolById = new Map(membership.map((row) => [row.id, row.inPool]));
 
   const rows = (await db.execute(sql`
     SELECT v.player_id AS id, v.value::int AS value
@@ -135,5 +268,8 @@ export async function playerValuesForCategory(
   `)) as unknown as Array<{ id: string; value: number }>;
 
   const byId = new Map(rows.map((r) => [r.id, Number(r.value ?? 0)]));
-  return playerIds.map((id) => ({ id, value: byId.get(id) ?? 0 }));
+  return playerIds.map((id) => {
+    const inPool = inPoolById.get(id) ?? true;
+    return { id, value: inPool ? (byId.get(id) ?? 0) : 0, inPool };
+  });
 }

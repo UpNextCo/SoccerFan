@@ -14,6 +14,8 @@ final class TargetManViewModel {
     var errorMessage: String?
     var confettiBurstToken = 0
     var showResult = false
+    var shakeToken = 0
+    var wrongMessage: String?
 
     init(challenge: TargetManChallenge) {
         self.state = TargetManGameState(challenge: challenge)
@@ -35,6 +37,7 @@ final class TargetManViewModel {
         searchResults = []
         errorMessage = nil
         showResult = false
+        wrongMessage = nil
     }
 
     var selectedPlayerIds: Set<String> {
@@ -61,10 +64,45 @@ final class TargetManViewModel {
         guard !selectedPlayerIds.contains(player.id) else { return }
         guard state.selections.count < TargetManGameState.slotCount else { return }
 
-        HapticManager.light()
-        state.selections.append(TargetManSelection(player: player))
+        var selection = TargetManSelection(player: player)
+        if let pool = state.challenge.pool, pool.isNationality, !pool.matchesNationality(player.nationality) {
+            selection.poolMissReason = pool.rejectReason(playerName: player.name)
+        }
+        state.selections.append(selection)
         searchQuery = ""
         searchResults = []
+
+        if let reason = selection.poolMissReason {
+            flashWrong(reason)
+            return
+        }
+        HapticManager.light()
+        if let pool = state.challenge.pool, pool.isClub {
+            Task { await verifyClubPool(playerId: player.id, playerName: player.name, pool: pool) }
+        }
+    }
+
+    private func verifyClubPool(playerId: String, playerName: String, pool: TargetManPoolDTO) async {
+        do {
+            let matches = try await APIClient.shared.targetManPoolMatch(playerIds: [playerId], pool: pool)
+            guard matches[playerId] == false else { return }
+            guard let index = state.selections.firstIndex(where: { $0.player.id == playerId }) else { return }
+            let reason = pool.rejectReason(playerName: playerName)
+            state.selections[index].poolMissReason = reason
+            flashWrong(reason)
+        } catch {
+            return
+        }
+    }
+
+    private func flashWrong(_ reason: String) {
+        HapticManager.error()
+        shakeToken += 1
+        wrongMessage = reason
+        Task {
+            try? await Task.sleep(for: .seconds(2.4))
+            if wrongMessage == reason { wrongMessage = nil }
+        }
     }
 
     func removePlayer(at index: Int) {
@@ -102,6 +140,7 @@ final class TargetManViewModel {
         errorMessage = nil
         confettiBurstToken = 0
         showResult = false
+        wrongMessage = nil
     }
 
     private func revealResults() {
@@ -112,7 +151,11 @@ final class TargetManViewModel {
             for index in 0..<total {
                 try? await Task.sleep(for: .seconds(TargetManTiming.revealStagger))
                 state.revealedCount = index + 1
-                HapticManager.light()
+                if state.selections.indices.contains(index), state.selections[index].isPoolMiss {
+                    HapticManager.error()
+                } else {
+                    HapticManager.light()
+                }
             }
 
             let combined = state.selections.compactMap(\.statValue).reduce(0, +)
@@ -178,10 +221,22 @@ struct TargetManView: View {
                                 challenge: viewModel.state.challenge,
                                 onRemove: { viewModel.removePlayer(at: $0) }
                             )
+                            .modifier(TargetManShakeEffect(animatableData: CGFloat(viewModel.shakeToken)))
+                            .animation(.linear(duration: 0.4), value: viewModel.shakeToken)
+
+                            if let msg = viewModel.wrongMessage {
+                                Text(msg.uppercased())
+                                    .font(BKFont.caption(11))
+                                    .tracking(0.5)
+                                    .foregroundStyle(BKTheme.wrong)
+                                    .multilineTextAlignment(.center)
+                                    .transition(.opacity)
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
                         .padding(.bottom, 24)
+                        .animation(.easeInOut(duration: 0.2), value: viewModel.wrongMessage)
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .onTapGesture { isSearchFocused = false }
@@ -419,7 +474,7 @@ private struct TargetManFilledSlotRow: View {
                 .font(.system(size: 12, weight: .heavy, design: .rounded))
                 .foregroundStyle(BKTheme.background)
                 .frame(width: 24, height: 24)
-                .background(BKTheme.accent)
+                .background(selection.isPoolMiss ? BKTheme.wrong : BKTheme.accent)
                 .clipShape(Circle())
 
             PlayerAvatar(urlString: selection.player.headshotUrl, size: 42)
@@ -427,9 +482,14 @@ private struct TargetManFilledSlotRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(selection.player.name.uppercased())
                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(BKTheme.textPrimary)
+                    .foregroundStyle(selection.isPoolMiss ? BKTheme.wrong : BKTheme.textPrimary)
                     .lineLimit(1)
-                if isRevealed, let stat = selection.statValue {
+                if let reason = selection.poolMissReason {
+                    Text(reason)
+                        .font(BKFont.caption(10))
+                        .foregroundStyle(BKTheme.wrong)
+                        .lineLimit(2)
+                } else if isRevealed, let stat = selection.statValue {
                     Text("\(challenge.displayCategoryLabel): \(challenge.formatValue(stat))")
                         .font(BKFont.caption(10))
                         .foregroundStyle(BKTheme.accent)
@@ -453,7 +513,7 @@ private struct TargetManFilledSlotRow: View {
             if isRevealed, let stat = selection.statValue {
                 Text("\(stat)")
                     .font(BKFont.headline(18))
-                    .foregroundStyle(BKTheme.accent)
+                    .foregroundStyle(selection.isPoolMiss ? BKTheme.wrong : BKTheme.accent)
                     .transition(.scale.combined(with: .opacity))
             } else if canRemove {
                 Button(action: onRemove) {
@@ -470,6 +530,10 @@ private struct TargetManFilledSlotRow: View {
         .padding(.vertical, 12)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(selection.isPoolMiss ? BKTheme.wrong.opacity(0.7) : Color.clear, lineWidth: 1.5)
+        )
         .animation(.spring(response: 0.32, dampingFraction: 0.78), value: isRevealed)
     }
 }
@@ -565,6 +629,14 @@ private struct TargetManLockButton: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
         .background(BKTheme.background)
+    }
+}
+
+/// Horizontal shake for a wrong pool pick (same feel as Draft XI).
+private struct TargetManShakeEffect: GeometryEffect {
+    var animatableData: CGFloat
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        ProjectionTransform(CGAffineTransform(translationX: 7 * sin(animatableData * .pi * 4), y: 0))
     }
 }
 
@@ -927,22 +999,22 @@ private struct TargetManResultPlayerRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("\(index)")
+                Text("\(index)")
                 .font(.system(size: 11, weight: .heavy, design: .rounded))
                 .foregroundStyle(BKTheme.background)
                 .frame(width: 22, height: 22)
-                .background(BKTheme.accent.opacity(0.85))
+                .background((selection.isPoolMiss ? BKTheme.wrong : BKTheme.accent).opacity(0.85))
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(selection.player.name.uppercased())
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(BKTheme.textPrimary)
+                    .foregroundStyle(selection.isPoolMiss ? BKTheme.wrong : BKTheme.textPrimary)
                     .lineLimit(1)
-                Text(selection.player.club)
+                Text(selection.poolMissReason ?? selection.player.club)
                     .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.textMuted)
-                    .lineLimit(1)
+                    .foregroundStyle(selection.isPoolMiss ? BKTheme.wrong : BKTheme.textMuted)
+                    .lineLimit(2)
             }
 
             Spacer()
@@ -951,10 +1023,10 @@ private struct TargetManResultPlayerRow: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(challenge.formatValue(stat))
                         .font(BKFont.headline(16))
-                        .foregroundStyle(BKTheme.accent)
-                    Text(challenge.displayCategoryLabel)
+                        .foregroundStyle(selection.isPoolMiss ? BKTheme.wrong : BKTheme.accent)
+                    Text(selection.isPoolMiss ? "WRONG" : challenge.displayCategoryLabel)
                         .font(BKFont.caption(9))
-                        .foregroundStyle(BKTheme.textMuted)
+                        .foregroundStyle(selection.isPoolMiss ? BKTheme.wrong : BKTheme.textMuted)
                 }
             }
         }

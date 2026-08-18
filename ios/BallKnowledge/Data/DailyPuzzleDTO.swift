@@ -34,6 +34,31 @@ struct Darts501PuzzleDTO: Codable, Equatable {
     }
 }
 
+struct TargetManPoolDTO: Codable, Equatable {
+    let type: String
+    let nationality: String?
+    let club: String?
+    let teamId: Int?
+
+    var isNationality: Bool { type == "nationality" && !(nationality ?? "").isEmpty }
+    var isClub: Bool { type == "club" && !(club ?? "").isEmpty }
+
+    func rejectReason(playerName: String) -> String {
+        if isNationality, let nationality {
+            return "\(playerName) isn't from \(nationality)"
+        }
+        if isClub, let club {
+            return "\(playerName) never played for \(club)"
+        }
+        return "\(playerName) doesn't fit this pool"
+    }
+
+    func matchesNationality(_ playerNationality: String) -> Bool {
+        guard isNationality, let nationality else { return true }
+        return playerNationality.compare(nationality, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+    }
+}
+
 struct TargetManPuzzleDTO: Codable, Equatable {
     let modeId: String
     let puzzleId: String
@@ -45,9 +70,10 @@ struct TargetManPuzzleDTO: Codable, Equatable {
     let unit: String?
     let target: Int
     let title: String
+    let pool: TargetManPoolDTO?
 
     enum CodingKeys: String, CodingKey {
-        case modeId, puzzleId, date, categoryId, categoryLabel, valueNoun, offNoun, unit, target, title
+        case modeId, puzzleId, date, categoryId, categoryLabel, valueNoun, offNoun, unit, target, title, pool
     }
 
     init(from decoder: Decoder) throws {
@@ -62,6 +88,7 @@ struct TargetManPuzzleDTO: Codable, Equatable {
         unit = try c.decodeIfPresent(String.self, forKey: .unit)
         target = try c.decodeIfPresent(Int.self, forKey: .target) ?? 0
         title = try c.decodeIfPresent(String.self, forKey: .title) ?? categoryLabel
+        pool = try c.decodeIfPresent(TargetManPoolDTO.self, forKey: .pool)
     }
 }
 

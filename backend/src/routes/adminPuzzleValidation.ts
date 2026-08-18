@@ -15,7 +15,11 @@ import {
   validateAdminGolfHole,
 } from '../services/adminGolfAuthoring.js';
 import { towerRuleSchema } from '../services/towerRuleSchema.js';
-import { adminTargetCategoryOptions } from '../services/targetManCategories.js';
+import {
+  adminTargetCategoryOptions,
+  previewTargetManCategory,
+} from '../services/targetManCategories.js';
+import { listDraftCategories } from '../services/battleGenerator.js';
 
 export const adminPuzzleValidationRouter = Router();
 adminPuzzleValidationRouter.use(requireAdmin);
@@ -67,6 +71,40 @@ adminPuzzleValidationRouter.post('/validate', async (req, res) => {
 adminPuzzleValidationRouter.get('/target-man/categories', async (_req, res) => {
   try {
     sendSuccess(res, await adminTargetCategoryOptions());
+  } catch (error) {
+    sendError(res, error instanceof Error ? error.message : String(error), 500);
+  }
+});
+
+adminPuzzleValidationRouter.post('/target-man/preview', async (req, res) => {
+  const body = z.object({
+    categoryId: z.string().trim().min(1),
+    pool: z.object({
+      type: z.enum(['nationality', 'club']),
+      nationality: z.string().trim().min(1).optional().nullable(),
+      club: z.string().trim().min(1).optional().nullable(),
+      teamId: z.number().int().positive().optional().nullable(),
+    }).optional().nullable(),
+  }).safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 'Invalid Target Man preview', 400, 'VALIDATION');
+    return;
+  }
+  try {
+    const preview = await previewTargetManCategory(body.data.categoryId, body.data.pool);
+    if (!preview) {
+      sendError(res, 'Unknown Target Man category', 400, 'VALIDATION');
+      return;
+    }
+    sendSuccess(res, preview);
+  } catch (error) {
+    sendError(res, error instanceof Error ? error.message : String(error), 500);
+  }
+});
+
+adminPuzzleValidationRouter.get('/draft/categories', async (_req, res) => {
+  try {
+    sendSuccess(res, listDraftCategories());
   } catch (error) {
     sendError(res, error instanceof Error ? error.message : String(error), 500);
   }

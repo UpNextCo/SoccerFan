@@ -402,10 +402,25 @@ actor APIClient {
         )
     }
 
-    func searchPlayers(query: String, currentTop5: Bool = false) async throws -> [PlayerSearchResultDTO] {
+    func searchPlayers(
+        query: String,
+        currentTop5: Bool = false,
+        nationality: String? = nil,
+        club: String? = nil,
+        teamId: Int? = nil
+    ) async throws -> [PlayerSearchResultDTO] {
         var items = [URLQueryItem(name: "q", value: query)]
         if currentTop5 {
             items.append(URLQueryItem(name: "currentTop5", value: "1"))
+        }
+        if let nationality, !nationality.isEmpty {
+            items.append(URLQueryItem(name: "nationality", value: nationality))
+        }
+        if let club, !club.isEmpty {
+            items.append(URLQueryItem(name: "club", value: club))
+        }
+        if let teamId {
+            items.append(URLQueryItem(name: "teamId", value: String(teamId)))
         }
         return try await request("players/search", queryItems: items)
     }
@@ -427,16 +442,54 @@ actor APIClient {
         }
     }
 
-    func targetManValues(categoryId: String, playerIds: [String]) async throws -> [String: Int] {
-        struct Body: Encodable { let categoryId: String; let playerIds: [String] }
-        struct Entry: Decodable { let id: String; let value: Int }
+    struct TargetManPlayerValue {
+        let value: Int
+        let inPool: Bool
+    }
+
+    func targetManValues(
+        categoryId: String,
+        playerIds: [String],
+        pool: TargetManPoolDTO? = nil
+    ) async throws -> [String: TargetManPlayerValue] {
+        struct Body: Encodable {
+            let categoryId: String
+            let playerIds: [String]
+            let pool: TargetManPoolDTO?
+        }
+        struct Entry: Decodable {
+            let id: String
+            let value: Int
+            let inPool: Bool?
+        }
         struct Resp: Decodable { let values: [Entry] }
         let resp: Resp = try await request(
             "players/target-values",
             method: "POST",
-            body: Body(categoryId: categoryId, playerIds: playerIds)
+            body: Body(categoryId: categoryId, playerIds: playerIds, pool: pool)
         )
-        return Dictionary(resp.values.map { ($0.id, $0.value) }, uniquingKeysWith: { a, _ in a })
+        return Dictionary(
+            resp.values.map { ($0.id, TargetManPlayerValue(value: $0.value, inPool: $0.inPool ?? true)) },
+            uniquingKeysWith: { a, _ in a }
+        )
+    }
+
+    func targetManPoolMatch(
+        playerIds: [String],
+        pool: TargetManPoolDTO
+    ) async throws -> [String: Bool] {
+        struct Body: Encodable {
+            let playerIds: [String]
+            let pool: TargetManPoolDTO
+        }
+        struct Entry: Decodable { let id: String; let inPool: Bool }
+        struct Resp: Decodable { let matches: [Entry] }
+        let resp: Resp = try await request(
+            "players/target-pool-match",
+            method: "POST",
+            body: Body(playerIds: playerIds, pool: pool)
+        )
+        return Dictionary(resp.matches.map { ($0.id, $0.inPool) }, uniquingKeysWith: { a, _ in a })
     }
 
     func getPlayerCareerStats(playerId: String, league: TargetManLeague) async throws -> PlayerCareerStatsDTO {

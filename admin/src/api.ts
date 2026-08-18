@@ -229,6 +229,28 @@ export type TargetManCategoryOption = {
   suggestedTarget: number
 }
 
+export type TargetManPool = {
+  type: 'nationality' | 'club'
+  nationality?: string | null
+  club?: string | null
+  teamId?: number | null
+}
+
+export type TargetManPreview = {
+  label: string
+  suggestedTarget: number
+  eligibleCount: number
+  samplePlayers: Array<{ name: string; value: number }>
+}
+
+export type DraftCategoryOption = {
+  id: string
+  title: string
+  noun: string
+  unit: 'eur_m' | null
+  includeGk: boolean
+}
+
 export type OpsMediaUpload = {
   id: string
   url: string
@@ -568,6 +590,13 @@ export const api = {
     }),
   listTargetManCategories: () =>
     request<TargetManCategoryOption[]>('/validation/target-man/categories'),
+  previewTargetMan: (body: { categoryId: string; pool?: TargetManPool | null }) =>
+    request<TargetManPreview>('/validation/target-man/preview', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  listDraftCategories: () =>
+    request<DraftCategoryOption[]>('/validation/draft/categories'),
   uploadLmsImage: (body: { fileBase64: string; mimeType: string; filename?: string }) =>
     request<OpsMediaUpload>('/media', {
       method: 'POST',

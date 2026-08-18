@@ -74,6 +74,9 @@ export const trustedIntlGoalsSql = (alias = 'e'): SQL => sql`COALESCE(
 export const intlCapsSub: SQL = sql`(SELECT player_id, ${trustedIntlCapsSql('e')}::int AS value
   FROM player_extra_stats e)`;
 
+export const intlGoalsSub: SQL = sql`(SELECT player_id, ${trustedIntlGoalsSql('e')}::int AS value
+  FROM player_extra_stats e)`;
+
 /**
  * Career appearances stay on the tracked-league definition. tm_career_apps holds the true
  * all-competition figure, but Transfermarkt renders goalkeepers on a different performance grid that

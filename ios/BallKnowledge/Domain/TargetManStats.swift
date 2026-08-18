@@ -9,11 +9,17 @@ enum TargetManStats {
         if let categoryId = challenge.serverCategoryId {
             let values = try await APIClient.shared.targetManValues(
                 categoryId: categoryId,
-                playerIds: selections.map(\.player.id)
+                playerIds: selections.map(\.player.id),
+                pool: challenge.pool
             )
             return selections.map { selection in
                 var copy = selection
-                copy.statValue = values[selection.player.id] ?? 0
+                let resolved = values[selection.player.id]
+                copy.statValue = resolved?.value ?? 0
+                if let pool = challenge.pool, resolved?.inPool == false {
+                    copy.poolMissReason = pool.rejectReason(playerName: selection.player.name)
+                    copy.statValue = 0
+                }
                 return copy
             }
         }

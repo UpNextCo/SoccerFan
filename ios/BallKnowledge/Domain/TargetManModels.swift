@@ -124,6 +124,7 @@ struct TargetManChallenge: Equatable, Codable {
     var serverValueNoun: String? = nil
     var serverOffNoun: String? = nil
     var serverUnit: String? = nil // "eur_m" → format as €Xm
+    var pool: TargetManPoolDTO? = nil
 
     var isServerValued: Bool { serverCategoryId != nil }
     var displayTitle: String { serverCategoryLabel ?? "\(leagueName) \(category.label)" }
@@ -152,12 +153,16 @@ struct TargetManSelection: Identifiable, Equatable, Codable {
     let id: UUID
     var player: PlayerSearchResultDTO
     var statValue: Int?
+    var poolMissReason: String?
 
-    init(player: PlayerSearchResultDTO, statValue: Int? = nil) {
+    init(player: PlayerSearchResultDTO, statValue: Int? = nil, poolMissReason: String? = nil) {
         self.id = UUID()
         self.player = player
         self.statValue = statValue
+        self.poolMissReason = poolMissReason
     }
+
+    var isPoolMiss: Bool { poolMissReason != nil }
 }
 
 struct TargetManGameState: Equatable, Codable {

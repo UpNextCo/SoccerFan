@@ -9,6 +9,7 @@ import { normalizeTeamName } from '../utils/teamName.js';
 import { clubKey } from '../utils/clubCanonical.js';
 import { resolveHeadshot } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
+import { targetManSearchFilterSql } from './targetManCategories.js';
 
 type SearchRow = {
   id: string;
@@ -120,7 +121,7 @@ const TOP5_LEAGUE_NAMES = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga',
 export async function searchPlayers(
   query: string,
   limit?: number,
-  opts?: { currentTop5?: boolean }
+  opts?: { currentTop5?: boolean; nationality?: string; club?: string; teamId?: number }
 ): Promise<PlayerSearchResult[]> {
   const normalized = normalizeSearchText(query);
 
@@ -134,6 +135,11 @@ export async function searchPlayers(
   const top5Filter = opts?.currentTop5
     ? sql`AND p.current_league IN (${sql.join(TOP5_LEAGUE_NAMES.map((n) => sql`${n}`), sql`, `)})`
     : sql``;
+  const poolFilter = sql`AND ${targetManSearchFilterSql({
+    nationality: opts?.nationality,
+    club: opts?.club,
+    teamId: opts?.teamId,
+  })}`;
 
   const rows = (await db.execute(sql`
     SELECT
@@ -182,6 +188,7 @@ export async function searchPlayers(
       )
     )
     ${top5Filter}
+    ${poolFilter}
     ORDER BY search_score DESC, lower(p.name) ASC
     LIMIT ${fetchLimit}
   `)) as SearchRow[];

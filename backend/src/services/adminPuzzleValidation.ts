@@ -4,8 +4,13 @@ import { golfRuleSignature } from './golfRuleSignature.js';
 import { isConfiguredOpsMediaUrl } from './opsMediaValidation.js';
 import { FOOTBALL_GOLF_HOLE_COUNT } from './footballGolfConstants.js';
 import { DRAFT_POSITION_COMPATIBILITY_VERSION } from './playerPositionService.js';
-import { targetCategoryById } from './targetManCategories.js';
+import {
+  composeTargetManLabel,
+  normalizeTargetManPool,
+  targetCategoryById,
+} from './targetManCategories.js';
 import { darts501FormulaById } from './darts501Generator.js';
+import { categoryById as draftCategoryById } from './battleGenerator.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 export interface AdminPuzzleValidationIssue {
@@ -221,6 +226,12 @@ const targetManPuzzle = z.object({
   valueNoun: text,
   offNoun: text,
   unit: z.string().nullable(),
+  pool: z.object({
+    type: z.enum(['nationality', 'club']),
+    nationality: z.string().trim().min(1).optional().nullable(),
+    club: z.string().trim().min(1).optional().nullable(),
+    teamId: z.number().int().positive().optional().nullable(),
+  }).optional().nullable(),
 }).passthrough();
 const targetManAnswerFields = z.object({
   categoryId: id,
@@ -433,6 +444,12 @@ function validateOneMore(puzzleJson: unknown, answerJson: unknown, issues: Admin
 function validateDraft(puzzleJson: unknown, issues: AdminPuzzleValidationIssue[]) {
   const puzzle = parse(draftPuzzle, puzzleJson, 'puzzleJson', issues);
   if (!puzzle) return;
+  const draftCategory = draftCategoryById(puzzle.category.id);
+  if (!draftCategory) {
+    issue(issues, 'puzzleJson.category.id', 'Choose a supported Draft XI category.');
+  } else if (puzzle.category.title !== draftCategory.title) {
+    issue(issues, 'puzzleJson.category.title', `Category name must be “${draftCategory.title}”.`);
+  }
   if (puzzle.positionCompatibilityVersion !== DRAFT_POSITION_COMPATIBILITY_VERSION) {
     issue(
       issues,
@@ -527,8 +544,13 @@ function validateTargetMan(puzzleJson: unknown, answerJson: unknown, issues: Adm
   if (!category) {
     issue(issues, 'puzzleJson.categoryId', 'Choose a supported Target Man category.');
   } else {
-    if (puzzle.categoryLabel !== category.label) {
-      issue(issues, 'puzzleJson.categoryLabel', `Category name must be “${category.label}”.`);
+    const pool = normalizeTargetManPool(puzzle.pool);
+    if (puzzle.pool && !pool) {
+      issue(issues, 'puzzleJson.pool', 'Choose a country or club for the pool, or clear the filter.');
+    }
+    const expectedLabel = composeTargetManLabel(category.label, pool);
+    if (puzzle.categoryLabel !== expectedLabel) {
+      issue(issues, 'puzzleJson.categoryLabel', `Category name must be “${expectedLabel}”.`);
     }
     if (puzzle.valueNoun !== category.valueNoun) {
       issue(issues, 'puzzleJson.valueNoun', `Answer unit must be “${category.valueNoun}”.`);

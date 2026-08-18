@@ -112,7 +112,8 @@ enum DailyChallengeResolver {
             serverCategoryLabel: puzzle.categoryLabel,
             serverValueNoun: puzzle.valueNoun,
             serverOffNoun: puzzle.offNoun,
-            serverUnit: puzzle.unit
+            serverUnit: puzzle.unit,
+            pool: puzzle.pool
         )
     }
 
