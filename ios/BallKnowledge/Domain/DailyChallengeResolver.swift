@@ -48,9 +48,14 @@ enum DailyChallengeResolver {
     static func backYourselfPuzzle(from bundle: DailyBundleDTO?) -> BackYourselfPuzzle? {
         guard let bundle, let dto = bundle.backYourselfPuzzle,
               dto.maxPool >= 1, !dto.category.label.isEmpty else { return nil }
+        return backYourselfPuzzle(from: dto, date: bundle.date)
+    }
+
+    static func backYourselfPuzzle(from dto: BackYourselfPuzzleDTO, date: String? = nil) -> BackYourselfPuzzle? {
+        guard dto.maxPool >= 1, !dto.category.label.isEmpty else { return nil }
         return BackYourselfPuzzle(
             id: dto.puzzleId,
-            date: bundle.date,
+            date: date ?? dto.date,
             category: dto.category,
             maxPool: dto.maxPool,
             xpCap: dto.xpCap,
@@ -177,9 +182,14 @@ enum DailyChallengeResolver {
     static func darts501Puzzle(from bundle: DailyBundleDTO?) -> Darts501Puzzle? {
         guard let bundle, let dto = bundle.darts501Puzzle,
               !dto.formulaLabel.isEmpty, dto.startScore > 0 else { return nil }
+        return darts501Puzzle(from: dto, date: bundle.date)
+    }
+
+    static func darts501Puzzle(from dto: Darts501PuzzleDTO, date: String? = nil) -> Darts501Puzzle? {
+        guard !dto.formulaLabel.isEmpty, dto.startScore > 0 else { return nil }
         return Darts501Puzzle(
             id: dto.puzzleId,
-            date: bundle.date,
+            date: date ?? dto.date,
             formulaId: dto.formulaId,
             formulaLabel: dto.formulaLabel,
             nationality: dto.nationality,

@@ -118,13 +118,24 @@ struct BackYourselfView: View {
     @State private var viewModel: BackYourselfViewModel
     @FocusState private var isSearchFocused: Bool
     private let allowReplay: Bool
+    private let showsXp: Bool
     private let dailyDate: String?
+    private let onSubmit: ((BackYourselfGameState) async -> Void)?
     var onComplete: () -> Void
 
-    init(dailyDate: String? = nil, puzzle: BackYourselfPuzzle, allowReplay: Bool = false, onComplete: @escaping () -> Void) {
+    init(
+        dailyDate: String? = nil,
+        puzzle: BackYourselfPuzzle,
+        allowReplay: Bool = false,
+        showsXp: Bool = true,
+        onSubmit: ((BackYourselfGameState) async -> Void)? = nil,
+        onComplete: @escaping () -> Void
+    ) {
         _viewModel = State(initialValue: BackYourselfViewModel(puzzle: puzzle))
         self.allowReplay = allowReplay
+        self.showsXp = showsXp
         self.dailyDate = dailyDate
+        self.onSubmit = onSubmit
         self.onComplete = onComplete
     }
 
@@ -206,8 +217,9 @@ struct BackYourselfView: View {
             BackYourselfResultView(
                 state: viewModel.state,
                 date: dailyDate ?? viewModel.state.puzzle.date,
+                showsXp: showsXp,
                 onHome: {
-                    if !allowReplay, let dailyDate {
+                    if onSubmit == nil, !allowReplay, let dailyDate {
                         let s = viewModel.state
                         Task {
                             await DailyCompletionService.recordCompletion(
@@ -225,6 +237,11 @@ struct BackYourselfView: View {
                     onComplete()
                 }
             )
+            .task {
+                if let onSubmit {
+                    await onSubmit(viewModel.state)
+                }
+            }
         }
     }
 
@@ -560,6 +577,7 @@ private struct BackYourselfHeartsRow: View {
 private struct BackYourselfResultView: View {
     let state: BackYourselfGameState
     let date: String
+    var showsXp: Bool = true
     let onHome: () -> Void
 
     var body: some View {
@@ -578,7 +596,9 @@ private struct BackYourselfResultView: View {
                 .font(BKFont.body(14))
                 .foregroundStyle(BKTheme.textSecondary)
 
-                XPResultSummary(earned: state.score, max: DailyXP.maxXP(.backYourself))
+                if showsXp {
+                    XPResultSummary(earned: state.score, max: DailyXP.maxXP(.backYourself))
+                }
 
                 ShareLink(item: state.shareText(date: date)) {
                     Text("SHARE")

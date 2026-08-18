@@ -134,6 +134,20 @@
       "when": 1786478400000,
       "tag": "0024_weekly_pyramid_league",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786872000000,
+      "tag": "0025_vs_multiplayer",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786875600000,
+      "tag": "0026_vs_live_draft",
+      "breakpoints": true
     }
   ]
 }

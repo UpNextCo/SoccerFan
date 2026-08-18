@@ -281,18 +281,24 @@ struct Darts501View: View {
     @State private var viewModel: Darts501ViewModel
     @FocusState private var isSearchFocused: Bool
     private let allowReplay: Bool
+    private let showsXp: Bool
     private let dailyDate: String?
+    private let onSubmit: ((Darts501GameState) async -> Void)?
     var onComplete: () -> Void
 
     init(
         dailyDate: String?,
         puzzle: Darts501Puzzle,
         allowReplay: Bool = false,
+        showsXp: Bool = true,
+        onSubmit: ((Darts501GameState) async -> Void)? = nil,
         onComplete: @escaping () -> Void
     ) {
         _viewModel = State(initialValue: Darts501ViewModel(puzzle: puzzle))
         self.dailyDate = dailyDate
         self.allowReplay = allowReplay
+        self.showsXp = showsXp
+        self.onSubmit = onSubmit
         self.onComplete = onComplete
     }
 
@@ -398,8 +404,9 @@ struct Darts501View: View {
         .fullScreenCover(isPresented: $viewModel.showResult) {
             Darts501ResultView(
                 state: viewModel.state,
+                showsXp: showsXp,
                 onHome: {
-                    if !allowReplay, let dailyDate {
+                    if onSubmit == nil, !allowReplay, let dailyDate {
                         Task {
                             await DailyCompletionService.recordCompletion(
                                 modeId: GameModeID.darts501.rawValue,
@@ -416,6 +423,11 @@ struct Darts501View: View {
                     dismiss()
                 }
             )
+            .task {
+                if let onSubmit {
+                    await onSubmit(viewModel.state)
+                }
+            }
         }
     }
 }
@@ -879,6 +891,7 @@ private struct Darts501RulesSheet: View {
 
 private struct Darts501ResultView: View {
     let state: Darts501GameState
+    var showsXp: Bool = true
     var onHome: () -> Void
 
     private var hero: String {
@@ -908,7 +921,9 @@ private struct Darts501ResultView: View {
                 }
                 .padding(.top, 24)
 
-                XPResultSummary(earned: state.xpEarned, max: DailyXP.maxXP(.darts501))
+                if showsXp {
+                    XPResultSummary(earned: state.xpEarned, max: DailyXP.maxXP(.darts501))
+                }
 
                 HStack(spacing: 10) {
                     Darts501StatChip(label: "Throws", value: "\(state.throwHistory.count)")

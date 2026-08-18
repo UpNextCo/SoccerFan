@@ -17,7 +17,7 @@ struct VsActivityAlert: Codable, Equatable, Identifiable {
 }
 
 /// App-wide poller for active VS challenges. Surfaces an in-app banner + Activity feed
-/// item when the opponent finishes (even if you're not on the VS tab).
+/// item when someone else finishes (even if you're not on the VS tab).
 @MainActor
 @Observable
 final class VsMonitor {
@@ -27,8 +27,8 @@ final class VsMonitor {
     private(set) var hasTabBadge = false
 
     private var trackedId: String?
-    private var lastOpponentCompleted = false
-    private var lastBothDone = false
+    private var lastOtherCompletedIds: Set<String> = []
+    private var lastAllDone = false
     private var seeded = false
     private var loopTask: Task<Void, Never>?
 
@@ -55,16 +55,16 @@ final class VsMonitor {
         guard let challenge else {
             trackedId = nil
             seeded = false
-            lastOpponentCompleted = false
-            lastBothDone = false
+            lastOtherCompletedIds = []
+            lastAllDone = false
             return
         }
         let switching = trackedId != challenge.id
         trackedId = challenge.id
         if switching {
             seeded = false
-            lastOpponentCompleted = opponentCompleted(challenge)
-            lastBothDone = challenge.result.bothDone
+            lastOtherCompletedIds = otherCompletedIds(challenge)
+            lastAllDone = challenge.result.allDone
         }
         process(challenge, allowNotify: seeded)
         seeded = true
@@ -86,17 +86,15 @@ final class VsMonitor {
                 let challenge = try await APIClient.shared.vsGet(id: id)
                 process(challenge, allowNotify: seeded)
                 seeded = true
-                if challenge.result.bothDone || challenge.status == "expired" {
-                    // Keep tracking briefly so the VS tab can still show the result if open,
-                    // but stop once we've notified for both-done.
-                    if challenge.result.bothDone {
+                if challenge.result.allDone || challenge.status == "expired" {
+                    if challenge.result.allDone {
                         trackedId = challenge.id
                     }
                 }
             } else if let challenge = try await APIClient.shared.vsActive() {
                 trackedId = challenge.id
-                lastOpponentCompleted = opponentCompleted(challenge)
-                lastBothDone = challenge.result.bothDone
+                lastOtherCompletedIds = otherCompletedIds(challenge)
+                lastAllDone = challenge.result.allDone
                 seeded = true
             }
         } catch {
@@ -106,32 +104,32 @@ final class VsMonitor {
     }
 
     private func process(_ challenge: VsChallengeDTO, allowNotify: Bool) {
-        let opponentDone = opponentCompleted(challenge)
-        let bothDone = challenge.result.bothDone
-        let opponentName = self.opponentName(challenge)
+        let others = otherCompletedIds(challenge)
+        let newFinishers = others.subtracting(lastOtherCompletedIds)
+        let allDone = challenge.result.allDone
 
-        if allowNotify, opponentDone, !lastOpponentCompleted {
-            if bothDone {
-                notifyResults(challenge, opponentName: opponentName)
-            } else {
-                notifyOpponentFinished(challenge, opponentName: opponentName)
+        if allowNotify, !newFinishers.isEmpty {
+            if allDone {
+                notifyResults(challenge)
+            } else if let player = challenge.players.first(where: { newFinishers.contains($0.userId) }) {
+                notifyOpponentFinished(challenge, opponentName: player.displayName)
             }
-        } else if allowNotify, bothDone, !lastBothDone {
-            notifyResults(challenge, opponentName: opponentName)
+        } else if allowNotify, allDone, !lastAllDone {
+            notifyResults(challenge)
         }
 
-        lastOpponentCompleted = opponentDone
-        lastBothDone = bothDone
+        lastOtherCompletedIds = others
+        lastAllDone = allDone
     }
 
     private func notifyOpponentFinished(_ challenge: VsChallengeDTO, opponentName: String) {
-        let alertId = "vs-opponent-\(challenge.id)"
+        let alertId = "vs-opponent-\(challenge.id)-\(opponentName)"
         guard !ActivityFeedStore.hasVsAlert(id: alertId) else { return }
 
         let title = "\(opponentName) finished"
         let message = youCompleted(challenge)
-            ? "Waiting on the final score — jump into VS."
-            : "Their Draft XI is in. Your turn to play."
+            ? "Waiting on the rest — jump into VS."
+            : "Their \(challenge.modeTitle) is in. Your turn to play."
 
         ActivityFeedStore.appendVsAlert(
             VsActivityAlert(
@@ -148,7 +146,7 @@ final class VsMonitor {
         HapticManager.success()
     }
 
-    private func notifyResults(_ challenge: VsChallengeDTO, opponentName: String) {
+    private func notifyResults(_ challenge: VsChallengeDTO) {
         let alertId = "vs-result-\(challenge.id)"
         guard !ActivityFeedStore.hasVsAlert(id: alertId) else { return }
 
@@ -156,17 +154,19 @@ final class VsMonitor {
         switch challenge.result.winner {
         case "draw":
             title = "VS draw"
-        case "host":
-            title = challenge.youAreHost ? "You won the VS" : "\(opponentName) won the VS"
-        case "guest":
-            title = challenge.youAreHost ? "\(opponentName) won the VS" : "You won the VS"
+        case "you":
+            title = "You won the VS"
         default:
-            title = "VS results are in"
+            if let winnerId = challenge.result.winnerUserId,
+               let winner = challenge.players.first(where: { $0.userId == winnerId }) {
+                title = "\(winner.displayName) won the VS"
+            } else {
+                title = "VS results are in"
+            }
         }
 
         let yourScore = challenge.result.yourScore.map(String.init) ?? "—"
-        let theirScore = challenge.result.theirScore.map(String.init) ?? "—"
-        let message = "\(yourScore) vs \(theirScore) \(challenge.categoryNoun)."
+        let message = "You scored \(yourScore) \(challenge.categoryNoun)."
 
         ActivityFeedStore.appendVsAlert(
             VsActivityAlert(
@@ -187,18 +187,11 @@ final class VsMonitor {
         hasTabBadge = ActivityFeedStore.unreadVsAlertCount > 0
     }
 
-    private func opponentCompleted(_ challenge: VsChallengeDTO) -> Bool {
-        challenge.youAreHost ? (challenge.guest?.completed ?? false) : challenge.host.completed
+    private func otherCompletedIds(_ challenge: VsChallengeDTO) -> Set<String> {
+        Set(challenge.players.filter { !$0.isYou && $0.completed }.map(\.userId))
     }
 
     private func youCompleted(_ challenge: VsChallengeDTO) -> Bool {
-        challenge.youAreHost ? challenge.host.completed : (challenge.guest?.completed ?? false)
-    }
-
-    private func opponentName(_ challenge: VsChallengeDTO) -> String {
-        if challenge.youAreHost {
-            return challenge.guest?.displayName ?? "Opponent"
-        }
-        return challenge.host.displayName
+        challenge.players.first(where: \.isYou)?.completed ?? false
     }
 }

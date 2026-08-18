@@ -583,13 +583,18 @@ actor APIClient {
 
     // MARK: VS
 
-    func vsCreate() async throws -> VsChallengeDTO {
-        try await request("vs/create", method: "POST", body: EmptyBody())
+    func vsCreate(modeId: String) async throws -> VsChallengeDTO {
+        struct Body: Encodable { let modeId: String }
+        return try await request("vs/create", method: "POST", body: Body(modeId: modeId))
     }
 
     func vsJoin(code: String) async throws -> VsChallengeDTO {
         struct Body: Encodable { let code: String }
         return try await request("vs/join", method: "POST", body: Body(code: code))
+    }
+
+    func vsStart(id: String) async throws -> VsChallengeDTO {
+        try await request("vs/\(id)/start", method: "POST", body: EmptyBody())
     }
 
     func vsActive() async throws -> VsChallengeDTO? {
@@ -600,8 +605,12 @@ actor APIClient {
         try await request("vs/\(id)")
     }
 
-    func vsSubmit(id: String, picks: [VsPickDTO]) async throws -> VsChallengeDTO {
-        try await request("vs/\(id)/submit", method: "POST", body: VsSubmitRequestDTO(picks: picks))
+    func vsSubmit(id: String, answer: JSONValue) async throws -> VsChallengeDTO {
+        try await request("vs/\(id)/submit", method: "POST", body: VsSubmitRequestDTO(answer: answer))
+    }
+
+    func vsLock(id: String, slotId: String, constraintId: String, playerId: String) async throws -> VsChallengeDTO {
+        try await request("vs/\(id)/lock", method: "POST", body: VsPickDTO(slotId: slotId, constraintId: constraintId, playerId: playerId))
     }
 }
 

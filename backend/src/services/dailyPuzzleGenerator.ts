@@ -157,19 +157,24 @@ export async function generateGuessWhoPuzzle(
 export async function generateTargetManPuzzle(
   date: string,
   _factPack: DailyFactPack,
-  opts?: { recentQuestions?: Set<string> }
+  opts?: { recentQuestions?: Set<string>; seedKey?: string }
 ): Promise<GeneratedDailyPuzzle> {
-  const seed = hashString(`${date}:target_man`);
+  const seed = hashString(opts?.seedKey ?? `${date}:target_man`);
 
   // Repeat suppression: the same category coming back every ~19 days is fine (it's a fresh
   // number), but the EXACT question (category + target) must not recur for months.
-  const recentQuestions = opts?.recentQuestions ?? (await recentTargetManQuestions(date, TARGET_MAN_REPEAT_WINDOW_DAYS));
+  const recentQuestions =
+    opts?.seedKey != null
+      ? new Set<string>()
+      : (opts?.recentQuestions ?? (await recentTargetManQuestions(date, TARGET_MAN_REPEAT_WINDOW_DAYS)));
 
   // Rotate across the curated category list with a coprime stride, then walk the list so a
   // thin pool falls through to the next category instead of failing the whole mode.
   const cats = TARGET_CATEGORIES;
   const stride = 7; // coprime with the (19) category count
-  const start = ((dayNumber(date) * stride) % cats.length + cats.length) % cats.length;
+  const start = opts?.seedKey
+    ? ((seed * stride) % cats.length + cats.length) % cats.length
+    : ((dayNumber(date) * stride) % cats.length + cats.length) % cats.length;
 
   for (let offset = 0; offset < cats.length; offset += 1) {
     const def = cats[(start + offset) % cats.length]!;
@@ -196,9 +201,12 @@ export async function generateTargetManPuzzle(
     }
     if (chosen.length < 5 || target <= 0) continue;
 
+    const puzzleId = opts?.seedKey
+      ? `vs-${opts.seedKey.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || String(seed)}-target_man`
+      : `${date}-target_man`;
     const puzzleJson = {
       modeId: 'target_man' as const,
-      puzzleId: `${date}-target_man`,
+      puzzleId,
       date,
       categoryId: def.id,
       categoryLabel: def.label,

@@ -59,6 +59,14 @@ extension GameModeID {
 }
 
 enum DailyPlayOrder {
+    /// Modes that can be hosted as a VS challenge.
+    static let vsModes: [GameModeID] = [
+        .backYourself,
+        .darts501,
+        .targetMan,
+        .draftMaster,
+    ]
+
     /// Modes shown on the homepage daily list (excludes defunct guessWho / worldCupXI / blindRank / footballTower / footballGolf).
     static let playableModes: [GameModeID] = [
         .footballBingo,

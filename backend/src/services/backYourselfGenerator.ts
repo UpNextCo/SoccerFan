@@ -868,12 +868,13 @@ function pickWeightedPool(candidates: Candidate[], seed: number): Candidate[] {
 }
 
 export async function generateBackYourselfPuzzle(
-  date: string
+  date: string,
+  opts?: { seedKey?: string }
 ): Promise<{ puzzle: BackYourselfPuzzlePublic; answer: BackYourselfPuzzleAnswer } | null> {
   const candidates = await getCandidates();
   if (candidates.length === 0) return null;
 
-  const seed = hashString(`${date}:back_yourself`);
+  const seed = hashString(opts?.seedKey ?? `${date}:back_yourself`);
   let pool = pickWeightedPool(candidates, seed);
   if (pool.length === 0) pool = candidates;
   const chosen = seededShuffle(pool, seed)[0]!;
@@ -904,9 +905,12 @@ export async function generateBackYourselfPuzzle(
   });
 
   const xpCap = backYourselfXpCap(chosen.maxPool);
+  const puzzleId = opts?.seedKey
+    ? `vs-${opts.seedKey.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || String(seed)}-back_yourself`
+    : `${date}-back_yourself`;
   const puzzle: BackYourselfPuzzlePublic = {
     modeId: 'back_yourself',
-    puzzleId: `${date}-back_yourself`,
+    puzzleId,
     date,
     category,
     maxPool: chosen.maxPool,

@@ -4,6 +4,7 @@ import SwiftUI
 @Observable
 final class VsViewModel {
     var challenge: VsChallengeDTO?
+    var selectedMode: GameModeID = .backYourself
     var joinCode = ""
     var isLoading = false
     var isBusy = false
@@ -26,7 +27,7 @@ final class VsViewModel {
         isBusy = true
         defer { isBusy = false }
         do {
-            challenge = try await APIClient.shared.vsCreate()
+            challenge = try await APIClient.shared.vsCreate(modeId: selectedMode.rawValue)
             VsMonitor.shared.track(challenge)
             errorMessage = nil
         } catch {
@@ -52,6 +53,19 @@ final class VsViewModel {
         }
     }
 
+    func start() async {
+        guard let id = challenge?.id else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            challenge = try await APIClient.shared.vsStart(id: id)
+            VsMonitor.shared.track(challenge)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func poll() async {
         guard let id = challenge?.id else { return }
         do {
@@ -62,21 +76,37 @@ final class VsViewModel {
         }
     }
 
-    func submit(state: BattleGameState) async -> (lineup: [BattleOptimalSlotDTO], optimalScore: Int?)? {
+    func submit(answer: JSONValue) async -> VsChallengeDTO? {
         guard let id = challenge?.id else { return nil }
-        let picks = state.picks.map { slotId, pick in
-            VsPickDTO(slotId: slotId, constraintId: pick.constraint.id, playerId: pick.player.id)
-        }
         do {
-            let updated = try await APIClient.shared.vsSubmit(id: id, picks: picks)
+            let updated = try await APIClient.shared.vsSubmit(id: id, answer: answer)
             challenge = updated
             VsMonitor.shared.track(challenge)
             errorMessage = nil
-            let lineup = updated.optimalLineup ?? []
-            return (lineup, updated.optimalScore)
+            return updated
         } catch {
             errorMessage = error.localizedDescription
             return nil
+        }
+    }
+
+    func submitDraft(state: BattleGameState) async -> (lineup: [BattleOptimalSlotDTO], optimalScore: Int?)? {
+        let updated = await submit(answer: state.answerPayload())
+        return (updated?.optimalLineup ?? [], updated?.optimalScore)
+    }
+
+    func lockPick(slotId: String, constraintId: String, playerId: String) async -> Bool {
+        guard let id = challenge?.id else { return false }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            challenge = try await APIClient.shared.vsLock(id: id, slotId: slotId, constraintId: constraintId, playerId: playerId)
+            VsMonitor.shared.track(challenge)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -88,8 +118,7 @@ final class VsViewModel {
     }
 
     var youHavePlayed: Bool {
-        guard let challenge else { return false }
-        return challenge.youAreHost ? challenge.host.completed : (challenge.guest?.completed ?? false)
+        challenge?.players.first(where: \.isYou)?.completed ?? false
     }
 
     var canPlay: Bool {
@@ -98,8 +127,27 @@ final class VsViewModel {
     }
 
     var battleChallenge: BattleChallenge? {
-        guard let challenge else { return nil }
-        return DailyChallengeResolver.battleChallenge(from: challenge.puzzle)
+        guard challenge?.modeId == GameModeID.draftMaster.rawValue,
+              let dto = challenge?.puzzle.decode(DraftMasterPuzzleDTO.self) else { return nil }
+        return DailyChallengeResolver.battleChallenge(from: dto)
+    }
+
+    var backYourselfPuzzle: BackYourselfPuzzle? {
+        guard challenge?.modeId == GameModeID.backYourself.rawValue,
+              let dto = challenge?.puzzle.decode(BackYourselfPuzzleDTO.self) else { return nil }
+        return DailyChallengeResolver.backYourselfPuzzle(from: dto)
+    }
+
+    var targetManChallenge: TargetManChallenge? {
+        guard let challenge, challenge.modeId == GameModeID.targetMan.rawValue,
+              let dto = challenge.puzzle.decode(TargetManPuzzleDTO.self) else { return nil }
+        return DailyChallengeResolver.targetManChallenge(from: dto, date: dto.date)
+    }
+
+    var darts501Puzzle: Darts501Puzzle? {
+        guard challenge?.modeId == GameModeID.darts501.rawValue,
+              let dto = challenge?.puzzle.decode(Darts501PuzzleDTO.self) else { return nil }
+        return DailyChallengeResolver.darts501Puzzle(from: dto)
     }
 }
 
@@ -134,32 +182,81 @@ struct VsTabView: View {
         .task(id: viewModel.challenge?.id) {
             guard viewModel.challenge != nil else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
+                let live = viewModel.challenge?.isLiveDraft == true
+                try? await Task.sleep(for: .seconds(live ? 1 : 3))
                 guard !Task.isCancelled else { break }
-                // Only poll while waiting on someone / something.
                 if let c = viewModel.challenge,
                    c.status == "waiting" || c.status == "active",
-                   !c.result.bothDone {
+                   !c.result.allDone {
                     await viewModel.poll()
+                    if c.modeId == GameModeID.draftMaster.rawValue,
+                       viewModel.challenge?.isLiveDraft == true {
+                        viewModel.playing = true
+                    }
+                    if viewModel.challenge?.result.allDone == true {
+                        viewModel.playing = false
+                    }
                 } else {
                     break
                 }
             }
         }
+        .onChange(of: viewModel.challenge?.status) {
+            if viewModel.challenge?.isLiveDraft == true {
+                viewModel.playing = true
+            }
+        }
         .fullScreenCover(isPresented: $viewModel.playing) {
-            if let challenge = viewModel.battleChallenge {
-                DraftMasterView(
+            playCover
+        }
+    }
+
+    @ViewBuilder
+    private var playCover: some View {
+        switch viewModel.challenge?.modeId {
+        case GameModeID.draftMaster.rawValue:
+            if let battle = viewModel.battleChallenge {
+                VsDraftLiveView(viewModel: viewModel, battle: battle)
+            }
+        case GameModeID.backYourself.rawValue:
+            if let puzzle = viewModel.backYourselfPuzzle {
+                BackYourselfView(
+                    puzzle: puzzle,
+                    allowReplay: true,
+                    showsXp: false,
+                    onSubmit: { state in
+                        _ = await viewModel.submit(answer: state.answerPayload())
+                    },
+                    onComplete: { viewModel.playing = false }
+                )
+            }
+        case GameModeID.targetMan.rawValue:
+            if let challenge = viewModel.targetManChallenge {
+                TargetManView(
                     challenge: challenge,
                     allowReplay: true,
                     showsXp: false,
                     onSubmit: { state in
-                        await viewModel.submit(state: state)
+                        _ = await viewModel.submit(answer: state.answerPayload())
                     },
-                    onComplete: {
-                        viewModel.playing = false
-                    }
+                    onComplete: { viewModel.playing = false }
                 )
             }
+        case GameModeID.darts501.rawValue:
+            if let puzzle = viewModel.darts501Puzzle {
+                Darts501View(
+                    dailyDate: nil,
+                    puzzle: puzzle,
+                    allowReplay: true,
+                    showsXp: false,
+                    onSubmit: { state in
+                        _ = await viewModel.submit(answer: state.answerPayload())
+                    },
+                    onComplete: { viewModel.playing = false }
+                )
+            }
+        default:
+            Color.clear
         }
     }
 
@@ -170,16 +267,34 @@ struct VsTabView: View {
                     Ph.users.weight(.fill)
                         .color(BKTheme.accent)
                         .frame(width: 44, height: 44)
-                    Text("Challenge a mate")
+                    Text("Challenge your mates")
                         .font(BKFont.title(28))
                         .foregroundStyle(BKTheme.textPrimary)
-                    Text("Create a code, share it, then both play the same Draft XI. Highest XI total wins — no XP.")
+                    Text("Pick a game, share a code, invite up to 4 friends. Same puzzle — best score wins. No XP.")
                         .font(BKFont.body(14))
                         .foregroundStyle(BKTheme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
                 }
-                .padding(.top, 36)
+                .padding(.top, 28)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("PICK A GAME")
+                        .font(BKFont.caption(11))
+                        .tracking(1)
+                        .foregroundStyle(BKTheme.textMuted)
+
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                        ForEach(DailyPlayOrder.vsModes) { mode in
+                            Button {
+                                viewModel.selectedMode = mode
+                            } label: {
+                                VsModeCard(mode: mode, selected: viewModel.selectedMode == mode)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
 
                 Button {
                     Task { await viewModel.create() }
@@ -249,10 +364,10 @@ struct VsTabView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 24) {
                 VStack(spacing: 8) {
-                    Text("DRAFT XI")
+                    Text(challenge.modeTitle)
                         .font(BKFont.caption(11)).tracking(1.2)
                         .foregroundStyle(BKTheme.accent)
-                    Text(challenge.puzzle.category.title)
+                    Text(challenge.title)
                         .font(BKFont.title(26))
                         .foregroundStyle(BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
@@ -263,25 +378,53 @@ struct VsTabView: View {
 
                 playersCard(challenge)
 
-                if challenge.result.bothDone {
+                if challenge.result.allDone {
                     winnerCard(challenge)
+                } else if viewModel.challenge?.isLiveDraft == true {
+                    waitingCard(
+                        title: "Live draft",
+                        message: "Same position, same time. Lock your pick — then you’ll see everyone else’s."
+                    )
                 } else if viewModel.youHavePlayed {
                     waitingCard(
                         title: "Score locked in",
-                        message: "Waiting for \(opponentName(challenge)) to finish their XI."
+                        message: "Waiting for everyone else to finish."
                     )
                 } else if challenge.status == "waiting" {
                     waitingCard(
-                        title: "Waiting for opponent",
-                        message: "Share your code. You'll both play once they join."
+                        title: challenge.youAreHost ? "Waiting for friends" : "Waiting to start",
+                        message: challenge.youAreHost
+                            ? "Share your code. Start once at least one mate has joined — up to 4."
+                            : "The host will start once everyone’s in."
                     )
+                }
+
+                if challenge.canStart {
+                    Button {
+                        Task { await viewModel.start() }
+                    } label: {
+                        HStack {
+                            if viewModel.isBusy {
+                                ProgressView().tint(BKTheme.textPrimary)
+                            }
+                            Text("START GAME")
+                                .font(BKFont.headline(14))
+                        }
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(BKTheme.accent)
+                        .clipShape(Capsule())
+                    }
+                    .disabled(viewModel.isBusy)
+                    .buttonStyle(.plain)
                 }
 
                 if viewModel.canPlay {
                     Button {
                         viewModel.playing = true
                     } label: {
-                        Text("PLAY DRAFT XI")
+                        Text("PLAY \(challenge.modeTitle)")
                             .font(BKFont.headline(14))
                             .foregroundStyle(BKTheme.textPrimary)
                             .frame(maxWidth: .infinity)
@@ -299,7 +442,7 @@ struct VsTabView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                if challenge.result.bothDone {
+                if challenge.result.allDone {
                     Button {
                         viewModel.clearChallenge()
                     } label: {
@@ -339,30 +482,24 @@ struct VsTabView: View {
     }
 
     private func playersCard(_ challenge: VsChallengeDTO) -> some View {
-        VStack(spacing: 12) {
-            playerRow(
-                name: challenge.host.displayName + (challenge.youAreHost ? " (you)" : ""),
-                score: challenge.host.score,
-                completed: challenge.host.completed,
-                noun: challenge.categoryNoun
-            )
-            Divider().overlay(BKTheme.textMuted.opacity(0.25))
-            if let guest = challenge.guest {
-                playerRow(
-                    name: guest.displayName + (!challenge.youAreHost ? " (you)" : ""),
-                    score: guest.score,
-                    completed: guest.completed,
-                    noun: challenge.categoryNoun
-                )
-            } else {
-                HStack {
-                    Text("Opponent")
-                        .font(BKFont.headline(15))
-                        .foregroundStyle(BKTheme.textMuted)
-                    Spacer()
-                    Text("Waiting…")
-                        .font(BKFont.caption(12))
-                        .foregroundStyle(BKTheme.textMuted)
+        let openSlots = max(0, challenge.maxPlayers - challenge.players.count)
+        return VStack(spacing: 12) {
+            ForEach(Array(challenge.players.enumerated()), id: \.element.userId) { index, player in
+                if index > 0 { Divider().overlay(BKTheme.textMuted.opacity(0.25)) }
+                playerRow(player, noun: challenge.categoryNoun, modeId: challenge.modeId)
+            }
+            if challenge.status == "waiting" {
+                ForEach(0..<openSlots, id: \.self) { _ in
+                    Divider().overlay(BKTheme.textMuted.opacity(0.25))
+                    HStack {
+                        Text("Open slot")
+                            .font(BKFont.headline(15))
+                            .foregroundStyle(BKTheme.textMuted)
+                        Spacer()
+                        Text("Waiting…")
+                            .font(BKFont.caption(12))
+                            .foregroundStyle(BKTheme.textMuted)
+                    }
                 }
             }
         }
@@ -371,20 +508,20 @@ struct VsTabView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private func playerRow(name: String, score: Int?, completed: Bool, noun: String) -> some View {
+    private func playerRow(_ player: VsPlayerDTO, noun: String, modeId: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(name)
+            Text(playerLabel(player))
                 .font(BKFont.headline(15))
                 .foregroundStyle(BKTheme.textPrimary)
             Spacer()
-            if completed, let score {
+            if player.completed, let score = player.displayScore ?? player.score {
                 Text("\(score)")
                     .font(BKFont.title(22))
                     .foregroundStyle(BKTheme.accent)
-                Text(noun.uppercased())
+                Text(scoreNoun(modeId, noun).uppercased())
                     .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.textMuted)
-            } else if completed {
+            } else if player.completed {
                 Text("Done")
                     .font(BKFont.caption(12))
                     .foregroundStyle(BKTheme.textMuted)
@@ -393,6 +530,22 @@ struct VsTabView: View {
                     .font(BKFont.caption(12))
                     .foregroundStyle(BKTheme.textMuted)
             }
+        }
+    }
+
+    private func playerLabel(_ player: VsPlayerDTO) -> String {
+        var name = player.displayName
+        if player.isYou { name += " (you)" }
+        else if player.isHost { name += " (host)" }
+        return name
+    }
+
+    private func scoreNoun(_ modeId: String, _ fallback: String) -> String {
+        switch modeId {
+        case GameModeID.targetMan.rawValue: return fallback
+        case GameModeID.backYourself.rawValue: return "named"
+        case GameModeID.darts501.rawValue: return "left"
+        default: return fallback
         }
     }
 
@@ -416,14 +569,12 @@ struct VsTabView: View {
         let headline: String = {
             switch challenge.result.winner {
             case "draw": return "IT'S A DRAW"
-            case "host":
-                return challenge.youAreHost ? "YOU WIN" : "\(challenge.host.displayName.uppercased()) WINS"
-            case "guest":
-                if let guest = challenge.guest {
-                    return challenge.youAreHost ? "\(guest.displayName.uppercased()) WINS" : "YOU WIN"
-                }
-                return "CHALLENGE COMPLETE"
+            case "you": return "YOU WIN"
             default:
+                if let winnerId = challenge.result.winnerUserId,
+                   let winner = challenge.players.first(where: { $0.userId == winnerId }) {
+                    return "\(winner.displayName.uppercased()) WINS"
+                }
                 return "CHALLENGE COMPLETE"
             }
         }()
@@ -434,28 +585,23 @@ struct VsTabView: View {
                 .foregroundStyle(BKTheme.accent)
                 .multilineTextAlignment(.center)
 
-            HStack(spacing: 20) {
-                scoreSide(
-                    label: challenge.youAreHost ? "YOU" : challenge.host.displayName.uppercased(),
-                    value: challenge.host.score ?? 0,
-                    highlight: challenge.result.winner == "host" || challenge.result.winner == "draw"
-                )
-                Text("VS")
-                    .font(BKFont.caption(12)).tracking(1)
-                    .foregroundStyle(BKTheme.textMuted)
-                scoreSide(
-                    label: {
-                        if let guest = challenge.guest {
-                            return challenge.youAreHost ? guest.displayName.uppercased() : "YOU"
-                        }
-                        return "OPPONENT"
-                    }(),
-                    value: challenge.guest?.score ?? 0,
-                    highlight: challenge.result.winner == "guest" || challenge.result.winner == "draw"
-                )
+            VStack(spacing: 10) {
+                ForEach(challenge.result.rankings, id: \.userId) { row in
+                    HStack {
+                        Text(row.displayName + (row.userId == challenge.players.first(where: \.isYou)?.userId ? " (you)" : ""))
+                            .font(BKFont.headline(14))
+                            .foregroundStyle(BKTheme.textPrimary)
+                            .lineLimit(1)
+                        Spacer()
+                        Text("\(row.displayScore)")
+                            .font(BKFont.title(22))
+                            .foregroundStyle(row.userId == challenge.result.winnerUserId || challenge.result.winner == "draw"
+                                             ? BKTheme.accent : BKTheme.textPrimary)
+                    }
+                }
             }
 
-            Text(challenge.categoryNoun.uppercased())
+            Text(scoreNoun(challenge.modeId, challenge.categoryNoun).uppercased())
                 .font(BKFont.caption(10)).tracking(1)
                 .foregroundStyle(BKTheme.textMuted)
         }
@@ -464,25 +610,42 @@ struct VsTabView: View {
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
+}
 
-    private func scoreSide(label: String, value: Int, highlight: Bool) -> some View {
-        VStack(spacing: 4) {
-            Text("\(value)")
-                .font(BKFont.title(36))
-                .foregroundStyle(highlight ? BKTheme.accent : BKTheme.textPrimary)
-            Text(label)
-                .font(BKFont.caption(10))
-                .foregroundStyle(BKTheme.textMuted)
+private struct VsModeCard: View {
+    let mode: GameModeID
+    let selected: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(BKTheme.background.opacity(0.45))
+                if let name = GameModeTileArt.bundleImageName(for: mode.rawValue) {
+                    GameModeBundleImage(name: name)
+                        .scaledToFill()
+                } else {
+                    Image(systemName: mode.icon)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(BKTheme.accent)
+                }
+            }
+            .frame(height: 72)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            Text(mode.title)
+                .font(BKFont.caption(11))
+                .tracking(0.6)
+                .foregroundStyle(selected ? BKTheme.accent : BKTheme.textPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func opponentName(_ challenge: VsChallengeDTO) -> String {
-        if challenge.youAreHost {
-            return challenge.guest?.displayName ?? "your opponent"
-        }
-        return challenge.host.displayName
+        .padding(10)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(selected ? BKTheme.accent : Color.clear, lineWidth: 2)
+        )
     }
 }

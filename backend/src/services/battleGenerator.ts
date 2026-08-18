@@ -908,6 +908,54 @@ export async function recomputeBattleScore(
   return { score, won: pct >= 0.7, total };
 }
 
+export type BattlePickScore =
+  | { valid: true; stat: number; playerName: string; headshotUrl: string | null }
+  | { valid: false; reason: 'missing' | 'position' | 'constraint' };
+
+/** Score a single Draft XI lock (VS live draft). Invalid picks are rejected, not scored as 0. */
+export async function scoreBattlePick(
+  puzzle: BattlePuzzleJson,
+  pick: { slotId: string; constraintId: string; playerId: string }
+): Promise<BattlePickScore> {
+  const cat = categoryById(puzzle.category.id);
+  const slot = puzzle.slots.find((s) => s.id === pick.slotId);
+  const constraint = puzzle.constraints.find((c) => c.id === pick.constraintId);
+  if (!cat || !slot || !constraint) return { valid: false, reason: 'missing' };
+
+  const query: BattleConstraintQuery = {
+    type: constraint.type,
+    club: constraint.club,
+    leagueId: constraint.leagueId,
+    nationality: constraint.nationality,
+  };
+  const rows = (await db.execute(sql`
+    WITH val AS ${cat.sub}
+    SELECT p.name, p.api_football_id,
+           COALESCE(val.value, 0)::int AS stat,
+           ${playerMatchesSubPositionSql(slot.position)} AS pos_ok,
+           ${satisfiesSql(query)} AS satisfies
+    FROM players p LEFT JOIN val ON val.player_id = p.id
+    WHERE p.id = ${pick.playerId}::uuid
+  `)) as unknown as Array<{
+    name: string;
+    api_football_id: number | null;
+    stat: number;
+    pos_ok: boolean;
+    satisfies: boolean;
+  }>;
+  const r = rows[0];
+  if (!r) return { valid: false, reason: 'missing' };
+  if (!r.pos_ok) return { valid: false, reason: 'position' };
+  if (!r.satisfies) return { valid: false, reason: 'constraint' };
+  const overrides = await getPhotoOverrides();
+  return {
+    valid: true,
+    stat: r.stat,
+    playerName: r.name,
+    headshotUrl: resolveHeadshot(overrides.get(pick.playerId), r.api_football_id) ?? null,
+  };
+}
+
 /** Category scalar for each player id (Draft XI Ops when a lineup pick is swapped manually). */
 export async function battleCategoryValues(
   categoryId: string,

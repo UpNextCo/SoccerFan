@@ -482,12 +482,15 @@ async function recentFormulaIds(date: string): Promise<Set<string>> {
   return recentDarts501Formulas(date, REPEAT_WINDOW_DAYS);
 }
 
-export async function generateDarts501Puzzle(date: string): Promise<{
+export async function generateDarts501Puzzle(
+  date: string,
+  opts?: { seedKey?: string }
+): Promise<{
   puzzle: Darts501PuzzlePublic;
   answer: { formulaId: string };
 } | null> {
-  const recent = await recentFormulaIds(date);
-  const start = hashStr(date) % DARTS501_FORMULAS.length;
+  const recent = opts?.seedKey ? new Set<string>() : await recentFormulaIds(date);
+  const start = hashStr(opts?.seedKey ?? date) % DARTS501_FORMULAS.length;
   const ordered = [
     ...DARTS501_FORMULAS.slice(start),
     ...DARTS501_FORMULAS.slice(0, start),

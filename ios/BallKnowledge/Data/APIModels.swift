@@ -311,6 +311,11 @@ indirect enum JSONValue: Codable, Equatable {
         if let v = try? c.decode([String: JSONValue].self) { self = .object(v); return }
         throw DecodingError.dataCorruptedError(in: c, debugDescription: "Unsupported JSON value")
     }
+
+    func decode<T: Decodable>(_ type: T.Type) -> T? {
+        guard let data = try? JSONEncoder().encode(self) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: data)
+    }
 }
 
 struct DailyCompleteRequestDTO: Encodable {
@@ -352,52 +357,151 @@ struct DailyGuessRequestDTO: Encodable {
     let playerId: String
 }
 
-// MARK: - VS (1v1)
+// MARK: - VS
 
 struct VsPlayerDTO: Codable, Equatable {
     let userId: String
     let displayName: String
     let score: Int?
+    let displayScore: Int?
     let completed: Bool
+    let isYou: Bool
+    let isHost: Bool
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try c.decode(String.self, forKey: .userId)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        score = try c.decodeIfPresent(Int.self, forKey: .score)
+        displayScore = try c.decodeIfPresent(Int.self, forKey: .displayScore) ?? score
+        completed = try c.decodeIfPresent(Bool.self, forKey: .completed) ?? false
+        isYou = try c.decodeIfPresent(Bool.self, forKey: .isYou) ?? false
+        isHost = try c.decodeIfPresent(Bool.self, forKey: .isHost) ?? false
+    }
+}
+
+struct VsRankingDTO: Codable, Equatable {
+    let userId: String
+    let displayName: String
+    let score: Int
+    let displayScore: Int
 }
 
 struct VsResultDTO: Codable, Equatable {
+    let allDone: Bool
     let bothDone: Bool
+    let winnerUserId: String?
     let winner: String?
     let yourScore: Int?
     let theirScore: Int?
+    let rankings: [VsRankingDTO]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedAll = try c.decodeIfPresent(Bool.self, forKey: .allDone)
+        let decodedBoth = try c.decodeIfPresent(Bool.self, forKey: .bothDone) ?? false
+        allDone = decodedAll ?? decodedBoth
+        bothDone = decodedBoth || allDone
+        winnerUserId = try c.decodeIfPresent(String.self, forKey: .winnerUserId)
+        winner = try c.decodeIfPresent(String.self, forKey: .winner)
+        yourScore = try c.decodeIfPresent(Int.self, forKey: .yourScore)
+        theirScore = try c.decodeIfPresent(Int.self, forKey: .theirScore)
+        rankings = try c.decodeIfPresent([VsRankingDTO].self, forKey: .rankings) ?? []
+    }
 }
 
 struct VsChallengeDTO: Codable, Equatable {
     let id: String
     let code: String
     let modeId: String
+    let modeTitle: String
+    let title: String
     let status: String
     let expiresAt: String
     let youAreHost: Bool
+    let maxPlayers: Int
+    let canStart: Bool
+    let players: [VsPlayerDTO]
     let host: VsPlayerDTO
     let guest: VsPlayerDTO?
-    let puzzle: DraftMasterPuzzleDTO
+    let puzzle: JSONValue
     let optimalLineup: [BattleOptimalSlotDTO]?
     let optimalScore: Int?
     let categoryNoun: String
     let result: VsResultDTO
+    let live: VsLiveDTO?
+
+    var gameMode: GameModeID? { GameModeID(rawValue: modeId) }
+    var isLiveDraft: Bool { modeId == GameModeID.draftMaster.rawValue && live != nil && status == "active" && !result.allDone }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         code = try c.decode(String.self, forKey: .code)
         modeId = try c.decode(String.self, forKey: .modeId)
+        modeTitle = try c.decodeIfPresent(String.self, forKey: .modeTitle) ?? (GameModeID(rawValue: modeId)?.title ?? modeId.uppercased())
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? modeTitle
         status = try c.decode(String.self, forKey: .status)
         expiresAt = try c.decode(String.self, forKey: .expiresAt)
         youAreHost = try c.decode(Bool.self, forKey: .youAreHost)
-        host = try c.decode(VsPlayerDTO.self, forKey: .host)
-        guest = try c.decodeIfPresent(VsPlayerDTO.self, forKey: .guest)
-        puzzle = try c.decode(DraftMasterPuzzleDTO.self, forKey: .puzzle)
+        maxPlayers = try c.decodeIfPresent(Int.self, forKey: .maxPlayers) ?? 5
+        canStart = try c.decodeIfPresent(Bool.self, forKey: .canStart) ?? false
+        if let decoded = try c.decodeIfPresent([VsPlayerDTO].self, forKey: .players), !decoded.isEmpty {
+            players = decoded
+        } else {
+            let hostPlayer = try c.decode(VsPlayerDTO.self, forKey: .host)
+            let guestPlayer = try c.decodeIfPresent(VsPlayerDTO.self, forKey: .guest)
+            players = [hostPlayer] + (guestPlayer.map { [$0] } ?? [])
+        }
+        host = try c.decodeIfPresent(VsPlayerDTO.self, forKey: .host) ?? players.first { $0.isHost } ?? players[0]
+        guest = try c.decodeIfPresent(VsPlayerDTO.self, forKey: .guest) ?? players.first { !$0.isHost }
+        puzzle = try c.decode(JSONValue.self, forKey: .puzzle)
         optimalLineup = try c.decodeIfPresent([BattleOptimalSlotDTO].self, forKey: .optimalLineup)
         optimalScore = try c.decodeIfPresent(Int.self, forKey: .optimalScore)
         categoryNoun = try c.decodeIfPresent(String.self, forKey: .categoryNoun) ?? "pts"
         result = try c.decode(VsResultDTO.self, forKey: .result)
+        live = try c.decodeIfPresent(VsLiveDTO.self, forKey: .live)
+    }
+}
+
+struct VsLiveBoardDTO: Codable, Equatable {
+    let userId: String
+    let displayName: String
+    let isYou: Bool
+    let total: Int
+    let locked: Bool
+    let playerName: String?
+    let constraintLabel: String?
+    let statValue: Int?
+    let headshotUrl: String?
+}
+
+struct VsLiveDTO: Codable, Equatable {
+    let slotIndex: Int
+    let slotCount: Int
+    let slotId: String
+    let slotLabel: String
+    let slotPosition: String
+    let deadlineAt: String
+    let youLocked: Bool
+    let finished: Bool
+    let usedConstraintIds: [String]
+    let usedPlayerIds: [String]
+    let board: [VsLiveBoardDTO]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        slotIndex = try c.decode(Int.self, forKey: .slotIndex)
+        slotCount = try c.decode(Int.self, forKey: .slotCount)
+        slotId = try c.decode(String.self, forKey: .slotId)
+        slotLabel = try c.decode(String.self, forKey: .slotLabel)
+        slotPosition = try c.decode(String.self, forKey: .slotPosition)
+        deadlineAt = try c.decode(String.self, forKey: .deadlineAt)
+        youLocked = try c.decodeIfPresent(Bool.self, forKey: .youLocked) ?? false
+        finished = try c.decodeIfPresent(Bool.self, forKey: .finished) ?? false
+        usedConstraintIds = try c.decodeIfPresent([String].self, forKey: .usedConstraintIds) ?? []
+        usedPlayerIds = try c.decodeIfPresent([String].self, forKey: .usedPlayerIds) ?? []
+        board = try c.decodeIfPresent([VsLiveBoardDTO].self, forKey: .board) ?? []
     }
 }
 
@@ -408,5 +512,5 @@ struct VsPickDTO: Encodable {
 }
 
 struct VsSubmitRequestDTO: Encodable {
-    let picks: [VsPickDTO]
+    let answer: JSONValue
 }

@@ -187,17 +187,23 @@ struct TargetManView: View {
     @State private var viewModel: TargetManViewModel
     @FocusState private var isSearchFocused: Bool
     private let allowReplay: Bool
+    private let showsXp: Bool
     private let dailyDate: String?
+    private let onSubmit: ((TargetManGameState) async -> Void)?
     var onComplete: () -> Void
 
     init(
         challenge: TargetManChallenge,
         allowReplay: Bool = false,
+        showsXp: Bool = true,
+        onSubmit: ((TargetManGameState) async -> Void)? = nil,
         onComplete: @escaping () -> Void
     ) {
         _viewModel = State(initialValue: TargetManViewModel(challenge: challenge))
         self.allowReplay = allowReplay
+        self.showsXp = showsXp
         self.dailyDate = challenge.date
+        self.onSubmit = onSubmit
         self.onComplete = onComplete
     }
 
@@ -205,7 +211,7 @@ struct TargetManView: View {
         ZStack {
             NavigationStack {
                 VStack(spacing: 0) {
-                    if let score = viewModel.state.score {
+                    if showsXp, let score = viewModel.state.score {
                         GameXPBar(current: score, max: DailyXP.maxXP(.targetMan))
                     } else {
                         GameXPBar(current: viewModel.state.selections.count, max: TargetManGameState.slotCount, label: "PICKS")
@@ -320,8 +326,9 @@ struct TargetManView: View {
                 difference: viewModel.state.difference ?? 0,
                 score: viewModel.state.score ?? 0,
                 xpEarned: viewModel.xpEarned,
+                showsXp: showsXp,
                 onHome: {
-                    if !allowReplay, let dailyDate {
+                    if onSubmit == nil, !allowReplay, let dailyDate {
                         Task {
                             await DailyCompletionService.recordCompletion(
                                 modeId: GameModeID.targetMan.rawValue,
@@ -338,6 +345,11 @@ struct TargetManView: View {
                     dismiss()
                 }
             )
+            .task {
+                if let onSubmit {
+                    await onSubmit(viewModel.state)
+                }
+            }
         }
     }
 }
@@ -659,6 +671,7 @@ private struct TargetManResultView: View {
     let difference: Int
     let score: Int
     let xpEarned: Int
+    var showsXp: Bool = true
     var onHome: () -> Void
 
     @State private var step: Int = 0
@@ -745,7 +758,7 @@ private struct TargetManResultView: View {
                                 .transition(resultTransition)
                             }
 
-                            if step >= TargetManResultStep.points.rawValue {
+                            if showsXp, step >= TargetManResultStep.points.rawValue {
                                 VStack(spacing: 8) {
                                     resultRevealRow(
                                     label: "XP EARNED",

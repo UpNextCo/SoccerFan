@@ -779,7 +779,15 @@ export const appMeta = pgTable('app_meta', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** 1v1 VS challenges (Draft XI first). Scores are raw XI totals — no XP. */
+/** VS lobby: host + up to 4 friends, one of the four VS modes. Scores are game totals — no XP. */
+export type VsParticipantRecord = {
+  userId: string;
+  score: number | null;
+  displayScore: number | null;
+  answerJson?: unknown;
+  completedAt: string | null;
+};
+
 export const vsChallenges = pgTable(
   'vs_challenges',
   {
@@ -790,9 +798,12 @@ export const vsChallenges = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     guestUserId: uuid('guest_user_id').references(() => users.id, { onDelete: 'cascade' }),
-    /** waiting | active | complete */
+    /** waiting | active | complete | expired */
     status: text('status').notNull().default('waiting'),
     puzzleJson: jsonb('puzzle_json').notNull(),
+    answerJson: jsonb('answer_json'),
+    liveJson: jsonb('live_json'),
+    participantsJson: jsonb('participants_json').$type<VsParticipantRecord[]>().notNull().default([]),
     hostScore: integer('host_score'),
     guestScore: integer('guest_score'),
     hostAnswerJson: jsonb('host_answer_json'),

@@ -6,9 +6,13 @@ import {
   getActiveVsChallenge,
   getVsChallenge,
   joinVsChallenge,
+  lockVsPick,
+  startVsChallenge,
   submitVsChallenge,
   VsError,
 } from '../services/vsService.js';
+
+const VS_MODE_ID_VALUES = ['draft_master', 'back_yourself', 'darts_501', 'target_man'] as const;
 
 export const vsRouter = Router();
 
@@ -20,9 +24,18 @@ function handleVsError(res: import('express').Response, err: unknown, fallback: 
   sendError(res, err instanceof Error ? err.message : fallback, 500);
 }
 
+const createSchema = z.object({
+  modeId: z.enum(VS_MODE_ID_VALUES),
+});
+
 vsRouter.post('/create', requireAuth, async (req, res) => {
+  const parsed = createSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    sendError(res, 'Pick Draft XI, Back Yourself, Football 501 or Target Man', 400);
+    return;
+  }
   try {
-    sendSuccess(res, await createVsChallenge(req.auth!.userId), 201);
+    sendSuccess(res, await createVsChallenge(req.auth!.userId, parsed.data.modeId), 201);
   } catch (err) {
     handleVsError(res, err, 'Failed to create challenge');
   }
@@ -53,6 +66,33 @@ vsRouter.get('/active', requireAuth, async (req, res) => {
   }
 });
 
+vsRouter.post('/:id/start', requireAuth, async (req, res) => {
+  try {
+    sendSuccess(res, await startVsChallenge(req.auth!.userId, String(req.params.id)));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to start challenge');
+  }
+});
+
+const lockSchema = z.object({
+  slotId: z.string().min(1),
+  constraintId: z.string().min(1),
+  playerId: z.string().min(1),
+});
+
+vsRouter.post('/:id/lock', requireAuth, async (req, res) => {
+  const parsed = lockSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    sendSuccess(res, await lockVsPick(req.auth!.userId, String(req.params.id), parsed.data));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to lock pick');
+  }
+});
+
 vsRouter.get('/:id', requireAuth, async (req, res) => {
   try {
     sendSuccess(res, await getVsChallenge(req.auth!.userId, String(req.params.id)));
@@ -61,14 +101,15 @@ vsRouter.get('/:id', requireAuth, async (req, res) => {
   }
 });
 
+const pickSchema = z.object({
+  slotId: z.string(),
+  constraintId: z.string(),
+  playerId: z.string(),
+});
+
 const submitSchema = z.object({
-  picks: z.array(
-    z.object({
-      slotId: z.string(),
-      constraintId: z.string(),
-      playerId: z.string(),
-    })
-  ),
+  answer: z.unknown().optional(),
+  picks: z.array(pickSchema).optional(),
 });
 
 vsRouter.post('/:id/submit', requireAuth, async (req, res) => {
@@ -77,8 +118,15 @@ vsRouter.post('/:id/submit', requireAuth, async (req, res) => {
     sendError(res, 'Invalid request body', 400);
     return;
   }
+  if (parsed.data.answer == null && parsed.data.picks == null) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
   try {
-    sendSuccess(res, await submitVsChallenge(req.auth!.userId, String(req.params.id), parsed.data.picks));
+    sendSuccess(
+      res,
+      await submitVsChallenge(req.auth!.userId, String(req.params.id), parsed.data.answer, parsed.data.picks)
+    );
   } catch (err) {
     handleVsError(res, err, 'Failed to submit');
   }
