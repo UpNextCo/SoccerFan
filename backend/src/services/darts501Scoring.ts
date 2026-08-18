@@ -14,7 +14,11 @@ export const DARTS501_IMPOSSIBLE_SCORES = new Set([
   163, 166, 169, 172, 173, 175, 176, 178, 179,
 ]);
 
-export type Darts501BustReason = 'impossible' | 'over_180' | 'checkout_overshoot';
+export type Darts501BustReason =
+  | 'impossible'
+  | 'over_180'
+  | 'checkout_overshoot'
+  | 'wrong_category';
 
 export type Darts501ThrowKind = 'score' | 'bust' | 'checkout' | 'perfect' | 'game_over';
 
@@ -57,35 +61,40 @@ export function isPerfectCheckout(nextRemaining: number): boolean {
  * Apply one legal-or-bust dart to the current remaining total.
  * `score` is the footballer's calculated value (already clamped ≥ 0).
  */
+function applyBust(
+  remaining: number,
+  inCheckout: boolean,
+  checkoutBusts: number,
+  reason: Darts501BustReason
+): Darts501ThrowResolution {
+  const nextBusts = checkoutBusts + 1;
+  return {
+    kind: nextBusts >= DARTS501_CHECKOUT_LIVES ? 'game_over' : 'bust',
+    remaining,
+    inCheckout,
+    checkoutBusts: nextBusts,
+    bustReason: reason,
+  };
+}
+
 export function resolveDarts501Throw(input: {
   remaining: number;
   score: number;
   inCheckout: boolean;
   checkoutBusts: number;
+  wrongCategory?: boolean;
 }): Darts501ThrowResolution {
   const remaining = input.remaining;
   const inCheckout = input.inCheckout || isCheckoutRemaining(remaining);
   const checkoutBusts = input.checkoutBusts;
-  const scoreBust = bustReasonForScore(input.score);
 
+  if (input.wrongCategory) {
+    return applyBust(remaining, inCheckout, checkoutBusts, 'wrong_category');
+  }
+
+  const scoreBust = bustReasonForScore(input.score);
   if (scoreBust) {
-    const nextBusts = checkoutBusts + 1;
-    if (nextBusts >= DARTS501_CHECKOUT_LIVES) {
-      return {
-        kind: 'game_over',
-        remaining,
-        inCheckout,
-        checkoutBusts: nextBusts,
-        bustReason: scoreBust,
-      };
-    }
-    return {
-      kind: 'bust',
-      remaining,
-      inCheckout,
-      checkoutBusts: nextBusts,
-      bustReason: scoreBust,
-    };
+    return applyBust(remaining, inCheckout, checkoutBusts, scoreBust);
   }
 
   const nextRemaining = remaining - input.score;
@@ -100,23 +109,7 @@ export function resolveDarts501Throw(input: {
   }
 
   if (inCheckout && nextRemaining < -DARTS501_CHECKOUT_WINDOW) {
-    const nextBusts = checkoutBusts + 1;
-    if (nextBusts >= DARTS501_CHECKOUT_LIVES) {
-      return {
-        kind: 'game_over',
-        remaining,
-        inCheckout: true,
-        checkoutBusts: nextBusts,
-        bustReason: 'checkout_overshoot',
-      };
-    }
-    return {
-      kind: 'bust',
-      remaining,
-      inCheckout: true,
-      checkoutBusts: nextBusts,
-      bustReason: 'checkout_overshoot',
-    };
+    return applyBust(remaining, true, checkoutBusts, 'checkout_overshoot');
   }
 
   return {

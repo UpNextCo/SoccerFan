@@ -31,7 +31,7 @@ enum GameModeID: String, CaseIterable, Identifiable {
         case .footballTower: return "FOOTBALL TOWER"
         case .lastManStanding: return "LAST MAN STANDING"
         case .backYourself: return "BACK YOURSELF"
-        case .darts501: return "DARTS 501"
+        case .darts501: return "FOOTBALL 501"
         }
     }
 

@@ -1,7 +1,7 @@
 import { isNotNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { players } from '../db/schema.js';
-import { INGEST_LEAGUES, resolveIngestLeagues } from './ingest-config.js';
+import { LEAGUE_ID_BY_NAME, resolveIngestLeagues } from './ingest-config.js';
 
 export type PlayerRef = {
   id: string;
@@ -37,7 +37,7 @@ export async function loadIngestPlayers(): Promise<PlayerRef[]> {
 }
 
 export function leagueIdForName(name: string): number | undefined {
-  return INGEST_LEAGUES.find((l) => l.name === name)?.id;
+  return LEAGUE_ID_BY_NAME[name];
 }
 
 export async function loadExternalIdMap(): Promise<Map<string, string>> {

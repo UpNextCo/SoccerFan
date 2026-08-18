@@ -6,7 +6,7 @@
  *  - playedForClub    (big clubs only)
  *  - nationClub       (Brazilian who played for Barcelona — the marquee combo)
  *  - clubCombo        (played for both A and B)
- *  - wonCompetition   (curated trophy whitelist)
+ *  - wonCompetition   (curated trophy whitelist; WC / CL / Euro = full squad, not final XI)
  *  - award            (Ballon d'Or, European Golden Shoe, WC Golden Boot/Ball)
  *  - statThreshold    (milestones via a generalised stats map: caps, CL apps, transfer fee…)
  *
@@ -29,6 +29,7 @@ import {
 } from './puzzleHistory.js';
 import { buildClubDisplayMap, canonicalClubListWith, canonicalClubName, clubKey } from '../utils/clubCanonical.js';
 import { trustedIntlCapsSql, trustedIntlGoalsSql } from './statMetrics.js';
+import { wonTournamentExistsSql } from './tournamentWinners.js';
 
 const BIG5 = [39, 140, 135, 78, 61];
 const GRID = 16;
@@ -318,6 +319,20 @@ async function loadPool(): Promise<BingoPlayer[]> {
     FROM player_honours WHERE player_id IN (${idList}) AND placement ILIKE '%winner%'
     GROUP BY player_id
   `);
+  // WC / CL / Euro winner tiles = tournament squad / campaign, not only honours or the final XI.
+  const squadTrophyRows = await rows<{ player_id: string; trophy: string }>(sql`
+    SELECT p.id AS player_id, 'World Cup'::text AS trophy
+    FROM players p
+    WHERE p.id IN (${idList}) AND ${wonTournamentExistsSql('World Cup', 'p.id')}
+    UNION
+    SELECT p.id, 'Champions League'
+    FROM players p
+    WHERE p.id IN (${idList}) AND ${wonTournamentExistsSql('Champions League', 'p.id')}
+    UNION
+    SELECT p.id, 'European Championship'
+    FROM players p
+    WHERE p.id IN (${idList}) AND ${wonTournamentExistsSql('Euro', 'p.id')}
+  `);
   const awardRows = await rows<{ player_id: string; award: string; placement: string }>(sql`
     SELECT player_id, award, placement
     FROM player_awards WHERE player_id IN (${idList})
@@ -334,6 +349,12 @@ async function loadPool(): Promise<BingoPlayer[]> {
   const clubsById = new Map(clubRows.map((r) => [r.player_id, r.clubs]));
   const leaguesById = new Map(leagueRows.map((r) => [r.player_id, r.leagues]));
   const trophiesById = new Map(trophyRows.map((r) => [r.player_id, r.trophies]));
+  const squadTrophiesById = new Map<string, string[]>();
+  for (const r of squadTrophyRows) {
+    const list = squadTrophiesById.get(r.player_id) ?? [];
+    if (!list.includes(r.trophy)) list.push(r.trophy);
+    squadTrophiesById.set(r.player_id, list);
+  }
   const awardsById = new Map<string, string[]>();
   for (const r of awardRows) {
     const winPlacements = AWARD_WIN_PLACEMENTS.get(r.award);
@@ -349,7 +370,10 @@ async function loadPool(): Promise<BingoPlayer[]> {
     const s = statsById.get(b.id);
     const clubs = canonicalClubListWith(clubsById.get(b.id) ?? [], clubDisplay);
     const trophies = [
-      ...new Set((trophiesById.get(b.id) ?? []).map((t) => canonicalBingoTrophy(t)).filter((t): t is string => t !== null)),
+      ...new Set([
+        ...(trophiesById.get(b.id) ?? []).map((t) => canonicalBingoTrophy(t)).filter((t): t is string => t !== null),
+        ...(squadTrophiesById.get(b.id) ?? []),
+      ]),
     ];
     const stats: Record<string, number> = {
       pl_apps: s?.pl_apps ?? 0, pl_goals: s?.pl_goals ?? 0,

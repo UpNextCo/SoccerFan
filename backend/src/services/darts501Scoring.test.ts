@@ -133,6 +133,34 @@ test('third checkout bust is game over', () => {
   assert.equal(result.checkoutBusts, 3);
 });
 
+test('wrong category busts without changing remaining', () => {
+  const result = resolveDarts501Throw({
+    remaining: 327,
+    score: 0,
+    inCheckout: false,
+    checkoutBusts: 0,
+    wrongCategory: true,
+  });
+  assert.equal(result.kind, 'bust');
+  assert.equal(result.remaining, 327);
+  assert.equal(result.bustReason, 'wrong_category');
+  assert.equal(result.checkoutBusts, 1);
+});
+
+test('third wrong-category miss is game over', () => {
+  const result = resolveDarts501Throw({
+    remaining: 400,
+    score: 0,
+    inCheckout: false,
+    checkoutBusts: 2,
+    wrongCategory: true,
+  });
+  assert.equal(result.kind, 'game_over');
+  assert.equal(result.remaining, 400);
+  assert.equal(result.checkoutBusts, 3);
+  assert.equal(result.bustReason, 'wrong_category');
+});
+
 test('zero score is legal and changes nothing', () => {
   const result = resolveDarts501Throw({
     remaining: 501,

@@ -43,6 +43,9 @@ enum AppConfig {
     /// without finishing a daily. Flip to `false` when done previewing.
     #if DEBUG
     static let previewDailyCompleteCelebration = false
+    /// DEBUG: auto-present the trophy cabinet on Home appear.
+    /// Flip to `false` when done previewing — Profile has the real entry now.
+    static let previewAwards = false
     #endif
 }
 

@@ -130,6 +130,7 @@ enum Darts501BustReason: String, Codable, Equatable {
     case impossible
     case over180 = "over_180"
     case checkoutOvershoot = "checkout_overshoot"
+    case wrongCategory = "wrong_category"
 }
 
 enum Darts501ThrowKind: String, Codable, Equatable {
@@ -263,26 +264,24 @@ enum Darts501Scoring {
         remaining: Int,
         score: Int,
         inCheckout: Bool,
-        checkoutBusts: Int
+        checkoutBusts: Int,
+        wrongCategory: Bool = false
     ) -> Resolution {
         let checkout = inCheckout || isCheckoutRemaining(remaining)
-        if let reason = bustReason(for: score) {
-            let nextBusts = checkoutBusts + 1
-            if nextBusts >= checkoutLives {
-                return Resolution(
-                    kind: .gameOver,
-                    remaining: remaining,
-                    inCheckout: checkout,
-                    checkoutBusts: nextBusts,
-                    bustReason: reason
-                )
-            }
-            return Resolution(
-                kind: .bust,
+        if wrongCategory {
+            return applyBust(
                 remaining: remaining,
                 inCheckout: checkout,
-                checkoutBusts: nextBusts,
-                bustReason: reason
+                checkoutBusts: checkoutBusts,
+                reason: .wrongCategory
+            )
+        }
+        if let reason = bustReason(for: score) {
+            return applyBust(
+                remaining: remaining,
+                inCheckout: checkout,
+                checkoutBusts: checkoutBusts,
+                reason: reason
             )
         }
 
@@ -298,22 +297,11 @@ enum Darts501Scoring {
         }
 
         if checkout && nextRemaining < -checkoutWindow {
-            let nextBusts = checkoutBusts + 1
-            if nextBusts >= checkoutLives {
-                return Resolution(
-                    kind: .gameOver,
-                    remaining: remaining,
-                    inCheckout: true,
-                    checkoutBusts: nextBusts,
-                    bustReason: .checkoutOvershoot
-                )
-            }
-            return Resolution(
-                kind: .bust,
+            return applyBust(
                 remaining: remaining,
                 inCheckout: true,
-                checkoutBusts: nextBusts,
-                bustReason: .checkoutOvershoot
+                checkoutBusts: checkoutBusts,
+                reason: .checkoutOvershoot
             )
         }
 
@@ -323,6 +311,22 @@ enum Darts501Scoring {
             inCheckout: isCheckoutRemaining(nextRemaining),
             checkoutBusts: checkoutBusts,
             bustReason: nil
+        )
+    }
+
+    private static func applyBust(
+        remaining: Int,
+        inCheckout: Bool,
+        checkoutBusts: Int,
+        reason: Darts501BustReason
+    ) -> Resolution {
+        let nextBusts = checkoutBusts + 1
+        return Resolution(
+            kind: nextBusts >= checkoutLives ? .gameOver : .bust,
+            remaining: remaining,
+            inCheckout: inCheckout,
+            checkoutBusts: nextBusts,
+            bustReason: reason
         )
     }
 

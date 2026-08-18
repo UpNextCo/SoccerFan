@@ -521,14 +521,12 @@ async function scoreDarts501(row: PuzzleRow, answer: unknown): Promise<ServerSco
 
   for (const id of playerIds) {
     const resolved = values.get(id);
-    if (!resolved?.eligible) {
-      throw new InvalidCompletionAnswerError('Darts 501 answer includes an ineligible player');
-    }
     const result = resolveDarts501Throw({
       remaining,
-      score: resolved.score,
+      score: resolved?.score ?? 0,
       inCheckout,
       checkoutBusts,
+      wrongCategory: !resolved?.eligible,
     });
     remaining = result.remaining;
     inCheckout = result.inCheckout;

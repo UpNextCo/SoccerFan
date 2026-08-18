@@ -1245,6 +1245,7 @@ struct ProfileTabView: View {
     @State private var showDeleteConfirm = false
     @State private var showIntrosResetAlert = false
     @State private var xpBreakdownScope: ProfileXpScope?
+    @State private var showTrophyCabinet = false
 
     private var displayName: String {
         LocalProfile.nameOverride ?? auth.user?.displayName ?? "Player"
@@ -1265,6 +1266,9 @@ struct ProfileTabView: View {
                 header
                     .padding(.top, 28)
                 statsCard
+                TrophyCabinetEntryCard {
+                    showTrophyCabinet = true
+                }
                 accountSection
                 aboutSection
                 dangerSection
@@ -1342,6 +1346,11 @@ struct ProfileTabView: View {
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $showTrophyCabinet) {
+            TrophyCabinetView {
+                showTrophyCabinet = false
+            }
         }
     }
 

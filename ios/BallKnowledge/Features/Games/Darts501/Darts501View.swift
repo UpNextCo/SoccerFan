@@ -102,7 +102,22 @@ final class Darts501ViewModel {
                 isAnimating = false
                 return
             }
-            guard result.valid, let score = result.score else {
+            if !result.valid {
+                if result.reason == "Unknown player" {
+                    flashFeedback(result.reason ?? "Unknown player")
+                    isAnimating = false
+                    return
+                }
+                await playThrow(
+                    player: player,
+                    score: 0,
+                    leftValue: result.leftValue,
+                    rightValue: result.rightValue,
+                    wrongCategory: true
+                )
+                return
+            }
+            guard let score = result.score else {
                 flashFeedback(result.reason ?? "Not in today's category")
                 isAnimating = false
                 return
@@ -123,13 +138,15 @@ final class Darts501ViewModel {
         player: PlayerSearchResultDTO,
         score: Int,
         leftValue: Int?,
-        rightValue: Int?
+        rightValue: Int?,
+        wrongCategory: Bool = false
     ) async {
         let resolution = Darts501Scoring.resolve(
             remaining: state.remaining,
             score: score,
             inCheckout: state.phase == .checkout,
-            checkoutBusts: state.checkoutBusts
+            checkoutBusts: state.checkoutBusts,
+            wrongCategory: wrongCategory
         )
 
         let row = Darts501Throw(
@@ -147,9 +164,9 @@ final class Darts501ViewModel {
         )
 
         revealName = player.name
-        revealScore = score
-        revealIs180 = score == 180 && resolution.kind != .bust && resolution.kind != .gameOver
-        revealIsBust = false
+        revealScore = wrongCategory ? nil : score
+        revealIs180 = !wrongCategory && score == 180 && resolution.kind != .bust && resolution.kind != .gameOver
+        revealIsBust = wrongCategory
         scorePunch = false
 
         try? await Task.sleep(for: .milliseconds(80))
@@ -168,7 +185,10 @@ final class Darts501ViewModel {
             HapticManager.error()
             heartLossToken += 1
             commit(row, resolution: resolution)
-            try? await Task.sleep(for: .milliseconds(420))
+            if wrongCategory {
+                flashFeedback("\(player.name) doesn't fit the category")
+            }
+            try? await Task.sleep(for: .milliseconds(wrongCategory ? 900 : 420))
             clearReveal()
             isAnimating = false
             if resolution.kind == .gameOver {
@@ -280,36 +300,45 @@ struct Darts501View: View {
         ZStack {
             NavigationStack {
                 VStack(spacing: 0) {
-                    Darts501Scoreboard(
-                        remaining: viewModel.displayedRemaining,
-                        inCheckout: viewModel.inCheckout,
-                        lives: viewModel.state.checkoutRemaining,
-                        totalLives: viewModel.state.puzzle.checkoutLives,
-                        heartLossToken: viewModel.heartLossToken,
-                        revealName: viewModel.revealName,
-                        revealScore: viewModel.revealScore,
-                        revealIs180: viewModel.revealIs180,
-                        revealIsBust: viewModel.revealIsBust,
-                        scorePunch: viewModel.scorePunch,
-                        shake: viewModel.boardShake,
-                        finishLabel: viewModel.finishLabel
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            Darts501Scoreboard(
+                                remaining: viewModel.displayedRemaining,
+                                inCheckout: viewModel.inCheckout,
+                                revealName: viewModel.revealName,
+                                revealScore: viewModel.revealScore,
+                                revealIs180: viewModel.revealIs180,
+                                revealIsBust: viewModel.revealIsBust,
+                                scorePunch: viewModel.scorePunch,
+                                shake: viewModel.boardShake,
+                                finishLabel: viewModel.finishLabel
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
 
-                    Darts501CategoryCard(category: viewModel.state.puzzle.category)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
-                        .padding(.bottom, 12)
+                            Darts501CategoryCard(category: viewModel.state.puzzle.category)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+                                .padding(.bottom, 8)
+
+                            Darts501HistoryList(
+                                rows: viewModel.state.throwHistory,
+                                onSelect: { viewModel.selectedThrow = $0 }
+                            )
+                        }
+                    }
+                    .scrollDismissesKeyboard(.immediately)
+                    .scrollBounceBehavior(.always)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 6)
+                            .onChanged { _ in
+                                if isSearchFocused { isSearchFocused = false }
+                            }
+                    )
 
                     Darts501SearchSection(
                         viewModel: viewModel,
                         isSearchFocused: $isSearchFocused
-                    )
-
-                    Darts501HistoryList(
-                        rows: viewModel.state.throwHistory,
-                        onSelect: { viewModel.selectedThrow = $0 }
                     )
                 }
                 .background(StadiumBackground())
@@ -323,7 +352,7 @@ struct Darts501View: View {
                         }
                     }
                     ToolbarItem(placement: .principal) {
-                        Text("DARTS 501")
+                        Text(GameModeID.darts501.title)
                             .font(BKFont.caption(13))
                             .tracking(1)
                             .foregroundStyle(BKTheme.accent)
@@ -396,9 +425,6 @@ struct Darts501View: View {
 private struct Darts501Scoreboard: View {
     let remaining: Int
     let inCheckout: Bool
-    let lives: Int
-    let totalLives: Int
-    let heartLossToken: Int
     let revealName: String?
     let revealScore: Int?
     let revealIs180: Bool
@@ -408,7 +434,7 @@ private struct Darts501Scoreboard: View {
     let finishLabel: String?
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             if inCheckout || finishLabel != nil {
                 Text(finishLabel ?? "CHECKOUT")
                     .font(BKFont.caption(12))
@@ -418,7 +444,7 @@ private struct Darts501Scoreboard: View {
             }
 
             Text("\(remaining)")
-                .font(BKFont.title(inCheckout ? 76 : 72))
+                .font(BKFont.title(inCheckout ? 56 : 52))
                 .foregroundStyle(BKTheme.textPrimary)
                 .contentTransition(.numericText())
                 .scaleEffect(finishLabel == "PERFECT CHECKOUT" ? 1.08 : 1)
@@ -431,45 +457,44 @@ private struct Darts501Scoreboard: View {
                 .font(BKFont.caption(11))
                 .tracking(1.4)
                 .foregroundStyle(BKTheme.textMuted)
-
-            Darts501HeartsRow(total: totalLives, remaining: lives, lossToken: heartLossToken)
-                .padding(.top, 4)
         }
-        .padding(.vertical, 20)
+        .padding(.vertical, 12)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
-        .background(BKTheme.card)
         .overlay(alignment: .top) {
-            if let revealScore, let revealName {
+            if let revealName {
                 VStack(spacing: 2) {
-                    Text(revealName)
-                        .font(BKFont.caption(11))
-                        .foregroundStyle(BKTheme.textSecondary)
-                        .lineLimit(1)
-                    Text(revealIs180 ? "180!" : "\(revealScore)")
-                        .font(BKFont.title(revealIs180 ? 28 : 22))
-                        .foregroundStyle(revealIsBust ? BKTheme.wrong : (revealIs180 ? BKTheme.accent : BKTheme.textPrimary))
-                        .scaleEffect(scorePunch ? 1 : 0.72)
+                    if revealScore != nil || !revealIsBust {
+                        Text(revealName)
+                            .font(BKFont.caption(11))
+                            .foregroundStyle(BKTheme.textSecondary)
+                            .lineLimit(1)
+                    }
+                    if let revealScore {
+                        Text(revealIs180 ? "180!" : "\(revealScore)")
+                            .font(BKFont.title(revealIs180 ? 28 : 22))
+                            .foregroundStyle(revealIsBust ? BKTheme.wrong : (revealIs180 ? BKTheme.accent : BKTheme.textPrimary))
+                            .scaleEffect(scorePunch ? 1 : 0.72)
+                    }
                     if revealIsBust {
-                        Text("BUST")
+                        Text(revealScore == nil ? "MISS" : "BUST")
                             .font(BKFont.headline(13))
                             .tracking(1.2)
                             .foregroundStyle(BKTheme.wrong)
+                        if revealScore == nil {
+                            Text("\(revealName) doesn't fit the category")
+                                .font(BKFont.caption(11))
+                                .foregroundStyle(BKTheme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                        }
                     }
                 }
                 .opacity(scorePunch ? 1 : 0)
-                .padding(.top, 10)
+                .padding(.top, 4)
                 .allowsHitTesting(false)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .strokeBorder(
-                    inCheckout ? BKTheme.partial.opacity(0.28) : Color.white.opacity(0.06),
-                    lineWidth: inCheckout ? 1.2 : 1
-                )
-        )
         .animation(.easeInOut(duration: 0.22), value: inCheckout)
     }
 }
@@ -489,7 +514,7 @@ private struct Darts501HeartsRow: View {
                 let filled = index < remaining
                 let isBreaking = breakingIndex == index
                 Image(systemName: filled || isBreaking ? "heart.fill" : "heart")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(
                         filled || isBreaking
                             ? Color(red: 0.95, green: 0.28, blue: 0.38)
@@ -527,7 +552,7 @@ private struct Darts501CategoryCard: View {
         VStack(spacing: 8) {
             if category.hasNationFilter {
                 Text(category.flag)
-                    .font(.system(size: 28))
+                    .font(.system(size: 46))
                 Text(category.audience)
                     .font(BKFont.headline(16))
                     .foregroundStyle(BKTheme.textPrimary)
@@ -552,10 +577,6 @@ private struct Darts501CategoryCard: View {
         .frame(maxWidth: .infinity)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-        )
     }
 }
 
@@ -567,6 +588,53 @@ private struct Darts501SearchSection: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            if !viewModel.searchResults.isEmpty, !viewModel.inputLocked {
+                PlayerSearchResultsList(
+                    players: viewModel.searchResults,
+                    isDisabled: { viewModel.state.usedPlayerIds.contains($0.id) },
+                    trailing: { player in
+                        if viewModel.state.usedPlayerIds.contains(player.id) {
+                            return AnyView(
+                                Text("Already used")
+                                    .font(BKFont.caption(10))
+                                    .foregroundStyle(BKTheme.textMuted)
+                            )
+                        }
+                        return nil
+                    },
+                    onSelect: { player in
+                        isSearchFocused.wrappedValue = false
+                        Task { await viewModel.select(player) }
+                    }
+                )
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 6)
+                        .onChanged { _ in
+                            if isSearchFocused.wrappedValue { isSearchFocused.wrappedValue = false }
+                        }
+                )
+            }
+
+            if let feedback = viewModel.feedback {
+                Text(feedback)
+                    .font(BKFont.caption(12))
+                    .foregroundStyle(BKTheme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+            }
+
+            Darts501HeartsBox(
+                total: viewModel.state.puzzle.checkoutLives,
+                remaining: viewModel.state.checkoutRemaining,
+                lossToken: viewModel.heartLossToken
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 6)
+                    .onChanged { _ in
+                        if isSearchFocused.wrappedValue { isSearchFocused.wrappedValue = false }
+                    }
+            )
+
             HStack(spacing: 12) {
                 TextField("", text: $viewModel.searchQuery, prompt:
                     Text(viewModel.inputLocked ? "LOCKING IN…" : "Search player")
@@ -592,38 +660,33 @@ private struct Darts501SearchSection: View {
             .padding(.vertical, 14)
             .background(BKTheme.cardElevated)
             .clipShape(RoundedRectangle(cornerRadius: 14))
-
-            if !viewModel.searchResults.isEmpty, !viewModel.inputLocked {
-                PlayerSearchResultsList(
-                    players: viewModel.searchResults,
-                    isDisabled: { viewModel.state.usedPlayerIds.contains($0.id) },
-                    trailing: { player in
-                        if viewModel.state.usedPlayerIds.contains(player.id) {
-                            return AnyView(
-                                Text("Already used")
-                                    .font(BKFont.caption(10))
-                                    .foregroundStyle(BKTheme.textMuted)
-                            )
-                        }
-                        return nil
-                    },
-                    onSelect: { player in
-                        isSearchFocused.wrappedValue = false
-                        Task { await viewModel.select(player) }
-                    }
-                )
-            }
-
-            if let feedback = viewModel.feedback {
-                Text(feedback)
-                    .font(BKFont.caption(12))
-                    .foregroundStyle(BKTheme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
-            }
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.top, 2)
+        .padding(.bottom, 12)
+        .background(BKTheme.background)
+    }
+}
+
+private struct Darts501HeartsBox: View {
+    let total: Int
+    let remaining: Int
+    let lossToken: Int
+
+    var body: some View {
+        HStack {
+            Text("LIVES")
+                .font(BKFont.caption(10))
+                .tracking(1.1)
+                .foregroundStyle(BKTheme.textMuted)
+            Spacer()
+            Darts501HeartsRow(total: total, remaining: remaining, lossToken: lossToken)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }
 
@@ -634,22 +697,19 @@ private struct Darts501HistoryList: View {
     var onSelect: (Darts501Throw) -> Void
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 6) {
-                ForEach(Array(rows.reversed().enumerated()), id: \.element.id) { index, row in
-                    Button {
-                        onSelect(row)
-                    } label: {
-                        Darts501HistoryRow(row: row, isLatest: index == 0)
-                    }
-                    .buttonStyle(.plain)
+        LazyVStack(spacing: 6) {
+            ForEach(Array(rows.reversed().enumerated()), id: \.element.id) { index, row in
+                Button {
+                    onSelect(row)
+                } label: {
+                    Darts501HistoryRow(row: row, isLatest: index == 0)
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 24)
         }
-        .scrollDismissesKeyboard(.interactively)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 24)
     }
 }
 
@@ -670,12 +730,12 @@ private struct Darts501HistoryRow: View {
                 .lineLimit(1)
             Spacer(minLength: 8)
             Darts501HistoryValue(
-                value: "\(row.score)",
+                value: row.bustReason == .wrongCategory ? "—" : "\(row.score)",
                 label: "Score",
                 color: isBust ? BKTheme.wrong : BKTheme.textPrimary
             )
             Darts501HistoryValue(
-                value: isBust ? "BUST" : "\(row.remainingAfter)",
+                value: row.bustReason == .wrongCategory ? "MISS" : (isBust ? "BUST" : "\(row.remainingAfter)"),
                 label: "Left",
                 color: isBust ? BKTheme.wrong : BKTheme.textMuted
             )
@@ -684,10 +744,6 @@ private struct Darts501HistoryRow: View {
         .padding(.vertical, isLatest ? 12 : 9)
         .background(isLatest ? BKTheme.cardElevated : BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Color.white.opacity(isLatest ? 0.08 : 0.04), lineWidth: 1)
-        )
     }
 }
 
@@ -725,13 +781,23 @@ private struct Darts501ThrowDetailSheet: View {
                 Text(row.playerName)
                     .font(BKFont.headline(18))
                     .foregroundStyle(BKTheme.textPrimary)
-                Text("\(row.score)")
-                    .font(BKFont.title(40))
-                    .foregroundStyle(row.kind == .bust || row.kind == .gameOver ? BKTheme.wrong : BKTheme.textPrimary)
-                if row.kind == .bust || row.kind == .gameOver {
-                    Text("BUST")
-                        .font(BKFont.headline(14))
+                if row.bustReason == .wrongCategory {
+                    Text("MISS")
+                        .font(BKFont.title(28))
                         .foregroundStyle(BKTheme.wrong)
+                    Text("\(row.playerName) doesn't fit the category")
+                        .font(BKFont.body(14))
+                        .foregroundStyle(BKTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("\(row.score)")
+                        .font(BKFont.title(40))
+                        .foregroundStyle(row.kind == .bust || row.kind == .gameOver ? BKTheme.wrong : BKTheme.textPrimary)
+                    if row.kind == .bust || row.kind == .gameOver {
+                        Text("BUST")
+                            .font(BKFont.headline(14))
+                            .foregroundStyle(BKTheme.wrong)
+                    }
                 }
                 if category.hasNationFilter {
                     Text("\(category.flag)  \(category.audience)")
@@ -777,6 +843,7 @@ private struct Darts501RulesSheet: View {
         "Players cannot be reused.",
         "Finish between 0 and -10.",
         "Exactly 0 is a Perfect Checkout.",
+        "A player who doesn't fit today's category is a bust.",
         "You have three hearts. Every bust costs a heart. Lose all three and it's game over.",
     ]
 
@@ -824,7 +891,7 @@ private struct Darts501ResultView: View {
         GameResultScreen(onExit: onHome) {
             VStack(spacing: 20) {
                 VStack(spacing: 8) {
-                    Text("DARTS 501")
+                    Text(GameModeID.darts501.title)
                         .font(BKFont.caption(11))
                         .tracking(1)
                         .foregroundStyle(BKTheme.textMuted)

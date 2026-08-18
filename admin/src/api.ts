@@ -724,5 +724,5 @@ export const MODE_LABELS: Record<string, string> = {
   target_man: 'Target Man',
   last_man_standing: 'LMS',
   back_yourself: 'Back Yourself',
-  darts_501: 'Darts 501',
+  darts_501: 'Football 501',
 }

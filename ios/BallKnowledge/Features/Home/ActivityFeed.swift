@@ -96,7 +96,7 @@ enum ActivityFeedStore {
     static func appendVsAlert(_ alert: VsActivityAlert) {
         var all = vsAlerts.filter { $0.id != alert.id }
         all.insert(alert, at: 0)
-        // Keep the feed tidy — last 20 VS alerts.
+        // Keep thex feed tidy — last 20 VS alerts.
         if all.count > 20 { all = Array(all.prefix(20)) }
         vsAlerts = all
     }

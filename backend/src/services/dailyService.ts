@@ -41,7 +41,7 @@ const GAME_MODES = [
   { id: 'target_man', title: 'TARGET MAN', subtitle: 'Hit the stat target', playerCount: 15200, isAvailable: true },
   { id: 'last_man_standing', title: 'LAST MAN STANDING', subtitle: 'Survive the field', playerCount: 10100, isAvailable: true },
   { id: 'back_yourself', title: 'BACK YOURSELF', subtitle: 'Pledge how many you can name', playerCount: 9800, isAvailable: true },
-  { id: 'darts_501', title: 'DARTS 501', subtitle: 'Name players, check out from 501', playerCount: 8700, isAvailable: true },
+  { id: 'darts_501', title: 'FOOTBALL 501', subtitle: 'Name players, check out from 501', playerCount: 8700, isAvailable: true },
 ];
 
 /** Modes still generated via generateAllDailyPuzzles (legacy Guess Who / Blind Rank retired). */
@@ -58,7 +58,7 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'target_man', title: 'TARGET MAN' },
   { modeId: 'last_man_standing', title: 'LAST MAN STANDING' },
   { modeId: 'back_yourself', title: 'BACK YOURSELF' },
-  { modeId: 'darts_501', title: 'DARTS 501' },
+  { modeId: 'darts_501', title: 'FOOTBALL 501' },
 ] as const;
 
 /** All modes that count as one daily play on iOS (order matches client flow). Football Golf is hidden. */

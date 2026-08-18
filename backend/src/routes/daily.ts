@@ -183,7 +183,7 @@ dailyRouter.post('/darts501/throw', requireAuth, async (req, res) => {
     const { evaluateDarts501Throw } = await import('../services/darts501Generator.js');
     sendSuccess(res, await evaluateDarts501Throw(parsed.data));
   } catch (err) {
-    sendError(res, err instanceof Error ? err.message : 'Darts 501 throw failed', 400);
+    sendError(res, err instanceof Error ? err.message : 'Football 501 throw failed', 400);
   }
 });
 

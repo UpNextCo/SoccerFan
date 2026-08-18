@@ -144,7 +144,7 @@ struct GameIntroContent {
                 steps: [
                     "Name players to score points based on today's stat.",
                     "Work your way down and finish between 0 and -10.",
-                    "You have three hearts. A bust costs a heart — lose all three and it's game over.",
+                    "You have three hearts. A bust — or a player outside today's category — costs a heart. Lose all three and it's game over.",
                 ]
             )
         }

@@ -4,7 +4,7 @@
  */
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
-import { resolveIngestLeagues, resolveIngestSeason } from './ingest-config.js';
+import { isEflLeagueId, resolveIngestLeagues, resolveIngestSeason } from './ingest-config.js';
 import { players } from '../db/schema.js';
 import { db } from '../db/index.js';
 import { canonicalNationality } from '../utils/nationality.js';
@@ -299,23 +299,26 @@ async function fetchLeagueTeams(
   return { teams: [], teamsSeason: season };
 }
 
-async function upsertPlayer(values: {
-  externalId: string;
-  name: string;
-  aliases: string[];
-  nationality: string;
-  position: string;
-  age: number;
-  currentClub: string;
-  currentLeague: string;
-  shirtNumber: number | null;
-  searchText: string;
-}) {
+async function upsertPlayer(
+  values: {
+    externalId: string;
+    name: string;
+    aliases: string[];
+    nationality: string;
+    position: string;
+    age: number;
+    currentClub: string;
+    currentLeague: string;
+    shirtNumber: number | null;
+    searchText: string;
+  },
+  marketValueTier: number
+) {
   await db
     .insert(players)
     .values({
       ...values,
-      marketValueTier: 3,
+      marketValueTier,
     })
     .onConflictDoUpdate({
       target: players.externalId,
@@ -358,18 +361,21 @@ async function ingestLeague(leagueId: number, leagueName: string, season: number
         console.warn(`  ! ${entry.player.name} (${team.name}) — nationality still missing`);
       }
 
-      await upsertPlayer({
-        externalId: String(entry.player.id),
-        name: identity.name,
-        aliases: identity.aliases,
-        nationality: identity.nationality,
-        position: mapPosition(stats?.games.position),
-        age: identity.age,
-        currentClub: team.name,
-        currentLeague: leagueName,
-        shirtNumber: stats?.games.number ?? null,
-        searchText: identity.searchText,
-      });
+      await upsertPlayer(
+        {
+          externalId: String(entry.player.id),
+          name: identity.name,
+          aliases: identity.aliases,
+          nationality: identity.nationality,
+          position: mapPosition(stats?.games.position),
+          age: identity.age,
+          currentClub: team.name,
+          currentLeague: leagueName,
+          shirtNumber: stats?.games.number ?? null,
+          searchText: identity.searchText,
+        },
+        isEflLeagueId(leagueId) ? 2 : 3
+      );
 
       console.log(`  + ${identity.name} (${team.name})`);
       playerCount += 1;

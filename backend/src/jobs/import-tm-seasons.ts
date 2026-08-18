@@ -4,8 +4,9 @@
  * row (apps/goals/assists/minutes). Never touches existing rows, so career totals can't double-count.
  * Then re-derive player_extra_stats.goals_before_21 from all-era season totals + DOB.
  *
- * Only competitions we map to a tracked league id are imported (big-5, Championship, CL/EL, plus a
- * few other top divisions we hold crests for). Club name isn't on this page, so team_name is null
+ * Only competitions we map to a tracked league id are imported (big-5, EFL Championship / League
+ * One / League Two, FA Cup / EFL Cup, CL/EL, plus a few other top divisions we hold crests for).
+ * Club name isn't on this page, so team_name is null
  * for gap-filled rows (the value here is the league/season/goals, which fixes goals-before-21 and
  * per-league career totals incl. the Championship).
  *
@@ -35,6 +36,18 @@ const COMP: Record<string, { id: number; name: string }> = {
   'bundesliga': { id: 78, name: 'Bundesliga' },
   'ligue 1': { id: 61, name: 'Ligue 1' },
   'championship': { id: 40, name: 'Championship' },
+  'efl championship': { id: 40, name: 'Championship' },
+  'league one': { id: 41, name: 'League One' },
+  'league 1': { id: 41, name: 'League One' },
+  'efl league one': { id: 41, name: 'League One' },
+  'league two': { id: 42, name: 'League Two' },
+  'league 2': { id: 42, name: 'League Two' },
+  'efl league two': { id: 42, name: 'League Two' },
+  'fa cup': { id: 45, name: 'FA Cup' },
+  'efl cup': { id: 48, name: 'EFL Cup' },
+  'league cup': { id: 48, name: 'EFL Cup' },
+  'carabao cup': { id: 48, name: 'EFL Cup' },
+  'football league cup': { id: 48, name: 'EFL Cup' },
   'uefa champions league': { id: 2, name: 'UEFA Champions League' },
   'uefa europa league': { id: 3, name: 'UEFA Europa League' },
   'uefa cup': { id: 3, name: 'UEFA Europa League' },

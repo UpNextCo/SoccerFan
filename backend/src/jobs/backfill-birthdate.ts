@@ -12,6 +12,7 @@ import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { fetchFootballApi, footballApiUrl, getApiCallsUsed } from './ingest-api.js';
+import { resolveIngestLeagues } from './ingest-config.js';
 
 interface ApiPlayerResponse {
   response?: Array<{ player?: { birth?: { date?: string | null } } }>;
@@ -22,11 +23,18 @@ async function main() {
 
   // Players needing DOB, with the most recent season we have stats for (guarantees
   // the season query returns a row). Players with no stats fall back to 2023.
+  const scoped = Boolean(process.env.INGEST_LEAGUE_IDS?.trim());
+  const leagueNames = scoped ? resolveIngestLeagues().map((l) => l.name) : [];
+  const leagueFilter = scoped
+    ? sql`AND p.current_league IN (${sql.join(leagueNames.map((n) => sql`${n}`), sql`, `)})`
+    : sql``;
+
   const targets = (await db.execute(sql`
     SELECT p.id, p.external_id::int AS ext,
            COALESCE((SELECT MAX(season) FROM player_stats s WHERE s.player_id = p.id), 2023)::int AS season
     FROM players p
     WHERE p.external_id IS NOT NULL AND p.birth_date IS NULL
+    ${leagueFilter}
     ORDER BY (SELECT COALESCE(SUM(appearances), 0) FROM player_stats s WHERE s.player_id = p.id) DESC
   `)) as unknown as Array<{ id: string; ext: number; season: number }>;
 

@@ -517,7 +517,7 @@ function validateClubChain(puzzleJson: unknown, answerJson: unknown, issues: Adm
 
 function validateDarts501(puzzleJson: unknown, _answerJson: unknown, issues: AdminPuzzleValidationIssue[]) {
   if (!puzzleJson || typeof puzzleJson !== 'object') {
-    issue(issues, 'puzzleJson', 'Darts 501 puzzle is missing.');
+    issue(issues, 'puzzleJson', 'Football 501 puzzle is missing.');
     return;
   }
   const puzzle = puzzleJson as { formulaId?: unknown; formulaLabel?: unknown };
@@ -527,7 +527,7 @@ function validateDarts501(puzzleJson: unknown, _answerJson: unknown, issues: Adm
   }
   const formula = darts501FormulaById(puzzle.formulaId);
   if (!formula) {
-    issue(issues, 'puzzleJson.formulaId', 'Choose a supported Darts 501 formula.');
+    issue(issues, 'puzzleJson.formulaId', 'Choose a supported Football 501 formula.');
     return;
   }
   if (typeof puzzle.formulaLabel !== 'string' || puzzle.formulaLabel !== formula.label) {

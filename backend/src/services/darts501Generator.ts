@@ -567,7 +567,7 @@ export async function evaluateDarts501Throw(input: {
   const puzzle = parseDarts501Puzzle(rows[0]?.puzzleJson);
   const formula = puzzle ? darts501FormulaById(puzzle.formulaId) : undefined;
   if (!puzzle || !formula) {
-    throw new Error('No Darts 501 puzzle for date');
+    throw new Error('No Football 501 puzzle for date');
   }
 
   if ((input.alreadyUsedIds ?? []).includes(input.playerId)) {
@@ -577,7 +577,7 @@ export async function evaluateDarts501Throw(input: {
   const left = metricDef(formula.left);
   const right = metricDef(formula.right);
   if (!left || !right) {
-    throw new Error('Darts 501 formula is missing a metric');
+    throw new Error('Football 501 formula is missing a metric');
   }
 
   const found = (await db.execute(sql`

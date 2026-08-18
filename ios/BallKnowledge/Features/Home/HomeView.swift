@@ -54,6 +54,9 @@ struct HomeView: View {
     @State private var isPlayingGame = false
     @State private var celebrationPayload: DailyCompleteCelebrationPayload?
     @State private var rankUpPayload: RankUpCelebrationPayload?
+    #if DEBUG
+    @State private var showAwardPreview = false
+    #endif
     @Binding var selectedTab: AppTab
 
     private var allowsUnlimitedDailyPlay: Bool { auth.allowsUnlimitedDailyPlay }
@@ -132,6 +135,10 @@ struct HomeView: View {
                 try? await Task.sleep(for: .milliseconds(500))
                 presentCelebrationPreview()
             }
+            if AppConfig.previewAwards {
+                try? await Task.sleep(for: .milliseconds(400))
+                showAwardPreview = true
+            }
             #endif
         }
         .onChange(of: scenePhase) { _, phase in
@@ -189,6 +196,13 @@ struct HomeView: View {
                 }
             }
         }
+        #if DEBUG
+        .fullScreenCover(isPresented: $showAwardPreview) {
+            TrophyCabinetView {
+                showAwardPreview = false
+            }
+        }
+        #endif
         .overlay(alignment: .top) {
             if let payload = celebrationPayload {
                 StreakToastBanner(payload: payload) {
@@ -196,12 +210,15 @@ struct HomeView: View {
                         celebrationPayload = nil
                     }
                 }
-                .padding(.top, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .padding(.top, 10)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity)
+                ))
                 .zIndex(30)
             }
         }
-        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: celebrationPayload)
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: celebrationPayload)
         .alert("Already played today", isPresented: $showAlreadyPlayedAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -224,7 +241,7 @@ struct HomeView: View {
         guard DailyPlayOrder.playableModes.contains(modeId) else { return }
 
         if !allowsUnlimitedDailyPlay, bundle.isCompleted(modeId) {
-            alreadyPlayedTitle = mode.title
+            alreadyPlayedTitle = DailyGameCard.displayTitle(for: mode)
             showAlreadyPlayedAlert = true
             return
         }
@@ -273,7 +290,7 @@ struct HomeView: View {
     private func presentCelebrationPreview() {
         guard celebrationPayload == nil, !isPlayingGame, presentedMode == nil else { return }
         let todayXp = max(auth.user?.todayXp ?? 0, 1840)
-        let streak = max(auth.user?.streak ?? 0, 4)
+        let streak = 10
         celebrationPayload = DailyCompleteCelebrationPayload(
             date: viewModel.dailyBundle?.date ?? DailyDate.localToday(),
             todayXp: todayXp,
@@ -909,7 +926,7 @@ struct DailyGameCard: View {
         case .footballTower: return "Football Tower"
         case .lastManStanding: return "Last Man Standing"
         case .backYourself: return "Back Yourself"
-        case .darts501: return "Darts 501"
+        case .darts501: return "Football 501"
         }
     }
 

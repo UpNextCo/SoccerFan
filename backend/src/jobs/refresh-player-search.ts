@@ -5,7 +5,7 @@
 import 'dotenv/config';
 import { eq, isNotNull } from 'drizzle-orm';
 import { fetchFootballApi, footballApiUrl } from './ingest-api.js';
-import { resolveIngestSeason } from './ingest-config.js';
+import { resolveIngestLeagues, resolveIngestSeason } from './ingest-config.js';
 import { db } from '../db/index.js';
 import { players } from '../db/schema.js';
 import { buildPlayerSearchFields, isAbbreviatedName } from '../utils/playerSearch.js';
@@ -61,6 +61,9 @@ async function main() {
   const season = resolveIngestSeason();
   const seasons = [season, season - 1, season - 2];
 
+  const scoped = Boolean(process.env.INGEST_LEAGUE_IDS?.trim());
+  const leagueNames = scoped ? new Set(resolveIngestLeagues().map((l) => l.name)) : null;
+
   const rows = await db
     .select({
       id: players.id,
@@ -68,15 +71,26 @@ async function main() {
       name: players.name,
       searchText: players.searchText,
       aliases: players.aliases,
+      currentLeague: players.currentLeague,
     })
     .from(players)
     .where(isNotNull(players.externalId));
 
+  const candidates = rows.filter((row) => {
+    if (!row.externalId) return false;
+    if (leagueNames && !leagueNames.has(row.currentLeague)) return false;
+    return needsDisplayRefresh(row.name, row.searchText);
+  });
+
   let updated = 0;
 
-  console.log(`Checking ${rows.length} ingested players for display names...`);
+  console.log(
+    `Checking ${candidates.length} of ${rows.length} ingested players for display names` +
+      (scoped ? ` (scoped to ${[...leagueNames!].join(', ')})` : '') +
+      '...'
+  );
 
-  for (const row of rows) {
+  for (const row of candidates) {
     if (!row.externalId) continue;
 
     const parts = await fetchNameParts(row.externalId, seasons);

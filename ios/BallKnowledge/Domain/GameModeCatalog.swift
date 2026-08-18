@@ -33,7 +33,7 @@ enum GameModeCatalog {
 
             return GameModeMetaDTO(
                 id: mode.rawValue,
-                title: apiMode?.title ?? mode.title,
+                title: mode.title,
                 subtitle: apiMode?.subtitle ?? "",
                 playerCount: apiMode?.playerCount ?? defaultPlayerCounts[index],
                 isAvailable: isAvailable

@@ -54,6 +54,8 @@ export const BADGE_LEAGUES = [
   { id: 78, name: 'Bundesliga' },
   { id: 61, name: 'Ligue 1' },
   { id: 40, name: 'Championship' },
+  { id: 41, name: 'League One' },
+  { id: 42, name: 'League Two' },
   { id: 88, name: 'Eredivisie' },
   { id: 94, name: 'Primeira Liga' },
   { id: 179, name: 'Scottish Premiership' },
@@ -76,6 +78,15 @@ export const LEAGUE_ID_BY_NAME: Record<string, number> = Object.fromEntries(
     }
     if (key === 'mls') aliases['major league soccer'] = league.id;
     if (key === 'brasileirao') aliases['serie a brazil'] = league.id;
+    if (key === 'championship') aliases['efl championship'] = league.id;
+    if (key === 'league one') {
+      aliases['league 1'] = league.id;
+      aliases['efl league one'] = league.id;
+    }
+    if (key === 'league two') {
+      aliases['league 2'] = league.id;
+      aliases['efl league two'] = league.id;
+    }
     return Object.entries(aliases);
   })
 );

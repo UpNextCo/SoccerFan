@@ -15,6 +15,7 @@ import { db } from '../db/index.js';
 import { players, playerStats } from '../db/schema.js';
 import { buildPlayerSearchFields, normalizeSearchText } from '../utils/playerSearch.js';
 import { canonicalNationality } from '../utils/nationality.js';
+import { isEflLeagueId } from './ingest-config.js';
 
 interface FbrefRow {
   player: string;
@@ -177,7 +178,7 @@ async function main() {
         age: latest.age > 0 ? latest.age : 25,
         currentClub: latest.team || 'Unknown',
         currentLeague: latest.leagueName,
-        marketValueTier: 3,
+        marketValueTier: isEflLeagueId(latest.leagueId) ? 2 : 3,
         searchText: fields.searchText,
       })
       .returning({ id: players.id });

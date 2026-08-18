@@ -10,12 +10,13 @@ and every player is marked "attempted" BEFORE scraping so a killed player is ski
 Usage:
   ./.venv/bin/python scripts/tm_scrape_seasons.py            # orchestrator (full crawl)
   ./.venv/bin/python scripts/tm_scrape_seasons.py --worker N # one batch of N (used internally)
+  TM_TARGETS=transferdata/tm_efl_targets.json ./.venv/bin/python scripts/tm_scrape_seasons.py
 """
 import json, os, re, signal, subprocess, sys, time
 
-TARGETS = "transferdata/tm_targets.json"
-OUT = "transferdata/tm_seasons.jsonl"
-ATTEMPTED = "transferdata/tm_attempted.txt"
+TARGETS = os.environ.get("TM_TARGETS", "transferdata/tm_targets.json")
+OUT = os.environ.get("TM_SEASONS_OUT", "transferdata/tm_seasons.jsonl")
+ATTEMPTED = os.environ.get("TM_ATTEMPTED", "transferdata/tm_attempted.txt")
 BATCH = 40
 BATCH_TIMEOUT = 700   # seconds; a healthy 40-player batch is ~6 min, so this only fires on a hang
 
