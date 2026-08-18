@@ -105,12 +105,27 @@
   background: var(--accent-soft);
 }
 
+.bingo-board-preview button.bingo-preview-tile.empty {
+  background: #fff4f4;
+}
+
+.bingo-square-player {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8f9fb;
+}
+
+.bingo-square-player .bingo-player-title {
+  margin-bottom: 0.65rem;
+}
+
 .bingo-category-card {
   display: none;
 }
 
 .bingo-category-card.active {
   display: flex;
+  flex-direction: column;
   margin-top: 1.25rem;
   padding: 1.25rem 0 0;
   border-top: 1px solid var(--line);

@@ -85,6 +85,70 @@
   white-space: nowrap;
 }
 
+.bingo-preview-count {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.bingo-preview-count.thin {
+  color: #946114;
+}
+
+.bingo-preview-count.empty,
+.bingo-preview-tile.empty .bingo-preview-count {
+  color: var(--danger, #b42318);
+}
+
+.bingo-square-players {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--line);
+}
+
+.bingo-square-players-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+
+.bingo-square-players-header p {
+  margin: 0.15rem 0 0;
+}
+
+.bingo-square-player-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.7rem;
+}
+
+.bingo-square-player {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.bingo-square-player.duplicate {
+  background: #fff4f4;
+}
+
+.bingo-player-card.matches-square {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.bingo-square-match-label {
+  display: block;
+  margin-top: 3px;
+  color: #07553d;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
 .bingo-category-card {
   padding: 0.9rem;
   border: 1px solid var(--line);

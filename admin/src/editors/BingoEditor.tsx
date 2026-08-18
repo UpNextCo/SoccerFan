@@ -29,6 +29,7 @@ type Player = {
   leagues?: string[]
   trophies?: string[]
   awards?: string[]
+  stats?: Record<string, number>
   premierLeagueApps?: number | null
   topLeagueGoals?: number | null
   topLeagueApps?: number | null
@@ -53,6 +54,146 @@ const CATEGORY_NAMES: Record<string, string> = {
 
 function categoryName(category: Cat): string {
   return CATEGORY_NAMES[category.type ?? ''] ?? 'Custom category'
+}
+
+function norm(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const CLUB_ALIASES: Record<string, string> = {
+  'inter milan': 'inter',
+  internazionale: 'inter',
+  'internazionale milano': 'inter',
+  'fc internazionale milano': 'inter',
+  'ac milan': 'milan',
+  milan: 'milan',
+  'bayern munich': 'bayern munchen',
+  'bayern munich fc': 'bayern munchen',
+  'atletico madrid': 'atletico madrid',
+  'atletico de madrid': 'atletico madrid',
+  'paris saint germain': 'paris saint germain',
+  'paris saint germain fc': 'paris saint germain',
+  'paris sg': 'paris saint germain',
+  psg: 'paris saint germain',
+  'tottenham hotspur': 'tottenham',
+  spurs: 'tottenham',
+  'manchester utd': 'manchester united',
+  'man utd': 'manchester united',
+  'man united': 'manchester united',
+  'man city': 'manchester city',
+  'borussia dortmund': 'borussia dortmund',
+  dortmund: 'borussia dortmund',
+  bvb: 'borussia dortmund',
+  'bayer leverkusen': 'bayer leverkusen',
+  leverkusen: 'bayer leverkusen',
+  'rb leipzig': 'rb leipzig',
+  leipzig: 'rb leipzig',
+  'sporting lisbon': 'sporting cp',
+  'fc porto': 'porto',
+  'fc barcelona': 'barcelona',
+  'real madrid cf': 'real madrid',
+  'juventus fc': 'juventus',
+  'as roma': 'roma',
+  'ssc napoli': 'napoli',
+  'athletic bilbao': 'athletic club',
+  'ath bilbao': 'athletic club',
+}
+
+function clubKey(raw: string): string {
+  const base = norm(raw)
+    .replace(/\bfc\b/g, '')
+    .replace(/\bcf\b/g, '')
+    .replace(/\bsc\b/g, '')
+    .replace(/\bac\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return CLUB_ALIASES[base] ?? base
+}
+
+function hasClub(player: Player, club: string): boolean {
+  const target = clubKey(club)
+  return Boolean(target) && (player.clubs ?? []).some((name) => clubKey(name) === target)
+}
+
+function playerMatchesCategory(player: Player, category: Cat): boolean {
+  const rule = String(category.matchingRule ?? '')
+  switch (category.type) {
+    case 'nationality':
+      return norm(player.nationality ?? '') === norm(rule)
+    case 'playedForClub':
+      return hasClub(player, rule)
+    case 'nationClub': {
+      const [nation, club] = rule.split('|')
+      return norm(player.nationality ?? '') === norm(nation ?? '') && hasClub(player, club ?? '')
+    }
+    case 'clubCombo': {
+      const [a, b] = rule.split('|')
+      return hasClub(player, a ?? '') && hasClub(player, b ?? '')
+    }
+    case 'wonCompetition':
+      return (player.trophies ?? []).some((trophy) => norm(trophy) === norm(rule))
+    case 'award':
+      return (player.awards ?? []).some((award) => norm(award) === norm(rule))
+    case 'statThreshold': {
+      const [key, thresholdText] = rule.split('>=')
+      const threshold = Number(thresholdText) || 0
+      const stats = player.stats ?? {}
+      const value =
+        stats[key ?? ''] ??
+        (key === 'pl_apps' ? player.premierLeagueApps : undefined) ??
+        (key === 'top_goals' ? player.topLeagueGoals : undefined) ??
+        (key === 'top_apps' ? player.topLeagueApps : undefined) ??
+        0
+      return Number(value) >= threshold
+    }
+    default:
+      return false
+  }
+}
+
+function matchReason(player: Player, category: Cat): string {
+  const rule = String(category.matchingRule ?? '')
+  switch (category.type) {
+    case 'nationality':
+      return player.nationality || rule
+    case 'playedForClub':
+      return player.clubs?.find((club) => clubKey(club) === clubKey(rule)) || rule
+    case 'nationClub': {
+      const [, club] = rule.split('|')
+      const matchedClub = player.clubs?.find((name) => clubKey(name) === clubKey(club ?? '')) || club
+      return [player.nationality, matchedClub].filter(Boolean).join(' · ')
+    }
+    case 'clubCombo': {
+      const [a, b] = rule.split('|')
+      const first = player.clubs?.find((name) => clubKey(name) === clubKey(a ?? '')) || a
+      const second = player.clubs?.find((name) => clubKey(name) === clubKey(b ?? '')) || b
+      return [first, second].filter(Boolean).join(' + ')
+    }
+    case 'wonCompetition':
+    case 'award':
+      return rule
+    case 'statThreshold': {
+      const [key, thresholdText] = rule.split('>=')
+      const stats = player.stats ?? {}
+      const value =
+        stats[key ?? ''] ??
+        (key === 'pl_apps' ? player.premierLeagueApps : undefined) ??
+        (key === 'top_goals' ? player.topLeagueGoals : undefined) ??
+        (key === 'top_apps' ? player.topLeagueApps : undefined)
+      return value == null ? rule.replace('>=', ' ≥ ') : `${key} ${value} (needs ≥ ${thresholdText})`
+    }
+    default:
+      return 'Matches this square'
+  }
+}
+
+function playerLabel(player: Player): string {
+  return player.name || player.displayName || 'Unknown player'
 }
 
 function ruleSummary(category: Cat): string {
@@ -135,6 +276,20 @@ export function BingoEditor({
   const duplicateIndices = useMemo(
     () => new Set(duplicatePlayerGroups.flatMap((group) => group.indices)),
     [duplicatePlayerGroups]
+  )
+  const matchersByCategory = useMemo(
+    () =>
+      categories.map((category) =>
+        players
+          .map((player, index) => ({ player, index }))
+          .filter(({ player }) => playerMatchesCategory(player, category))
+      ),
+    [categories, players]
+  )
+  const activeMatchers = matchersByCategory[activeCategoryIndex] ?? []
+  const matcherIndices = useMemo(
+    () => new Set(activeMatchers.map((entry) => entry.index)),
+    [activeMatchers]
   )
   useEffect(() => {
     latestRef.current = p
@@ -285,22 +440,28 @@ export function BingoEditor({
         <header className="editor-section-header">
           <div>
             <strong>Categories ({categories.length})</strong>
-            <p className="muted tiny">Select a square to edit it.</p>
+            <p className="muted tiny">Select a square to see and swap the pool players it uses.</p>
           </div>
         </header>
         <div className="bingo-board-preview" aria-label="Category board preview">
-          {categories.map((category, idx) => (
-            <button
-              type="button"
-              key={`preview-${category.id ?? idx}`}
-              className={`bingo-preview-tile${idx === activeCategoryIndex ? ' selected' : ''}`}
-              onClick={() => setActiveCategoryIndex(idx)}
-              aria-pressed={idx === activeCategoryIndex}
-            >
-              {categoryIcon(category)}
-              <span>{category.title || category.label || `Category ${idx + 1}`}</span>
-            </button>
-          ))}
+          {categories.map((category, idx) => {
+            const matcherCount = matchersByCategory[idx]?.length ?? 0
+            return (
+              <button
+                type="button"
+                key={`preview-${category.id ?? idx}`}
+                className={`bingo-preview-tile${idx === activeCategoryIndex ? ' selected' : ''}${matcherCount === 0 ? ' empty' : ''}`}
+                onClick={() => setActiveCategoryIndex(idx)}
+                aria-pressed={idx === activeCategoryIndex}
+              >
+                {categoryIcon(category)}
+                <span>{category.title || category.label || `Category ${idx + 1}`}</span>
+                <span className={`bingo-preview-count${matcherCount === 0 ? ' empty' : matcherCount < 3 ? ' thin' : ''}`}>
+                  {matcherCount} player{matcherCount === 1 ? '' : 's'}
+                </span>
+              </button>
+            )
+          })}
         </div>
         {categories.map((c, idx) => {
           const type = c.type ?? ''
@@ -317,6 +478,7 @@ export function BingoEditor({
             c.iconType === 'flag' ||
             c.iconType === 'nationClub'
           const ruleParts = String(c.matchingRule ?? '').split('|')
+          const squarePlayers = matchersByCategory[idx] ?? []
 
           return (
             <article
@@ -396,6 +558,60 @@ export function BingoEditor({
               )}
 
               {!isClub && !isNat && <p className="muted tiny">This category uses custom matching criteria.</p>}
+              <div className="bingo-square-players">
+                <header className="bingo-square-players-header">
+                  <div>
+                    <strong>Players on this square</strong>
+                    <p className="muted tiny">
+                      {squarePlayers.length} in the pool
+                      {squarePlayers.length === 0
+                        ? ' · changing the rule above will pick a different set'
+                        : squarePlayers.length < 3
+                          ? ' · thin (need 3+)'
+                          : ''}
+                    </p>
+                  </div>
+                </header>
+                {squarePlayers.length === 0 ? (
+                  <p className="editor-inline-warning">
+                    No pool players match this square. Change the rule above or swap someone into the
+                    player pool.
+                  </p>
+                ) : (
+                  <div className="bingo-square-player-list">
+                    {squarePlayers.map(({ player, index }) => (
+                      <article
+                        key={`${player.id ?? index}-${index}`}
+                        className={`bingo-square-player${duplicateIndices.has(index) ? ' duplicate' : ''}`}
+                      >
+                        <div className="bingo-player-title">
+                          {player.headshotUrl ? (
+                            <img src={player.headshotUrl} alt="" />
+                          ) : (
+                            <span className="bingo-player-placeholder" />
+                          )}
+                          <div>
+                            <strong>{playerLabel(player)}</strong>
+                            <span className="muted tiny">
+                              {matchReason(player, c)}
+                              {player.position ? ` · ${player.position}` : ''}
+                            </span>
+                          </div>
+                        </div>
+                        <EntityPicker
+                          kind="player"
+                          label="Swap player"
+                          valueLabel={playerLabel(player)}
+                          imageUrl={player.headshotUrl}
+                          nationality={player.nationality}
+                          disabled={locked}
+                          onPickPlayer={(hit) => pickPoolPlayer(index, hit)}
+                        />
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
               <details className="editor-advanced">
                 <summary>Advanced</summary>
                 <div className="advanced-grid">
@@ -417,7 +633,9 @@ export function BingoEditor({
       >
         <summary>
           Player pool
-          <span className="muted tiny">{players.length} players · open only to swap someone</span>
+          <span className="muted tiny">
+            {players.length} players · {activeMatchers.length} on the selected square
+          </span>
         </summary>
         {duplicatePlayerGroups.length > 0 && (
           <div className="error-box bingo-duplicate-summary" role="alert">
@@ -465,13 +683,16 @@ export function BingoEditor({
               <article
                 id={`bingo-player-${idx}`}
                 key={`${pl.id ?? idx}-${pl.headshotUrl ?? ''}-${pl.name ?? ''}`}
-                className={`bingo-player-card${duplicateIndices.has(idx) ? ' duplicate' : ''}`}
+                className={`bingo-player-card${duplicateIndices.has(idx) ? ' duplicate' : ''}${matcherIndices.has(idx) ? ' matches-square' : ''}`}
               >
                 <div className="bingo-player-title">
                   {pl.headshotUrl ? <img src={pl.headshotUrl} alt="" /> : <span className="bingo-player-placeholder" />}
                   <div>
                     <strong>{pl.name || pl.displayName || 'Unknown player'}</strong>
                     <span className="muted tiny">{metadata.join(' · ') || 'Details unavailable'}</span>
+                    {matcherIndices.has(idx) && (
+                      <span className="bingo-square-match-label">On selected square</span>
+                    )}
                     {duplicateIndices.has(idx) && (
                       <span className="bingo-duplicate-label">
                         Duplicate · pool position {idx + 1}

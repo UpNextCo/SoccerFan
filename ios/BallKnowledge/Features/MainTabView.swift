@@ -317,6 +317,7 @@ struct LeaguesTabView: View {
                     )
                     .frame(minHeight: 280)
                 } else {
+                    let rankWidth = LeaderboardRankColumn.width(forMaxRank: viewModel.players.map(\.rank).max() ?? 0)
                     VStack(spacing: 0) {
                         ForEach(Array(viewModel.players.enumerated()), id: \.element.id) { index, player in
                             let rank = player.rank
@@ -332,7 +333,8 @@ struct LeaguesTabView: View {
                                 player: player,
                                 isCurrentUser: player.userId == auth.user?.id,
                                 isChampion: (zones?.isChampionsLeague == true) && rank == 1,
-                                zone: weeklyZone(for: rank, zones: zones)
+                                zone: weeklyZone(for: rank, zones: zones),
+                                rankWidth: rankWidth
                             )
                             .padding(.horizontal, 16)
                             .padding(.vertical, 4)
@@ -361,12 +363,14 @@ struct LeaguesTabView: View {
             )
         } else {
             ScrollView(showsIndicators: false) {
+                let rankWidth = LeaderboardRankColumn.width(forMaxRank: viewModel.players.map(\.rank).max() ?? 0)
                 VStack(spacing: 8) {
                     ForEach(viewModel.players) { player in
                         ExpandablePlayerStandingRow(
                             player: player,
                             scope: scope,
-                            isCurrentUser: player.userId == auth.user?.id
+                            isCurrentUser: player.userId == auth.user?.id,
+                            rankWidth: rankWidth
                         )
                         .id("\(scope.rawValue)-\(player.userId)")
                     }
@@ -394,11 +398,13 @@ struct LeaguesTabView: View {
             )
         } else {
             ScrollView(showsIndicators: false) {
+                let rankWidth = LeaderboardRankColumn.width(forMaxRank: viewModel.teams.map(\.rank).max() ?? 0)
                 VStack(spacing: 8) {
                     ForEach(viewModel.teams) { team in
                         ExpandableTeamStandingRow(
                             team: team,
-                            currentUserId: auth.user?.id
+                            currentUserId: auth.user?.id,
+                            rankWidth: rankWidth
                         )
                     }
                 }
@@ -450,18 +456,35 @@ private enum WeeklyRowZone {
     case promotion, relegation, none
 }
 
+private enum LeaderboardRankColumn {
+    static func width(forMaxRank rank: Int) -> CGFloat {
+        if rank >= 1000 { return 44 }
+        if rank >= 100 { return 38 }
+        return 28
+    }
+
+    static func compactWidth(forMaxRank rank: Int) -> CGFloat {
+        if rank >= 1000 { return 36 }
+        if rank >= 100 { return 30 }
+        return 22
+    }
+}
+
 private struct WeeklyLeagueStandingRow: View {
     let player: PlayerStandingDTO
     var isCurrentUser = false
     var isChampion = false
     var zone: WeeklyRowZone = .none
+    var rankWidth: CGFloat = 28
 
     var body: some View {
         HStack(spacing: 12) {
             Text("\(player.rank)")
                 .font(.system(size: 15, weight: .black, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(rankColor)
-                .frame(width: 28, alignment: .center)
+                .lineLimit(1)
+                .frame(width: rankWidth, alignment: .center)
 
             avatarView
                 .frame(width: 36, height: 36)
@@ -555,6 +578,7 @@ struct ExpandablePlayerStandingRow: View {
     let player: PlayerStandingDTO
     let scope: LeagueScope
     var isCurrentUser = false
+    var rankWidth: CGFloat = 28
 
     @State private var isExpanded = false
     @State private var modes: [XpByModeRowDTO] = []
@@ -580,7 +604,8 @@ struct ExpandablePlayerStandingRow: View {
                     player: player,
                     isCurrentUser: isCurrentUser,
                     showsChevron: canExpand,
-                    isExpanded: isExpanded
+                    isExpanded: isExpanded,
+                    rankWidth: rankWidth
                 )
             }
             .buttonStyle(.plain)
@@ -657,13 +682,16 @@ struct PlayerStandingRow: View {
     var isCurrentUser = false
     var showsChevron = false
     var isExpanded = false
+    var rankWidth: CGFloat = 28
 
     var body: some View {
         HStack(spacing: 12) {
             Text("\(player.rank)")
                 .font(.system(size: 15, weight: .black, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(player.rank <= 3 ? BKTheme.accent : BKTheme.textMuted)
-                .frame(width: 28, alignment: .center)
+                .lineLimit(1)
+                .frame(width: rankWidth, alignment: .center)
 
             avatarView
                 .frame(width: 36, height: 36)
@@ -775,6 +803,7 @@ private struct LeaguePlayerXpGameRow: View {
 struct ExpandableTeamStandingRow: View {
     let team: TeamStandingDTO
     var currentUserId: String?
+    var rankWidth: CGFloat = 28
 
     @State private var isExpanded = false
     @State private var fans: [PlayerStandingDTO] = []
@@ -791,7 +820,7 @@ struct ExpandableTeamStandingRow: View {
                     Task { await loadFans() }
                 }
             } label: {
-                TeamStandingRow(team: team, showsChevron: true, isExpanded: isExpanded)
+                TeamStandingRow(team: team, showsChevron: true, isExpanded: isExpanded, rankWidth: rankWidth)
             }
             .buttonStyle(.plain)
 
@@ -809,10 +838,12 @@ struct ExpandableTeamStandingRow: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                     } else {
+                        let fanRankWidth = LeaderboardRankColumn.compactWidth(forMaxRank: fans.map(\.rank).max() ?? 0)
                         ForEach(fans) { player in
                             TeamFanRow(
                                 player: player,
-                                isCurrentUser: player.userId == currentUserId
+                                isCurrentUser: player.userId == currentUserId,
+                                rankWidth: fanRankWidth
                             )
                         }
                     }
@@ -846,13 +877,16 @@ struct TeamStandingRow: View {
     let team: TeamStandingDTO
     var showsChevron = false
     var isExpanded = false
+    var rankWidth: CGFloat = 28
 
     var body: some View {
         HStack(spacing: 12) {
             Text("\(team.rank)")
                 .font(.system(size: 15, weight: .black, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(team.rank <= 3 ? BKTheme.accent : BKTheme.textMuted)
-                .frame(width: 28, alignment: .center)
+                .lineLimit(1)
+                .frame(width: rankWidth, alignment: .center)
 
             AsyncImage(url: URL(string: team.logoUrl ?? "")) { image in
                 image.resizable().scaledToFit()
@@ -903,6 +937,7 @@ struct TeamStandingRow: View {
 private struct TeamFanRow: View {
     let player: PlayerStandingDTO
     var isCurrentUser = false
+    var rankWidth: CGFloat = 22
 
     private var displayName: String {
         let base = isCurrentUser ? (LocalProfile.nameOverride ?? player.displayName) : player.displayName
@@ -913,8 +948,10 @@ private struct TeamFanRow: View {
         HStack(spacing: 10) {
             Text("\(player.rank)")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(BKTheme.textMuted)
-                .frame(width: 22, alignment: .center)
+                .lineLimit(1)
+                .frame(width: rankWidth, alignment: .center)
 
             Group {
                 if isCurrentUser, let image = LocalProfile.loadAvatar() {
