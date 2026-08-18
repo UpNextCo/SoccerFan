@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { api, type AdminLeagueHit, type AdminTeamHit } from '../api'
+import { api, type AdminLeagueHit, type AdminPlayerHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import './game-editors.css'
 
@@ -115,6 +115,16 @@ const AWARD_OPTIONS = [
   { award: "UEFA Men's Player of the Year", label: "UEFA Men's Player of the Year winners", placements: ['winner'] },
 ] as const
 
+const STAT_KEYS = [
+  { key: 'pl_goals', noun: 'Premier League goals' },
+  { key: 'cl_goals', noun: 'Champions League goals' },
+  { key: 'transfer_eur_m', noun: '€M transfer fee' },
+  { key: 'career_hattricks', noun: 'career hat-tricks' },
+  { key: 'ucl_red_cards', noun: 'Champions League red cards' },
+  { key: 'season_reds', noun: 'reds in a single season' },
+  { key: 'intl_caps', noun: 'international caps' },
+] as const
+
 /** Keep in sync with backend BACK_YOURSELF_STAT_DEFS. */
 const STAT_OPTIONS = [
   { key: 'pl_goals', min: 100, label: '100+ Premier League goals' },
@@ -127,8 +137,14 @@ const STAT_OPTIONS = [
   { key: 'intl_caps', min: 150, label: '150+ international caps' },
 ] as const
 
+const WC_YEARS = [2022, 2018, 2014, 2010, 2006, 2002, 1998, 1994] as const
+
 function awardOptionValue(award: string, placements: string[]): string {
   return `${award}|${placements.join(',')}`
+}
+
+function statNoun(key: string | null | undefined): string {
+  return STAT_KEYS.find((item) => item.key === key)?.noun ?? (key ?? 'stat').replace(/_/g, ' ')
 }
 
 function rebuildLabel(c: Category): string {
@@ -151,7 +167,7 @@ function rebuildLabel(c: Category): string {
   }
   if (type === 'stat') {
     return STAT_OPTIONS.find((o) => o.key === c.statKey && o.min === c.statMin)?.label
-      ?? (c.statKey && c.statMin != null ? `${c.statMin}+ ${c.statKey}` : 'Stat milestone')
+      ?? (c.statKey && c.statMin != null ? `${c.statMin}+ ${statNoun(c.statKey)}` : 'Stat milestone')
   }
   if (type === 'managed_by') return c.manager ? `Managed by ${c.manager}` : 'Managed by…'
   if (type === 'wc_squad') return `${c.wcCountry ?? '?'} World Cup ${c.wcYear ?? '?'}`
@@ -172,6 +188,37 @@ function statOptionValue(key: string, min: number): string {
 
 function finalOptionValue(competition: string, mode: string): string {
   return `${competition}|${mode}`
+}
+
+function emptyCategoryPatch(nextType: CategoryType): Partial<Category> {
+  const awardDefault = AWARD_OPTIONS[0]
+  const statDefault = STAT_OPTIONS[0]
+  const managerDefault = MANAGER_OPTIONS[0]
+  const finalDefault = FINAL_OPTIONS[0]
+  return {
+    type: nextType,
+    club: null,
+    logoUrl: null,
+    leagueId: null,
+    leagueName: null,
+    nationality: null,
+    award: nextType === 'award' ? awardDefault.award : null,
+    awardPlacements: nextType === 'award' ? [...awardDefault.placements] : null,
+    statKey: nextType === 'stat' ? statDefault.key : null,
+    statMin: nextType === 'stat' ? statDefault.min : null,
+    manager: nextType === 'managed_by' ? managerDefault.manager : null,
+    managerNorm: nextType === 'managed_by' ? managerDefault.managerNorm : null,
+    wcYear: nextType === 'wc_squad' ? 2022 : null,
+    wcCountry: nextType === 'wc_squad' ? 'France' : null,
+    clubA: null,
+    clubB: null,
+    anchorAId: null,
+    anchorBId: null,
+    anchorAName: null,
+    anchorBName: null,
+    finalCompetition: nextType === 'final' ? finalDefault.competition : null,
+    finalMode: nextType === 'final' ? finalDefault.mode : null,
+  }
 }
 
 export function BackYourselfEditor({
@@ -201,7 +248,6 @@ export function BackYourselfEditor({
   const needsFinal = type === 'final'
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [comboSlot, setComboSlot] = useState<'A' | 'B'>('A')
   const latestRef = useRef({ p, a })
   latestRef.current = { p, a }
 
@@ -210,37 +256,51 @@ export function BackYourselfEditor({
     onChange(nextPuzzle, nextAnswer)
   }
 
-  function updateCategory(patch: Partial<Category>) {
-    const merged = { ...category, ...patch }
-    const nextCat = { ...merged, label: rebuildLabel(merged) }
-    commit({ ...p, category: nextCat }, a)
+  function applyCategory(patch: Partial<Category>, refresh = false) {
+    const current = latestRef.current.p
+    const merged = { ...(current.category ?? {}), ...patch }
+    const nextCat = {
+      ...merged,
+      label: 'label' in patch ? (patch.label ?? '') : rebuildLabel(merged),
+    }
+    commit({ ...current, category: nextCat }, latestRef.current.a)
+    if (refresh && !locked) void recalculatePool()
   }
 
-  async function pickClub(hit: AdminTeamHit) {
+  async function pickClub(hit: AdminTeamHit, slot?: 'A' | 'B') {
     const team = await api.resolveTeam(hit.id)
-    if (type === 'club_combo') {
-      if (comboSlot === 'A') {
-        updateCategory({ clubA: team.name, logoUrl: team.logoUrl })
+    const currentType = (latestRef.current.p.category?.type as CategoryType) || type
+    if (currentType === 'club_combo' || slot) {
+      if ((slot ?? 'A') === 'A') {
+        applyCategory({ clubA: team.name, logoUrl: team.logoUrl }, true)
       } else {
-        updateCategory({ clubB: team.name })
+        applyCategory({ clubB: team.name }, true)
       }
       return
     }
-    updateCategory({
+    applyCategory({
       club: team.name,
       logoUrl: team.logoUrl,
-      leagueId: type === 'club' ? team.leagueId : category.leagueId,
-      leagueName: type === 'club' ? team.leagueName : category.leagueName,
-    })
+      leagueId: currentType === 'club' ? team.leagueId : latestRef.current.p.category?.leagueId,
+      leagueName: currentType === 'club' ? team.leagueName : latestRef.current.p.category?.leagueName,
+    }, true)
   }
 
   function pickLeague(league: AdminLeagueHit) {
-    updateCategory({
+    applyCategory({
       leagueId: league.id,
       leagueName: league.name,
       logoUrl: league.logoUrl,
       club: null,
-    })
+    }, true)
+  }
+
+  function pickAnchor(slot: 'A' | 'B', hit: AdminPlayerHit) {
+    if (slot === 'A') {
+      applyCategory({ anchorAId: hit.id, anchorAName: hit.name }, true)
+      return
+    }
+    applyCategory({ anchorBId: hit.id, anchorBName: hit.name }, true)
   }
 
   async function recalculatePool() {
@@ -259,11 +319,6 @@ export function BackYourselfEditor({
     }
   }
 
-  const selectedStat =
-    category.statKey && category.statMin != null
-      ? statOptionValue(category.statKey, category.statMin)
-      : ''
-
   const selectedAward = awardOptionValue(
     category.award ?? AWARD_OPTIONS[0].award,
     category.awardPlacements ?? [...AWARD_OPTIONS[0].placements]
@@ -273,6 +328,10 @@ export function BackYourselfEditor({
     category.finalCompetition ?? FINAL_OPTIONS[0].competition,
     category.finalMode ?? FINAL_OPTIONS[0].mode
   )
+
+  const wcYears = category.wcYear && !WC_YEARS.includes(category.wcYear as typeof WC_YEARS[number])
+    ? [category.wcYear, ...WC_YEARS]
+    : [...WC_YEARS]
 
   return (
     <div className="mode-editor">
@@ -311,34 +370,13 @@ export function BackYourselfEditor({
             disabled={locked}
             onChange={(e) => {
               const nextType = e.target.value as CategoryType
-              const awardDefault = AWARD_OPTIONS[0]
-              const statDefault = STAT_OPTIONS[0]
-              const managerDefault = MANAGER_OPTIONS[0]
-              const finalDefault = FINAL_OPTIONS[0]
-              updateCategory({
-                type: nextType,
-                club: null,
-                logoUrl: null,
-                leagueId: null,
-                leagueName: null,
-                nationality: null,
-                award: nextType === 'award' ? awardDefault.award : null,
-                awardPlacements: nextType === 'award' ? [...awardDefault.placements] : null,
-                statKey: nextType === 'stat' ? statDefault.key : null,
-                statMin: nextType === 'stat' ? statDefault.min : null,
-                manager: nextType === 'managed_by' ? managerDefault.manager : null,
-                managerNorm: nextType === 'managed_by' ? managerDefault.managerNorm : null,
-                wcYear: nextType === 'wc_squad' ? 2022 : null,
-                wcCountry: nextType === 'wc_squad' ? 'France' : null,
-                clubA: null,
-                clubB: null,
-                anchorAId: null,
-                anchorBId: null,
-                anchorAName: null,
-                anchorBName: null,
-                finalCompetition: nextType === 'final' ? finalDefault.competition : null,
-                finalMode: nextType === 'final' ? finalDefault.mode : null,
-              })
+              const ready =
+                nextType === 'award'
+                || nextType === 'stat'
+                || nextType === 'managed_by'
+                || nextType === 'final'
+                || nextType === 'wc_squad'
+              applyCategory(emptyCategoryPatch(nextType), ready)
             }}
           >
             {(Object.keys(TYPE_LABELS) as CategoryType[]).map((key) => (
@@ -354,11 +392,12 @@ export function BackYourselfEditor({
             label="Nationality"
             valueLabel={category.nationality ?? undefined}
             disabled={locked}
-            onPickNationality={(hit) => updateCategory({ nationality: hit.name })}
+            onPickNationality={(hit) => applyCategory({ nationality: hit.name }, true)}
           />
         )}
         {needsClub && (
           <EntityPicker
+            key={`club-${category.club ?? ''}`}
             kind="team"
             label="Club"
             valueLabel={category.club ?? undefined}
@@ -385,10 +424,10 @@ export function BackYourselfEditor({
               disabled={locked}
               onChange={(e) => {
                 const [award, placementsStr] = e.target.value.split('|')
-                updateCategory({
+                applyCategory({
                   award,
                   awardPlacements: (placementsStr ?? 'winner').split(','),
-                })
+                }, true)
               }}
             >
               {AWARD_OPTIONS.map((opt) => (
@@ -403,23 +442,57 @@ export function BackYourselfEditor({
           </label>
         )}
         {needsStat && (
-          <label className="field compact">
-            Milestone
-            <select
-              value={selectedStat || statOptionValue(STAT_OPTIONS[0].key, STAT_OPTIONS[0].min)}
-              disabled={locked}
-              onChange={(e) => {
-                const [key, minStr] = e.target.value.split(':')
-                updateCategory({ statKey: key, statMin: Number(minStr) })
-              }}
-            >
-              {STAT_OPTIONS.map((opt) => (
-                <option key={statOptionValue(opt.key, opt.min)} value={statOptionValue(opt.key, opt.min)}>
-                  {opt.label}
-                </option>
+          <>
+            <div className="by-stat-row">
+              <label className="field compact">
+                Stat
+                <select
+                  value={category.statKey ?? STAT_KEYS[0].key}
+                  disabled={locked}
+                  onChange={(e) => {
+                    const key = e.target.value
+                    const preset = STAT_OPTIONS.find((opt) => opt.key === key)
+                    applyCategory({
+                      statKey: key,
+                      statMin: category.statMin ?? preset?.min ?? 1,
+                    }, true)
+                  }}
+                >
+                  {STAT_KEYS.map((opt) => (
+                    <option key={opt.key} value={opt.key}>
+                      {opt.noun}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field compact">
+                At least
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={category.statMin ?? ''}
+                  disabled={locked}
+                  onChange={(e) => applyCategory({
+                    statMin: Math.max(1, Math.round(Number(e.target.value) || 1)),
+                  }, true)}
+                />
+              </label>
+            </div>
+            <div className="chip-list">
+              {STAT_OPTIONS.filter((opt) => opt.key === (category.statKey ?? STAT_KEYS[0].key)).map((opt) => (
+                <button
+                  type="button"
+                  key={statOptionValue(opt.key, opt.min)}
+                  className={opt.min === category.statMin ? 'hint-chip' : 'ghost'}
+                  disabled={locked}
+                  onClick={() => applyCategory({ statKey: opt.key, statMin: opt.min }, true)}
+                >
+                  {opt.min}+
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          </>
         )}
         {needsManager && (
           <label className="field compact">
@@ -430,7 +503,7 @@ export function BackYourselfEditor({
               onChange={(e) => {
                 const hit = MANAGER_OPTIONS.find((m) => m.managerNorm === e.target.value)
                 if (!hit) return
-                updateCategory({ manager: hit.manager, managerNorm: hit.managerNorm })
+                applyCategory({ manager: hit.manager, managerNorm: hit.managerNorm }, true)
               }}
             >
               {MANAGER_OPTIONS.map((m) => (
@@ -443,53 +516,77 @@ export function BackYourselfEditor({
         )}
         {needsWc && (
           <>
+            <EntityPicker
+              kind="nationality"
+              label="Country"
+              valueLabel={category.wcCountry ?? undefined}
+              disabled={locked}
+              onPickNationality={(hit) => applyCategory({
+                wcCountry: hit.name,
+                nationality: hit.name,
+              }, true)}
+            />
             <label className="field compact">
-              Country
-              <input
-                value={category.wcCountry ?? ''}
+              World Cup
+              <select
+                value={category.wcYear ?? 2022}
                 disabled={locked}
-                onChange={(e) => updateCategory({ wcCountry: e.target.value, nationality: e.target.value })}
-              />
-            </label>
-            <label className="field compact">
-              Year
-              <input
-                type="number"
-                value={category.wcYear ?? ''}
-                disabled={locked}
-                onChange={(e) => updateCategory({ wcYear: Number(e.target.value) || null })}
-              />
+                onChange={(e) => applyCategory({ wcYear: Number(e.target.value) || null }, true)}
+              >
+                {wcYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
             </label>
           </>
         )}
         {needsCombo && (
-          <>
-            <label className="field compact">
-              Picking club
-              <select
-                value={comboSlot}
-                disabled={locked}
-                onChange={(e) => setComboSlot(e.target.value as 'A' | 'B')}
-              >
-                <option value="A">Club A — {category.clubA ?? 'unset'}</option>
-                <option value="B">Club B — {category.clubB ?? 'unset'}</option>
-              </select>
-            </label>
+          <div className="by-pair-grid">
             <EntityPicker
+              key={`combo-a-${category.clubA ?? ''}`}
               kind="team"
-              label={comboSlot === 'A' ? 'Club A' : 'Club B'}
-              valueLabel={(comboSlot === 'A' ? category.clubA : category.clubB) ?? undefined}
-              imageUrl={comboSlot === 'A' ? category.logoUrl ?? undefined : undefined}
+              label="Club A"
+              valueLabel={category.clubA ?? undefined}
+              imageUrl={category.logoUrl ?? undefined}
               disabled={locked}
-              onPickTeam={(hit) => void pickClub(hit)}
+              onPickTeam={(hit) => void pickClub(hit, 'A')}
             />
-          </>
+            <EntityPicker
+              key={`combo-b-${category.clubB ?? ''}`}
+              kind="team"
+              label="Club B"
+              valueLabel={category.clubB ?? undefined}
+              disabled={locked}
+              onPickTeam={(hit) => void pickClub(hit, 'B')}
+            />
+          </div>
         )}
         {needsPlayedWith && (
-          <p className="muted tiny">
-            Set anchorAId / anchorBId / names via JSON or regenerate. Display:{' '}
-            {category.anchorAName ?? '?'} + {category.anchorBName ?? '?'}.
-          </p>
+          <>
+            <div className="by-pair-grid">
+              <EntityPicker
+                key={`anchor-a-${category.anchorAId ?? ''}`}
+                kind="player"
+                label="Player A"
+                valueLabel={category.anchorAName ?? undefined}
+                disabled={locked}
+                onPickPlayer={(hit) => pickAnchor('A', hit)}
+              />
+              <EntityPicker
+                key={`anchor-b-${category.anchorBId ?? ''}`}
+                kind="player"
+                label="Player B"
+                valueLabel={category.anchorBName ?? undefined}
+                disabled={locked}
+                onPickPlayer={(hit) => pickAnchor('B', hit)}
+              />
+            </div>
+            <p className="muted tiny">
+              Search two players. The pool is everyone who shared a club season with both.
+            </p>
+          </>
         )}
         {needsFinal && (
           <label className="field compact">
@@ -499,7 +596,7 @@ export function BackYourselfEditor({
               disabled={locked}
               onChange={(e) => {
                 const [competition, mode] = e.target.value.split('|')
-                updateCategory({ finalCompetition: competition, finalMode: mode })
+                applyCategory({ finalCompetition: competition, finalMode: mode }, true)
               }}
             >
               {FINAL_OPTIONS.map((opt) => (
@@ -518,7 +615,7 @@ export function BackYourselfEditor({
           <input
             value={category.label ?? ''}
             disabled={locked}
-            onChange={(e) => updateCategory({ label: e.target.value })}
+            onChange={(e) => applyCategory({ label: e.target.value })}
           />
         </label>
         <div className="button-row">
@@ -528,7 +625,7 @@ export function BackYourselfEditor({
         </div>
         {error && <p className="muted tiny" style={{ color: '#b42318' }}>{error}</p>}
         <p className="muted tiny">
-          Pool size must stay between 10 and 120. XP maxes at pledge {p.xpCap ?? 40}+ even when the pool is larger. Recalculate after every category change before approving.
+          Pool size must stay between 10 and 120. XP maxes at pledge {p.xpCap ?? 40}+ even when the pool is larger. The pool refreshes when you change the category; recalculate again before approving if the count looks stale.
         </p>
       </div>
     </div>
