@@ -52,8 +52,9 @@ export function validateLMSQuestion(built: LMSBuilderResult, ctx: LMSBuildContex
   const optionCount = question.options.length;
   if (question.type === 'higher_lower') {
     if (optionCount !== 2) return false;
-  } else if (question.type === 'custom_question') {
-    if (optionCount !== 1) return false;
+  } else if (question.type === 'custom_question' || question.type === 'missing_club') {
+    if (question.type === 'custom_question' && optionCount !== 1) return false;
+    if (question.type === 'missing_club' && optionCount !== 1 && optionCount !== 4) return false;
   } else if (optionCount !== 4) {
     return false;
   }

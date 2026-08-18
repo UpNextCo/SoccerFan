@@ -331,11 +331,25 @@
 
 .career-club-editor-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
   align-items: end;
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.career-club-editor-row.missing {
+  background: #fff8e8;
+  border-radius: 10px;
+  padding-inline: 10px;
+}
+
+.lms-subject-player {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 0.75rem;
 }
 
 .career-loan-toggle {

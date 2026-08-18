@@ -22,7 +22,7 @@ export type LmsRevealQuestion = {
   subPrompt?: string | null;
   options: Array<{ id: string; label: string }>;
   presentation?: {
-    careerClubs?: Array<{ name: string; note?: 'loan' | string | null }>;
+    careerClubs?: Array<{ name: string; note?: 'loan' | string | null; missing?: boolean }>;
     cluePlayers?: Array<{ name: string }>;
     [k: string]: unknown;
   } | null;
@@ -164,6 +164,20 @@ function recomputeOddOneOut(
   return { ...answer, reveal: name };
 }
 
+function recomputeMissingClub(
+  question: LmsRevealQuestion,
+  answer: LmsRevealAnswer
+): LmsRevealAnswer {
+  const correct = question.options.find((o) => o.id === answer.correctOptionId);
+  const path = (question.presentation?.careerClubs ?? [])
+    .map((club) => (club.missing ? '???' : `${club.name}${club.note === 'loan' ? ' (loan)' : ''}`))
+    .filter((part) => part.trim())
+    .join(' → ');
+  if (!correct?.label) return { ...answer, reveal: path || answer.reveal || '' };
+  if (!path) return { ...answer, reveal: correct.label };
+  return { ...answer, reveal: `${correct.label} — ${path}` };
+}
+
 function recomputeCareerPath(
   question: LmsRevealQuestion,
   answer: LmsRevealAnswer
@@ -198,6 +212,8 @@ export async function recomputeLmsQuestionAnswer(
       return recomputeHigherLower(question, answer);
     case 'career_path':
       return recomputeCareerPath(question, answer);
+    case 'missing_club':
+      return recomputeMissingClub(question, answer);
     case 'odd_one_out':
       return recomputeOddOneOut(question, answer);
     case 'which_club':

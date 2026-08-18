@@ -723,7 +723,7 @@ export const leagueWeeks = pgTable(
 );
 
 /**
- * A weekly competition table of ≤30 players within one division.
+ * A weekly competition table of ≤20 players within one division.
  * Legacy column `tier` kept for older rows; new code uses `division`.
  */
 export const leagueCohorts = pgTable(

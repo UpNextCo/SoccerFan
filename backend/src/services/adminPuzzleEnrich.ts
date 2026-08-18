@@ -39,7 +39,7 @@ type LMSQuestion = {
     layout?: string;
     imageUrl?: string;
     imageBlur?: number;
-    careerClubs?: Array<{ name: string; logoUrl?: string; note?: 'loan' }>;
+    careerClubs?: Array<{ name: string; logoUrl?: string; note?: 'loan'; missing?: boolean }>;
     cluePlayers?: Array<{
       id?: string;
       name: string;
@@ -74,7 +74,7 @@ function playerIdFromOption(questionId: string, optionId: string): string | null
 }
 
 function isClubQuestion(q: LMSQuestion): boolean {
-  if (q.type === 'which_club' || q.type === 'image_badge') return true;
+  if (q.type === 'which_club' || q.type === 'image_badge' || q.type === 'missing_club') return true;
   if (q.type !== 'odd_one_out') return false;
   const sub = q.subPrompt?.toLowerCase() ?? '';
   return sub.includes('club');
@@ -162,7 +162,7 @@ export async function enrichAdminLMSPuzzle(
     }
 
     if (isClubQuestion(q)) {
-      if (q.type === 'which_club') {
+      if (q.type === 'which_club' || q.type === 'missing_club') {
         const cluePlayers: Array<{
           id?: string;
           name: string;
@@ -214,6 +214,19 @@ export async function enrichAdminLMSPuzzle(
           };
           ans.reveal = correct.label;
         }
+      }
+      if (Array.isArray(q.presentation?.careerClubs)) {
+        q.presentation = {
+          ...q.presentation,
+          careerClubs: await Promise.all(
+            q.presentation.careerClubs.map(async (club) => ({
+              ...club,
+              logoUrl: club.name
+                ? (await lookupTeamLogo(club.name, ''))?.logoUrl ?? club.logoUrl
+                : club.logoUrl,
+            }))
+          ),
+        };
       }
       continue;
     }

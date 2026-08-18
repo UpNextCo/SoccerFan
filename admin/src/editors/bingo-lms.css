@@ -349,9 +349,45 @@
 
 .lms-question-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   gap: 1rem;
   margin-bottom: 0.75rem;
+}
+
+.lms-answer-format span {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.lms-format-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f4f6f9;
+}
+
+.lms-format-toggle button {
+  min-height: 36px;
+  padding: 0.4rem 0.85rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.lms-format-toggle button.selected {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(21, 25, 34, 0.08);
+}
+
+.lms-format-toggle button:disabled {
+  opacity: 0.6;
 }
 
 .lms-question-controls .field {

@@ -72,7 +72,7 @@ export function lmsSemanticSignaturePayload(
     correctLabel: normalizeSemanticText(correct.label),
     careerClubPath:
       question.presentation?.careerClubs?.map((club) =>
-        `${normalizeSemanticText(club.name)}${club.note === 'loan' ? ':loan' : ''}`
+        `${normalizeSemanticText(club.name)}${club.note === 'loan' ? ':loan' : ''}${club.missing ? ':missing' : ''}`
       ) ?? [],
     ...(question.type === 'custom_image'
       ? { imageIdentity: (question.presentation?.imageUrl ?? '').trim().toLowerCase() }
@@ -139,7 +139,8 @@ export function extractLMSUsedKeys(
         break;
       }
       case 'image_badge':
-      case 'which_club': {
+      case 'which_club':
+      case 'missing_club': {
         const correct = question.options.find((option) => option.id === questionAnswer.correctOptionId);
         if (correct) keys.push(clubUsedKey(correct.label));
         break;

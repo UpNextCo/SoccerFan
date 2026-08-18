@@ -330,6 +330,15 @@ struct LastManStandingCareerClubDTO: Codable, Equatable {
     let name: String
     let logoUrl: String?
     let note: String?
+    let missing: Bool?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        logoUrl = try c.decodeIfPresent(String.self, forKey: .logoUrl)
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+        missing = try c.decodeIfPresent(Bool.self, forKey: .missing)
+    }
 }
 
 struct LastManStandingCluePlayerDTO: Codable, Equatable {

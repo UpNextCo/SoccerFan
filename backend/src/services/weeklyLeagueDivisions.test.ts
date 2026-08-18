@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   compareWeeklyMembership,
-  divisionForLifetimePercentile,
   londonWeekEnd,
   londonWeekStart,
   outcomeForRank,
@@ -13,61 +12,61 @@ import {
 } from './weeklyLeagueDivisions.js';
 
 test('zoneCounts: full table is 5 up / 5 down', () => {
-  assert.deepEqual(zoneCounts(30), { promote: 5, relegate: 5 });
+  assert.deepEqual(zoneCounts(20), { promote: 5, relegate: 5 });
 });
 
 test('zoneCounts: small tables keep a mid-band', () => {
   assert.deepEqual(zoneCounts(1), { promote: 0, relegate: 0 });
   assert.deepEqual(zoneCounts(2), { promote: 0, relegate: 0 });
   assert.deepEqual(zoneCounts(3), { promote: 1, relegate: 1 });
-  assert.deepEqual(zoneCounts(10), { promote: 2, relegate: 2 });
+  assert.deepEqual(zoneCounts(10), { promote: 4, relegate: 4 });
   const n12 = zoneCounts(12);
+  assert.deepEqual(n12, { promote: 5, relegate: 5 });
   assert.ok(n12.promote + n12.relegate < 12);
-  assert.ok(n12.promote >= 1 && n12.relegate >= 1);
 });
 
 test('zonesForTable: Champions League has no promotion; Sunday has no relegation', () => {
-  const cl = zonesForTable('champions_league', 30);
+  const cl = zonesForTable('champions_league', 20);
   assert.equal(cl.promoteMaxRank, 0);
-  assert.equal(cl.relegateMinRank, 26);
+  assert.equal(cl.relegateMinRank, 16);
   assert.equal(cl.isChampionsLeague, true);
 
-  const sun = zonesForTable('sunday_league', 30);
+  const sun = zonesForTable('sunday_league', 20);
   assert.equal(sun.promoteMaxRank, 5);
   assert.equal(sun.relegateMinRank, 0);
   assert.equal(sun.isSundayLeague, true);
 
-  const champ = zonesForTable('championship', 30);
+  const champ = zonesForTable('championship', 20);
   assert.equal(champ.promoteMaxRank, 5);
-  assert.equal(champ.relegateMinRank, 26);
+  assert.equal(champ.relegateMinRank, 16);
 });
 
 test('outcomeForRank: CL #1 is champion; edges promote/relegate', () => {
-  assert.deepEqual(outcomeForRank('champions_league', 1, 30), {
+  assert.deepEqual(outcomeForRank('champions_league', 1, 20), {
     outcome: 'champion',
     nextDivision: 'champions_league',
   });
-  assert.deepEqual(outcomeForRank('champions_league', 26, 30), {
+  assert.deepEqual(outcomeForRank('champions_league', 16, 20), {
     outcome: 'relegated',
     nextDivision: 'premier_league',
   });
-  assert.deepEqual(outcomeForRank('sunday_league', 1, 30), {
+  assert.deepEqual(outcomeForRank('sunday_league', 1, 20), {
     outcome: 'promoted',
     nextDivision: 'non_league',
   });
-  assert.deepEqual(outcomeForRank('sunday_league', 30, 30), {
+  assert.deepEqual(outcomeForRank('sunday_league', 20, 20), {
     outcome: 'stayed',
     nextDivision: 'sunday_league',
   });
-  assert.deepEqual(outcomeForRank('championship', 3, 30), {
+  assert.deepEqual(outcomeForRank('championship', 3, 20), {
     outcome: 'promoted',
     nextDivision: 'premier_league',
   });
-  assert.deepEqual(outcomeForRank('championship', 28, 30), {
+  assert.deepEqual(outcomeForRank('championship', 18, 20), {
     outcome: 'relegated',
     nextDivision: 'league_one',
   });
-  assert.deepEqual(outcomeForRank('championship', 15, 30), {
+  assert.deepEqual(outcomeForRank('championship', 10, 20), {
     outcome: 'stayed',
     nextDivision: 'championship',
   });
@@ -106,24 +105,13 @@ test('compareWeeklyMembership: XP, then reached_at, then user_id', () => {
   assert.equal(sameXpTime[0]!.userId, 'a');
 });
 
-test('packGroupSizes: even packing under 30', () => {
+test('packGroupSizes: even packing under 20', () => {
   assert.deepEqual(packGroupSizes(0), []);
-  assert.deepEqual(packGroupSizes(30), [30]);
-  assert.deepEqual(packGroupSizes(31), [16, 15]);
-  assert.deepEqual(packGroupSizes(61), [21, 20, 20]);
+  assert.deepEqual(packGroupSizes(20), [20]);
+  assert.deepEqual(packGroupSizes(21), [11, 10]);
+  assert.deepEqual(packGroupSizes(61), [16, 15, 15, 15]);
   assert.equal(packGroupSizes(61).reduce((a, b) => a + b, 0), 61);
-  assert.ok(packGroupSizes(90).every((s) => s <= 30));
-});
-
-test('divisionForLifetimePercentile bands', () => {
-  const total = 100;
-  assert.equal(divisionForLifetimePercentile(0, total), 'champions_league');
-  assert.equal(divisionForLifetimePercentile(4, total), 'champions_league');
-  assert.equal(divisionForLifetimePercentile(5, total), 'premier_league');
-  assert.equal(divisionForLifetimePercentile(14, total), 'premier_league');
-  assert.equal(divisionForLifetimePercentile(15, total), 'championship');
-  assert.equal(divisionForLifetimePercentile(80, total), 'sunday_league');
-  assert.equal(divisionForLifetimePercentile(0, 0), 'sunday_league');
+  assert.ok(packGroupSizes(90).every((s) => s <= 20));
 });
 
 test('londonWeekStart/End: Monday–Sunday Europe/London', () => {
@@ -139,7 +127,7 @@ test('londonWeekStart/End: Monday–Sunday Europe/London', () => {
 });
 
 test('formatStatusLine: promotion / relegation / CL copy', () => {
-  const standings = Array.from({ length: 30 }, (_, i) => ({
+  const standings = Array.from({ length: 20 }, (_, i) => ({
     rank: i + 1,
     xp: 300 - i * 10,
     userId: `u${i + 1}`,
@@ -159,10 +147,10 @@ test('formatStatusLine: promotion / relegation / CL copy', () => {
   assert.equal(
     formatStatusLine({
       division: 'championship',
-      rank: 28,
-      xp: 20,
+      rank: 18,
+      xp: 120,
       standings,
-      viewerUserId: 'u28',
+      viewerUserId: 'u18',
     }),
     "You're in the relegation zone"
   );
@@ -170,7 +158,7 @@ test('formatStatusLine: promotion / relegation / CL copy', () => {
   const fromPromo = formatStatusLine({
     division: 'championship',
     rank: 10,
-    xp: 200,
+    xp: 210,
     standings,
     viewerUserId: 'u10',
   });

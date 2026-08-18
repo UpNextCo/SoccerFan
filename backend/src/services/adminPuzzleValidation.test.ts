@@ -234,6 +234,84 @@ test('validates authored LMS custom questions with one selected player answer', 
   );
 });
 
+test('validates authored LMS missing-club questions', () => {
+  const questions = Array.from({ length: 10 }, (_, index) => {
+    const questionId = `missing-q-${index + 1}`;
+    const missing = index === 2;
+    return {
+      id: questionId,
+      type: missing ? 'missing_club' : 'odd_one_out',
+      slot: index + 1,
+      prompt: missing ? 'Guess the missing club' : `Question ${index + 1}`,
+      options: missing
+        ? ['Inter', 'Milan', 'Roma', 'Napoli'].map((label, optionIndex) => ({
+            id: `${questionId}-${optionIndex + 1}`,
+            label,
+          }))
+        : ['Alpha', 'Bravo', 'Charlie', 'Delta'].map((label, optionIndex) => ({
+            id: `${questionId}-o${optionIndex + 1}`,
+            label,
+          })),
+      presentation: missing
+        ? {
+            careerClubs: [
+              { name: 'Ajax' },
+              { name: 'Inter', missing: true },
+              { name: 'Barcelona' },
+            ],
+          }
+        : undefined,
+    };
+  });
+  const answer = {
+    questions: questions.map((question) => ({
+      questionId: question.id,
+      correctOptionId: question.options[0]!.id,
+    })),
+  };
+  assert.equal(validatePuzzleReport('last_man_standing', { questions }, answer).ok, true);
+
+  questions[2]!.presentation = {
+    careerClubs: [
+      { name: 'Ajax' },
+      { name: 'Inter' },
+      { name: 'Barcelona' },
+    ],
+  };
+  const unmarked = validatePuzzleReport('last_man_standing', { questions }, answer);
+  assert.equal(unmarked.ok, false);
+  assert.match(
+    unmarked.issues.find((entry) => entry.path.includes('careerClubs'))?.message ?? '',
+    /exactly one club/
+  );
+});
+
+test('hides the missing LMS club and typed club answer from the public daily bundle', () => {
+  const puzzle = {
+    questions: [
+      {
+        id: 'q-1',
+        type: 'missing_club',
+        prompt: 'Guess the missing club',
+        options: [{ id: 'q-1-42', label: 'Inter' }],
+        presentation: {
+          careerClubs: [
+            { name: 'Ajax' },
+            { name: 'Inter', logoUrl: 'https://example.com/inter.png', missing: true },
+            { name: 'Barcelona' },
+          ],
+        },
+      },
+    ],
+  };
+  const sanitized = sanitizePublicPuzzle('last_man_standing', puzzle) as typeof puzzle;
+  assert.deepEqual(sanitized.questions[0]!.options, []);
+  assert.equal(sanitized.questions[0]!.presentation?.careerClubs?.[1]?.name, '');
+  assert.equal(sanitized.questions[0]!.presentation?.careerClubs?.[1]?.logoUrl, undefined);
+  assert.equal(sanitized.questions[0]!.presentation?.careerClubs?.[1]?.missing, true);
+  assert.equal(sanitized.questions[0]!.presentation?.careerClubs?.[0]?.name, 'Ajax');
+});
+
 test('hides custom LMS text answers from the public daily bundle', () => {
   const puzzle = {
     questions: [

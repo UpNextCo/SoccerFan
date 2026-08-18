@@ -37,12 +37,29 @@ enum LMSQuestionType: String, Codable {
     case imageBadge = "image_badge"
     case customImage = "custom_image"
     case customQuestion = "custom_question"
+    case missingClub = "missing_club"
 }
 
 struct LMSCareerClub: Equatable, Codable {
     let name: String
     var logoUrl: String?
     var note: String?
+    var missing: Bool
+
+    init(name: String, logoUrl: String? = nil, note: String? = nil, missing: Bool = false) {
+        self.name = name
+        self.logoUrl = logoUrl
+        self.note = note
+        self.missing = missing
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        logoUrl = try c.decodeIfPresent(String.self, forKey: .logoUrl)
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+        missing = try c.decodeIfPresent(Bool.self, forKey: .missing) ?? false
+    }
 }
 
 struct LMSCluePlayer: Equatable, Codable {
@@ -86,6 +103,10 @@ struct LMSQuestion: Identifiable, Equatable, Codable {
     var subPrompt: String?
     let options: [LMSOption]
     var presentation: LMSPresentation?
+
+    var usesTypedSearch: Bool {
+        type == .customQuestion || (type == .missingClub && options.isEmpty)
+    }
 }
 
 struct LMSPrompt: Equatable, Codable {

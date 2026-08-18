@@ -31,7 +31,6 @@ export {
   zonesForTable,
   packGroupSizes,
   outcomeForRank,
-  divisionForLifetimePercentile,
   DIVISION_LABELS,
   WEEKLY_DIVISIONS,
   type WeeklyDivision,

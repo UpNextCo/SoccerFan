@@ -17,6 +17,7 @@ final class LastManStandingViewModel {
     var checkError: String?
     var customSearchQuery = ""
     var customSearchResults: [PlayerSearchResultDTO] = []
+    var customTeamSearchResults: [TeamSearchResultDTO] = []
     var isSearchingCustomAnswer = false
     /// When true, survivor grid won't animate position changes (X marks stamp in place first).
     var freezeSurvivorLayout = false
@@ -62,6 +63,7 @@ final class LastManStandingViewModel {
         checkError = nil
         customSearchQuery = ""
         customSearchResults = []
+        customTeamSearchResults = []
         isSearchingCustomAnswer = false
         freezeSurvivorLayout = false
         runToken = nil
@@ -127,8 +129,9 @@ final class LastManStandingViewModel {
 
     func searchCustomAnswer() async {
         let query = customSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard state.currentQuestion?.type == .customQuestion, query.count >= 2 else {
+        guard let question = state.currentQuestion, question.usesTypedSearch, query.count >= 2 else {
             customSearchResults = []
+            customTeamSearchResults = []
             return
         }
         isSearchingCustomAnswer = true
@@ -138,9 +141,16 @@ final class LastManStandingViewModel {
             return
         }
         do {
-            customSearchResults = try await APIClient.shared.searchPlayers(query: query)
+            if question.type == .missingClub {
+                customTeamSearchResults = try await APIClient.shared.searchTeams(query: query)
+                customSearchResults = []
+            } else {
+                customSearchResults = try await APIClient.shared.searchPlayers(query: query)
+                customTeamSearchResults = []
+            }
         } catch {
             customSearchResults = []
+            customTeamSearchResults = []
         }
     }
 
@@ -148,7 +158,16 @@ final class LastManStandingViewModel {
         guard let question = state.currentQuestion, question.type == .customQuestion else { return }
         customSearchQuery = ""
         customSearchResults = []
+        customTeamSearchResults = []
         await submit(optionId: "\(question.id)-\(player.id)")
+    }
+
+    func submitCustomClubAnswer(_ team: TeamSearchResultDTO) async {
+        guard let question = state.currentQuestion, question.type == .missingClub else { return }
+        customSearchQuery = ""
+        customSearchResults = []
+        customTeamSearchResults = []
+        await submit(optionId: "\(question.id)-\(team.id)")
     }
 
     private func handleCorrect() async {
@@ -277,6 +296,7 @@ final class LastManStandingViewModel {
     private func clearCustomSearch() {
         customSearchQuery = ""
         customSearchResults = []
+        customTeamSearchResults = []
         isSearchingCustomAnswer = false
     }
 }
@@ -314,7 +334,7 @@ struct LastManStandingView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .scrollDismissesKeyboard(.interactively)
 
-                    if state.currentQuestion?.type == .customQuestion,
+                    if state.currentQuestion?.usesTypedSearch == true,
                        state.status == .question {
                         customAnswerPanel
                     }
@@ -530,49 +550,101 @@ struct LastManStandingView: View {
         }
     }
 
+    private var isClubSearch: Bool {
+        state.currentQuestion?.type == .missingClub
+    }
+
     private var customAnswerPanel: some View {
         VStack(spacing: 8) {
             if viewModel.customSearchQuery
                 .trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
-                if viewModel.customSearchResults.isEmpty &&
-                    !viewModel.isSearchingCustomAnswer {
-                    Text("No players found")
+                let resultsEmpty = isClubSearch
+                    ? viewModel.customTeamSearchResults.isEmpty
+                    : viewModel.customSearchResults.isEmpty
+                if resultsEmpty && !viewModel.isSearchingCustomAnswer {
+                    Text(isClubSearch ? "No clubs found" : "No players found")
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textMuted)
                         .padding(.vertical, 6)
                 } else {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 5) {
-                            ForEach(Array(viewModel.customSearchResults.prefix(6))) { player in
-                                Button {
-                                    customSearchFocused = false
-                                    Task { await viewModel.submitCustomAnswer(player) }
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        PlayerAvatar(urlString: player.headshotUrl, size: 34) {
-                                            PlayerSilhouette(size: 34)
-                                        }
-                                        VStack(alignment: .leading, spacing: 1) {
-                                            Text(player.name)
-                                                .font(BKFont.headline(14))
-                                                .foregroundStyle(BKTheme.textPrimary)
-                                            Text(player.club)
-                                                .font(BKFont.caption(9))
+                            if isClubSearch {
+                                ForEach(Array(viewModel.customTeamSearchResults.prefix(6))) { team in
+                                    Button {
+                                        customSearchFocused = false
+                                        Task { await viewModel.submitCustomClubAnswer(team) }
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            TeamBadgeImage(
+                                                club: team.name,
+                                                league: "",
+                                                logoURL: team.logoUrl.flatMap(URL.init(string:)),
+                                                size: 34
+                                            ) {
+                                                Text(GuessWhoDisplay.clubAbbrev(team.name))
+                                                    .font(BKFont.caption(9))
+                                                    .foregroundStyle(BKTheme.textMuted)
+                                                    .frame(width: 34, height: 34)
+                                                    .background(BKTheme.cardElevated)
+                                                    .clipShape(Circle())
+                                            }
+                                            VStack(alignment: .leading, spacing: 1) {
+                                                Text(team.name)
+                                                    .font(BKFont.headline(14))
+                                                    .foregroundStyle(BKTheme.textPrimary)
+                                                if let country = team.country, !country.isEmpty {
+                                                    Text(country)
+                                                        .font(BKFont.caption(9))
+                                                        .foregroundStyle(BKTheme.textMuted)
+                                                        .lineLimit(1)
+                                                }
+                                            }
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 9, weight: .bold))
                                                 .foregroundStyle(BKTheme.textMuted)
-                                                .lineLimit(1)
                                         }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 9, weight: .bold))
-                                            .foregroundStyle(BKTheme.textMuted)
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 7)
+                                        .background(BKTheme.card.opacity(0.94))
+                                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                                     }
-                                    .padding(.horizontal, 11)
-                                    .padding(.vertical, 7)
-                                    .background(BKTheme.card.opacity(0.94))
-                                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                                    .buttonStyle(.plain)
+                                    .disabled(!state.isInteractive || viewModel.isChecking)
                                 }
-                                .buttonStyle(.plain)
-                                .disabled(!state.isInteractive || viewModel.isChecking)
+                            } else {
+                                ForEach(Array(viewModel.customSearchResults.prefix(6))) { player in
+                                    Button {
+                                        customSearchFocused = false
+                                        Task { await viewModel.submitCustomAnswer(player) }
+                                    } label: {
+                                        HStack(spacing: 10) {
+                                            PlayerAvatar(urlString: player.headshotUrl, size: 34) {
+                                                PlayerSilhouette(size: 34)
+                                            }
+                                            VStack(alignment: .leading, spacing: 1) {
+                                                Text(player.name)
+                                                    .font(BKFont.headline(14))
+                                                    .foregroundStyle(BKTheme.textPrimary)
+                                                Text(player.club)
+                                                    .font(BKFont.caption(9))
+                                                    .foregroundStyle(BKTheme.textMuted)
+                                                    .lineLimit(1)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundStyle(BKTheme.textMuted)
+                                        }
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 7)
+                                        .background(BKTheme.card.opacity(0.94))
+                                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(!state.isInteractive || viewModel.isChecking)
+                                }
                             }
                         }
                     }
@@ -584,7 +656,7 @@ struct LastManStandingView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(BKTheme.textMuted)
                 TextField(
-                    "Search player",
+                    isClubSearch ? "Search club" : "Search player",
                     text: Binding(
                         get: { viewModel.customSearchQuery },
                         set: { viewModel.customSearchQuery = $0 }

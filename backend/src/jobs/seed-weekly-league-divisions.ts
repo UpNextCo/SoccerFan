@@ -1,5 +1,5 @@
 /**
- * One-time launch seed: place existing users into pyramid divisions by lifetime XP percentile.
+ * One-time launch seed: put every user in Sunday League.
  * Does NOT create weekly tables — those form when a user first earns XP in the week.
  *
  *   DATABASE_URL=... npm run job:seed-weekly-league-divisions
@@ -7,49 +7,38 @@
  *   DATABASE_URL=... npm run job:seed-weekly-league-divisions -- --force
  */
 import 'dotenv/config';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users } from '../db/schema.js';
-import {
-  divisionForLifetimePercentile,
-  getAppMeta,
-  setAppMeta,
-} from '../services/leagueService.js';
+import { getAppMeta, setAppMeta } from '../services/leagueService.js';
 
 const DRY = process.argv.includes('--dry');
 const FORCE = process.argv.includes('--force');
-const META_KEY = 'weekly_league_divisions_seeded';
+const META_KEY = 'weekly_league_launch_sunday';
 
 async function main() {
   const existing = await getAppMeta(META_KEY);
   if (existing === '1' && !FORCE) {
-    console.log('Seed already applied (app_meta.weekly_league_divisions_seeded=1). Pass --force to re-run.');
+    console.log('Seed already applied (app_meta.weekly_league_launch_sunday=1). Pass --force to re-run.');
     process.exit(0);
   }
 
-  const rows = (await db.execute(sql`
-    SELECT u.id, COALESCE(p.xp, 0)::int AS xp
-    FROM users u
-    LEFT JOIN user_progress p ON p.user_id = u.id
-    WHERE COALESCE(p.xp, 0) > 0
-    ORDER BY xp DESC, u.id ASC
-  `)) as unknown as Array<{ id: string; xp: number }>;
+  const before = (await db.execute(sql`
+    SELECT current_division AS division, COUNT(*)::int AS n
+    FROM users
+    GROUP BY current_division
+    ORDER BY n DESC
+  `)) as unknown as Array<{ division: string; n: number }>;
 
-  console.log(`Seeding divisions for ${rows.length} users with XP > 0${DRY ? ' (DRY)' : ''}`);
-
-  const counts: Record<string, number> = {};
-  for (let i = 0; i < rows.length; i += 1) {
-    const division = divisionForLifetimePercentile(i, rows.length);
-    counts[division] = (counts[division] ?? 0) + 1;
-    if (DRY) continue;
-    await db.update(users).set({ currentDivision: division }).where(eq(users.id, rows[i]!.id));
-  }
-
-  console.table(counts);
+  console.log(`Resetting all users to sunday_league${DRY ? ' (DRY)' : ''}`);
+  console.table(Object.fromEntries(before.map((row) => [row.division, row.n])));
 
   if (!DRY) {
+    await db.execute(sql`
+      UPDATE users SET current_division = 'sunday_league'
+      WHERE current_division <> 'sunday_league'
+    `);
     await setAppMeta(META_KEY, '1');
-    console.log('Marked weekly_league_divisions_seeded=1');
+    console.log('Marked weekly_league_launch_sunday=1');
   }
   process.exit(0);
 }

@@ -2,7 +2,7 @@
  * Weekly pyramid league — division ladder, zone math, London week helpers.
  */
 
-export const COHORT_SIZE = 30;
+export const COHORT_SIZE = 20;
 
 export const WEEKLY_DIVISIONS = [
   'sunday_league',
@@ -62,15 +62,15 @@ export interface LeagueZones {
 
 /**
  * Promotion / relegation band sizes for a table of N players.
- * N=30 → 5/5. Smaller tables ≈17% each, capped so a mid-band remains.
+ * Full table (20) → top 5 promote / bottom 5 relegate. Smaller tables keep 5/5
+ * until a mid-band would disappear, then shrink both sides equally.
  */
 export function zoneCounts(tableSize: number): { promote: number; relegate: number } {
   const n = Math.max(0, Math.floor(tableSize));
   if (n <= 0) return { promote: 0, relegate: 0 };
-  if (n === 30) return { promote: 5, relegate: 5 };
 
-  let promote = Math.round(n * 0.17);
-  let relegate = Math.round(n * 0.17);
+  let promote = 5;
+  let relegate = 5;
   const maxMove = Math.max(0, Math.floor((n - 1) / 2));
   promote = Math.min(promote, maxMove);
   relegate = Math.min(relegate, maxMove);
@@ -196,22 +196,6 @@ export function londonDateString(instant: Date = new Date()): string {
   const m = parts.find((p) => p.type === 'month')?.value;
   const d = parts.find((p) => p.type === 'day')?.value;
   return `${y}-${m}-${d}`;
-}
-
-/**
- * Lifetime-XP percentile → launch division.
- * Top 5% CL, next 10% PL, 15% Champ, 15% L1, 15% L2, 20% Non-League, bottom 20% Sunday.
- */
-export function divisionForLifetimePercentile(rankIndex0: number, total: number): WeeklyDivision {
-  if (total <= 0) return 'sunday_league';
-  const pct = (rankIndex0 + 0.5) / total; // 0 = best
-  if (pct <= 0.05) return 'champions_league';
-  if (pct <= 0.15) return 'premier_league';
-  if (pct <= 0.3) return 'championship';
-  if (pct <= 0.45) return 'league_one';
-  if (pct <= 0.6) return 'league_two';
-  if (pct <= 0.8) return 'non_league';
-  return 'sunday_league';
 }
 
 export function formatStatusLine(input: {

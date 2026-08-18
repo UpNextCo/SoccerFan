@@ -12,12 +12,28 @@ type Opt = {
   position?: string
 }
 
+type CareerClub = {
+  name: string
+  logoUrl?: string
+  note?: 'loan'
+  missing?: boolean
+}
+
+type CluePlayer = {
+  id?: string
+  name: string
+  headshotUrl?: string
+  nationality?: string
+  position?: string
+}
+
 type Presentation = {
   layout?: string
   imageUrl?: string
   imageBlur?: number
-  careerClubs?: Array<{ name: string; logoUrl?: string; note?: 'loan' }>
+  careerClubs?: CareerClub[]
   careerPathVersion?: 2
+  cluePlayers?: CluePlayer[]
   [k: string]: unknown
 }
 
@@ -57,9 +73,20 @@ const QUESTION_TYPES = [
   'which_club',
   'image_badge',
   'custom_image',
+  'missing_club',
   'custom_question',
 ] as const
 type QuestionType = (typeof QUESTION_TYPES)[number]
+type AnswerFormat = 'multiple_choice' | 'search'
+type McSnapshot = {
+  type: Exclude<QuestionType, 'custom_question'>
+  options: Opt[]
+  presentation?: Presentation
+  correctOptionId?: string
+  reveal?: string
+}
+
+const CONTENT_TYPES = QUESTION_TYPES.filter((type) => type !== 'custom_question')
 
 const FRIENDLY_TYPES: Record<QuestionType, string> = {
   higher_lower: 'Higher or lower',
@@ -68,36 +95,68 @@ const FRIENDLY_TYPES: Record<QuestionType, string> = {
   which_club: 'Which club?',
   image_badge: 'Image badge',
   custom_image: 'Custom image',
-  custom_question: 'Custom question',
+  missing_club: 'Missing club',
+  custom_question: 'Type / search',
 }
+
+const PLAYER_OPTION_ID =
+  /-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function isQuestionType(value: string): value is QuestionType {
   return QUESTION_TYPES.some((type) => type === value)
+}
+
+function isContentType(value: string): value is Exclude<QuestionType, 'custom_question'> {
+  return CONTENT_TYPES.some((type) => type === value)
 }
 
 function friendlyType(type: string): string {
   return isQuestionType(type) ? FRIENDLY_TYPES[type] : type.replaceAll('_', ' ')
 }
 
-function expectedOptionCount(type: string): number {
-  return type === 'higher_lower' ? 2 : type === 'custom_question' ? 1 : 4
+function expectedOptionCount(question: Q): number {
+  if (question.type === 'higher_lower') return 2
+  if (question.type === 'custom_question') return 1
+  if (question.type === 'missing_club' && question.options.length === 1) return 1
+  return 4
 }
 
 function makeOptionId(questionId: string, key: string): string {
   return `${questionId}-${key}`
 }
 
-function hasSelectedPlayerAnswer(question: Q): boolean {
-  if (question.type !== 'custom_question') return true
-  return /-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    .test(question.options[0]?.id ?? '')
+function isSearchQuestion(question: Q): boolean {
+  return question.type === 'custom_question' ||
+    (question.type === 'missing_club' && question.options.length === 1)
+}
+
+function hasPlayerOptionId(optionId: string): boolean {
+  return PLAYER_OPTION_ID.test(optionId)
+}
+
+function hasTeamOptionId(optionId: string): boolean {
+  return /-\d+$/.test(optionId)
+}
+
+function hasSelectedSearchAnswer(question: Q): boolean {
+  if (question.type === 'custom_question') {
+    return hasPlayerOptionId(question.options[0]?.id ?? '')
+  }
+  if (question.type === 'missing_club' && question.options.length === 1) {
+    return hasTeamOptionId(question.options[0]?.id ?? '')
+  }
+  return true
 }
 
 function isClubQuestion(q: Q): boolean {
-  if (q.type === 'which_club' || q.type === 'image_badge') return true
+  if (q.type === 'which_club' || q.type === 'image_badge' || q.type === 'missing_club') return true
   if (q.type !== 'odd_one_out') return false
   const sub = q.subPrompt?.toLowerCase() ?? ''
   return sub.includes('club')
+}
+
+function missingClubFromPath(clubs: CareerClub[] | undefined): CareerClub | undefined {
+  return clubs?.find((club) => club.missing)
 }
 
 async function prepareImageUpload(file: File): Promise<{ fileBase64: string; mimeType: string }> {
@@ -158,6 +217,7 @@ export function LmsEditor({
 
   // Keep latest puzzle/answer for async pick handlers (avoid stale closures wiping media).
   const latestRef = useRef({ p, a })
+  const mcSnapshots = useRef(new Map<string, McSnapshot>())
   const revealSeq = useRef(0)
   const [revealBusyFor, setRevealBusyFor] = useState<string | null>(null)
   useEffect(() => {
@@ -219,27 +279,79 @@ export function LmsEditor({
     commit({ ...curP, questions: nextQs }, curA)
   }
 
-  function setQuestionType(question: Q, type: QuestionType) {
-    const defaultLayout: Record<QuestionType, string> = {
-      higher_lower: 'two_up',
-      career_path: 'stack',
-      odd_one_out: 'grid',
-      which_club: 'grid',
-      image_badge: 'image_header',
-      custom_image: 'image_header',
-      custom_question: 'stack',
-    }
-    if (type === 'custom_question') {
-      const { p: curP, a: curA } = latestRef.current
-      const option = {
-        id: makeOptionId(question.id, 'choose-player'),
-        label: 'Choose player',
+  function rememberMultipleChoice(question: Q) {
+    if (isSearchQuestion(question)) return
+    const answerRow = latestRef.current.a.questions.find((item) => item.questionId === question.id)
+    mcSnapshots.current.set(question.id, {
+      type: isContentType(question.type) ? question.type : 'odd_one_out',
+      options: question.options,
+      presentation: question.presentation,
+      correctOptionId: answerRow?.correctOptionId,
+      reveal: answerRow?.reveal,
+    })
+  }
+
+  function setAnswerFormat(question: Q, format: AnswerFormat) {
+    if (format === 'search') {
+      if (isSearchQuestion(question)) return
+      rememberMultipleChoice(question)
+      const answerRow = latestRef.current.a.questions.find((item) => item.questionId === question.id)
+      const correct = question.options.find((option) => option.id === answerRow?.correctOptionId)
+      if (question.type === 'missing_club') {
+        const missing = missingClubFromPath(question.presentation?.careerClubs)
+        const option =
+          correct && hasTeamOptionId(correct.id)
+            ? { ...correct }
+            : missing?.name
+              ? {
+                  id: makeOptionId(question.id, 'choose-club'),
+                  label: missing.name,
+                  teamLogoUrl: missing.logoUrl,
+                }
+              : {
+                  id: makeOptionId(question.id, 'choose-club'),
+                  label: 'Choose club',
+                }
+        const { p: curP, a: curA } = latestRef.current
+        const nextQuestions = sortedQuestions(curP).map((item) =>
+          item.id === question.id
+            ? {
+                ...item,
+                type: 'missing_club' as const,
+                options: [option],
+                presentation: { ...(item.presentation ?? {}), layout: 'stack' },
+              }
+            : item
+        )
+        const existing = curA.questions.find((item) => item.questionId === question.id)
+        const nextRow: Ans = {
+          ...(existing ?? { questionId: question.id }),
+          questionId: question.id,
+          correctOptionId: option.id,
+          reveal: option.label === 'Choose club' ? existing?.reveal ?? '' : option.label,
+        }
+        const nextAnswers = existing
+          ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+          : [...curA.questions, nextRow]
+        commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+        return
       }
+      const keepPlayer =
+        correct &&
+        hasPlayerOptionId(correct.id) &&
+        !isClubQuestion(question)
+      const option = keepPlayer
+        ? { ...correct }
+        : {
+            id: makeOptionId(question.id, 'choose-player'),
+            label: 'Choose player',
+          }
+      const { p: curP, a: curA } = latestRef.current
       const nextQuestions = sortedQuestions(curP).map((item) =>
         item.id === question.id
           ? {
               ...item,
-              type,
+              type: 'custom_question' as const,
               options: [option],
               presentation: { layout: 'stack' },
             }
@@ -250,7 +362,159 @@ export function LmsEditor({
         ...(existing ?? { questionId: question.id }),
         questionId: question.id,
         correctOptionId: option.id,
-        reveal: option.label,
+        reveal: keepPlayer ? option.label : existing?.reveal ?? '',
+      }
+      const nextAnswers = existing
+        ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+        : [...curA.questions, nextRow]
+      commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+      return
+    }
+
+    if (!isSearchQuestion(question)) return
+    const snapshot = mcSnapshots.current.get(question.id)
+    if (snapshot) {
+      const { p: curP, a: curA } = latestRef.current
+      const nextQuestions = sortedQuestions(curP).map((item) =>
+        item.id === question.id
+          ? {
+              ...item,
+              type: snapshot.type,
+              options: snapshot.options,
+              presentation: snapshot.presentation,
+            }
+          : item
+      )
+      const existing = curA.questions.find((item) => item.questionId === question.id)
+      const restoredCorrect =
+        snapshot.correctOptionId &&
+        snapshot.options.some((option) => option.id === snapshot.correctOptionId)
+          ? snapshot.correctOptionId
+          : snapshot.options[0]?.id ?? ''
+      const nextRow: Ans = {
+        ...(existing ?? { questionId: question.id }),
+        questionId: question.id,
+        correctOptionId: restoredCorrect,
+        reveal: snapshot.reveal ?? existing?.reveal ?? '',
+      }
+      const nextAnswers = existing
+        ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+        : [...curA.questions, nextRow]
+      commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+      return
+    }
+    if (question.type === 'missing_club') {
+      const missing = missingClubFromPath(question.presentation?.careerClubs)
+      const options = Array.from({ length: 4 }, (_, index) => ({
+        id: makeOptionId(question.id, `club-${index + 1}`),
+        label: index === 0 && missing?.name ? missing.name : `Club ${index + 1}`,
+        teamLogoUrl: index === 0 ? missing?.logoUrl : undefined,
+      }))
+      const { p: curP, a: curA } = latestRef.current
+      const nextQuestions = sortedQuestions(curP).map((item) =>
+        item.id === question.id
+          ? {
+              ...item,
+              type: 'missing_club' as const,
+              options,
+              presentation: { ...(item.presentation ?? {}), layout: 'stack' },
+            }
+          : item
+      )
+      const existing = curA.questions.find((item) => item.questionId === question.id)
+      const nextRow: Ans = {
+        ...(existing ?? { questionId: question.id }),
+        questionId: question.id,
+        correctOptionId: options[0]!.id,
+        reveal: missing?.name || existing?.reveal || '',
+      }
+      const nextAnswers = existing
+        ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+        : [...curA.questions, nextRow]
+      commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+      return
+    }
+    const options = Array.from({ length: 4 }, (_, index) => ({
+      id: makeOptionId(question.id, `option-${index + 1}`),
+      label: `Option ${index + 1}`,
+    }))
+    const { p: curP, a: curA } = latestRef.current
+    const nextQuestions = sortedQuestions(curP).map((item) =>
+      item.id === question.id
+        ? {
+            ...item,
+            type: 'odd_one_out' as const,
+            options,
+            presentation: { layout: 'grid' },
+          }
+        : item
+    )
+    const existing = curA.questions.find((item) => item.questionId === question.id)
+    const nextRow: Ans = {
+      ...(existing ?? { questionId: question.id }),
+      questionId: question.id,
+      correctOptionId: options[0]!.id,
+      reveal: existing?.reveal ?? '',
+    }
+    const nextAnswers = existing
+      ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+      : [...curA.questions, nextRow]
+    commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+  }
+
+  function setQuestionType(question: Q, type: QuestionType) {
+    const defaultLayout: Record<QuestionType, string> = {
+      higher_lower: 'two_up',
+      career_path: 'stack',
+      odd_one_out: 'grid',
+      which_club: 'grid',
+      image_badge: 'image_header',
+      custom_image: 'image_header',
+      missing_club: 'stack',
+      custom_question: 'stack',
+    }
+    if (type === 'custom_question') {
+      setAnswerFormat(question, 'search')
+      return
+    }
+    if (type === 'missing_club') {
+      const existingClubs = question.presentation?.careerClubs ?? []
+      const clubs =
+        existingClubs.length >= 3
+          ? existingClubs.map((club, index) => ({
+              ...club,
+              missing: index === Math.floor((existingClubs.length - 1) / 2) ? true : undefined,
+            }))
+          : [{ name: '' }, { name: '', missing: true }, { name: '' }]
+      const missing = missingClubFromPath(clubs)
+      const options = Array.from({ length: 4 }, (_, index) => ({
+        id: makeOptionId(question.id, `club-${index + 1}`),
+        label: index === 0 && missing?.name ? missing.name : `Club ${index + 1}`,
+        teamLogoUrl: index === 0 ? missing?.logoUrl : undefined,
+      }))
+      const { p: curP, a: curA } = latestRef.current
+      const nextQuestions = sortedQuestions(curP).map((item) =>
+        item.id === question.id
+          ? {
+              ...item,
+              type,
+              prompt: item.prompt.trim() ? item.prompt : 'Guess the missing club',
+              options,
+              presentation: {
+                layout: 'stack',
+                careerClubs: clubs,
+                careerPathVersion: 2 as const,
+                cluePlayers: item.presentation?.cluePlayers,
+              },
+            }
+          : item
+      )
+      const existing = curA.questions.find((item) => item.questionId === question.id)
+      const nextRow: Ans = {
+        ...(existing ?? { questionId: question.id }),
+        questionId: question.id,
+        correctOptionId: options[0]!.id,
+        reveal: missing?.name || existing?.reveal || '',
       }
       const nextAnswers = existing
         ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
@@ -559,7 +823,9 @@ export function LmsEditor({
     const { a: curA } = latestRef.current
     const ans = curA.questions.find((x) => x.questionId === q.id)
     const willBeCorrect =
-      ans?.correctOptionId === oldOpt.id || ans?.correctOptionId === nextOpt.id
+      ans?.correctOptionId === oldOpt.id ||
+      ans?.correctOptionId === nextOpt.id ||
+      (q.type === 'missing_club' && q.options.length === 1)
 
     const presentation =
       q.type === 'image_badge' && willBeCorrect
@@ -577,6 +843,20 @@ export function LmsEditor({
         : undefined
 
     replaceOption(q.id, oldOpt.id, nextOpt, { presentation, answerPatch })
+    if (q.type === 'missing_club' && willBeCorrect) {
+      const latest = sortedQuestions(latestRef.current.p).find((item) => item.id === q.id) ?? q
+      const clubs = [...(latest.presentation?.careerClubs ?? [])]
+      const missingIndex = clubs.findIndex((club) => club.missing)
+      if (missingIndex >= 0) {
+        clubs[missingIndex] = {
+          ...clubs[missingIndex],
+          name: team.name,
+          logoUrl: team.logoUrl,
+          missing: true,
+        }
+        setCareerClubs(latest, clubs)
+      }
+    }
     await refreshReveal(q.id)
   }
 
@@ -585,6 +865,71 @@ export function LmsEditor({
     const clubs = [...(q.presentation?.careerClubs ?? [])]
     clubs[clubIdx] = { ...clubs[clubIdx], name: team.name, logoUrl: team.logoUrl }
     setCareerClubs(q, clubs)
+    if (q.type === 'missing_club' && clubs[clubIdx]?.missing) {
+      applyMissingClubAnswer(q, team)
+    }
+  }
+
+  function markMissingClub(q: Q, clubIdx: number) {
+    const clubs = (q.presentation?.careerClubs ?? []).map((club, index) => ({
+      ...club,
+      missing: index === clubIdx ? true : undefined,
+    }))
+    setCareerClubs(q, clubs)
+    const selected = clubs[clubIdx]
+    if (selected?.name) {
+      applyMissingClubAnswer(q, {
+        id: undefined,
+        name: selected.name,
+        logoUrl: selected.logoUrl,
+      })
+    }
+  }
+
+  function applyMissingClubAnswer(
+    q: Q,
+    team: { id?: number; name: string; logoUrl?: string }
+  ) {
+    const { p: curP, a: curA } = latestRef.current
+    const current = sortedQuestions(curP).find((item) => item.id === q.id) ?? q
+    const answerRow = curA.questions.find((item) => item.questionId === q.id)
+    const targetId = answerRow?.correctOptionId ?? current.options[0]?.id
+    if (!targetId) return
+    const nextId = team.id != null ? makeOptionId(q.id, String(team.id)) : targetId
+    const nextOpt: Opt = {
+      id: nextId,
+      label: team.name,
+      teamLogoUrl: team.logoUrl,
+    }
+    replaceOption(q.id, targetId, nextOpt, {
+      answerPatch: { correctOptionId: nextId, reveal: team.name },
+    })
+  }
+
+  function pickSubjectPlayer(q: Q, hit: AdminPlayerHit) {
+    updateQuestion(q.slot, {
+      presentation: {
+        ...(q.presentation ?? {}),
+        cluePlayers: [
+          {
+            id: hit.id,
+            name: hit.name,
+            headshotUrl: hit.headshotUrl,
+            nationality: hit.nationality,
+            position: hit.position,
+          },
+        ],
+      },
+    })
+  }
+
+  function clearSubjectPlayer(q: Q) {
+    updateQuestion(q.slot, {
+      presentation: {
+        ...(q.presentation ?? {}),
+        cluePlayers: undefined,
+      },
+    })
   }
 
   function setCareerClubs(q: Q, clubs: NonNullable<Presentation['careerClubs']>) {
@@ -601,17 +946,22 @@ export function LmsEditor({
           }
         : question
     )
+    const latestQuestion = sortedQuestions(currentPuzzle).find((item) => item.id === q.id) ?? q
     const currentQuestionAnswer = currentAnswer.questions.find((item) => item.questionId === q.id)
-    const correctPlayer = q.options.find(
+    const correctLabel = latestQuestion.options.find(
       (option) => option.id === currentQuestionAnswer?.correctOptionId
     )?.label
     const path = clubs
       .filter((club) => club.name.trim())
-      .map((club) => `${club.name}${club.note === 'loan' ? ' (loan)' : ''}`)
+      .map((club) =>
+        club.missing
+          ? '???'
+          : `${club.name}${club.note === 'loan' ? ' (loan)' : ''}`
+      )
       .join(' → ')
     const nextAnswers = currentAnswer.questions.map((item) =>
-      item.questionId === q.id && correctPlayer
-        ? { ...item, reveal: `${correctPlayer} — ${path}` }
+      item.questionId === q.id && correctLabel
+        ? { ...item, reveal: `${correctLabel} — ${path}` }
         : item
     )
     commit(
@@ -631,6 +981,10 @@ export function LmsEditor({
     const clubs = [...(q.presentation?.careerClubs ?? [])]
     if (clubs.length <= 3) return
     clubs.splice(index, 1)
+    if (q.type === 'missing_club' && !clubs.some((club) => club.missing) && clubs[0]) {
+      const mid = Math.floor((clubs.length - 1) / 2)
+      clubs[mid] = { ...clubs[mid], missing: true }
+    }
     setCareerClubs(q, clubs)
   }
 
@@ -691,13 +1045,17 @@ export function LmsEditor({
         const ans = correctFor(q)
         const clubMode = isClubQuestion(q)
         const hasCorrect = Boolean(ans && q.options.some((option) => option.id === ans.correctOptionId))
-        const expectedOptions = expectedOptionCount(q.type)
+        const expectedOptions = expectedOptionCount(q)
         const optionCountValid = q.options.length === expectedOptions
+        const missingClubReady =
+          q.type !== 'missing_club' ||
+          Boolean(missingClubFromPath(q.presentation?.careerClubs)?.name.trim())
         const complete = Boolean(
           q.prompt.trim() &&
           hasCorrect &&
           optionCountValid &&
-          hasSelectedPlayerAnswer(q)
+          hasSelectedSearchAnswer(q) &&
+          missingClubReady
         )
         return (
           <article key={q.id} className="q-card lms-question-card">
@@ -719,19 +1077,44 @@ export function LmsEditor({
             </header>
 
             <div className="lms-question-controls">
-              <label className="field">
-                Question type
-                <select
-                  value={q.type}
-                  disabled={locked}
-                  onChange={(event) => {
-                    if (isQuestionType(event.target.value)) setQuestionType(q, event.target.value)
-                  }}
-                >
-                  {!isQuestionType(q.type) && <option value={q.type}>{friendlyType(q.type)}</option>}
-                  {QUESTION_TYPES.map((type) => <option key={type} value={type}>{FRIENDLY_TYPES[type]}</option>)}
-                </select>
-              </label>
+              <div className="field lms-answer-format">
+                <span>Answer format</span>
+                <div className="lms-format-toggle" role="group" aria-label="Answer format">
+                  <button
+                    type="button"
+                    className={!isSearchQuestion(q) ? 'selected' : ''}
+                    disabled={locked}
+                    aria-pressed={!isSearchQuestion(q)}
+                    onClick={() => setAnswerFormat(q, 'multiple_choice')}
+                  >
+                    Multiple choice
+                  </button>
+                  <button
+                    type="button"
+                    className={isSearchQuestion(q) ? 'selected' : ''}
+                    disabled={locked}
+                    aria-pressed={isSearchQuestion(q)}
+                    onClick={() => setAnswerFormat(q, 'search')}
+                  >
+                    Type / search
+                  </button>
+                </div>
+              </div>
+              {!isSearchQuestion(q) && (
+                <label className="field">
+                  Question type
+                  <select
+                    value={isContentType(q.type) ? q.type : 'odd_one_out'}
+                    disabled={locked}
+                    onChange={(event) => {
+                      if (isContentType(event.target.value)) setQuestionType(q, event.target.value)
+                    }}
+                  >
+                    {!isContentType(q.type) && <option value={q.type}>{friendlyType(q.type)}</option>}
+                    {CONTENT_TYPES.map((type) => <option key={type} value={type}>{FRIENDLY_TYPES[type]}</option>)}
+                  </select>
+                </label>
+              )}
               <label className="lms-signature-control">
                 <input type="checkbox" checked={q.signature ?? false} disabled={locked} onChange={(event) => updateQuestion(q.slot, { signature: event.target.checked })} />
                 Signature question
@@ -817,20 +1200,69 @@ export function LmsEditor({
               </div>
             )}
 
-            {q.type === 'career_path' && (
+            {(q.type === 'career_path' || q.type === 'missing_club') && (
               <fieldset disabled={locked} className="options">
-                <legend>Career path ({q.presentation?.careerClubs?.length ?? 0}/6)</legend>
-                <p className="muted tiny">Keep the clubs in chronological order. Mark temporary moves as loans.</p>
+                <legend>
+                  {q.type === 'missing_club' ? 'Career path with a missing club' : 'Career path'}
+                  {' '}({q.presentation?.careerClubs?.length ?? 0}/6)
+                </legend>
+                {q.type === 'missing_club' && (
+                  <>
+                    <p className="muted tiny">
+                      Show the path with one club blanked out. Mark the hidden club, then add
+                      multiple-choice clubs or let players search for it.
+                    </p>
+                    <div className="lms-subject-player">
+                      <EntityPicker
+                        kind="player"
+                        label="Player (optional)"
+                        valueLabel={q.presentation?.cluePlayers?.[0]?.name}
+                        imageUrl={q.presentation?.cluePlayers?.[0]?.headshotUrl}
+                        nationality={q.presentation?.cluePlayers?.[0]?.nationality}
+                        disabled={locked}
+                        onPickPlayer={(hit) => pickSubjectPlayer(q, hit)}
+                      />
+                      {q.presentation?.cluePlayers?.[0] && (
+                        <button
+                          type="button"
+                          className="ghost tiny-btn"
+                          disabled={locked}
+                          onClick={() => clearSubjectPlayer(q)}
+                        >
+                          Clear player
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+                {q.type === 'career_path' && (
+                  <p className="muted tiny">Keep the clubs in chronological order. Mark temporary moves as loans.</p>
+                )}
                 {(q.presentation?.careerClubs ?? []).map((club, idx, clubs) => (
-                  <div className="career-club-editor-row" key={`${q.id}-club-${idx}-${club.name}-${club.logoUrl ?? ''}`}>
+                  <div
+                    className={`career-club-editor-row${club.missing ? ' missing' : ''}`}
+                    key={`${q.id}-club-${idx}-${club.name}-${club.logoUrl ?? ''}`}
+                  >
                     <EntityPicker
                       kind="team"
-                      label={`Club ${idx + 1}`}
+                      label={club.missing ? `Club ${idx + 1} (missing)` : `Club ${idx + 1}`}
                       valueLabel={club.name || undefined}
                       imageUrl={club.logoUrl}
                       disabled={locked}
                       onPickTeam={(hit) => pickCareerClub(q, idx, hit)}
                     />
+                    {q.type === 'missing_club' && (
+                      <label className="career-loan-toggle">
+                        <input
+                          type="radio"
+                          name={`missing-club-${q.id}`}
+                          checked={Boolean(club.missing)}
+                          disabled={locked}
+                          onChange={() => markMissingClub(q, idx)}
+                        />
+                        Missing
+                      </label>
+                    )}
                     <label className="career-loan-toggle">
                       <input
                         type="checkbox"
@@ -858,30 +1290,54 @@ export function LmsEditor({
               </fieldset>
             )}
 
-            {q.type === 'custom_question' && (
+            {isSearchQuestion(q) && (
               <fieldset disabled={locked} className="options">
                 <legend>Correct answer</legend>
-                <p className="muted tiny">
-                  Players will type and search for this answer in the app.
-                </p>
-                {q.options[0] && (
-                  <EntityPicker
-                    key={`custom-answer-${q.options[0].id}-${q.options[0].label}`}
-                    kind="player"
-                    label="Player"
-                    valueLabel={
-                      hasSelectedPlayerAnswer(q) ? q.options[0].label : undefined
-                    }
-                    imageUrl={q.options[0].headshotUrl}
-                    nationality={q.options[0].nationality}
-                    disabled={locked}
-                    onPickPlayer={(hit) => pickPlayer(q, q.options[0]!, hit)}
-                  />
+                {q.type === 'missing_club' ? (
+                  <>
+                    <p className="muted tiny">
+                      Players type a club name and search, like Target Man. Choose the missing club.
+                    </p>
+                    {q.options[0] && (
+                      <EntityPicker
+                        key={`custom-club-${q.options[0].id}-${q.options[0].label}`}
+                        kind="team"
+                        label="Club"
+                        valueLabel={
+                          hasSelectedSearchAnswer(q) ? q.options[0].label : undefined
+                        }
+                        imageUrl={q.options[0].teamLogoUrl}
+                        disabled={locked}
+                        onPickTeam={(hit) => pickClub(q, q.options[0]!, hit)}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="muted tiny">
+                      Players type a name and search, like Target Man. Choose the player that should
+                      count as correct.
+                    </p>
+                    {q.options[0] && (
+                      <EntityPicker
+                        key={`custom-answer-${q.options[0].id}-${q.options[0].label}`}
+                        kind="player"
+                        label="Player"
+                        valueLabel={
+                          hasSelectedSearchAnswer(q) ? q.options[0].label : undefined
+                        }
+                        imageUrl={q.options[0].headshotUrl}
+                        nationality={q.options[0].nationality}
+                        disabled={locked}
+                        onPickPlayer={(hit) => pickPlayer(q, q.options[0]!, hit)}
+                      />
+                    )}
+                  </>
                 )}
               </fieldset>
             )}
 
-            {q.type !== 'custom_question' && <fieldset disabled={locked} className="options">
+            {!isSearchQuestion(q) && <fieldset disabled={locked} className="options">
               <legend>Possible answers ({q.options.length}/{expectedOptions})</legend>
               {!optionCountValid && (
                 <p className="editor-inline-warning">

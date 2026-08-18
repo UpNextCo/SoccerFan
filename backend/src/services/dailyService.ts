@@ -792,11 +792,28 @@ export function sanitizePublicPuzzle(modeId: string, puzzleJson: unknown): unkno
     if (!Array.isArray(puzzle.questions)) return puzzleJson;
     return {
       ...puzzle,
-      questions: puzzle.questions.map((question) =>
-        question.type === 'custom_question'
-          ? { ...question, options: [] }
-          : question
-      ),
+      questions: puzzle.questions.map((question) => {
+        if (question.type === 'custom_question') {
+          return { ...question, options: [] };
+        }
+        if (question.type !== 'missing_club') return question;
+        const presentation = question.presentation as
+          | {
+              careerClubs?: Array<{ name?: string; logoUrl?: string; missing?: boolean; [key: string]: unknown }>;
+              [key: string]: unknown;
+            }
+          | undefined;
+        const careerClubs = presentation?.careerClubs?.map((club) =>
+          club.missing ? { ...club, name: '', logoUrl: undefined } : club
+        );
+        return {
+          ...question,
+          options: question.options?.length === 1 ? [] : question.options,
+          presentation: presentation
+            ? { ...presentation, careerClubs: careerClubs ?? presentation.careerClubs }
+            : presentation,
+        };
+      }),
     };
   }
 

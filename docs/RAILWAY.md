@@ -60,7 +60,7 @@ npm run job:rollover-weekly-leagues
 
 Idempotent — safe if it runs twice. Finalizes the previous London week (promotion/relegation) and ensures the new week row exists. Tables fill lazily when players earn XP.
 
-One-time launch seed (existing users → divisions by lifetime XP percentile):
+One-time launch seed (every user starts in Sunday League):
 
 ```bash
 npm run job:seed-weekly-league-divisions

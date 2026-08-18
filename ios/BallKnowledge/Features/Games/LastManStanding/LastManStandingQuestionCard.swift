@@ -18,7 +18,7 @@ struct LastManStandingQuestionCard: View {
             let sub = question.subPrompt?.lowercased() ?? ""
             return sub.contains("clubs")
                 || (sub.contains("club") && !sub.contains("never played for"))
-        case .higherLower, .careerPath, .customImage, .customQuestion:
+        case .higherLower, .careerPath, .customImage, .customQuestion, .missingClub:
             return false
         }
     }
@@ -53,6 +53,8 @@ struct LastManStandingQuestionCard: View {
             }
         case .customQuestion:
             EmptyView()
+        case .missingClub:
+            missingClubBody
         case .oddOneOut, .whichClub:
             if showsClubOptions {
                 clubOptionGrid
@@ -166,6 +168,54 @@ struct LastManStandingQuestionCard: View {
         }
     }
 
+    @ViewBuilder
+    private var missingClubBody: some View {
+        VStack(spacing: Layout.blockSpacing) {
+            if let player = question.presentation?.cluePlayers?.first {
+                HStack(spacing: 12) {
+                    PlayerAvatar(urlString: player.headshotUrl, size: 44) {
+                        PlayerSilhouette(size: 44)
+                    }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(player.name)
+                            .font(BKFont.headline(17))
+                            .foregroundStyle(BKTheme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                        HStack(spacing: 6) {
+                            if let nationality = player.nationality, !nationality.isEmpty {
+                                Text(GuessWhoDisplay.nationalityFlag(nationality))
+                                    .font(.system(size: 14))
+                            }
+                            if let position = player.position, !position.isEmpty {
+                                Text(GuessWhoDisplay.positionAbbrev(position))
+                                    .font(BKFont.caption(10))
+                                    .foregroundStyle(BKTheme.textMuted)
+                            }
+                        }
+                    }
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, minHeight: 54)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 7)
+                .background(BKTheme.card.opacity(0.92))
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .overlay(
+                    LMSVisualStyle.cardStroke(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    )
+                )
+            }
+            if let clubs = question.presentation?.careerClubs, !clubs.isEmpty {
+                careerPathClubRow(clubs)
+            }
+            if !question.options.isEmpty {
+                clubOptionGrid
+            }
+        }
+    }
+
     private func careerPathClubRow(_ clubs: [LMSCareerClub]) -> some View {
         let metrics = careerPathMetrics(for: clubs.count)
         return HStack(spacing: metrics.spacing) {
@@ -176,21 +226,35 @@ struct LastManStandingQuestionCard: View {
                         .foregroundStyle(BKTheme.textMuted)
                 }
                 VStack(spacing: metrics.verticalSpacing) {
-                    TeamBadgeImage(club: club.name, league: "", logoURL: club.logoUrl.flatMap(URL.init(string:)), size: metrics.badgeSize) {
-                        Text(GuessWhoDisplay.clubAbbrev(club.name))
-                            .font(.system(size: metrics.labelSize, weight: .bold))
+                    if club.missing {
+                        Text("?")
+                            .font(.system(size: metrics.badgeSize * 0.55, weight: .bold, design: .rounded))
                             .foregroundStyle(BKTheme.textMuted)
                             .frame(width: metrics.badgeSize, height: metrics.badgeSize)
                             .background(BKTheme.card.opacity(0.6))
                             .clipShape(Circle())
+                            .overlay(LMSVisualStyle.cardStroke(Circle()))
+                        Text("???")
+                            .font(BKFont.caption(metrics.labelSize))
+                            .foregroundStyle(BKTheme.textSecondary)
+                            .frame(width: metrics.labelWidth)
+                    } else {
+                        TeamBadgeImage(club: club.name, league: "", logoURL: club.logoUrl.flatMap(URL.init(string:)), size: metrics.badgeSize) {
+                            Text(GuessWhoDisplay.clubAbbrev(club.name))
+                                .font(.system(size: metrics.labelSize, weight: .bold))
+                                .foregroundStyle(BKTheme.textMuted)
+                                .frame(width: metrics.badgeSize, height: metrics.badgeSize)
+                                .background(BKTheme.card.opacity(0.6))
+                                .clipShape(Circle())
+                        }
+                        Text(club.name)
+                            .font(BKFont.caption(metrics.labelSize))
+                            .foregroundStyle(BKTheme.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.75)
+                            .frame(width: metrics.labelWidth)
                     }
-                    Text(club.name)
-                        .font(BKFont.caption(metrics.labelSize))
-                        .foregroundStyle(BKTheme.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.75)
-                        .frame(width: metrics.labelWidth)
                     if club.note == "loan" {
                         Text("LOAN")
                             .font(.system(size: metrics.loanSize, weight: .bold, design: .rounded))

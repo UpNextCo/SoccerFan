@@ -5,11 +5,12 @@ export type LMSQuestionType =
   | 'which_club'
   | 'image_badge'
   | 'custom_image'
-  | 'custom_question';
+  | 'custom_question'
+  | 'missing_club';
 
 export type LMSGeneratedQuestionType = Exclude<
   LMSQuestionType,
-  'custom_image' | 'custom_question'
+  'custom_image' | 'custom_question' | 'missing_club'
 >;
 
 export interface LMSOptionPublic {
@@ -25,6 +26,7 @@ export interface LMSCareerClubPublic {
   name: string;
   logoUrl?: string;
   note?: 'loan';
+  missing?: boolean;
 }
 
 export interface LMSCluePlayerPublic {

@@ -37,13 +37,16 @@ const lmsTypes = [
   'image_badge',
   'custom_image',
   'custom_question',
+  'missing_club',
 ] as const;
 const lmsPlayerOptionId = /-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const lmsTeamOptionId = /-\d+$/;
 const lmsOption = z.object({ id, label: text }).passthrough();
 const lmsCareerClub = z.object({
   name: text,
   logoUrl: z.string().optional(),
   note: z.literal('loan').optional(),
+  missing: z.boolean().optional(),
 }).passthrough();
 const lmsQuestion = z.object({
   id,
@@ -256,7 +259,10 @@ function validateLms(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzz
     const count =
       question.type === 'higher_lower'
         ? 2
-        : question.type === 'custom_question' ? 1 : 4;
+        : question.type === 'custom_question' ||
+            (question.type === 'missing_club' && question.options.length === 1)
+          ? 1
+          : 4;
     if (question.options.length !== count) issue(issues, `puzzleJson.questions.${index}.options`, `${question.type} requires exactly ${count} options.`);
     if (!unique(question.options.map((option) => option.id))) issue(issues, `puzzleJson.questions.${index}.options`, 'Option ids must be unique.');
     if (!unique(question.options.map((option) => option.label.trim().toLocaleLowerCase()))) {
@@ -283,7 +289,7 @@ function validateLms(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzz
         'Choose the correct player for this custom question.'
       );
     }
-    if (question.type === 'career_path') {
+    if (question.type === 'career_path' || question.type === 'missing_club') {
       const clubCount = question.presentation?.careerClubs?.length ?? 0;
       if (clubCount < 3 || clubCount > 6) {
         issue(
@@ -292,11 +298,28 @@ function validateLms(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzz
           'Career paths must contain between 3 and 6 clubs.'
         );
       }
-      if (question.presentation?.careerPathVersion !== 2) {
+      if (question.type === 'career_path' && question.presentation?.careerPathVersion !== 2) {
         issue(
           issues,
           `puzzleJson.questions.${index}.presentation.careerPathVersion`,
           'This career path uses the old three-club generator. Edit the path or regenerate the puzzle.'
+        );
+      }
+    }
+    if (question.type === 'missing_club') {
+      const clubs = question.presentation?.careerClubs ?? [];
+      const missingClubs = clubs.filter((club) => club.missing);
+      if (missingClubs.length !== 1) {
+        issue(
+          issues,
+          `puzzleJson.questions.${index}.presentation.careerClubs`,
+          'Mark exactly one club as the missing club.'
+        );
+      } else if (question.options.length === 1 && !lmsTeamOptionId.test(question.options[0]?.id ?? '')) {
+        issue(
+          issues,
+          `puzzleJson.questions.${index}.options.0`,
+          'Choose the missing club so players can search for it.'
         );
       }
     }
