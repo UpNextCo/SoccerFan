@@ -32,12 +32,11 @@ import { resolveCompletionScore } from './dailyScoring.js';
 import { isAcceptableCompletionDate, previousDay, resolveClientDailyDate, todayUTC } from '../utils/dailyDate.js';
 import type { DailyBundle, DailyCompleteResponse } from '../types.js';
 
-/** Live homepage catalog — matches iOS DailyPlayOrder.playableModes. */
+/** Live homepage catalog — matches iOS DailyPlayOrder.playableModes. Football Golf is defunct. */
 const GAME_MODES = [
   { id: 'football_bingo', title: 'FOOTBALL BINGO', subtitle: 'Fill the grid', playerCount: 12400, isAvailable: true },
   { id: 'one_more', title: 'ONE MORE', subtitle: 'Risk it for points', playerCount: 6400, isAvailable: true },
   { id: 'draft_master', title: 'DRAFT XI', subtitle: 'Build the highest-scoring XI', playerCount: 11300, isAvailable: true },
-  { id: 'football_golf', title: 'FOOTBALL GOLF', subtitle: '5 holes, name the answers', playerCount: 7600, isAvailable: true },
   { id: 'club_chain', title: 'CLUB CHAIN', subtitle: 'Link them by shared clubs', playerCount: 9200, isAvailable: true },
   { id: 'target_man', title: 'TARGET MAN', subtitle: 'Hit the stat target', playerCount: 15200, isAvailable: true },
   { id: 'last_man_standing', title: 'LAST MAN STANDING', subtitle: 'Survive the field', playerCount: 10100, isAvailable: true },
@@ -55,7 +54,6 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'football_bingo', title: 'FOOTBALL BINGO' },
   { modeId: 'one_more', title: 'ONE MORE' },
   { modeId: 'draft_master', title: 'DRAFT XI' },
-  { modeId: 'football_golf', title: 'FOOTBALL GOLF' },
   { modeId: 'club_chain', title: 'CLUB CHAIN' },
   { modeId: 'target_man', title: 'TARGET MAN' },
   { modeId: 'last_man_standing', title: 'LAST MAN STANDING' },
@@ -63,12 +61,11 @@ const BUNDLE_PUZZLE_MODES = [
   { modeId: 'darts_501', title: 'DARTS 501' },
 ] as const;
 
-/** All modes that count as one daily play on iOS (order matches client flow). */
+/** All modes that count as one daily play on iOS (order matches client flow). Football Golf is hidden. */
 export const DAILY_PLAYABLE_MODES = [
   'football_bingo',
   'one_more',
   'draft_master',
-  'football_golf',
   'club_chain',
   'target_man',
   'last_man_standing',
@@ -100,6 +97,25 @@ async function hasClearedDaily(userId: string, date: string): Promise<boolean> {
   return availableModes.every((modeId) => completed.has(modeId));
 }
 
+/** Award today's streak if the live set is already cleared (e.g. a retired mode was the last gap). */
+async function applyStreakIfDailyCleared(userId: string, playDate: string): Promise<void> {
+  const progressRows = await db
+    .select()
+    .from(userProgress)
+    .where(eq(userProgress.userId, userId))
+    .limit(1);
+  const progress = progressRows[0];
+  if (!progress || progress.lastPlayedDate === playDate) return;
+  if (!(await hasClearedDaily(userId, playDate))) return;
+
+  const newStreak =
+    progress.lastPlayedDate === previousDay(playDate) ? progress.streak + 1 : 1;
+  await db
+    .update(userProgress)
+    .set({ streak: newStreak, lastPlayedDate: playDate })
+    .where(eq(userProgress.userId, userId));
+}
+
 // ---- XP model ------------------------------------------------------------------------------------
 // One XP system across every game: a game's `score` IS its XP, earned incrementally per step and
 // clamped to the mode's effort-tiered maximum. A full loss earns 0 (no participation floor). The
@@ -128,6 +144,8 @@ export function maxXpForMode(modeId: string): number {
 }
 
 function computeXp(modeId: string, score: number, _guesses: number, _won: boolean): number {
+  // Hidden / defunct modes must not bank XP even if an older client still submits them.
+  if (modeId === 'football_golf') return 0;
   return Math.max(0, Math.min(maxXpForMode(modeId), Math.round(score)));
 }
 
@@ -559,7 +577,7 @@ async function migrateStaleBingo(date: string): Promise<void> {
 }
 
 async function ensureDailyPuzzles(date: string): Promise<void> {
-  // Keep migrations for live modes only — defunct Guess Who / Blind Rank / WC XI are no longer generated.
+  // Keep migrations for live modes only — defunct Guess Who / Blind Rank / WC XI / Golf are no longer generated.
   await migrateStaleDraftMaster(date);
   await migrateStaleBingo(date);
   await migrateStaleOneMore(date);
@@ -578,9 +596,6 @@ async function ensureDailyPuzzles(date: string): Promise<void> {
   }
   if (!existing.has('football_bingo')) {
     await ensureBingoPuzzle(date);
-  }
-  if (!existing.has('football_golf')) {
-    await ensureGolfPuzzle(date);
   }
   if (!existing.has('one_more')) {
     await ensureOneMorePuzzle(date);
@@ -745,6 +760,10 @@ export async function getDailyBundle(userId: string, clientDate?: string): Promi
   const availableModes = DAILY_PLAYABLE_MODES.filter((modeId) => puzzles.some((p) => p.modeId === modeId));
   const allComplete =
     availableModes.length > 0 && availableModes.every((modeId) => completedModeIds.includes(modeId));
+
+  if (allComplete) {
+    await applyStreakIfDailyCleared(userId, date);
+  }
 
   return {
     date,

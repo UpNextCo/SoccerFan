@@ -162,6 +162,14 @@ export function resolveMembershipDestination(
   return outcomeForRank(division, rank, tableSize);
 }
 
+/**
+ * Did not earn XP this week → no table seat. Drop one division (Sunday stays).
+ * Stops a CL/PL place being held by sitting out.
+ */
+export function nextDivisionIfInactive(division: WeeklyDivision): WeeklyDivision {
+  return relegateDivision(division);
+}
+
 /** Tie-break: higher XP, then earlier weekly_xp_reached_at, then user_id ASC. */
 export function compareWeeklyMembership(
   a: { weeklyXp: number; weeklyXpReachedAt: Date | null; userId: string },

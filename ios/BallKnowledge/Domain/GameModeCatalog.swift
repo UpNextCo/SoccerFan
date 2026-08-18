@@ -3,12 +3,12 @@ import Foundation
 /// Local source of truth for game mode tiles. Merges API metadata (counts, availability)
 /// with on-device ids/titles so renames work before the backend is redeployed.
 ///
-/// DEFUNCT (hidden from homepage): guessWho, worldCupXI, blindRank, footballTower — code kept elsewhere.
+/// DEFUNCT (hidden from homepage): guessWho, worldCupXI, blindRank, footballTower, footballGolf — code kept elsewhere.
 enum GameModeCatalog {
     private static let defaultPlayerCounts = [12400, 6400, 15200, 22100, 7600, 9800, 11300, 8900, 9200, 8700, 9100, 9800, 8700]
 
     private static let locallyAvailable: Set<GameModeID> = [
-        .footballBingo, .targetMan, .footballGolf, .oneMore, .draftMaster, .clubChain, .lastManStanding, .backYourself, .darts501,
+        .footballBingo, .targetMan, .oneMore, .draftMaster, .clubChain, .lastManStanding, .backYourself, .darts501,
     ]
 
     /// Maps retired API ids to their replacement mode.

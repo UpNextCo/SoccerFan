@@ -1,13 +1,13 @@
 import Foundation
 import SwiftUI
 
-// DEFUNCT modes (code retained, hidden from homepage daily): guessWho, worldCupXI, blindRank, footballTower.
+// DEFUNCT modes (code retained, hidden from homepage daily): guessWho, worldCupXI, blindRank, footballTower, footballGolf.
 enum GameModeID: String, CaseIterable, Identifiable {
     case footballBingo = "football_bingo"
     case oneMore = "one_more"
     case targetMan = "target_man"
     case guessWho = "guess_who" // DEFUNCT
-    case footballGolf = "football_golf"
+    case footballGolf = "football_golf" // DEFUNCT
     case blindRank = "blind_rank" // DEFUNCT
     case draftMaster = "draft_master"
     case worldCupXI = "world_cup_xi" // DEFUNCT
@@ -59,12 +59,11 @@ extension GameModeID {
 }
 
 enum DailyPlayOrder {
-    /// Modes shown on the homepage daily list (excludes defunct guessWho / worldCupXI / blindRank / footballTower).
+    /// Modes shown on the homepage daily list (excludes defunct guessWho / worldCupXI / blindRank / footballTower / footballGolf).
     static let playableModes: [GameModeID] = [
         .footballBingo,
         .oneMore,
         .draftMaster,
-        .footballGolf,
         .clubChain,
         .targetMan,
         .lastManStanding,
@@ -343,8 +342,8 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1500). Live nine-game total 9300. A full loss
-    /// earns 0 (no participation floor). Every game's on-screen score IS this XP.
+    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1500). Live eight-game total 8500. A full loss
+    /// earns 0 (no participation floor). Every game's on-screen score IS this XP. Hidden Football Golf awards 0.
     static let maxByMode: [String: Int] = [
         "guess_who": 800,
         "one_more": 900,
@@ -371,7 +370,8 @@ enum DailyXP {
     /// A game's `score` IS its XP. Clamp to the mode's ceiling; a full loss is 0. Mirror of the
     /// server `computeXp`. `guesses`/`won` are kept for call-site compatibility only.
     static func xp(mode: String, score: Int, guesses: Int = 1, won: Bool = true) -> Int {
-        max(0, min(maxXP(mode: mode), score))
+        if mode == GameModeID.footballGolf.rawValue { return 0 }
+        return max(0, min(maxXP(mode: mode), score))
     }
 
     static func xp(_ mode: GameModeID, score: Int, guesses: Int = 1, won: Bool = true) -> Int {

@@ -6,6 +6,7 @@ import {
   londonWeekStart,
   outcomeForRank,
   packGroupSizes,
+  nextDivisionIfInactive,
   resolveMembershipDestination,
   selectChampionsLeagueQualifiers,
   zoneCounts,
@@ -182,6 +183,16 @@ test('resolveMembershipDestination: combined cut keeps CL and beats local relega
     resolveMembershipDestination('champions_league', 16, 20, 'cl-dropped', qualifiers),
     { outcome: 'relegated', nextDivision: 'premier_league' }
   );
+});
+
+test('nextDivisionIfInactive: no play drops one division; Sunday stays', () => {
+  assert.equal(nextDivisionIfInactive('champions_league'), 'premier_league');
+  assert.equal(nextDivisionIfInactive('premier_league'), 'championship');
+  assert.equal(nextDivisionIfInactive('championship'), 'league_one');
+  assert.equal(nextDivisionIfInactive('league_one'), 'league_two');
+  assert.equal(nextDivisionIfInactive('league_two'), 'non_league');
+  assert.equal(nextDivisionIfInactive('non_league'), 'sunday_league');
+  assert.equal(nextDivisionIfInactive('sunday_league'), 'sunday_league');
 });
 
 test('formatStatusLine: promotion / relegation / CL copy', () => {

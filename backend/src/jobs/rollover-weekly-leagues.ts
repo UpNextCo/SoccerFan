@@ -13,6 +13,7 @@ import { leagueCohorts, leagueMemberships, leagueWeeks, users } from '../db/sche
 import {
   ensureActiveLeagueWeek,
   londonWeekStart,
+  nextDivisionIfInactive,
   resolveMembershipDestination,
   selectChampionsLeagueQualifiers,
   weekEndFor,
@@ -45,7 +46,7 @@ async function main() {
     .limit(1);
 
   if (!prevWeek[0]) {
-    // No activity last week — create a finalized empty week for continuity.
+    const dropped = await relegateInactiveUsers(prevStart);
     if (!DRY) {
       await db.insert(leagueWeeks).values({
         weekStart: prevStart,
@@ -54,7 +55,9 @@ async function main() {
         finalizedAt: new Date(),
       }).onConflictDoNothing();
     }
-    console.log('No previous week activity — nothing to finalize.');
+    console.log(
+      `No previous week tables — relegated ${dropped} inactive player(s).`
+    );
     process.exit(0);
   }
 
@@ -146,6 +149,8 @@ async function main() {
     }
   }
 
+  const droppedInactive = await relegateInactiveUsers(prevStart);
+
   if (!DRY) {
     await db
       .update(leagueWeeks)
@@ -155,10 +160,41 @@ async function main() {
 
   console.log(
     DRY
-      ? `Dry run complete — would update ${cohorts.length} tables`
-      : `Finalized week ${prevStart}; updated ${updatedMembers} memberships. Next week ${currentStart} is active (tables fill on XP).`
+      ? `Dry run complete — would update ${cohorts.length} tables, relegate ${droppedInactive} inactive`
+      : `Finalized week ${prevStart}; updated ${updatedMembers} memberships, relegated ${droppedInactive} inactive. Next week ${currentStart} is active (tables fill on XP).`
   );
   process.exit(0);
+}
+
+/** No XP this week → no membership. Drop one division so a seat cannot be parked. */
+async function relegateInactiveUsers(weekStart: string): Promise<number> {
+  const idle = (await db.execute(sql`
+    SELECT u.id, u.current_division
+    FROM users u
+    WHERE u.current_division <> 'sunday_league'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM league_memberships m
+        WHERE m.user_id = u.id AND m.week_start = ${weekStart}
+      )
+  `)) as unknown as Array<{ id: string; current_division: string }>;
+
+  let dropped = 0;
+  for (const row of idle) {
+    const division = isWeeklyDivision(row.current_division)
+      ? row.current_division
+      : 'sunday_league';
+    const nextDivision = nextDivisionIfInactive(division);
+    if (nextDivision === division) continue;
+    console.log(
+      `  inactive ${row.id.slice(0, 8)} ${division} → ${nextDivision}`
+    );
+    if (!DRY) {
+      await db.update(users).set({ currentDivision: nextDivision }).where(eq(users.id, row.id));
+    }
+    dropped += 1;
+  }
+  return dropped;
 }
 
 main().catch((err) => {
