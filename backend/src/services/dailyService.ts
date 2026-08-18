@@ -73,32 +73,18 @@ export const DAILY_PLAYABLE_MODES = [
   'darts_501',
 ] as const;
 
-/**
- * True when the user has completed every playable mode that actually generated for `date`.
- * Missing puzzles (generation failure) are excluded so a broken mode can't block the streak forever.
- */
-async function hasClearedDaily(userId: string, date: string): Promise<boolean> {
-  const puzzles = await db
-    .select({ modeId: dailyPuzzles.modeId })
-    .from(dailyPuzzles)
-    .where(eq(dailyPuzzles.date, date));
+const PLAYABLE_MODE_SET = new Set<string>(DAILY_PLAYABLE_MODES);
 
-  const availableModes = DAILY_PLAYABLE_MODES.filter((modeId) =>
-    puzzles.some((p) => p.modeId === modeId)
-  );
-  if (availableModes.length === 0) return false;
-
-  const completions = await db
-    .select({ modeId: dailyCompletions.modeId })
-    .from(dailyCompletions)
-    .where(and(eq(dailyCompletions.userId, userId), eq(dailyCompletions.date, date)));
-
-  const completed = new Set(completions.map((row) => row.modeId));
-  return availableModes.every((modeId) => completed.has(modeId));
+function isPlayableDailyMode(modeId: string): boolean {
+  return PLAYABLE_MODE_SET.has(modeId);
 }
 
-/** Award today's streak if the live set is already cleared (e.g. a retired mode was the last gap). */
-async function applyStreakIfDailyCleared(userId: string, playDate: string): Promise<void> {
+function nextStreak(current: number, lastPlayedDate: string | null, playDate: string): number {
+  return lastPlayedDate === previousDay(playDate) ? current + 1 : 1;
+}
+
+/** Award today's streak after any live daily is finished (one game is enough). */
+async function applyStreakIfPlayedToday(userId: string, playDate: string): Promise<void> {
   const progressRows = await db
     .select()
     .from(userProgress)
@@ -106,10 +92,14 @@ async function applyStreakIfDailyCleared(userId: string, playDate: string): Prom
     .limit(1);
   const progress = progressRows[0];
   if (!progress || progress.lastPlayedDate === playDate) return;
-  if (!(await hasClearedDaily(userId, playDate))) return;
 
-  const newStreak =
-    progress.lastPlayedDate === previousDay(playDate) ? progress.streak + 1 : 1;
+  const completions = await db
+    .select({ modeId: dailyCompletions.modeId })
+    .from(dailyCompletions)
+    .where(and(eq(dailyCompletions.userId, userId), eq(dailyCompletions.date, playDate)));
+  if (!completions.some((row) => isPlayableDailyMode(row.modeId))) return;
+
+  const newStreak = nextStreak(progress.streak, progress.lastPlayedDate, playDate);
   await db
     .update(userProgress)
     .set({ streak: newStreak, lastPlayedDate: playDate })
@@ -761,8 +751,9 @@ export async function getDailyBundle(userId: string, clientDate?: string): Promi
   const allComplete =
     availableModes.length > 0 && availableModes.every((modeId) => completedModeIds.includes(modeId));
 
-  if (allComplete) {
-    await applyStreakIfDailyCleared(userId, date);
+  const playedToday = completedModeIds.some((modeId) => isPlayableDailyMode(modeId));
+  if (playedToday) {
+    await applyStreakIfPlayedToday(userId, date);
   }
 
   return {
@@ -924,18 +915,12 @@ export async function completeDaily(
   const progress = progressRows[0]!;
 
   const playDate = input.date;
-  // Day streak only advances when every available daily mode for this date is done —
-  // partial play still banks XP, but does not count as a streak day.
-  const dayFullyCleared = await hasClearedDaily(userId, playDate);
+  // Day streak advances on the first live daily finished that calendar day.
   let newStreak = progress.streak;
   let lastPlayedDate = progress.lastPlayedDate;
 
-  if (dayFullyCleared && lastPlayedDate !== playDate) {
-    if (lastPlayedDate === previousDay(playDate)) {
-      newStreak = progress.streak + 1;
-    } else {
-      newStreak = 1;
-    }
+  if (isPlayableDailyMode(input.modeId) && lastPlayedDate !== playDate) {
+    newStreak = nextStreak(progress.streak, lastPlayedDate, playDate);
     lastPlayedDate = playDate;
   }
 

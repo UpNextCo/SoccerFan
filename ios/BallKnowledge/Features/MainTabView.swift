@@ -1203,11 +1203,11 @@ enum DailyReminder {
             let content = UNMutableNotificationContent()
             if dayOffset == 0, completedCount > 0 {
                 content.title = "Finish today's games"
-                content.body = "Finish your games to keep your daily streak alive."
+                content.body = "More games are waiting — keep stacking XP."
             } else {
                 let count = totalCount > 0 ? totalCount : DailyPlayOrder.playableModes.count
                 content.title = "Your \(count) daily games are ready"
-                content.body = "Play today's set and keep your daily streak alive."
+                content.body = "Play a game today to keep your daily streak alive."
             }
             content.sound = .default
 

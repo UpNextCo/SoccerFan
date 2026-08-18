@@ -189,11 +189,19 @@ struct HomeView: View {
                 }
             }
         }
-        .fullScreenCover(item: $celebrationPayload) { payload in
-            DailyCompleteCelebrationView(payload: payload) {
-                celebrationPayload = nil
+        .overlay(alignment: .top) {
+            if let payload = celebrationPayload {
+                StreakToastBanner(payload: payload) {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                        celebrationPayload = nil
+                    }
+                }
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(30)
             }
         }
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: celebrationPayload)
         .alert("Already played today", isPresented: $showAlreadyPlayedAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -240,28 +248,28 @@ struct HomeView: View {
         inProgressModes = GameProgressStore.inProgressModes(date: date, context: modelContext)
     }
 
-    /// Show the all-7 celebration once per day when returning home after clearing the set.
+    /// Show the streak toast once per day after the first finished daily.
     private func presentCelebrationIfNeeded() {
         guard celebrationPayload == nil,
               rankUpPayload == nil,
               !isPlayingGame,
               presentedMode == nil else { return }
         guard let bundle = viewModel.dailyBundle else { return }
-        guard isDailyComplete(bundle) else { return }
+        guard DailyPlayOrder.completedCount(in: bundle) > 0 else { return }
         guard !DailyCompleteCelebration.hasShown(for: bundle.date) else { return }
 
-        let todayXp = auth.user?.todayXp ?? 0
         let streak = auth.user?.streak ?? 0
+        guard streak > 0 else { return }
         DailyCompleteCelebration.markShown(for: bundle.date)
         celebrationPayload = DailyCompleteCelebrationPayload(
             date: bundle.date,
-            todayXp: todayXp,
+            todayXp: auth.user?.todayXp ?? 0,
             streak: streak
         )
     }
 
     #if DEBUG
-    /// Skips the all-7 / once-per-day gates so the celebration can be previewed on launch.
+    /// Skips the once-per-day gate so the streak toast can be previewed on launch.
     private func presentCelebrationPreview() {
         guard celebrationPayload == nil, !isPlayingGame, presentedMode == nil else { return }
         let todayXp = max(auth.user?.todayXp ?? 0, 1840)

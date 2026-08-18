@@ -39,8 +39,8 @@ enum AppConfig {
         #endif
     }
 
-    /// DEBUG: auto-present the all-7 celebration on Home appear so you can iterate on it
-    /// without clearing the daily set. Flip to `false` when done previewing.
+    /// DEBUG: auto-present the streak toast on Home appear so you can iterate on it
+    /// without finishing a daily. Flip to `false` when done previewing.
     #if DEBUG
     static let previewDailyCompleteCelebration = false
     #endif
@@ -50,7 +50,7 @@ enum UserDefaultsKeys {
     static let hasCompletedOnboarding = "hasCompletedOnboarding"
     static let isDevAccount = "isDevAccount"
     static let completedPostSignInSetup = "completedPostSignInSetup"
-    /// Local calendar date (YYYY-MM-DD) for which the all-7 celebration was already shown.
+    /// Local calendar date (YYYY-MM-DD) for which the first-game streak toast was already shown.
     static let dailyCompleteCelebratedDate = "dailyCompleteCelebratedDate"
     /// One-shot weekly pyramid league intro (Leagues → Weekly).
     static let weeklyLeagueIntroShown = "weeklyLeagueIntroShown"

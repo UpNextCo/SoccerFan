@@ -17,10 +17,17 @@ settings:
     INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
     INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
 
+packages:
+  Lottie:
+    url: https://github.com/airbnb/lottie-spm
+    from: 4.5.2
+
 targets:
   BallKnowledge:
     type: application
     platform: iOS
+    dependencies:
+      - package: Lottie
     sources:
       - path: BallKnowledge
         excludes:

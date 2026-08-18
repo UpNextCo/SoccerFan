@@ -1052,7 +1052,7 @@ struct ReminderSetupStep: View {
             OnboardingTitleBlock(
                 eyebrow: "Stay sharp",
                 title: "Never lose your streak",
-                subtitle: "Get a daily nudge when the games are ready — finish the set to keep your streak."
+                subtitle: "Get a daily nudge when the games are ready — play one to keep your streak."
             )
             .padding(.top, 28)
 

@@ -183,8 +183,8 @@ enum HomeActivity {
                 tint: BKTheme.streak,
                 title: streak > 0 ? "Keep your \(streak)-day streak alive" : "Start today's games",
                 message: streak > 0
-                    ? "Finish today's set before reset to keep the chain going."
-                    : "Play today's games to earn XP and start a streak.",
+                    ? "Play one game today to keep the chain going."
+                    : "Play a game today to earn XP and start a streak.",
                 unread: true
             ))
         } else {
@@ -192,9 +192,9 @@ enum HomeActivity {
                 id: "streak-finish-\(today)",
                 icon: "flame.fill",
                 tint: BKTheme.streak,
-                title: streak > 0 ? "Finish the set to keep your streak" : "Finish the set to start your streak",
-                message: "\(todayXp.formatted()) XP so far today — clear the rest before reset.",
-                unread: true
+                title: streak > 0 ? "Streak saved — keep stacking XP" : "Keep stacking XP",
+                message: "\(todayXp.formatted()) XP so far today — more games still to play.",
+                unread: false
             ))
         }
 
