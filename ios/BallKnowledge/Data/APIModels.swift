@@ -430,9 +430,12 @@ struct VsChallengeDTO: Codable, Equatable {
     let categoryNoun: String
     let result: VsResultDTO
     let live: VsLiveDTO?
+    let hotseat: VsHotseatDTO?
 
     var gameMode: GameModeID? { GameModeID(rawValue: modeId) }
     var isLiveDraft: Bool { modeId == GameModeID.draftMaster.rawValue && live != nil && status == "active" && !result.allDone }
+    var isLiveHotseat: Bool { modeId == GameModeID.backYourself.rawValue && hotseat != nil && status == "active" && !result.allDone }
+    var isLivePlay: Bool { isLiveDraft || isLiveHotseat }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -461,6 +464,46 @@ struct VsChallengeDTO: Codable, Equatable {
         categoryNoun = try c.decodeIfPresent(String.self, forKey: .categoryNoun) ?? "pts"
         result = try c.decode(VsResultDTO.self, forKey: .result)
         live = try c.decodeIfPresent(VsLiveDTO.self, forKey: .live)
+        hotseat = try c.decodeIfPresent(VsHotseatDTO.self, forKey: .hotseat)
+    }
+}
+
+struct VsHotseatPlayerDTO: Codable, Equatable {
+    let userId: String
+    let displayName: String
+    let isYou: Bool
+    let alive: Bool
+    let namedCount: Int
+}
+
+struct VsHotseatNamedDTO: Codable, Equatable, Identifiable {
+    let userId: String
+    let displayName: String
+    let playerId: String
+    let playerName: String
+    let headshotUrl: String?
+
+    var id: String { "\(userId)-\(playerId)-\(playerName)" }
+}
+
+struct VsHotseatDTO: Codable, Equatable {
+    let turnUserId: String
+    let yourTurn: Bool
+    let deadlineAt: String
+    let finished: Bool
+    let namedPlayerIds: [String]
+    let players: [VsHotseatPlayerDTO]
+    let named: [VsHotseatNamedDTO]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        turnUserId = try c.decode(String.self, forKey: .turnUserId)
+        yourTurn = try c.decodeIfPresent(Bool.self, forKey: .yourTurn) ?? false
+        deadlineAt = try c.decode(String.self, forKey: .deadlineAt)
+        finished = try c.decodeIfPresent(Bool.self, forKey: .finished) ?? false
+        namedPlayerIds = try c.decodeIfPresent([String].self, forKey: .namedPlayerIds) ?? []
+        players = try c.decodeIfPresent([VsHotseatPlayerDTO].self, forKey: .players) ?? []
+        named = try c.decodeIfPresent([VsHotseatNamedDTO].self, forKey: .named) ?? []
     }
 }
 

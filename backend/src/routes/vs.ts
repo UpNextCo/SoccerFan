@@ -6,7 +6,9 @@ import {
   getActiveVsChallenge,
   getVsChallenge,
   joinVsChallenge,
+  giveUpVsHotseat,
   lockVsPick,
+  nameVsHotseat,
   startVsChallenge,
   submitVsChallenge,
   VsError,
@@ -90,6 +92,31 @@ vsRouter.post('/:id/lock', requireAuth, async (req, res) => {
     sendSuccess(res, await lockVsPick(req.auth!.userId, String(req.params.id), parsed.data));
   } catch (err) {
     handleVsError(res, err, 'Failed to lock pick');
+  }
+});
+
+const nameSchema = z.object({
+  playerId: z.string().min(1),
+});
+
+vsRouter.post('/:id/name', requireAuth, async (req, res) => {
+  const parsed = nameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    sendSuccess(res, await nameVsHotseat(req.auth!.userId, String(req.params.id), parsed.data.playerId));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to name player');
+  }
+});
+
+vsRouter.post('/:id/giveup', requireAuth, async (req, res) => {
+  try {
+    sendSuccess(res, await giveUpVsHotseat(req.auth!.userId, String(req.params.id)));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to give up');
   }
 });
 

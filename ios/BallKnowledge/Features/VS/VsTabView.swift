@@ -110,6 +110,36 @@ final class VsViewModel {
         }
     }
 
+    func namePlayer(playerId: String) async -> Bool {
+        guard let id = challenge?.id else { return false }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            challenge = try await APIClient.shared.vsName(id: id, playerId: playerId)
+            VsMonitor.shared.track(challenge)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func giveUpHotseat() async -> Bool {
+        guard let id = challenge?.id else { return false }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            challenge = try await APIClient.shared.vsGiveUp(id: id)
+            VsMonitor.shared.track(challenge)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func clearChallenge() {
         challenge = nil
         playing = false
@@ -182,15 +212,14 @@ struct VsTabView: View {
         .task(id: viewModel.challenge?.id) {
             guard viewModel.challenge != nil else { return }
             while !Task.isCancelled {
-                let live = viewModel.challenge?.isLiveDraft == true
+                let live = viewModel.challenge?.isLivePlay == true
                 try? await Task.sleep(for: .seconds(live ? 1 : 3))
                 guard !Task.isCancelled else { break }
                 if let c = viewModel.challenge,
                    c.status == "waiting" || c.status == "active",
                    !c.result.allDone {
                     await viewModel.poll()
-                    if c.modeId == GameModeID.draftMaster.rawValue,
-                       viewModel.challenge?.isLiveDraft == true {
+                    if viewModel.challenge?.isLivePlay == true {
                         viewModel.playing = true
                     }
                     if viewModel.challenge?.result.allDone == true {
@@ -202,7 +231,7 @@ struct VsTabView: View {
             }
         }
         .onChange(of: viewModel.challenge?.status) {
-            if viewModel.challenge?.isLiveDraft == true {
+            if viewModel.challenge?.isLivePlay == true {
                 viewModel.playing = true
             }
         }
@@ -220,15 +249,7 @@ struct VsTabView: View {
             }
         case GameModeID.backYourself.rawValue:
             if let puzzle = viewModel.backYourselfPuzzle {
-                BackYourselfView(
-                    puzzle: puzzle,
-                    allowReplay: true,
-                    showsXp: false,
-                    onSubmit: { state in
-                        _ = await viewModel.submit(answer: state.answerPayload())
-                    },
-                    onComplete: { viewModel.playing = false }
-                )
+                VsHotseatView(viewModel: viewModel, puzzle: puzzle)
             }
         case GameModeID.targetMan.rawValue:
             if let challenge = viewModel.targetManChallenge {
@@ -270,7 +291,7 @@ struct VsTabView: View {
                     Text("Challenge your mates")
                         .font(BKFont.title(28))
                         .foregroundStyle(BKTheme.textPrimary)
-                    Text("Pick a game, share a code, invite up to 4 friends. Same puzzle — best score wins. No XP.")
+                    Text("Pick a game, share a code, invite up to 4 friends. Live turns for Back Yourself and Draft XI. No XP.")
                         .font(BKFont.body(14))
                         .foregroundStyle(BKTheme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -385,6 +406,11 @@ struct VsTabView: View {
                         title: "Live draft",
                         message: "Same position, same time. Lock your pick — then you’ll see everyone else’s."
                     )
+                } else if viewModel.challenge?.isLiveHotseat == true {
+                    waitingCard(
+                        title: "Live Back Yourself",
+                        message: "Take turns naming players. Shared names, 30 seconds each. Last one standing wins."
+                    )
                 } else if viewModel.youHavePlayed {
                     waitingCard(
                         title: "Score locked in",
@@ -424,7 +450,9 @@ struct VsTabView: View {
                     Button {
                         viewModel.playing = true
                     } label: {
-                        Text("PLAY \(challenge.modeTitle)")
+                        Text(viewModel.challenge?.isLivePlay == true
+                             ? "REJOIN \(challenge.modeTitle)"
+                             : "PLAY \(challenge.modeTitle)")
                             .font(BKFont.headline(14))
                             .foregroundStyle(BKTheme.textPrimary)
                             .frame(maxWidth: .infinity)
@@ -514,7 +542,7 @@ struct VsTabView: View {
                 .font(BKFont.headline(15))
                 .foregroundStyle(BKTheme.textPrimary)
             Spacer()
-            if player.completed, let score = player.displayScore ?? player.score {
+            if let score = player.displayScore ?? player.score {
                 Text("\(score)")
                     .font(BKFont.title(22))
                     .foregroundStyle(BKTheme.accent)
@@ -526,7 +554,7 @@ struct VsTabView: View {
                     .font(BKFont.caption(12))
                     .foregroundStyle(BKTheme.textMuted)
             } else {
-                Text("Not played")
+                Text("Waiting")
                     .font(BKFont.caption(12))
                     .foregroundStyle(BKTheme.textMuted)
             }

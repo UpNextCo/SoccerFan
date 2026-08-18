@@ -612,6 +612,15 @@ actor APIClient {
     func vsLock(id: String, slotId: String, constraintId: String, playerId: String) async throws -> VsChallengeDTO {
         try await request("vs/\(id)/lock", method: "POST", body: VsPickDTO(slotId: slotId, constraintId: constraintId, playerId: playerId))
     }
+
+    func vsName(id: String, playerId: String) async throws -> VsChallengeDTO {
+        struct Body: Encodable { let playerId: String }
+        return try await request("vs/\(id)/name", method: "POST", body: Body(playerId: playerId))
+    }
+
+    func vsGiveUp(id: String) async throws -> VsChallengeDTO {
+        try await request("vs/\(id)/giveup", method: "POST", body: EmptyBody())
+    }
 }
 
 private struct EmptyBody: Encodable {}

@@ -37,7 +37,7 @@ export async function generateVsPuzzle(modeId: VsModeId, seedKey: string): Promi
       return { puzzle, answer: null };
     }
     case 'back_yourself': {
-      const generated = await generateBackYourselfPuzzle(today, { seedKey });
+      const generated = await generateBackYourselfPuzzle(today, { seedKey, minPool: 40 });
       if (!generated) {
         throw new Error('Could not generate a Back Yourself challenge right now. Try again.');
       }

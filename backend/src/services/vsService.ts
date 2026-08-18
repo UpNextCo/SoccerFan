@@ -44,6 +44,21 @@ import {
   vsPuzzleMeta,
   type VsModeId,
 } from './vsPuzzle.js';
+import {
+  applyHotseatTimeouts,
+  eliminatePlayer,
+  initHotseat,
+  namedCount,
+  namedPlayerIds,
+  parseHotseat,
+  passTurn,
+  type VsHotseatState,
+} from './vsLiveHotseat.js';
+import {
+  playerMatchesBackYourselfCategory,
+  resolveBackYourselfPlayerCard,
+  type BackYourselfCategory,
+} from './backYourselfGenerator.js';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 6;
@@ -104,6 +119,33 @@ export type VsChallengeView = {
     rankings: VsRankingView[];
   };
   live: VsLiveView | null;
+  hotseat: VsHotseatView | null;
+};
+
+export type VsHotseatPlayerView = {
+  userId: string;
+  displayName: string;
+  isYou: boolean;
+  alive: boolean;
+  namedCount: number;
+};
+
+export type VsHotseatNamedView = {
+  userId: string;
+  displayName: string;
+  playerId: string;
+  playerName: string;
+  headshotUrl: string | null;
+};
+
+export type VsHotseatView = {
+  turnUserId: string;
+  yourTurn: boolean;
+  deadlineAt: string;
+  finished: boolean;
+  namedPlayerIds: string[];
+  players: VsHotseatPlayerView[];
+  named: VsHotseatNamedView[];
 };
 
 export type VsLiveBoardRow = {
@@ -258,9 +300,49 @@ function liveViewFor(
 }
 
 function liveTotals(row: VsChallenge): Map<string, number> | null {
-  const live = liveStateOf(row);
-  if (!live || row.modeId !== 'draft_master') return null;
-  return new Map(participantsOf(row).map((p) => [p.userId, totalFor(live, p.userId)]));
+  if (row.modeId === 'draft_master') {
+    const live = liveStateOf(row);
+    if (!live) return null;
+    return new Map(participantsOf(row).map((p) => [p.userId, totalFor(live, p.userId)]));
+  }
+  if (row.modeId === 'back_yourself') {
+    const hotseat = parseHotseat(row.liveJson);
+    if (!hotseat) return null;
+    return new Map(participantsOf(row).map((p) => [p.userId, namedCount(hotseat, p.userId)]));
+  }
+  return null;
+}
+
+function hotseatViewFor(
+  row: VsChallenge,
+  userId: string,
+  names: Map<string, string>
+): VsHotseatView | null {
+  if (row.modeId !== 'back_yourself' || (row.status !== 'active' && row.status !== 'complete')) return null;
+  const hotseat = parseHotseat(row.liveJson);
+  if (!hotseat) return null;
+  const people = participantsOf(row);
+  return {
+    turnUserId: hotseat.turnUserId,
+    yourTurn: !hotseat.finished && hotseat.turnUserId === userId,
+    deadlineAt: hotseat.deadlineAt,
+    finished: hotseat.finished,
+    namedPlayerIds: [...namedPlayerIds(hotseat)],
+    players: people.map((p) => ({
+      userId: p.userId,
+      displayName: names.get(p.userId) ?? 'Player',
+      isYou: p.userId === userId,
+      alive: hotseat.remaining.includes(p.userId),
+      namedCount: namedCount(hotseat, p.userId),
+    })),
+    named: hotseat.named.map((n) => ({
+      userId: n.userId,
+      displayName: names.get(n.userId) ?? 'Player',
+      playerId: n.playerId,
+      playerName: n.playerName,
+      headshotUrl: n.headshotUrl,
+    })),
+  };
 }
 
 async function persistRow(
@@ -322,9 +404,74 @@ async function syncLiveDraft(row: VsChallenge): Promise<VsChallenge> {
   return row;
 }
 
-function draftLiveForStart(row: VsChallenge): VsLiveState | null {
-  if (row.modeId !== 'draft_master') return null;
-  return liveStateOf(row) ?? initLiveState(participantsOf(row).map((p) => p.userId));
+function draftLiveForStart(row: VsChallenge): VsLiveState | VsHotseatState | null {
+  const ids = participantsOf(row).map((p) => p.userId);
+  if (row.modeId === 'draft_master') {
+    return liveStateOf(row) ?? initLiveState(ids);
+  }
+  if (row.modeId === 'back_yourself') {
+    return parseHotseat(row.liveJson) ?? initHotseat(ids);
+  }
+  return null;
+}
+
+function liveJsonForActive(row: VsChallenge, userIds: string[]): unknown {
+  if (row.modeId === 'draft_master') {
+    return liveStateOf(row) ?? initLiveState(userIds);
+  }
+  if (row.modeId === 'back_yourself') {
+    return parseHotseat(row.liveJson) ?? initHotseat(userIds);
+  }
+  return row.liveJson;
+}
+
+async function finishHotseat(row: VsChallenge, hotseat: VsHotseatState): Promise<VsChallenge> {
+  const now = new Date();
+  const finished = { ...hotseat, finished: true };
+  const next = participantsOf(row).map((p) => {
+    const score = namedCount(finished, p.userId);
+    return {
+      ...p,
+      score,
+      displayScore: score,
+      answerJson: { namedPlayerIds: finished.named.filter((n) => n.userId === p.userId).map((n) => n.playerId) },
+      completedAt: p.completedAt ?? now.toISOString(),
+    };
+  });
+  const host = next.find((p) => p.userId === row.hostUserId);
+  const guest = next.find((p) => p.userId !== row.hostUserId);
+  const updated = await persistRow(row.id, {
+    liveJson: finished,
+    participantsJson: next,
+    status: 'complete',
+    hostScore: host?.displayScore ?? null,
+    hostAnswerJson: host?.answerJson ?? null,
+    hostCompletedAt: now,
+    guestScore: guest?.displayScore ?? null,
+    guestAnswerJson: guest?.answerJson ?? null,
+    guestCompletedAt: guest ? now : null,
+  });
+  return updated ?? { ...row, status: 'complete', liveJson: finished, participantsJson: next };
+}
+
+async function syncHotseat(row: VsChallenge): Promise<VsChallenge> {
+  if (row.modeId !== 'back_yourself' || row.status !== 'active') return row;
+  const userIds = participantsOf(row).map((p) => p.userId);
+  let hotseat = parseHotseat(row.liveJson);
+  if (!hotseat) {
+    hotseat = initHotseat(userIds);
+    const updated = await persistRow(row.id, { liveJson: hotseat });
+    return updated ?? { ...row, liveJson: hotseat };
+  }
+  const advanced = applyHotseatTimeouts(hotseat);
+  if (advanced.finished && !hotseat.finished) {
+    return finishHotseat(row, advanced);
+  }
+  if (advanced.turnUserId !== hotseat.turnUserId || advanced.deadlineAt !== hotseat.deadlineAt) {
+    const updated = await persistRow(row.id, { liveJson: advanced });
+    return updated ?? { ...row, liveJson: advanced };
+  }
+  return row;
 }
 
 function rankingWinner(
@@ -342,11 +489,15 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
   const youAreHost = row.hostUserId === userId;
   const you = people.find((p) => p.userId === userId);
   const youCompleted = you?.completedAt != null;
-  const allDone = people.length >= 2 && people.every((p) => p.completedAt != null);
+  const hotseat = parseHotseat(row.liveJson);
+  const allDone =
+    hotseat?.finished === true || (people.length >= 2 && people.every((p) => p.completedAt != null));
   const completed = people
     .filter((p) => p.completedAt != null && p.score != null)
     .map((p) => ({ userId: p.userId, score: p.score as number, displayScore: p.displayScore ?? p.score ?? 0 }));
-  const { winnerUserId, isDraw } = allDone ? rankingWinner(completed) : { winnerUserId: null, isDraw: false };
+  const ranked = allDone ? rankingWinner(completed) : { winnerUserId: null, isDraw: false };
+  const winnerUserId = hotseat?.finished ? hotseat.winnerUserId : ranked.winnerUserId;
+  const isDraw = hotseat?.finished ? false : ranked.isDraw;
 
   const publicPuzzle = sanitizePublicPuzzle(row.modeId, row.puzzleJson);
   const meta = vsPuzzleMeta(row.modeId, row.puzzleJson);
@@ -378,7 +529,13 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
 
   const rankings: VsRankingView[] = allDone
     ? [...completed]
-        .sort((a, b) => b.score - a.score)
+        .sort((a, b) => {
+          if (hotseat?.finished && winnerUserId) {
+            if (a.userId === winnerUserId) return -1;
+            if (b.userId === winnerUserId) return 1;
+          }
+          return b.score - a.score;
+        })
         .map((p) => ({
           userId: p.userId,
           displayName: names.get(p.userId) ?? 'Player',
@@ -421,11 +578,12 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
       rankings,
     },
     live: liveViewFor(row, userId, names),
+    hotseat: hotseatViewFor(row, userId, names),
   };
 }
 
 async function viewFor(row: VsChallenge, userId: string): Promise<VsChallengeView> {
-  const synced = await syncLiveDraft(row);
+  const synced = row.modeId === 'back_yourself' ? await syncHotseat(row) : await syncLiveDraft(row);
   const ids = participantsOf(synced).map((p) => p.userId);
   const names = await loadUsers(ids);
   return toView(synced, userId, names);
@@ -619,9 +777,7 @@ export async function joinVsChallenge(userId: string, rawCode: string): Promise<
   const next = [...people, emptyParticipant(userId)];
   const nextStatus = next.length >= VS_MAX_PLAYERS ? 'active' : current.status;
   const liveJson =
-    nextStatus === 'active' && current.modeId === 'draft_master'
-      ? (liveStateOf(current) ?? initLiveState(next.map((p) => p.userId)))
-      : current.liveJson;
+    nextStatus === 'active' ? liveJsonForActive(current, next.map((p) => p.userId)) : current.liveJson;
 
   const [updated] = await db
     .update(vsChallenges)
@@ -662,7 +818,7 @@ export async function startVsChallenge(userId: string, challengeId: string): Pro
     .update(vsChallenges)
     .set({
       status: 'active',
-      liveJson: draftLiveForStart(row) ?? row.liveJson,
+      liveJson: draftLiveForStart(row) ?? liveJsonForActive(row, participantsOf(row).map((p) => p.userId)) ?? row.liveJson,
     })
     .where(and(eq(vsChallenges.id, row.id), eq(vsChallenges.status, 'waiting')))
     .returning();
@@ -786,6 +942,12 @@ export async function submitVsChallenge(
   if (row.status === 'waiting') {
     throw new VsError('Waiting for the host to start', 400, 'WAITING');
   }
+  if (row.modeId === 'draft_master' && liveStateOf(row)) {
+    throw new VsError('This Draft XI is live — lock each slot instead', 400, 'LIVE');
+  }
+  if (row.modeId === 'back_yourself' && parseHotseat(row.liveJson)) {
+    throw new VsError('This Back Yourself is live — name on your turn instead', 400, 'LIVE');
+  }
 
   const people = participantsOf(row);
   const you = people.find((p) => p.userId === userId);
@@ -818,4 +980,72 @@ export async function submitVsChallenge(
 
   if (!updated) throw new VsError('Failed to submit', 500, 'SUBMIT_FAILED');
   return viewFor(updated, userId);
+}
+
+export async function nameVsHotseat(userId: string, challengeId: string, playerId: string): Promise<VsChallengeView> {
+  const row = await syncHotseat(await requireParticipant(challengeId, userId));
+  if (row.status === 'expired') throw new VsError('This challenge has expired', 410, 'EXPIRED');
+  if (row.status !== 'active' || row.modeId !== 'back_yourself') {
+    throw new VsError('This challenge is not a live Back Yourself', 400, 'INVALID_STATUS');
+  }
+  const hotseat = parseHotseat(row.liveJson);
+  if (!hotseat || hotseat.finished) return viewFor(row, userId);
+  if (hotseat.turnUserId !== userId) {
+    throw new VsError('Wait for your turn', 400, 'NOT_YOUR_TURN');
+  }
+  if (Date.now() >= Date.parse(hotseat.deadlineAt)) {
+    return viewFor(row, userId);
+  }
+  if (namedPlayerIds(hotseat).has(playerId)) {
+    throw new VsError('Already named', 400, 'DUPLICATE');
+  }
+
+  const stored = row.answerJson as { validPlayerIds?: string[] } | undefined;
+  const validSet = new Set(stored?.validPlayerIds ?? []);
+  const puzzle = row.puzzleJson as { category?: BackYourselfCategory };
+  const inPool = validSet.size > 0
+    ? validSet.has(playerId)
+    : await playerMatchesBackYourselfCategory(playerId, puzzle.category as BackYourselfCategory);
+  if (!inPool) {
+    throw new VsError("Doesn't fit the category", 400, 'INVALID_ANSWER');
+  }
+
+  const card = await resolveBackYourselfPlayerCard(playerId);
+  const next: VsHotseatState = passTurn(
+    {
+      ...hotseat,
+      named: [
+        ...hotseat.named,
+        {
+          userId,
+          playerId,
+          playerName: card?.name ?? 'Player',
+          headshotUrl: card?.headshotUrl ?? null,
+          namedAt: new Date().toISOString(),
+        },
+      ],
+    },
+    userId
+  );
+
+  if (next.finished) return viewFor(await finishHotseat(row, next), userId);
+  const updated = await persistRow(row.id, { liveJson: next });
+  return viewFor(updated ?? { ...row, liveJson: next }, userId);
+}
+
+export async function giveUpVsHotseat(userId: string, challengeId: string): Promise<VsChallengeView> {
+  const row = await syncHotseat(await requireParticipant(challengeId, userId));
+  if (row.status === 'expired') throw new VsError('This challenge has expired', 410, 'EXPIRED');
+  if (row.status !== 'active' || row.modeId !== 'back_yourself') {
+    throw new VsError('This challenge is not a live Back Yourself', 400, 'INVALID_STATUS');
+  }
+  const hotseat = parseHotseat(row.liveJson);
+  if (!hotseat || hotseat.finished) return viewFor(row, userId);
+  if (hotseat.turnUserId !== userId) {
+    throw new VsError('Wait for your turn', 400, 'NOT_YOUR_TURN');
+  }
+  const next = eliminatePlayer(hotseat, userId);
+  if (next.finished) return viewFor(await finishHotseat(row, next), userId);
+  const updated = await persistRow(row.id, { liveJson: next });
+  return viewFor(updated ?? { ...row, liveJson: next }, userId);
 }

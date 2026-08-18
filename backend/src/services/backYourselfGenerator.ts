@@ -869,10 +869,14 @@ function pickWeightedPool(candidates: Candidate[], seed: number): Candidate[] {
 
 export async function generateBackYourselfPuzzle(
   date: string,
-  opts?: { seedKey?: string }
+  opts?: { seedKey?: string; minPool?: number }
 ): Promise<{ puzzle: BackYourselfPuzzlePublic; answer: BackYourselfPuzzleAnswer } | null> {
-  const candidates = await getCandidates();
+  let candidates = await getCandidates();
   if (candidates.length === 0) return null;
+  if (opts?.minPool != null) {
+    const wide = candidates.filter((c) => c.maxPool >= opts.minPool!);
+    if (wide.length > 0) candidates = wide;
+  }
 
   const seed = hashString(opts?.seedKey ?? `${date}:back_yourself`);
   let pool = pickWeightedPool(candidates, seed);
