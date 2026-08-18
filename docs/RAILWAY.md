@@ -58,7 +58,7 @@ Add a Railway cron (or GitHub Action) shortly after Monday 00:00 **Europe/London
 npm run job:rollover-weekly-leagues
 ```
 
-Idempotent — safe if it runs twice. Finalizes the previous London week (promotion/relegation) and ensures the new week row exists. Tables fill lazily when players earn XP.
+Idempotent — safe if it runs twice. Finalizes the previous London week (promotion/relegation) and ensures the new week row exists. Tables fill lazily when players earn XP. Champions League is a single table of the top 20 scorers from Champions League + Premier League that week.
 
 One-time launch seed (every user starts in Sunday League):
 

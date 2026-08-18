@@ -312,6 +312,54 @@ test('hides the missing LMS club and typed club answer from the public daily bun
   assert.equal(sanitized.questions[0]!.presentation?.careerClubs?.[0]?.name, 'Ajax');
 });
 
+test('validates authored LMS custom text questions in both answer formats', () => {
+  const questions = Array.from({ length: 10 }, (_, index) => {
+    const questionId = `text-q-${index + 1}`;
+    const custom = index === 2;
+    return {
+      id: questionId,
+      type: custom ? 'custom_text' : 'odd_one_out',
+      slot: index + 1,
+      prompt: custom ? 'Who scored the winner in the 2014 World Cup final?' : `Question ${index + 1}`,
+      options: custom
+        ? ['Mario Gotze', 'Messi', 'Higuain', 'Klose'].map((label, optionIndex) => ({
+            id: `${questionId}-00000000-0000-4000-8000-00000000000${optionIndex + 1}`,
+            label,
+          }))
+        : ['Alpha', 'Bravo', 'Charlie', 'Delta'].map((label, optionIndex) => ({
+            id: `${questionId}-o${optionIndex + 1}`,
+            label,
+          })),
+    };
+  });
+  const answer = {
+    questions: questions.map((question) => ({
+      questionId: question.id,
+      correctOptionId: question.options[0]!.id,
+    })),
+  };
+  assert.equal(validatePuzzleReport('last_man_standing', { questions }, answer).ok, true);
+
+  questions[2]!.options = [{
+    id: `${questions[2]!.id}-choose-player`,
+    label: 'Choose player',
+  }];
+  answer.questions[2]!.correctOptionId = questions[2]!.options[0]!.id;
+  const searchUnpicked = validatePuzzleReport('last_man_standing', { questions }, answer);
+  assert.equal(searchUnpicked.ok, false);
+  assert.match(
+    searchUnpicked.issues.find((entry) => entry.path.endsWith('.options.0'))?.message ?? '',
+    /Choose the correct player/
+  );
+
+  questions[2]!.options = [{
+    id: `${questions[2]!.id}-00000000-0000-4000-8000-000000000001`,
+    label: 'Mario Gotze',
+  }];
+  answer.questions[2]!.correctOptionId = questions[2]!.options[0]!.id;
+  assert.equal(validatePuzzleReport('last_man_standing', { questions }, answer).ok, true);
+});
+
 test('hides custom LMS text answers from the public daily bundle', () => {
   const puzzle = {
     questions: [

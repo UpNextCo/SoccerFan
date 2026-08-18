@@ -38,6 +38,7 @@ enum LMSQuestionType: String, Codable {
     case customImage = "custom_image"
     case customQuestion = "custom_question"
     case missingClub = "missing_club"
+    case customText = "custom_text"
 }
 
 struct LMSCareerClub: Equatable, Codable {
@@ -105,7 +106,8 @@ struct LMSQuestion: Identifiable, Equatable, Codable {
     var presentation: LMSPresentation?
 
     var usesTypedSearch: Bool {
-        type == .customQuestion || (type == .missingClub && options.isEmpty)
+        type == .customQuestion ||
+        ((type == .missingClub || type == .customText) && options.isEmpty)
     }
 }
 

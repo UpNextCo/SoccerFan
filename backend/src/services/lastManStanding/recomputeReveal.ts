@@ -221,6 +221,7 @@ export async function recomputeLmsQuestionAnswer(
     case 'image_badge':
     case 'custom_image':
     case 'custom_question':
+    case 'custom_text':
     default: {
       const correct = question.options.find((o) => o.id === answer.correctOptionId);
       return {

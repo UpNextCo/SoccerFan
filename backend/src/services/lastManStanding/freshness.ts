@@ -147,7 +147,8 @@ export function extractLMSUsedKeys(
       }
       case 'custom_image':
         break;
-      case 'custom_question': {
+      case 'custom_question':
+      case 'custom_text': {
         const playerId = playerIdFromOption(question.id, questionAnswer.correctOptionId);
         if (playerId) keys.push(playerUsedKey(playerId));
         break;

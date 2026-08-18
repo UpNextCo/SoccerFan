@@ -18,7 +18,7 @@ struct LastManStandingQuestionCard: View {
             let sub = question.subPrompt?.lowercased() ?? ""
             return sub.contains("clubs")
                 || (sub.contains("club") && !sub.contains("never played for"))
-        case .higherLower, .careerPath, .customImage, .customQuestion, .missingClub:
+        case .higherLower, .careerPath, .customImage, .customQuestion, .missingClub, .customText:
             return false
         }
     }
@@ -53,6 +53,12 @@ struct LastManStandingQuestionCard: View {
             }
         case .customQuestion:
             EmptyView()
+        case .customText:
+            if question.options.isEmpty {
+                EmptyView()
+            } else {
+                playerOptionGrid
+            }
         case .missingClub:
             missingClubBody
         case .oddOneOut, .whichClub:

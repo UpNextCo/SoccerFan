@@ -6,6 +6,8 @@ import {
   londonWeekStart,
   outcomeForRank,
   packGroupSizes,
+  resolveMembershipDestination,
+  selectChampionsLeagueQualifiers,
   zoneCounts,
   zonesForTable,
   formatStatusLine,
@@ -25,11 +27,15 @@ test('zoneCounts: small tables keep a mid-band', () => {
   assert.ok(n12.promote + n12.relegate < 12);
 });
 
-test('zonesForTable: Champions League has no promotion; Sunday has no relegation', () => {
+test('zonesForTable: CL and PL have no table promotion; Sunday has no relegation', () => {
   const cl = zonesForTable('champions_league', 20);
   assert.equal(cl.promoteMaxRank, 0);
-  assert.equal(cl.relegateMinRank, 16);
+  assert.equal(cl.relegateMinRank, 0);
   assert.equal(cl.isChampionsLeague, true);
+
+  const pl = zonesForTable('premier_league', 20);
+  assert.equal(pl.promoteMaxRank, 0);
+  assert.equal(pl.relegateMinRank, 16);
 
   const sun = zonesForTable('sunday_league', 20);
   assert.equal(sun.promoteMaxRank, 5);
@@ -41,14 +47,22 @@ test('zonesForTable: Champions League has no promotion; Sunday has no relegation
   assert.equal(champ.relegateMinRank, 16);
 });
 
-test('outcomeForRank: CL #1 is champion; edges promote/relegate', () => {
+test('outcomeForRank: CL fallback is back to Premier League', () => {
   assert.deepEqual(outcomeForRank('champions_league', 1, 20), {
     outcome: 'champion',
-    nextDivision: 'champions_league',
+    nextDivision: 'premier_league',
   });
   assert.deepEqual(outcomeForRank('champions_league', 16, 20), {
     outcome: 'relegated',
     nextDivision: 'premier_league',
+  });
+  assert.deepEqual(outcomeForRank('premier_league', 1, 20), {
+    outcome: 'stayed',
+    nextDivision: 'premier_league',
+  });
+  assert.deepEqual(outcomeForRank('premier_league', 18, 20), {
+    outcome: 'relegated',
+    nextDivision: 'championship',
   });
   assert.deepEqual(outcomeForRank('sunday_league', 1, 20), {
     outcome: 'promoted',
@@ -126,6 +140,50 @@ test('londonWeekStart/End: Monday–Sunday Europe/London', () => {
   assert.equal(londonWeekStart(new Date('2026-08-17T00:10:00+01:00')), '2026-08-17');
 });
 
+test('selectChampionsLeagueQualifiers: top 20 across CL + Premier League', () => {
+  const pool = Array.from({ length: 45 }, (_, i) => ({
+    userId: `u${String(i + 1).padStart(2, '0')}`,
+    weeklyXp: 450 - i,
+    weeklyXpReachedAt: new Date('2026-08-10T10:00:00Z'),
+  }));
+  const ids = selectChampionsLeagueQualifiers(pool);
+  assert.equal(ids.size, 20);
+  assert.equal(ids.has('u01'), true);
+  assert.equal(ids.has('u20'), true);
+  assert.equal(ids.has('u21'), false);
+
+  const short = selectChampionsLeagueQualifiers(pool.slice(0, 7));
+  assert.equal(short.size, 7);
+});
+
+test('resolveMembershipDestination: combined cut keeps CL and beats local relegation', () => {
+  const qualifiers = new Set(['stacked-bottom', 'cl-safe', 'cl-champ']);
+  assert.deepEqual(
+    resolveMembershipDestination('premier_league', 18, 20, 'stacked-bottom', qualifiers),
+    { outcome: 'promoted', nextDivision: 'champions_league' }
+  );
+  assert.deepEqual(
+    resolveMembershipDestination('premier_league', 18, 20, 'not-selected', qualifiers),
+    { outcome: 'relegated', nextDivision: 'championship' }
+  );
+  assert.deepEqual(
+    resolveMembershipDestination('premier_league', 3, 20, 'not-selected', qualifiers),
+    { outcome: 'stayed', nextDivision: 'premier_league' }
+  );
+  assert.deepEqual(
+    resolveMembershipDestination('champions_league', 1, 20, 'cl-champ', qualifiers),
+    { outcome: 'champion', nextDivision: 'champions_league' }
+  );
+  assert.deepEqual(
+    resolveMembershipDestination('champions_league', 8, 20, 'cl-safe', qualifiers),
+    { outcome: 'stayed', nextDivision: 'champions_league' }
+  );
+  assert.deepEqual(
+    resolveMembershipDestination('champions_league', 16, 20, 'cl-dropped', qualifiers),
+    { outcome: 'relegated', nextDivision: 'premier_league' }
+  );
+});
+
 test('formatStatusLine: promotion / relegation / CL copy', () => {
   const standings = Array.from({ length: 20 }, (_, i) => ({
     rank: i + 1,
@@ -174,6 +232,50 @@ test('formatStatusLine: promotion / relegation / CL copy', () => {
     }),
     '1st in the Champions League'
   );
+
+  assert.equal(
+    formatStatusLine({
+      division: 'champions_league',
+      rank: 8,
+      xp: 230,
+      standings,
+      viewerUserId: 'u8',
+      championsLeague: { globalRank: 8, slots: 20, cutoffXp: 180 },
+    }),
+    "You're staying in the Champions League"
+  );
+
+  const stayNeed = formatStatusLine({
+    division: 'champions_league',
+    rank: 8,
+    xp: 230,
+    standings,
+    viewerUserId: 'u8',
+    championsLeague: { globalRank: 28, slots: 20, cutoffXp: 400 },
+  });
+  assert.ok(stayNeed?.includes('XP to stay in Champions League'));
+
+  assert.equal(
+    formatStatusLine({
+      division: 'premier_league',
+      rank: 8,
+      xp: 230,
+      standings,
+      viewerUserId: 'u8',
+      championsLeague: { globalRank: 12, slots: 20, cutoffXp: 400 },
+    }),
+    "You're in the Champions League places"
+  );
+
+  const fromCl = formatStatusLine({
+    division: 'premier_league',
+    rank: 8,
+    xp: 230,
+    standings,
+    viewerUserId: 'u8',
+    championsLeague: { globalRank: 28, slots: 20, cutoffXp: 400 },
+  });
+  assert.ok(fromCl?.includes('XP from Champions League'));
 });
 
 test('rollover idempotency signal: finalized week is a no-op precondition', () => {

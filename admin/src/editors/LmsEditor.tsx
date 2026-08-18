@@ -74,6 +74,7 @@ const QUESTION_TYPES = [
   'image_badge',
   'custom_image',
   'missing_club',
+  'custom_text',
   'custom_question',
 ] as const
 type QuestionType = (typeof QUESTION_TYPES)[number]
@@ -96,6 +97,7 @@ const FRIENDLY_TYPES: Record<QuestionType, string> = {
   image_badge: 'Image badge',
   custom_image: 'Custom image',
   missing_club: 'Missing club',
+  custom_text: 'Custom text',
   custom_question: 'Type / search',
 }
 
@@ -117,7 +119,12 @@ function friendlyType(type: string): string {
 function expectedOptionCount(question: Q): number {
   if (question.type === 'higher_lower') return 2
   if (question.type === 'custom_question') return 1
-  if (question.type === 'missing_club' && question.options.length === 1) return 1
+  if (
+    (question.type === 'missing_club' || question.type === 'custom_text') &&
+    question.options.length === 1
+  ) {
+    return 1
+  }
   return 4
 }
 
@@ -127,7 +134,8 @@ function makeOptionId(questionId: string, key: string): string {
 
 function isSearchQuestion(question: Q): boolean {
   return question.type === 'custom_question' ||
-    (question.type === 'missing_club' && question.options.length === 1)
+    ((question.type === 'missing_club' || question.type === 'custom_text') &&
+      question.options.length === 1)
 }
 
 function hasPlayerOptionId(optionId: string): boolean {
@@ -139,7 +147,10 @@ function hasTeamOptionId(optionId: string): boolean {
 }
 
 function hasSelectedSearchAnswer(question: Q): boolean {
-  if (question.type === 'custom_question') {
+  if (
+    question.type === 'custom_question' ||
+    (question.type === 'custom_text' && question.options.length === 1)
+  ) {
     return hasPlayerOptionId(question.options[0]?.id ?? '')
   }
   if (question.type === 'missing_club' && question.options.length === 1) {
@@ -297,6 +308,38 @@ export function LmsEditor({
       rememberMultipleChoice(question)
       const answerRow = latestRef.current.a.questions.find((item) => item.questionId === question.id)
       const correct = question.options.find((option) => option.id === answerRow?.correctOptionId)
+      if (question.type === 'custom_text') {
+        const option =
+          correct && hasPlayerOptionId(correct.id)
+            ? { ...correct }
+            : {
+                id: makeOptionId(question.id, 'choose-player'),
+                label: 'Choose player',
+              }
+        const { p: curP, a: curA } = latestRef.current
+        const nextQuestions = sortedQuestions(curP).map((item) =>
+          item.id === question.id
+            ? {
+                ...item,
+                type: 'custom_text' as const,
+                options: [option],
+                presentation: { layout: 'stack' },
+              }
+            : item
+        )
+        const existing = curA.questions.find((item) => item.questionId === question.id)
+        const nextRow: Ans = {
+          ...(existing ?? { questionId: question.id }),
+          questionId: question.id,
+          correctOptionId: option.id,
+          reveal: hasPlayerOptionId(option.id) ? option.label : existing?.reveal ?? '',
+        }
+        const nextAnswers = existing
+          ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+          : [...curA.questions, nextRow]
+        commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+        return
+      }
       if (question.type === 'missing_club') {
         const missing = missingClubFromPath(question.presentation?.careerClubs)
         const option =
@@ -403,6 +446,38 @@ export function LmsEditor({
       commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
       return
     }
+    if (question.type === 'custom_text' || question.type === 'custom_question') {
+      const options = Array.from({ length: 4 }, (_, index) => ({
+        id: makeOptionId(question.id, `player-${index + 1}`),
+        label: `Player ${index + 1}`,
+      }))
+      if (question.options[0] && hasPlayerOptionId(question.options[0].id)) {
+        options[0] = { ...question.options[0] }
+      }
+      const { p: curP, a: curA } = latestRef.current
+      const nextQuestions = sortedQuestions(curP).map((item) =>
+        item.id === question.id
+          ? {
+              ...item,
+              type: 'custom_text' as const,
+              options,
+              presentation: { layout: 'grid' },
+            }
+          : item
+      )
+      const existing = curA.questions.find((item) => item.questionId === question.id)
+      const nextRow: Ans = {
+        ...(existing ?? { questionId: question.id }),
+        questionId: question.id,
+        correctOptionId: options[0]!.id,
+        reveal: options[0]!.label === 'Player 1' ? existing?.reveal ?? '' : options[0]!.label,
+      }
+      const nextAnswers = existing
+        ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+        : [...curA.questions, nextRow]
+      commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
+      return
+    }
     if (question.type === 'missing_club') {
       const missing = missingClubFromPath(question.presentation?.careerClubs)
       const options = Array.from({ length: 4 }, (_, index) => ({
@@ -471,10 +546,49 @@ export function LmsEditor({
       image_badge: 'image_header',
       custom_image: 'image_header',
       missing_club: 'stack',
+      custom_text: 'grid',
       custom_question: 'stack',
     }
     if (type === 'custom_question') {
       setAnswerFormat(question, 'search')
+      return
+    }
+    if (type === 'custom_text') {
+      const options = Array.from({ length: 4 }, (_, index) => {
+        const existing = question.options[index]
+        if (existing && hasPlayerOptionId(existing.id)) return { ...existing }
+        return {
+          id: makeOptionId(question.id, `player-${index + 1}`),
+          label: `Player ${index + 1}`,
+        }
+      })
+      const { p: curP, a: curA } = latestRef.current
+      const nextQuestions = sortedQuestions(curP).map((item) =>
+        item.id === question.id
+          ? {
+              ...item,
+              type,
+              options,
+              presentation: { layout: 'grid' },
+            }
+          : item
+      )
+      const existing = curA.questions.find((item) => item.questionId === question.id)
+      const keptCorrect =
+        existing?.correctOptionId &&
+        options.some((option) => option.id === existing.correctOptionId)
+          ? existing.correctOptionId
+          : options[0]!.id
+      const nextRow: Ans = {
+        ...(existing ?? { questionId: question.id }),
+        questionId: question.id,
+        correctOptionId: keptCorrect,
+        reveal: existing?.reveal ?? '',
+      }
+      const nextAnswers = existing
+        ? curA.questions.map((item) => (item.questionId === question.id ? nextRow : item))
+        : [...curA.questions, nextRow]
+      commit({ ...curP, questions: nextQuestions }, { questions: nextAnswers })
       return
     }
     if (type === 'missing_club') {
@@ -750,10 +864,12 @@ export function LmsEditor({
         nationality: hit.nationality,
         position: hit.position,
       },
-      wasCorrect || q.type === 'custom_question' || q.type === 'higher_lower'
+      wasCorrect || q.type === 'custom_question' || isSearchQuestion(q) || q.type === 'higher_lower'
         ? {
             answerPatch: {
-              ...(wasCorrect || q.type === 'custom_question' ? { correctOptionId: nextId } : {}),
+              ...(wasCorrect || q.type === 'custom_question' || isSearchQuestion(q)
+                ? { correctOptionId: nextId }
+                : {}),
               reveal: hit.name,
             },
           }
@@ -785,10 +901,10 @@ export function LmsEditor({
           nationality: full.nationality ?? hit.nationality,
           position: full.position ?? hit.position,
         },
-        stillCorrect || q.type === 'custom_question' || q.type === 'higher_lower'
+        stillCorrect || q.type === 'custom_question' || isSearchQuestion(q) || q.type === 'higher_lower'
           ? {
               answerPatch: {
-                ...(stillCorrect || q.type === 'custom_question'
+                ...(stillCorrect || q.type === 'custom_question' || isSearchQuestion(q)
                   ? { correctOptionId: resolvedId }
                   : {}),
                 reveal: resolvedName,
@@ -1050,12 +1166,17 @@ export function LmsEditor({
         const missingClubReady =
           q.type !== 'missing_club' ||
           Boolean(missingClubFromPath(q.presentation?.careerClubs)?.name.trim())
+        const customTextReady =
+          q.type !== 'custom_text' ||
+          isSearchQuestion(q) ||
+          q.options.every((option) => hasPlayerOptionId(option.id))
         const complete = Boolean(
           q.prompt.trim() &&
           hasCorrect &&
           optionCountValid &&
           hasSelectedSearchAnswer(q) &&
-          missingClubReady
+          missingClubReady &&
+          customTextReady
         )
         return (
           <article key={q.id} className="q-card lms-question-card">
@@ -1339,6 +1460,11 @@ export function LmsEditor({
 
             {!isSearchQuestion(q) && <fieldset disabled={locked} className="options">
               <legend>Possible answers ({q.options.length}/{expectedOptions})</legend>
+              {q.type === 'custom_text' && (
+                <p className="muted tiny">
+                  Search and select four players, then check the correct one.
+                </p>
+              )}
               {!optionCountValid && (
                 <p className="editor-inline-warning">
                   {friendlyType(q.type)} requires exactly {expectedOptions} options. Add or remove options before saving.
@@ -1388,7 +1514,7 @@ export function LmsEditor({
                       onPickPlayer={(hit) => pickPlayer(q, o, hit)}
                     />
                   )}
-                  {q.type !== 'custom_image' && <button
+                  {q.type !== 'custom_image' && q.type !== 'custom_text' && <button
                     type="button"
                     className="danger tiny-btn lms-remove-option"
                     disabled={locked || q.options.length <= 2}
@@ -1399,7 +1525,7 @@ export function LmsEditor({
                   </button>}
                 </div>
               ))}
-              {q.type !== 'custom_image' && (
+              {q.type !== 'custom_image' && q.type !== 'custom_text' && (
                 <button type="button" className="ghost" disabled={locked} onClick={() => addOption(q)}>+ Add option</button>
               )}
             </fieldset>}

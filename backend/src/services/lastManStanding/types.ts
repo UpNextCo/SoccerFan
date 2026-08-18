@@ -6,11 +6,12 @@ export type LMSQuestionType =
   | 'image_badge'
   | 'custom_image'
   | 'custom_question'
-  | 'missing_club';
+  | 'missing_club'
+  | 'custom_text';
 
 export type LMSGeneratedQuestionType = Exclude<
   LMSQuestionType,
-  'custom_image' | 'custom_question' | 'missing_club'
+  'custom_image' | 'custom_question' | 'missing_club' | 'custom_text'
 >;
 
 export interface LMSOptionPublic {

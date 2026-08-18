@@ -246,7 +246,7 @@ struct WeeklyLeagueIntroView: View {
                 .foregroundStyle(BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text("Earn XP to join your table of 20. Finish top 5 to promote — finish bottom 5 and you drop a division.")
+            Text("Earn XP to join your table of 20. Finish top 5 to promote — finish bottom 5 and you drop a division. Champions League is one table: the 20 highest scorers across Champions League and Premier League.")
                 .font(BKFont.body(13))
                 .foregroundStyle(BKTheme.textSecondary)
                 .multilineTextAlignment(.center)

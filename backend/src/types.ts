@@ -182,7 +182,7 @@ export interface LastManStandingPresentationPublic {
 
 export interface LastManStandingQuestionPublic {
   id: string;
-  type: 'higher_lower' | 'career_path' | 'odd_one_out' | 'which_club' | 'image_badge' | 'custom_image' | 'custom_question' | 'missing_club';
+  type: 'higher_lower' | 'career_path' | 'odd_one_out' | 'which_club' | 'image_badge' | 'custom_image' | 'custom_question' | 'missing_club' | 'custom_text';
   slot: number;
   signature?: boolean;
   prompt: string;

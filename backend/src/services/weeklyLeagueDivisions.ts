@@ -87,9 +87,15 @@ export function zonesForTable(division: WeeklyDivision, tableSize: number): Leag
   const { promote, relegate } = zoneCounts(tableSize);
   const isChampionsLeague = division === 'champions_league';
   const isSundayLeague = division === 'sunday_league';
-  const promoteMaxRank = isChampionsLeague || promote <= 0 ? 0 : promote;
+  const isPremierLeague = division === 'premier_league';
+  // CL is a single exclusive table — no table promo/relegation bands.
+  // PL has no table promotion: the 20 highest scorers across every PL table make CL.
+  const promoteMaxRank =
+    isChampionsLeague || isPremierLeague || promote <= 0 ? 0 : promote;
   const relegateMinRank =
-    isSundayLeague || relegate <= 0 || tableSize <= 0 ? 0 : tableSize - relegate + 1;
+    isSundayLeague || isChampionsLeague || relegate <= 0 || tableSize <= 0
+      ? 0
+      : tableSize - relegate + 1;
   return {
     promoteMaxRank,
     relegateMinRank,
@@ -106,10 +112,12 @@ export function outcomeForRank(
   rank: number,
   tableSize: number
 ): { outcome: MembershipOutcome; nextDivision: WeeklyDivision } {
-  const zones = zonesForTable(division, tableSize);
-  if (division === 'champions_league' && rank === 1) {
-    return { outcome: 'champion', nextDivision: division };
+  // Fallback when a CL player missed the combined top-20 cut.
+  if (division === 'champions_league') {
+    if (rank === 1) return { outcome: 'champion', nextDivision: 'premier_league' };
+    return { outcome: 'relegated', nextDivision: 'premier_league' };
   }
+  const zones = zonesForTable(division, tableSize);
   if (zones.promoteMaxRank > 0 && rank <= zones.promoteMaxRank) {
     return { outcome: 'promoted', nextDivision: promoteDivision(division) };
   }
@@ -117,6 +125,41 @@ export function outcomeForRank(
     return { outcome: 'relegated', nextDivision: relegateDivision(division) };
   }
   return { outcome: 'stayed', nextDivision: division };
+}
+
+export type WeeklyXpMember = {
+  weeklyXp: number;
+  weeklyXpReachedAt: Date | null;
+  userId: string;
+};
+
+/** Top `limit` scorers from this week's CL + all Premier League tables. */
+export function selectChampionsLeagueQualifiers<T extends WeeklyXpMember>(
+  topTierMembers: T[],
+  limit = COHORT_SIZE
+): Set<string> {
+  const sorted = [...topTierMembers].sort(compareWeeklyMembership);
+  return new Set(sorted.slice(0, Math.max(0, limit)).map((row) => row.userId));
+}
+
+/** Final dest after a week. Combined CL+PL cut beats local table zones. */
+export function resolveMembershipDestination(
+  division: WeeklyDivision,
+  rank: number,
+  tableSize: number,
+  userId: string,
+  clQualifierIds: ReadonlySet<string>
+): { outcome: MembershipOutcome; nextDivision: WeeklyDivision } {
+  if (clQualifierIds.has(userId) && (division === 'premier_league' || division === 'champions_league')) {
+    if (division === 'champions_league' && rank === 1) {
+      return { outcome: 'champion', nextDivision: 'champions_league' };
+    }
+    if (division === 'champions_league') {
+      return { outcome: 'stayed', nextDivision: 'champions_league' };
+    }
+    return { outcome: 'promoted', nextDivision: 'champions_league' };
+  }
+  return outcomeForRank(division, rank, tableSize);
 }
 
 /** Tie-break: higher XP, then earlier weekly_xp_reached_at, then user_id ASC. */
@@ -204,24 +247,34 @@ export function formatStatusLine(input: {
   xp: number;
   standings: Array<{ rank: number; xp: number; userId: string }>;
   viewerUserId: string;
+  championsLeague?: { globalRank: number; slots: number; cutoffXp: number } | null;
 }): string | null {
-  const { division, rank, xp, standings } = input;
+  const { division, rank, xp, standings, championsLeague } = input;
   const zones = zonesForTable(division, standings.length);
   if (standings.length === 0 || rank <= 0) return null;
 
+  const inClPlaces = Boolean(
+    championsLeague &&
+      championsLeague.slots > 0 &&
+      championsLeague.globalRank > 0 &&
+      championsLeague.globalRank <= championsLeague.slots
+  );
+
   if (division === 'champions_league') {
     if (rank === 1) return '1st in the Champions League';
-    if (zones.relegateMinRank > 0 && rank >= zones.relegateMinRank) {
-      return "You're in the relegation zone";
-    }
-    if (zones.relegateMinRank > 0) {
-      const edge = standings.find((s) => s.rank === zones.relegateMinRank);
-      if (edge && xp >= edge.xp) {
-        const clear = xp - edge.xp;
-        if (clear > 0) return `${clear.toLocaleString('en-GB')} XP clear of relegation`;
+    if (championsLeague) {
+      if (inClPlaces) return "You're staying in the Champions League";
+      if (xp < championsLeague.cutoffXp) {
+        const need = championsLeague.cutoffXp - xp + 1;
+        if (need > 0) return `${need.toLocaleString('en-GB')} XP to stay in Champions League`;
       }
+      return "You're dropping to Premier League";
     }
     return `${ordinal(rank)} in the Champions League`;
+  }
+
+  if (division === 'premier_league' && inClPlaces) {
+    return "You're in the Champions League places";
   }
 
   if (zones.promoteMaxRank > 0 && rank <= zones.promoteMaxRank) {
@@ -235,6 +288,12 @@ export function formatStatusLine(input: {
     if (promoEdge && xp < promoEdge.xp) {
       const need = promoEdge.xp - xp + 1;
       if (need > 0) return `${need.toLocaleString('en-GB')} XP from promotion`;
+    }
+  }
+  if (division === 'premier_league' && championsLeague && championsLeague.slots > 0) {
+    if (xp < championsLeague.cutoffXp) {
+      const need = championsLeague.cutoffXp - xp + 1;
+      if (need > 0) return `${need.toLocaleString('en-GB')} XP from Champions League`;
     }
   }
   if (zones.relegateMinRank > 0) {

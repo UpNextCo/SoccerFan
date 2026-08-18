@@ -793,7 +793,10 @@ export function sanitizePublicPuzzle(modeId: string, puzzleJson: unknown): unkno
     return {
       ...puzzle,
       questions: puzzle.questions.map((question) => {
-        if (question.type === 'custom_question') {
+        if (
+          question.type === 'custom_question' ||
+          (question.type === 'custom_text' && question.options?.length === 1)
+        ) {
           return { ...question, options: [] };
         }
         if (question.type !== 'missing_club') return question;

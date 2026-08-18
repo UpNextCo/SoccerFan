@@ -31,6 +31,8 @@ export {
   zonesForTable,
   packGroupSizes,
   outcomeForRank,
+  resolveMembershipDestination,
+  selectChampionsLeagueQualifiers,
   DIVISION_LABELS,
   WEEKLY_DIVISIONS,
   type WeeklyDivision,
@@ -404,6 +406,21 @@ export async function ensureWeeklyMembership(userId: string, weekStart: string):
 
   const weekId = await ensureActiveLeagueWeek(weekStart);
   const division = await userDivision(userId);
+  return assignToDivisionTable(userId, weekStart, weekId, division);
+}
+
+async function assignToDivisionTable(
+  userId: string,
+  weekStart: string,
+  weekId: string,
+  division: WeeklyDivision
+): Promise<string> {
+  if (division === 'champions_league') {
+    const placed = await tryJoinExclusiveChampionsLeague(userId, weekStart, weekId);
+    if (placed) return placed;
+    await db.update(users).set({ currentDivision: 'premier_league' }).where(eq(users.id, userId));
+    return assignToDivisionTable(userId, weekStart, weekId, 'premier_league');
+  }
 
   const openCohort = (await db.execute(sql`
     SELECT c.id, COUNT(m.id)::int AS members
@@ -438,6 +455,68 @@ export async function ensureWeeklyMembership(userId: string, weekStart: string):
     cohortId = created[0]!.id;
   }
 
+  await insertMembership(userId, cohortId, weekStart);
+  return cohortId;
+}
+
+/** Champions League is one table of 20. Never open a second group. */
+async function tryJoinExclusiveChampionsLeague(
+  userId: string,
+  weekStart: string,
+  weekId: string
+): Promise<string | null> {
+  const existing = (await db.execute(sql`
+    SELECT c.id, COUNT(m.id)::int AS members
+    FROM league_cohorts c
+    LEFT JOIN league_memberships m ON m.cohort_id = c.id
+    WHERE c.league_week_id = ${weekId}::uuid
+      AND c.division = 'champions_league'
+    GROUP BY c.id
+    ORDER BY c.group_index ASC
+    LIMIT 1
+  `)) as unknown as Array<{ id: string; members: number }>;
+
+  if (existing[0]) {
+    if (existing[0].members >= COHORT_SIZE) return null;
+    await insertMembership(userId, existing[0].id, weekStart);
+    return existing[0].id;
+  }
+
+  try {
+    const created = await db
+      .insert(leagueCohorts)
+      .values({
+        tier: 'bronze',
+        weekStart,
+        division: 'champions_league',
+        groupIndex: 0,
+        leagueWeekId: weekId,
+      })
+      .returning({ id: leagueCohorts.id });
+    const cohortId = created[0]?.id;
+    if (!cohortId) return null;
+    await insertMembership(userId, cohortId, weekStart);
+    return cohortId;
+  } catch {
+    const again = (await db.execute(sql`
+      SELECT c.id, COUNT(m.id)::int AS members
+      FROM league_cohorts c
+      LEFT JOIN league_memberships m ON m.cohort_id = c.id
+      WHERE c.league_week_id = ${weekId}::uuid
+        AND c.division = 'champions_league'
+      GROUP BY c.id
+      ORDER BY c.group_index ASC
+      LIMIT 1
+    `)) as unknown as Array<{ id: string; members: number }>;
+    if (again[0] && again[0].members < COHORT_SIZE) {
+      await insertMembership(userId, again[0].id, weekStart);
+      return again[0].id;
+    }
+    return null;
+  }
+}
+
+async function insertMembership(userId: string, cohortId: string, weekStart: string): Promise<void> {
   await db
     .insert(leagueMemberships)
     .values({
@@ -448,8 +527,6 @@ export async function ensureWeeklyMembership(userId: string, weekStart: string):
       joinedAt: new Date(),
     })
     .onConflictDoNothing({ target: [leagueMemberships.userId, leagueMemberships.weekStart] });
-
-  return cohortId;
 }
 
 /** Weekly pyramid payload for the Leagues tab. Does not auto-join until XP is earned. */
@@ -504,6 +581,10 @@ export async function weeklyLeagueForUser(userId: string): Promise<WeeklyLeagueM
 
   const zones = zonesForTable(division, standings.length);
   const viewer = standings.find((s) => s.isYou) ?? null;
+  const championsLeague =
+    (division === 'premier_league' || division === 'champions_league') && viewer
+      ? await championsLeagueCutoff(weekStart, userId)
+      : null;
   const statusLine = viewer
     ? formatStatusLine({
         division,
@@ -511,6 +592,7 @@ export async function weeklyLeagueForUser(userId: string): Promise<WeeklyLeagueM
         xp: viewer.xp,
         standings: standings.map((s) => ({ rank: s.rank, xp: s.xp, userId: s.userId })),
         viewerUserId: userId,
+        championsLeague,
       })
     : null;
 
@@ -527,6 +609,29 @@ export async function weeklyLeagueForUser(userId: string): Promise<WeeklyLeagueM
     statusLine,
     viewerRank: viewer?.rank ?? null,
   };
+}
+
+async function championsLeagueCutoff(
+  weekStart: string,
+  userId: string
+): Promise<{ globalRank: number; slots: number; cutoffXp: number } | null> {
+  const rows = (await db.execute(sql`
+    SELECT m.user_id, m.weekly_xp::int AS xp, m.weekly_xp_reached_at
+    FROM league_memberships m
+    JOIN league_cohorts c ON c.id = m.cohort_id
+    WHERE m.week_start = ${weekStart}
+      AND c.division IN ('premier_league', 'champions_league')
+    ORDER BY m.weekly_xp DESC NULLS LAST,
+             m.weekly_xp_reached_at ASC NULLS LAST,
+             m.user_id ASC
+  `)) as unknown as Array<{ user_id: string; xp: number; weekly_xp_reached_at: string | null }>;
+
+  if (rows.length === 0) return null;
+  const globalRank = rows.findIndex((row) => row.user_id === userId) + 1;
+  if (globalRank <= 0) return null;
+  const slots = Math.min(COHORT_SIZE, rows.length);
+  const cutoffXp = Number(rows[slots - 1]?.xp) || 0;
+  return { globalRank, slots, cutoffXp };
 }
 
 /** @deprecated Prefer weeklyLeagueForUser — kept for older callers that auto-joined. */

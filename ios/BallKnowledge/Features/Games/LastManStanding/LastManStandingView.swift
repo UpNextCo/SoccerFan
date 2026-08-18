@@ -155,7 +155,8 @@ final class LastManStandingViewModel {
     }
 
     func submitCustomAnswer(_ player: PlayerSearchResultDTO) async {
-        guard let question = state.currentQuestion, question.type == .customQuestion else { return }
+        guard let question = state.currentQuestion,
+              question.type == .customQuestion || question.type == .customText else { return }
         customSearchQuery = ""
         customSearchResults = []
         customTeamSearchResults = []

@@ -38,6 +38,7 @@ const lmsTypes = [
   'custom_image',
   'custom_question',
   'missing_club',
+  'custom_text',
 ] as const;
 const lmsPlayerOptionId = /-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const lmsTeamOptionId = /-\d+$/;
@@ -260,7 +261,8 @@ function validateLms(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzz
       question.type === 'higher_lower'
         ? 2
         : question.type === 'custom_question' ||
-            (question.type === 'missing_club' && question.options.length === 1)
+            ((question.type === 'missing_club' || question.type === 'custom_text') &&
+              question.options.length === 1)
           ? 1
           : 4;
     if (question.options.length !== count) issue(issues, `puzzleJson.questions.${index}.options`, `${question.type} requires exactly ${count} options.`);
@@ -280,13 +282,14 @@ function validateLms(puzzleJson: unknown, answerJson: unknown, issues: AdminPuzz
       }
     }
     if (
-      question.type === 'custom_question' &&
+      (question.type === 'custom_question' ||
+        (question.type === 'custom_text' && question.options.length === 1)) &&
       !lmsPlayerOptionId.test(question.options[0]?.id ?? '')
     ) {
       issue(
         issues,
         `puzzleJson.questions.${index}.options.0`,
-        'Choose the correct player for this custom question.'
+        'Choose the correct player for this question.'
       );
     }
     if (question.type === 'career_path' || question.type === 'missing_club') {

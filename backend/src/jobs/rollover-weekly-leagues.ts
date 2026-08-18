@@ -13,7 +13,8 @@ import { leagueCohorts, leagueMemberships, leagueWeeks, users } from '../db/sche
 import {
   ensureActiveLeagueWeek,
   londonWeekStart,
-  outcomeForRank,
+  resolveMembershipDestination,
+  selectChampionsLeagueQualifiers,
   weekEndFor,
   type WeeklyDivision,
 } from '../services/leagueService.js';
@@ -69,9 +70,21 @@ async function main() {
 
   console.log(`Finalizing ${cohorts.length} table(s) for week ${prevStart}`);
 
-  let updatedMembers = 0;
+  type MemberRow = {
+    id: string;
+    user_id: string;
+    weekly_xp: number;
+    weekly_xp_reached_at: string | null;
+  };
+
+  const membersByCohort = new Map<string, MemberRow[]>();
+  const topTierPool: Array<{
+    weeklyXp: number;
+    weeklyXpReachedAt: Date | null;
+    userId: string;
+  }> = [];
+
   for (const cohort of cohorts) {
-    const division = isWeeklyDivision(cohort.division) ? cohort.division : 'sunday_league';
     const members = (await db.execute(sql`
       SELECT m.id, m.user_id, m.weekly_xp, m.weekly_xp_reached_at
       FROM league_memberships m
@@ -79,18 +92,41 @@ async function main() {
       ORDER BY m.weekly_xp DESC NULLS LAST,
                m.weekly_xp_reached_at ASC NULLS LAST,
                m.user_id ASC
-    `)) as unknown as Array<{
-      id: string;
-      user_id: string;
-      weekly_xp: number;
-      weekly_xp_reached_at: string | null;
-    }>;
+    `)) as unknown as MemberRow[];
+    membersByCohort.set(cohort.id, members);
+    if (cohort.division === 'premier_league' || cohort.division === 'champions_league') {
+      for (const member of members) {
+        topTierPool.push({
+          weeklyXp: Number(member.weekly_xp) || 0,
+          weeklyXpReachedAt: member.weekly_xp_reached_at
+            ? new Date(member.weekly_xp_reached_at)
+            : null,
+          userId: member.user_id,
+        });
+      }
+    }
+  }
 
+  const clQualifiers = selectChampionsLeagueQualifiers(topTierPool);
+  console.log(
+    `Champions League next week: ${clQualifiers.size} qualifier(s) from ${topTierPool.length} CL + Premier League player(s)`
+  );
+
+  let updatedMembers = 0;
+  for (const cohort of cohorts) {
+    const division = isWeeklyDivision(cohort.division) ? cohort.division : 'sunday_league';
+    const members = membersByCohort.get(cohort.id) ?? [];
     const n = members.length;
     for (let i = 0; i < n; i += 1) {
       const rank = i + 1;
       const member = members[i]!;
-      const { outcome, nextDivision } = outcomeForRank(division as WeeklyDivision, rank, n);
+      const { outcome, nextDivision } = resolveMembershipDestination(
+        division as WeeklyDivision,
+        rank,
+        n,
+        member.user_id,
+        clQualifiers
+      );
       console.log(
         `  ${cohort.division} g${cohort.groupIndex} #${rank} ${member.user_id.slice(0, 8)} xp=${member.weekly_xp} → ${outcome} (${nextDivision})`
       );
