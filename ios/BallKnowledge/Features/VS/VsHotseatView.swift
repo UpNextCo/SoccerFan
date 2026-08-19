@@ -172,7 +172,7 @@ struct VsHotseatView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
 
-            Text("Shared names · last one standing wins")
+            Text("A miss knocks you out · last one standing wins")
                 .font(BKFont.caption(12))
                 .foregroundStyle(BKTheme.textSecondary)
         }
@@ -187,7 +187,7 @@ struct VsHotseatView: View {
                     .tracking(1.2)
                     .foregroundStyle(BKTheme.textMuted)
                 if hotseat?.named.isEmpty != false {
-                    Text("Name a player who fits. Once named, nobody else can use them.")
+                    Text("Name a player who fits. A miss knocks you out. Once named, nobody else can use them.")
                         .font(BKFont.body(14))
                         .foregroundStyle(BKTheme.textSecondary)
                 } else {
@@ -318,7 +318,8 @@ struct VsHotseatView: View {
         }
         let ok = await viewModel.namePlayer(playerId: hit.id)
         if ok {
-            HapticManager.success()
+            let stillAlive = viewModel.challenge?.hotseat?.players.first(where: \.isYou)?.alive != false
+            if stillAlive { HapticManager.success() } else { HapticManager.error() }
             search.reset()
         } else {
             search.feedback = viewModel.errorMessage ?? "Doesn't fit the category"

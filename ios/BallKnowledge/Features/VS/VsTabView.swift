@@ -382,29 +382,23 @@ struct VsTabView: View {
                     Text("Challenge your mates")
                         .font(BKFont.title(28))
                         .foregroundStyle(BKTheme.textPrimary)
-                    Text("Pick a game, share a code, invite up to 3 friends. Live turns for Back Yourself and Draft XI. No XP.")
+                    Text("Pick a game and invite up to 3 friends.")
                         .font(BKFont.body(14))
                         .foregroundStyle(BKTheme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
                 }
                 .padding(.top, 8)
+                .padding(.bottom, 16)
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("PICK A GAME")
-                        .font(BKFont.caption(11))
-                        .tracking(1)
-                        .foregroundStyle(BKTheme.textMuted)
-
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                        ForEach(DailyPlayOrder.vsModes) { mode in
-                            Button {
-                                viewModel.selectedMode = mode
-                            } label: {
-                                VsModeCard(mode: mode, selected: viewModel.selectedMode == mode)
-                            }
-                            .buttonStyle(.plain)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                    ForEach(DailyPlayOrder.vsModes) { mode in
+                        Button {
+                            viewModel.selectedMode = mode
+                        } label: {
+                            VsModeCard(mode: mode, selected: viewModel.selectedMode == mode)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
 
@@ -456,13 +450,14 @@ struct VsTabView: View {
                             .font(BKFont.headline(14))
                             .foregroundStyle(BKTheme.textPrimary)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, 16)
                             .background(BKTheme.card)
                             .clipShape(Capsule())
                     }
                     .disabled(viewModel.isBusy)
                     .buttonStyle(.plain)
                 }
+                .padding(.top, 16)
                 .id("vsJoinCode")
 
                 if let error = viewModel.errorMessage {
@@ -498,11 +493,14 @@ struct VsTabView: View {
     private func challengeContent(_ challenge: VsChallengeDTO) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
-                HStack(alignment: .center, spacing: 10) {
+                VStack(spacing: 8) {
                     Text(challenge.title)
-                        .font(BKFont.title(26))
+                        .font(BKFont.title(22))
                         .foregroundStyle(BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
+                        .lineLimit(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 300)
                     if challenge.youAreHost && challenge.status == "waiting" {
                         Button {
                             Task { await viewModel.reshuffleCategory() }
@@ -520,7 +518,10 @@ struct VsTabView: View {
                         .accessibilityLabel("Change category")
                     }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 28)
                 .padding(.top, 4)
+                .padding(.bottom, 8)
                 .animation(.easeOut(duration: 0.2), value: challenge.title)
 
                 codeCard(challenge.code)
@@ -537,7 +538,7 @@ struct VsTabView: View {
                 } else if viewModel.challenge?.isLiveHotseat == true {
                     waitingCard(
                         title: "Live Back Yourself",
-                        message: "Take turns naming players. Shared names, 30 seconds each. Last one standing wins."
+                        message: "Take turns naming players. Shared names, 30 seconds each. Name someone who doesn’t fit and you’re out — last one standing wins."
                     )
                 } else if viewModel.challenge?.isLiveTargetMan == true {
                     waitingCard(
@@ -621,22 +622,24 @@ struct VsTabView: View {
 
     private func codeCard(_ code: String) -> some View {
         VStack(spacing: 10) {
-            Text("CHALLENGE CODE")
-                .font(BKFont.caption(10)).tracking(1)
-                .foregroundStyle(BKTheme.textMuted)
+            HStack(spacing: 6) {
+                Text("CHALLENGE CODE")
+                    .font(BKFont.caption(10)).tracking(1)
+                    .foregroundStyle(BKTheme.textMuted)
+                ShareLink(item: "Join my Ball Knowledge VS challenge — code \(code)") {
+                    Text("SHARE")
+                        .font(BKFont.caption(10)).tracking(1)
+                        .foregroundStyle(BKTheme.accent)
+                }
+            }
             Text(code)
                 .font(BKFont.title(40))
                 .tracking(6)
                 .foregroundStyle(BKTheme.textPrimary)
-            ShareLink(item: "Join my Ball Knowledge VS challenge — code \(code)") {
-                Text("Share code")
-                    .font(BKFont.caption(12))
-                    .foregroundStyle(BKTheme.accent)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 22)
-        .background(BKTheme.card)
+        .background(Color(hex: "161616"))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
@@ -647,6 +650,7 @@ struct VsTabView: View {
                 Text(challenge.youAreHost ? "Waiting for friends" : "Waiting to start")
                     .font(BKFont.headline(16))
                     .foregroundStyle(BKTheme.textPrimary)
+                    .padding(.bottom, 6)
             }
             ForEach(Array(challenge.players.enumerated()), id: \.element.userId) { index, player in
                 if index > 0 { Divider().overlay(BKTheme.textMuted.opacity(0.25)) }
@@ -671,7 +675,7 @@ struct VsTabView: View {
             }
         }
         .padding(16)
-        .background(BKTheme.card)
+        .background(Color(hex: "121212"))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
@@ -897,6 +901,7 @@ private struct VsModeCard: View {
                 if let name = GameModeTileArt.bundleImageName(for: mode.rawValue) {
                     GameModeBundleImage(name: name)
                         .scaledToFill()
+                        .offset(y: 14)
                 } else {
                     Image(systemName: mode.icon)
                         .font(.system(size: 22, weight: .semibold))

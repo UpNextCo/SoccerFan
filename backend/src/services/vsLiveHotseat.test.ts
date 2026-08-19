@@ -28,6 +28,15 @@ test('passTurn moves to the next remaining player and resets the clock', () => {
   assert.equal(named.finished, false);
 });
 
+test('eliminatePlayer with two players ends the game', () => {
+  const now = Date.parse('2026-08-19T00:00:00.000Z');
+  const afterA = eliminatePlayer(initHotseat(['a', 'b'], now), 'a', now);
+  assert.equal(afterA.finished, true);
+  assert.equal(afterA.winnerUserId, 'b');
+  assert.deepEqual(afterA.remaining, ['b']);
+  assert.deepEqual(afterA.eliminated, ['a']);
+});
+
 test('eliminatePlayer skips the next remaining player and last one wins', () => {
   const now = Date.parse('2026-08-19T00:00:00.000Z');
   const afterA = eliminatePlayer(initHotseat(['a', 'b', 'c'], now), 'a', now);

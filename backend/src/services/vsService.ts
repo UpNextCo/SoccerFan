@@ -1473,7 +1473,10 @@ export async function nameVsHotseat(userId: string, challengeId: string, playerI
     ? validSet.has(playerId)
     : await playerMatchesBackYourselfCategory(playerId, puzzle.category as BackYourselfCategory);
   if (!inPool) {
-    throw new VsError("Doesn't fit the category", 400, 'INVALID_ANSWER');
+    const next = eliminatePlayer(hotseat, userId);
+    if (next.finished) return viewFor(await finishHotseat(row, next), userId);
+    const updated = await persistRow(row.id, { liveJson: next });
+    return viewFor(updated ?? { ...row, liveJson: next }, userId);
   }
 
   const card = await resolveBackYourselfPlayerCard(playerId);

@@ -58,9 +58,10 @@ struct LaunchLoadingView: View {
         ZStack {
             BKTheme.background.ignoresSafeArea()
             VStack(spacing: 16) {
-                Ph.soccerBall.fill
-                    .color(BKTheme.accent)
-                    .frame(width: 48, height: 48)
+                GameModeBundleImage(name: "balllsss")
+                    .scaledToFill()
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 ProgressView()
                     .tint(BKTheme.accent)
             }

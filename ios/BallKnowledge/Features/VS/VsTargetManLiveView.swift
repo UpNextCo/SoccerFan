@@ -6,22 +6,47 @@ struct VsTargetManLiveView: View {
     @State private var search = VsHotseatSearch()
     @FocusState private var searchFocused: Bool
     @State private var now = Date()
+    @State private var seenPickIds: Set<String> = []
+    @State private var seededPicks = false
+    @State private var mateToast: VsTargetManPickDTO?
 
     private var live: VsTargetManDTO? { viewModel.challenge?.targetMan }
+    private var namedPicks: [VsTargetManPickDTO] { live?.picks ?? [] }
     private var turnName: String {
         live?.board.first(where: { $0.userId == live?.turnUserId })?.displayName ?? "Someone"
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                scoreboard
-                targetHeader
-                pickGrid
-                Spacer(minLength: 0)
-                turnFooter
+            GeometryReader { geo in
+                let safeBottom = geo.safeAreaInsets.bottom
+                let showingResults = live?.yourTurn == true && !search.results.isEmpty
+                let sheetH = (showingResults ? 286 : 118) + safeBottom
+                ZStack(alignment: .bottom) {
+                    VStack(spacing: 0) {
+                        targetHeader
+                        pickGrid
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.bottom, sheetH)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .background(StadiumBackground(glowIntensity: 0.32))
+
+                    if live?.finished != true {
+                        turnSheet(safeBottom: safeBottom)
+                            .frame(height: sheetH, alignment: .top)
+                    }
+
+                    if let mateToast {
+                        VsTargetManMateToast(pick: mateToast)
+                            .padding(.bottom, sheetH + 20)
+                            .transition(.scale(scale: 0.92).combined(with: .opacity))
+                    }
+                }
+                .animation(.spring(response: 0.32, dampingFraction: 0.86), value: mateToast?.id)
+                .frame(width: geo.size.width, height: geo.size.height + safeBottom)
+                .ignoresSafeArea(edges: .bottom)
             }
-            .background(StadiumBackground(glowIntensity: 0.32))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -38,6 +63,11 @@ struct VsTargetManLiveView: View {
                     VsChallengeOverflowMenu(viewModel: viewModel)
                 }
             }
+        }
+        .liftsForKeyboard()
+        .onAppear { seedSeenPicks() }
+        .onChange(of: namedPicks.map(\.id)) { _, _ in
+            revealMatePickIfNeeded()
         }
         .onReceive(Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()) { now = $0 }
         .onChange(of: live?.yourTurn) { _, yourTurn in
@@ -65,69 +95,19 @@ struct VsTargetManLiveView: View {
         }
     }
 
-    private var scoreboard: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(live?.board ?? [], id: \.userId) { row in
-                    let isTurn = row.userId == live?.turnUserId && live?.finished != true
-                    VStack(spacing: 2) {
-                        Text(row.isYou ? "YOU" : row.displayName.uppercased())
-                            .font(BKFont.caption(9))
-                            .foregroundStyle(BKTheme.textMuted)
-                            .lineLimit(1)
-                        Text("\(row.pickCount)/\(live?.slotCount ?? 5)")
-                            .font(BKFont.title(20))
-                            .foregroundStyle(row.isYou ? BKTheme.accent : BKTheme.textPrimary)
-                            .contentTransition(.numericText())
-                    }
-                    .frame(minWidth: 64)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-                    .background(BKTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(isTurn ? BKTheme.accent : Color.clear, lineWidth: 1.5)
-                    )
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
-        }
-        .animation(.easeOut(duration: 0.25), value: live?.board.map(\.pickCount))
-    }
-
     private var targetHeader: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
-                    .font(BKFont.caption(11)).tracking(1)
-                    .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
-                Spacer()
-                Text(timerLabel)
-                    .font(BKFont.headline(16))
-                    .foregroundStyle(secondsLeft <= 12 ? BKTheme.wrong : BKTheme.accent)
-                    .monospacedDigit()
-            }
-            .padding(.horizontal, 20)
-
-            Text("TARGET")
-                .font(BKFont.caption(10)).tracking(1)
-                .foregroundStyle(BKTheme.textMuted)
+        VStack(spacing: 10) {
             Text(targetLabel)
-                .font(BKFont.title(36))
+                .font(BKFont.title(44))
                 .foregroundStyle(BKTheme.accent)
             Text((live?.categoryLabel ?? "Target Man").uppercased())
-                .font(BKFont.headline(14))
+                .font(BKFont.headline(17))
                 .foregroundStyle(BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
-            Text("ROW \((live?.slotIndex ?? 0) + 1) OF \(live?.slotCount ?? 5)  ·  SHARED NAMES  ·  SCORES AT THE END")
-                .font(BKFont.caption(10)).tracking(0.6)
-                .foregroundStyle(BKTheme.textMuted)
         }
-        .padding(.vertical, 8)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
     }
 
     private var pickGrid: some View {
@@ -145,14 +125,29 @@ struct VsTargetManLiveView: View {
 
     private func rowCard(_ slot: Int) -> some View {
         let current = slot == live?.slotIndex && live?.finished != true
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("ROW \(slot + 1)")
-                .font(BKFont.caption(10)).tracking(0.8)
-                .foregroundStyle(current ? BKTheme.accent : BKTheme.textMuted)
-            HStack(spacing: 8) {
-                ForEach(live?.board ?? [], id: \.userId) { person in
-                    pickCell(person: person, slot: slot, current: current)
+        let people = live?.board ?? []
+        return Group {
+            if people.count <= 2 {
+                HStack(spacing: 8) {
+                    ForEach(people, id: \.userId) { person in
+                        pickCell(person: person, slot: slot, current: current)
+                    }
                 }
+            } else {
+                GeometryReader { geo in
+                    let cellW = (geo.size.width - 8) / 2
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(people, id: \.userId) { person in
+                                pickCell(person: person, slot: slot, current: current)
+                                    .frame(width: cellW)
+                            }
+                        }
+                        .scrollTargetLayout()
+                    }
+                    .scrollTargetBehavior(.viewAligned)
+                }
+                .frame(height: 58)
             }
         }
         .padding(12)
@@ -173,39 +168,79 @@ struct VsTargetManLiveView: View {
                 .font(BKFont.caption(8))
                 .foregroundStyle(BKTheme.textMuted)
                 .lineLimit(1)
-            if let pick {
-                HStack(alignment: .center, spacing: 6) {
-                    PlayerAvatar(urlString: pick.headshotUrl, size: 28)
-                    Text(pick.playerName.isEmpty ? "Skipped" : pick.playerName)
-                        .font(BKFont.headline(12))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.75)
+            Group {
+                if let pick {
+                    HStack(alignment: .center, spacing: 6) {
+                        PlayerAvatar(urlString: pick.headshotUrl, size: 28)
+                        Text(pick.playerName.isEmpty ? "Skipped" : pick.playerName)
+                            .font(BKFont.headline(12))
+                            .foregroundStyle(BKTheme.textPrimary)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.75)
+                    }
+                } else if waiting {
+                    Text("…")
+                        .font(BKFont.headline(16))
+                        .foregroundStyle(BKTheme.accent)
+                } else {
+                    Text("—")
+                        .font(BKFont.headline(14))
+                        .foregroundStyle(BKTheme.textMuted)
                 }
-            } else if waiting {
-                Text("…")
-                    .font(BKFont.headline(16))
-                    .foregroundStyle(BKTheme.accent)
-            } else {
-                Text("—")
-                    .font(BKFont.headline(14))
-                    .foregroundStyle(BKTheme.textMuted)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
+        .frame(maxWidth: .infinity, minHeight: 58, maxHeight: 58, alignment: .topLeading)
         .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    @ViewBuilder
-    private var turnFooter: some View {
-        if live?.yourTurn == true {
-            VStack(spacing: 10) {
+    private var sheetShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 18,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 18,
+            style: .continuous
+        )
+    }
+
+    private func turnSheet(safeBottom: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
+                    .font(BKFont.headline(13)).tracking(0.8)
+                    .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
+                Spacer(minLength: 8)
+                Text(timerLabel)
+                    .font(BKFont.title(22))
+                    .foregroundStyle(secondsLeft <= 12 ? BKTheme.wrong : BKTheme.accent)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+
+            if live?.yourTurn == true {
+                if !search.results.isEmpty {
+                    PlayerSearchResultsList(
+                        players: search.results,
+                        isDisabled: { viewModel.isBusy || (live?.usedPlayerIds.contains($0.id) == true) }
+                    ) { hit in
+                        Task { await name(hit) }
+                    }
+                    .frame(maxHeight: 160)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+                }
                 if let feedback = search.feedback ?? viewModel.errorMessage {
                     Text(feedback)
                         .font(BKFont.caption(12))
                         .foregroundStyle(BKTheme.wrong)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 8)
                 }
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
@@ -223,28 +258,24 @@ struct VsTargetManLiveView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .background(BKTheme.card)
+                .background(BKTheme.cardElevated)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                if !search.results.isEmpty {
-                    PlayerSearchResultsList(
-                        players: search.results,
-                        isDisabled: { viewModel.isBusy || (live?.usedPlayerIds.contains($0.id) == true) }
-                    ) { hit in
-                        Task { await name(hit) }
-                    }
-                    .frame(maxHeight: 200)
-                }
+                .padding(.horizontal, 24)
+            } else {
+                Text(live?.finished == true ? "Challenge over" : "Waiting for \(turnName)")
+                    .font(BKFont.body(14))
+                    .foregroundStyle(BKTheme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 16)
-            .background(BKTheme.background.opacity(0.92))
-        } else {
-            Text(live?.finished == true ? "Challenge over" : "Waiting for \(turnName)")
-                .font(BKFont.body(14))
-                .foregroundStyle(BKTheme.textSecondary)
-                .padding(18)
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, safeBottom)
+        .frame(maxWidth: .infinity)
+        .background(BKTheme.card)
+        .clipShape(sheetShape)
+        .overlay {
+            sheetShape.stroke(BKTheme.cardElevated, lineWidth: 1)
         }
     }
 
@@ -287,5 +318,61 @@ struct VsTargetManLiveView: View {
             search.feedback = viewModel.errorMessage ?? "Couldn't lock that pick"
             HapticManager.error()
         }
+    }
+
+    private func seedSeenPicks() {
+        seenPickIds = Set(namedPicks.map(\.id))
+        seededPicks = true
+    }
+
+    private func revealMatePickIfNeeded() {
+        let ids = namedPicks.map(\.id)
+        if !seededPicks {
+            seedSeenPicks()
+            return
+        }
+        let fresh = namedPicks.filter { !seenPickIds.contains($0.id) }
+        seenPickIds.formUnion(ids)
+        guard let mate = fresh.last(where: { !$0.isYou }) else { return }
+        mateToast = mate
+        Task {
+            try? await Task.sleep(for: .seconds(2.1))
+            if mateToast?.id == mate.id {
+                mateToast = nil
+            }
+        }
+    }
+}
+
+private struct VsTargetManMateToast: View {
+    let pick: VsTargetManPickDTO
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("\(pick.displayName.uppercased()) PLAYED")
+                .font(BKFont.caption(12)).tracking(0.8)
+                .foregroundStyle(BKTheme.accent)
+
+            HStack(alignment: .center, spacing: 12) {
+                PlayerAvatar(urlString: pick.headshotUrl, size: 52)
+                Text(pick.playerName.isEmpty ? "Skipped" : pick.playerName)
+                    .font(BKFont.headline(17))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: 280)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(BKTheme.cardElevated, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
+        .allowsHitTesting(false)
     }
 }
