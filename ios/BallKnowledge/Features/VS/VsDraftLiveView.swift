@@ -6,6 +6,9 @@ struct VsDraftLiveView: View {
     let battle: BattleChallenge
     @State private var draft: DraftMasterViewModel
     @State private var picksExpanded = false
+    @State private var seenPickIds: Set<String> = []
+    @State private var seededPicks = false
+    @State private var mateToast: VsLivePickFeedDTO?
 
     init(viewModel: VsViewModel, battle: BattleChallenge) {
         self.viewModel = viewModel
@@ -17,7 +20,6 @@ struct VsDraftLiveView: View {
 
     private var live: VsLiveDTO? { viewModel.challenge?.live }
     private var namedPicks: [VsLivePickFeedDTO] { live?.picks ?? [] }
-    private var latestPicks: [VsLivePickFeedDTO] { Array(namedPicks.suffix(2).reversed()) }
     private var picksBySlot: [(slot: BattleSlot, rows: [VsLivePickFeedDTO])] {
         battle.slots.compactMap { slot in
             let rows = namedPicks.filter { $0.slotId == slot.id }
@@ -32,51 +34,58 @@ struct VsDraftLiveView: View {
         NavigationStack {
             GeometryReader { geo in
                 let safeBottom = geo.safeAreaInsets.bottom
-                let collapsedH = VsDraftPicksSheet.collapsedHeight(empty: namedPicks.isEmpty, safeBottom: safeBottom)
-                let expandedH = min(geo.size.height * 0.78, geo.size.height - 72)
+                let collapsedH = VsDraftPicksSheet.collapsedHeight(safeBottom: safeBottom)
+                let expandedH = max(collapsedH, min(geo.size.height * 0.78, max(0, geo.size.height - 72)))
+                if geo.size.width > 40, geo.size.height > 80 {
+                    ZStack(alignment: .bottom) {
+                        VStack(spacing: 0) {
+                            scoreboard
+                            BattleConstraintsStrip(
+                                constraints: battle.constraints,
+                                usedIds: Set(live?.usedConstraintIds ?? []).union(draft.state.usedConstraintIds)
+                            )
+                            .padding(.top, 6)
+                            BattlePitchView(
+                                slots: battle.slots,
+                                state: draft.state,
+                                highlightedSlotId: live?.slotId,
+                                interactiveSlotId: live?.yourTurn == true ? live?.slotId : "",
+                                compact: true,
+                                slotScale: 0.88,
+                                onTapSlot: { open($0) },
+                                onDropConstraint: { id, slot in
+                                    guard live?.yourTurn == true, slot.id == live?.slotId else { return }
+                                    draft.assignConstraint(id: id, toSlot: slot.id)
+                                    draft.openSlot(slot)
+                                }
+                            )
+                            .frame(maxHeight: .infinity)
+                            .padding(.horizontal, 34)
+                            .padding(.bottom, collapsedH)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-                ZStack(alignment: .bottom) {
-                    VStack(spacing: 0) {
-                        categoryHeader
-                        scoreboard
-                        BattleConstraintsStrip(
-                            constraints: battle.constraints,
-                            usedIds: Set(live?.usedConstraintIds ?? []).union(draft.state.usedConstraintIds)
+                        VsDraftPicksSheet(
+                            battle: battle,
+                            live: live,
+                            picksBySlot: picksBySlot,
+                            turnName: turnName,
+                            collapsedHeight: collapsedH,
+                            expandedHeight: expandedH,
+                            safeBottom: safeBottom,
+                            expanded: $picksExpanded
                         )
-                        BattlePitchView(
-                            slots: battle.slots,
-                            state: draft.state,
-                            highlightedSlotId: live?.slotId,
-                            interactiveSlotId: live?.yourTurn == true ? live?.slotId : "",
-                            onTapSlot: { open($0) },
-                            onDropConstraint: { id, slot in
-                                guard live?.yourTurn == true, slot.id == live?.slotId else { return }
-                                draft.assignConstraint(id: id, toSlot: slot.id)
-                                draft.openSlot(slot)
-                            }
-                        )
-                        .frame(maxHeight: .infinity)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        .padding(.bottom, collapsedH - 8)
+
+                        if let mateToast {
+                            VsDraftMateToast(pick: mateToast)
+                                .padding(.bottom, collapsedH + 20)
+                                .transition(.scale(scale: 0.92).combined(with: .opacity))
+                        }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
-                    VsDraftPicksSheet(
-                        battle: battle,
-                        live: live,
-                        namedPicks: namedPicks,
-                        latestPicks: latestPicks,
-                        picksBySlot: picksBySlot,
-                        turnName: turnName,
-                        collapsedHeight: collapsedH,
-                        expandedHeight: expandedH,
-                        safeBottom: safeBottom,
-                        expanded: $picksExpanded
-                    )
+                    .animation(.spring(response: 0.32, dampingFraction: 0.86), value: mateToast?.id)
+                    .frame(width: geo.size.width, height: geo.size.height + safeBottom)
+                    .ignoresSafeArea(edges: .bottom)
                 }
-                .frame(width: geo.size.width, height: geo.size.height + safeBottom)
-                .ignoresSafeArea(edges: .bottom)
             }
             .background {
                 StadiumBackground().ignoresSafeArea()
@@ -89,9 +98,14 @@ struct VsDraftLiveView: View {
                     }
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("VS · DRAFT XI")
-                        .font(BKFont.caption(13)).tracking(1)
-                        .foregroundStyle(BKTheme.accent)
+                    Text(battle.category.title.uppercased())
+                        .font(BKFont.caption(12)).tracking(0.6)
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 220)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     VsChallengeOverflowMenu(viewModel: viewModel)
@@ -104,7 +118,13 @@ struct VsDraftLiveView: View {
         )) { slot in
             BattleSearchSheet(viewModel: draft, slot: slot)
         }
-        .onAppear { wireDraft() }
+        .onAppear {
+            wireDraft()
+            seedSeenPicks()
+        }
+        .onChange(of: namedPicks.map(\.id)) { _, _ in
+            revealMatePickIfNeeded()
+        }
         .onChange(of: live?.yourPicks.map(\.id)) { _, _ in syncPitch() }
         .onChange(of: live?.usedPlayerIds) { _, ids in
             draft.extraUsedPlayerIds = Set(ids ?? [])
@@ -133,53 +153,41 @@ struct VsDraftLiveView: View {
         }
     }
 
-    private var categoryHeader: some View {
-        VStack(spacing: 3) {
-            Text(battle.category.title.uppercased())
-                .font(BKFont.headline(15)).tracking(1)
-                .foregroundStyle(BKTheme.textPrimary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.75)
-                .multilineTextAlignment(.center)
-            Text(BattleFormations.displayName(for: battle.formationId).uppercased())
-                .font(BKFont.caption(11)).tracking(1.1)
-                .foregroundStyle(BKTheme.textMuted)
+    private var scoreboard: some View {
+        let rows = live?.board ?? []
+        let nameSize: CGFloat = rows.count >= 4 ? 11 : rows.count == 3 ? 13 : 15
+        let scoreSize: CGFloat = rows.count >= 4 ? 24 : rows.count == 3 ? 30 : 38
+        let hyphenSize: CGFloat = rows.count >= 4 ? 14 : rows.count == 3 ? 16 : 20
+        let gap: CGFloat = rows.count >= 4 ? 8 : rows.count == 3 ? 12 : 16
+        return HStack(spacing: gap) {
+            ForEach(Array(rows.enumerated()), id: \.element.userId) { index, row in
+                if index > 0 {
+                    Text("–")
+                        .font(BKFont.headline(hyphenSize))
+                        .foregroundStyle(BKTheme.textMuted)
+                }
+                let isTurn = row.userId == live?.turnUserId && live?.finished != true
+                VStack(spacing: 3) {
+                    Text(row.isYou ? "YOU" : row.displayName.uppercased())
+                        .font(BKFont.caption(nameSize))
+                        .tracking(0.7)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                    Text("\(row.total)")
+                        .font(BKFont.title(scoreSize))
+                        .contentTransition(.numericText())
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(isTurn ? BKTheme.accent : BKTheme.textPrimary)
+                .opacity(isTurn ? 1 : 0.55)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16)
-        .padding(.top, 6)
-        .padding(.bottom, 4)
-    }
-
-    private var scoreboard: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(live?.board ?? [], id: \.userId) { row in
-                    let isTurn = row.userId == live?.turnUserId && live?.finished != true
-                    VStack(spacing: 2) {
-                        Text(row.isYou ? "YOU" : row.displayName.uppercased())
-                            .font(BKFont.caption(9))
-                            .foregroundStyle(BKTheme.textMuted)
-                            .lineLimit(1)
-                        Text("\(row.total)")
-                            .font(BKFont.title(22))
-                            .foregroundStyle(row.isYou ? BKTheme.accent : BKTheme.textPrimary)
-                            .contentTransition(.numericText())
-                    }
-                    .frame(minWidth: 64)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-                    .background(BKTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(isTurn ? BKTheme.accent : Color.clear, lineWidth: 1.5)
-                    )
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-        }
+        .padding(.top, 28)
+        .padding(.bottom, 14)
+        .animation(.easeOut(duration: 0.25), value: live?.turnUserId)
         .animation(.easeOut(duration: 0.25), value: live?.board.map(\.total))
     }
 
@@ -215,13 +223,73 @@ struct VsDraftLiveView: View {
         guard live?.yourTurn == true, slot.id == live?.slotId else { return }
         draft.openSlot(slot)
     }
+
+    private func seedSeenPicks() {
+        seenPickIds = Set(namedPicks.map(\.id))
+        seededPicks = true
+    }
+
+    private func revealMatePickIfNeeded() {
+        let ids = namedPicks.map(\.id)
+        if !seededPicks {
+            seedSeenPicks()
+            return
+        }
+        let fresh = namedPicks.filter { !seenPickIds.contains($0.id) }
+        seenPickIds.formUnion(ids)
+        guard let mate = fresh.last(where: { !$0.isYou }) else { return }
+        mateToast = mate
+        Task {
+            try? await Task.sleep(for: .seconds(2.1))
+            if mateToast?.id == mate.id {
+                mateToast = nil
+            }
+        }
+    }
+}
+
+private struct VsDraftMateToast: View {
+    let pick: VsLivePickFeedDTO
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("\(pick.displayName.uppercased()) PLAYED")
+                .font(BKFont.caption(12)).tracking(0.8)
+                .foregroundStyle(BKTheme.accent)
+
+            HStack(alignment: .center, spacing: 12) {
+                PlayerAvatar(urlString: pick.headshotUrl, size: 52)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(pick.playerName)
+                        .font(BKFont.headline(17))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Text("\(pick.statValue)")
+                        .font(BKFont.title(22))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: 280)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(BKTheme.cardElevated, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
+        .allowsHitTesting(false)
+    }
 }
 
 private struct VsDraftPicksSheet: View {
     let battle: BattleChallenge
     let live: VsLiveDTO?
-    let namedPicks: [VsLivePickFeedDTO]
-    let latestPicks: [VsLivePickFeedDTO]
     let picksBySlot: [(slot: BattleSlot, rows: [VsLivePickFeedDTO])]
     let turnName: String
     let collapsedHeight: CGFloat
@@ -232,81 +300,66 @@ private struct VsDraftPicksSheet: View {
     @State private var drag: CGFloat = 0
     @State private var now = Date()
 
-    static func collapsedHeight(empty: Bool, safeBottom: CGFloat) -> CGFloat {
-        (empty ? 122 : 176) + safeBottom
+    static func collapsedHeight(safeBottom: CGFloat) -> CGFloat {
+        94 + safeBottom
     }
 
     private var sheetHeight: CGFloat {
-        let resting = expanded ? expandedHeight : collapsedHeight
-        return min(expandedHeight, max(collapsedHeight, resting - drag))
+        let floor = max(collapsedHeight, 1)
+        let ceiling = max(expandedHeight, floor)
+        let resting = expanded ? ceiling : floor
+        let raw = min(ceiling, max(floor, resting - drag))
+        return raw.isFinite ? raw : floor
+    }
+
+    private var sheetShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 18,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 18,
+            style: .continuous
+        )
     }
 
     var body: some View {
         VStack(spacing: 0) {
             chrome
-            if namedPicks.isEmpty {
-                Text(live?.yourTurn == true
-                     ? "Drag a chip onto the highlighted slot, then name a player."
-                     : "Waiting for \(turnName) to pick.")
-                    .font(BKFont.body(13))
-                    .foregroundStyle(BKTheme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-            } else {
-                ScrollView(showsIndicators: expanded) {
+            if expanded {
+                ScrollView(showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 14) {
-                        VStack(spacing: 8) {
-                            ForEach(latestPicks) { row in
-                                pickRow(row, showSlot: true)
-                            }
-                        }
-                        if !picksBySlot.isEmpty {
-                            Text("BY POSITION")
-                                .font(BKFont.caption(10)).tracking(0.8)
-                                .foregroundStyle(BKTheme.textMuted)
-                                .padding(.top, 2)
-                        }
-                        ForEach(picksBySlot, id: \.slot.id) { group in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(group.slot.position.uppercased())
-                                    .font(BKFont.caption(10)).tracking(0.8)
-                                    .foregroundStyle(BKTheme.textMuted)
-                                ForEach(group.rows) { row in
-                                    pickRow(row, showSlot: false)
+                        if picksBySlot.isEmpty {
+                            Text(live?.yourTurn == true
+                                 ? "Drag a chip onto the highlighted slot, then name a player."
+                                 : "Waiting for \(turnName) to pick.")
+                                .font(BKFont.body(13))
+                                .foregroundStyle(BKTheme.textSecondary)
+                        } else {
+                            ForEach(picksBySlot, id: \.slot.id) { group in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(group.slot.position.uppercased())
+                                        .font(BKFont.caption(10)).tracking(0.8)
+                                        .foregroundStyle(BKTheme.textMuted)
+                                    ForEach(group.rows) { row in
+                                        pickRow(row)
+                                    }
                                 }
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 24)
                     .padding(.bottom, 12)
                 }
-                .scrollDisabled(!expanded)
             }
             Spacer(minLength: 0)
         }
         .padding(.bottom, safeBottom)
         .frame(height: sheetHeight, alignment: .top)
         .frame(maxWidth: .infinity)
-        .background {
-            UnevenRoundedRectangle(
-                topLeadingRadius: 18,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 18,
-                style: .continuous
-            )
-            .fill(BKTheme.card)
-            .ignoresSafeArea(edges: .bottom)
-        }
-        .overlay(alignment: .top) {
-            UnevenRoundedRectangle(
-                topLeadingRadius: 18,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 18,
-                style: .continuous
-            )
-            .stroke(BKTheme.cardElevated, lineWidth: 1)
+        .background(BKTheme.card)
+        .clipShape(sheetShape)
+        .overlay {
+            sheetShape.stroke(BKTheme.cardElevated, lineWidth: 1)
         }
         .contentShape(Rectangle())
         .gesture(dragGesture, including: expanded ? .none : .all)
@@ -322,37 +375,45 @@ private struct VsDraftPicksSheet: View {
                 .padding(.bottom, 10)
 
             HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
-                        .font(BKFont.caption(11)).tracking(1)
+                        .font(BKFont.headline(13)).tracking(0.8)
                         .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
                     Text((live?.slotPosition ?? "—").uppercased())
-                        .font(BKFont.headline(16))
+                        .font(BKFont.title(18))
                         .foregroundStyle(BKTheme.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                 }
                 Spacer(minLength: 8)
                 Text(timerLabel)
-                    .font(BKFont.headline(16))
+                    .font(BKFont.title(22))
                     .foregroundStyle(secondsLeft <= 20 ? BKTheme.wrong : BKTheme.accent)
                     .monospacedDigit()
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 24)
             .padding(.bottom, 10)
+
+            if !expanded {
+                Text("Swipe up to see past picks")
+                    .font(BKFont.caption(12)).tracking(0.4)
+                    .foregroundStyle(BKTheme.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+                    .padding(.bottom, 2)
+            }
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         .highPriorityGesture(dragGesture, including: expanded ? .gesture : .none)
         .onTapGesture {
-            guard !namedPicks.isEmpty else { return }
             withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.9)) {
                 expanded.toggle()
             }
         }
     }
 
-    private func pickRow(_ row: VsLivePickFeedDTO, showSlot: Bool) -> some View {
+    private func pickRow(_ row: VsLivePickFeedDTO) -> some View {
         HStack(spacing: 10) {
             if let constraint = battle.constraints.first(where: { $0.id == row.constraintId }) {
                 ConstraintIcon(constraint: constraint, size: 28)
@@ -367,11 +428,6 @@ private struct VsDraftPicksSheet: View {
                     .lineLimit(1)
             }
             Spacer()
-            if showSlot {
-                Text(row.slotLabel)
-                    .font(BKFont.caption(11))
-                    .foregroundStyle(BKTheme.textMuted)
-            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)

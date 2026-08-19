@@ -667,7 +667,10 @@ struct VsTabView: View {
             if challenge.status == "waiting" {
                 ForEach(0..<openSlots, id: \.self) { _ in
                     Divider().overlay(BKTheme.textMuted.opacity(0.25))
-                    HStack {
+                    HStack(spacing: 10) {
+                        Circle()
+                            .strokeBorder(BKTheme.textMuted.opacity(0.35), style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+                            .frame(width: 36, height: 36)
                         Text("Open slot")
                             .font(BKFont.headline(15))
                             .foregroundStyle(BKTheme.textMuted)
@@ -685,10 +688,12 @@ struct VsTabView: View {
     }
 
     private func playerRow(_ player: VsPlayerDTO, noun: String, modeId: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center, spacing: 10) {
+            lobbyAvatar(player)
             Text(playerLabel(player))
                 .font(BKFont.headline(15))
                 .foregroundStyle(BKTheme.textPrimary)
+                .lineLimit(1)
             Spacer()
             if let score = player.displayScore ?? player.score {
                 Text("\(score)")
@@ -707,6 +712,27 @@ struct VsTabView: View {
                     .foregroundStyle(BKTheme.textMuted)
             }
         }
+    }
+
+    private func lobbyAvatar(_ player: VsPlayerDTO) -> some View {
+        Group {
+            if player.isYou, let image = LocalProfile.loadAvatar() {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                PlayerAvatar(urlString: player.avatarUrl, size: 36) {
+                    BKTheme.cardElevated
+                        .overlay {
+                            Ph.userCircle.fill
+                                .color(BKTheme.avatarPlaceholder)
+                                .frame(width: 22, height: 22)
+                        }
+                }
+            }
+        }
+        .frame(width: 36, height: 36)
+        .clipShape(Circle())
     }
 
     private func playerLabel(_ player: VsPlayerDTO) -> String {

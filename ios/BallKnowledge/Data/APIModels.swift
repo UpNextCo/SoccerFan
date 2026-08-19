@@ -362,6 +362,7 @@ struct DailyGuessRequestDTO: Encodable {
 struct VsPlayerDTO: Codable, Equatable {
     let userId: String
     let displayName: String
+    let avatarUrl: String?
     let score: Int?
     let displayScore: Int?
     let completed: Bool
@@ -372,6 +373,7 @@ struct VsPlayerDTO: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         userId = try c.decode(String.self, forKey: .userId)
         displayName = try c.decode(String.self, forKey: .displayName)
+        avatarUrl = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
         score = try c.decodeIfPresent(Int.self, forKey: .score)
         displayScore = try c.decodeIfPresent(Int.self, forKey: .displayScore) ?? score
         completed = try c.decodeIfPresent(Bool.self, forKey: .completed) ?? false

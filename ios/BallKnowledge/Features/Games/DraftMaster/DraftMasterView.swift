@@ -581,9 +581,9 @@ struct BattleConstraintsStrip: View {
     let usedIds: Set<String>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 10) {
+                HStack(alignment: .top, spacing: 6) {
                     ForEach(constraints) { constraint in
                         let used = usedIds.contains(constraint.id)
                         ConstraintChip(constraint: constraint, used: used)
@@ -591,10 +591,10 @@ struct BattleConstraintsStrip: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 2)
     }
 }
 
@@ -605,7 +605,7 @@ private struct ConstraintDragIfAvailable: ViewModifier {
     func body(content: Content) -> some View {
         if enabled {
             content.draggable(constraint.id) {
-                ConstraintIcon(constraint: constraint, size: 44)
+                ConstraintIcon(constraint: constraint, size: 40)
             }
         } else {
             content
@@ -618,24 +618,22 @@ private struct ConstraintChip: View {
     let used: Bool
 
     var body: some View {
-        VStack(spacing: 4) {
-            ConstraintIcon(constraint: constraint, size: 40)
+        VStack(spacing: 3) {
+            ConstraintIcon(constraint: constraint, size: 36)
             Text(constraint.label.uppercased())
                 .font(.system(size: 8, weight: .bold, design: .rounded))
                 .foregroundStyle(BKTheme.textMuted)
                 .lineLimit(2)
                 .minimumScaleFactor(0.6)
                 .multilineTextAlignment(.center)
-                .frame(width: 60, height: 22, alignment: .top)
+                .frame(width: 52)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-        .frame(width: 68, height: 82)
+        .frame(width: 60, height: 70)
         .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(alignment: .topTrailing) {
             if used {
-                Ph.checkCircle.fill.color(BKTheme.accent).frame(width: 12, height: 12).padding(3)
+                Ph.checkCircle.fill.color(BKTheme.accent).frame(width: 11, height: 11).padding(3)
             }
         }
         .opacity(used ? 0.45 : 1)
@@ -724,16 +722,21 @@ struct BattlePitchView: View {
     var focusSlotId: String? = nil
     /// How much of the full pitch height is visible while focused (1 = no zoom).
     var visibleFraction: CGFloat = 0.4
+    /// Cap height to a natural pitch shape instead of stretching to fill leftover space.
+    var compact: Bool = false
+    var slotScale: CGFloat = 1
     var onTapSlot: (BattleSlot) -> Void
     var onDropConstraint: (String, BattleSlot) -> Void
 
     var body: some View {
         GeometryReader { geo in
             let zoomed = focusSlotId != nil
-            let viewportH = geo.size.height
+            let naturalH = geo.size.width * 1.16
+            let viewportH = compact ? min(geo.size.height, naturalH) : geo.size.height
+            let originY = compact ? max(0, (geo.size.height - viewportH) / 2) : 0
             let fraction = zoomed ? max(0.22, visibleFraction) : 1
             let virtualH = viewportH / fraction
-            let verticalInset: CGFloat = zoomed ? 28 : 14
+            let verticalInset: CGFloat = zoomed ? 28 : (compact ? 10 : 14)
             let usableHeight = max(0, virtualH - verticalInset * 2)
             let focusVirtualY: CGFloat = {
                 guard let id = focusSlotId, let slot = slots.first(where: { $0.id == id }) else {
@@ -748,6 +751,8 @@ struct BattlePitchView: View {
                 PitchBackground()
                     .frame(width: geo.size.width, height: virtualH)
                     .offset(y: -offsetY)
+                    .frame(width: geo.size.width, height: viewportH, alignment: .top)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .allowsHitTesting(false)
 
                 ForEach(slots) { slot in
@@ -759,6 +764,7 @@ struct BattlePitchView: View {
                         pick: state.pick(forSlot: slot.id),
                         highlighted: highlightedSlotId == slot.id,
                         interactive: interactive,
+                        scale: slotScale,
                         onTap: { onTapSlot(slot) },
                         onDrop: { id in onDropConstraint(id, slot) }
                     )
@@ -769,7 +775,7 @@ struct BattlePitchView: View {
                 }
             }
             .frame(width: geo.size.width, height: viewportH, alignment: .topLeading)
-            .clipped()
+            .offset(y: originY)
         }
         .animation(.spring(response: 0.55, dampingFraction: 0.86), value: focusSlotId)
     }
@@ -781,8 +787,13 @@ struct BattlePitchSlot: View {
     let pick: BattlePick?
     var highlighted: Bool = false
     var interactive: Bool = true
+    var scale: CGFloat = 1
     var onTap: () -> Void
     var onDrop: (String) -> Void
+
+    private var ring: CGFloat { 46 * scale }
+    private var avatar: CGFloat { 42 * scale }
+    private var chip: CGFloat { 34 * scale }
 
     @State private var targeted = false
 
@@ -796,45 +807,45 @@ struct BattlePitchSlot: View {
     }
 
     var body: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 2 * scale) {
             ZStack {
                 Circle()
                     // Darker-grey fill so slots sit clearly on the grass; thin whitish-green ring.
                     .fill(pick != nil ? Color.black.opacity(0.30) : Color(white: 0.14).opacity(0.72))
-                    .frame(width: 46, height: 46)
+                    .frame(width: ring, height: ring)
                     .overlay(
-                        Circle().stroke(strokeColor, lineWidth: (targeted || highlighted) ? 2.8 : 1.1)
+                        Circle().stroke(strokeColor, lineWidth: (targeted || highlighted) ? 2.4 : 1)
                     )
-                    .shadow(color: highlighted ? BKTheme.accent.opacity(0.55) : .clear, radius: 8)
+                    .shadow(color: highlighted ? BKTheme.accent.opacity(0.55) : .clear, radius: 7 * scale)
                 if let pick {
-                    PlayerAvatar(urlString: pick.player.headshotUrl, size: 42)
+                    PlayerAvatar(urlString: pick.player.headshotUrl, size: avatar)
                         .grayscale(pick.correct ? 0 : 0.85)
                         .opacity(pick.correct ? 1 : 0.55)
                 } else if let constraint {
-                    ConstraintIcon(constraint: constraint, size: 34)
+                    ConstraintIcon(constraint: constraint, size: chip)
                 } else {
-                    Text("+").font(.system(size: 18, weight: .bold, design: .rounded)).foregroundStyle(Self.ringColor)
+                    Text("+").font(.system(size: 16 * scale, weight: .bold, design: .rounded)).foregroundStyle(Self.ringColor)
                 }
             }
             Text(slot.label)
-                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .font(.system(size: 9 * scale + 1, weight: .bold, design: .rounded))
                 .foregroundStyle(highlighted ? BKTheme.accent : Color.white.opacity(0.95))
             if let pick {
                 Text(shortName(pick.player.name))
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(.system(size: 8 * scale + 1, weight: .bold, design: .rounded))
                     .foregroundStyle(pick.correct ? .white : BKTheme.wrong)
-                    .lineLimit(1).frame(maxWidth: 70)
+                    .lineLimit(1).frame(maxWidth: 56 * scale + 8)
                 Text(pick.correct ? "\(pick.player.statValue)" : "0")
-                    .font(.system(size: 9, weight: .heavy, design: .rounded))
+                    .font(.system(size: 8 * scale + 1, weight: .heavy, design: .rounded))
                     .foregroundStyle(pick.correct ? .white : BKTheme.wrong)
             } else if constraint != nil {
                 Text("TAP TO PICK")
-                    .font(.system(size: 7, weight: .bold, design: .rounded))
+                    .font(.system(size: 6 * scale + 1, weight: .bold, design: .rounded))
                     .foregroundStyle(Color.white.opacity(0.7))
             }
         }
         .shadow(color: .black.opacity(0.35), radius: 1, x: 0, y: 1)
-        .frame(width: 76)
+        .frame(width: 62 * scale + 8)
         .contentShape(Rectangle())
         .onTapGesture { if interactive { onTap() } }
         .dropDestination(for: String.self) { items, _ in

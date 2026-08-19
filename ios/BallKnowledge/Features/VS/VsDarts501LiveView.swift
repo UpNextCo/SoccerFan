@@ -18,20 +18,32 @@ struct VsDarts501LiveView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                VStack(spacing: 0) {
-                    scoreboard
-                    turnBar
-                    formulaCard
-                    history
-                    Spacer(minLength: 0)
-                    turnFooter
-                }
-                .background(StadiumBackground(glowIntensity: 0.32))
+            GeometryReader { geo in
+                let safeBottom = geo.safeAreaInsets.bottom
+                let showingResults = live?.yourTurn == true && !search.results.isEmpty
+                let sheetH = (showingResults ? 286 : 118) + safeBottom
+                ZStack(alignment: .bottom) {
+                    VStack(spacing: 0) {
+                        scoreboard
+                        formulaCard
+                        history
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.bottom, sheetH)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .background(StadiumBackground(glowIntensity: 0.32))
 
-                if showResult {
-                    resultScreen
+                    if !showResult {
+                        turnSheet(safeBottom: safeBottom)
+                            .frame(height: sheetH, alignment: .top)
+                    }
+
+                    if showResult {
+                        resultScreen
+                    }
                 }
+                .frame(width: geo.size.width, height: geo.size.height + safeBottom)
+                .ignoresSafeArea(edges: .bottom)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -52,6 +64,7 @@ struct VsDarts501LiveView: View {
                 }
             }
         }
+        .liftsForKeyboard()
         .onReceive(Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()) { now = $0 }
         .onChange(of: live?.yourTurn) { _, yourTurn in
             if yourTurn != true {
@@ -72,73 +85,85 @@ struct VsDarts501LiveView: View {
     }
 
     private var scoreboard: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(live?.board ?? [], id: \.userId) { row in
-                    let isTurn = row.userId == live?.turnUserId && live?.finished != true
-                    VStack(spacing: 4) {
-                        Text(row.isYou ? "YOU" : row.displayName.uppercased())
-                            .font(BKFont.caption(9))
-                            .foregroundStyle(BKTheme.textMuted)
-                            .lineLimit(1)
-                        Text("\(row.remaining)")
-                            .font(BKFont.title(22))
-                            .foregroundStyle(row.inCheckout ? BKTheme.partial : (row.isYou ? BKTheme.accent : BKTheme.textPrimary))
-                            .contentTransition(.numericText())
-                        hearts(filled: row.livesLeft, total: live?.checkoutLives ?? 3)
-                    }
-                    .frame(minWidth: 72)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-                    .background(BKTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(isTurn ? BKTheme.accent : Color.clear, lineWidth: 1.5)
-                    )
+        let rows = live?.board ?? []
+        let nameSize: CGFloat = rows.count >= 4 ? 11 : rows.count == 3 ? 13 : 15
+        let scoreSize: CGFloat = rows.count >= 4 ? 24 : rows.count == 3 ? 30 : 38
+        let hyphenSize: CGFloat = rows.count >= 4 ? 14 : rows.count == 3 ? 16 : 20
+        let gap: CGFloat = rows.count >= 4 ? 8 : rows.count == 3 ? 12 : 16
+        return HStack(spacing: gap) {
+            ForEach(Array(rows.enumerated()), id: \.element.userId) { index, row in
+                if index > 0 {
+                    Text("–")
+                        .font(BKFont.headline(hyphenSize))
+                        .foregroundStyle(BKTheme.textMuted)
                 }
+                let isTurn = row.userId == live?.turnUserId && live?.finished != true
+                VStack(spacing: 3) {
+                    Text(row.isYou ? "YOU" : row.displayName.uppercased())
+                        .font(BKFont.caption(nameSize))
+                        .tracking(0.7)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                    Text("\(row.remaining)")
+                        .font(BKFont.title(scoreSize))
+                        .contentTransition(.numericText())
+                        .minimumScaleFactor(0.7)
+                        .lineLimit(1)
+                    hearts(filled: row.livesLeft, total: live?.checkoutLives ?? 3)
+                }
+                .foregroundStyle(isTurn ? BKTheme.accent : BKTheme.textPrimary)
+                .opacity(isTurn ? 1 : 0.55)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.top, 28)
+        .padding(.bottom, 26)
+        .animation(.easeOut(duration: 0.25), value: live?.turnUserId)
         .animation(.easeOut(duration: 0.25), value: live?.board.map(\.remaining))
     }
 
-    private var turnBar: some View {
-        HStack(spacing: 8) {
-            Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
-                .font(BKFont.caption(11)).tracking(1)
-                .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
-            if turnPlayer?.inCheckout == true {
-                Text("CHECKOUT")
-                    .font(BKFont.caption(10)).tracking(1)
-                    .foregroundStyle(BKTheme.partial)
-            }
-            Spacer()
-            Text(timerLabel)
-                .font(BKFont.headline(16))
-                .foregroundStyle(secondsLeft <= 12 ? BKTheme.wrong : BKTheme.accent)
-                .monospacedDigit()
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
+    private var category: Darts501CategoryDisplay {
+        if let cat = viewModel.darts501Puzzle?.category { return cat }
+        let audience = live?.audience ?? "Any player"
+        let formula = {
+            if let detail = live?.formulaDetail, !detail.isEmpty { return detail }
+            return live?.formulaLabel ?? "Football 501"
+        }()
+        return Darts501CategoryDisplay(nationality: nil, audience: audience, formula: formula)
     }
 
     private var formulaCard: some View {
-        VStack(spacing: 4) {
-            Text((live?.audience ?? "Any player").uppercased())
-                .font(BKFont.caption(10)).tracking(0.8)
-                .foregroundStyle(BKTheme.textMuted)
-            Text(live?.formulaLabel ?? "Football 501")
-                .font(BKFont.headline(15))
-                .foregroundStyle(BKTheme.textPrimary)
+        let cat = category
+        return VStack(spacing: 8) {
+            if cat.hasNationFilter {
+                VStack(spacing: 3) {
+                    Text(cat.flag)
+                        .font(.system(size: 40))
+                    Text(cat.audience.uppercased())
+                        .font(BKFont.headline(15))
+                        .tracking(0.6)
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                }
+            } else {
+                Text("TODAY'S STAT")
+                    .font(BKFont.caption(11))
+                    .tracking(1.2)
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+            Text(cat.formula)
+                .font(BKFont.body(13))
+                .foregroundStyle(BKTheme.textSecondary)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 260)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
-        .padding(14)
         .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
     }
@@ -184,14 +209,58 @@ struct VsDarts501LiveView: View {
         }
     }
 
-    @ViewBuilder
-    private var turnFooter: some View {
-        if live?.yourTurn == true {
-            VStack(spacing: 10) {
+    private var sheetShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 18,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 18,
+            style: .continuous
+        )
+    }
+
+    private func turnSheet(safeBottom: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
+                        .font(BKFont.headline(13)).tracking(0.8)
+                        .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
+                    if turnPlayer?.inCheckout == true {
+                        Text("CHECKOUT")
+                            .font(BKFont.caption(10)).tracking(1)
+                            .foregroundStyle(BKTheme.partial)
+                    }
+                }
+                Spacer(minLength: 8)
+                Text(timerLabel)
+                    .font(BKFont.title(22))
+                    .foregroundStyle(secondsLeft <= 12 ? BKTheme.wrong : BKTheme.accent)
+                    .monospacedDigit()
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+
+            if live?.yourTurn == true {
+                if !search.results.isEmpty {
+                    PlayerSearchResultsList(
+                        players: search.results,
+                        isDisabled: { viewModel.isBusy || (live?.usedPlayerIds.contains($0.id) == true) }
+                    ) { hit in
+                        Task { await throwPlayer(hit) }
+                    }
+                    .frame(maxHeight: 160)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+                }
                 if let feedback = search.feedback ?? viewModel.errorMessage {
                     Text(feedback)
                         .font(BKFont.caption(12))
                         .foregroundStyle(BKTheme.wrong)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 8)
                 }
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
@@ -209,28 +278,24 @@ struct VsDarts501LiveView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .background(BKTheme.card)
+                .background(BKTheme.cardElevated)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                if !search.results.isEmpty {
-                    PlayerSearchResultsList(
-                        players: search.results,
-                        isDisabled: { viewModel.isBusy || (live?.usedPlayerIds.contains($0.id) == true) }
-                    ) { hit in
-                        Task { await throwPlayer(hit) }
-                    }
-                    .frame(maxHeight: 200)
-                }
+                .padding(.horizontal, 24)
+            } else {
+                Text(live?.finished == true ? "Challenge over" : "Waiting for \(turnName)")
+                    .font(BKFont.body(14))
+                    .foregroundStyle(BKTheme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 16)
-            .background(BKTheme.background.opacity(0.92))
-        } else {
-            Text(live?.finished == true ? "Challenge over" : "Waiting for \(turnName)")
-                .font(BKFont.body(14))
-                .foregroundStyle(BKTheme.textSecondary)
-                .padding(18)
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, safeBottom)
+        .frame(maxWidth: .infinity)
+        .background(BKTheme.card)
+        .clipShape(sheetShape)
+        .overlay {
+            sheetShape.stroke(BKTheme.cardElevated, lineWidth: 1)
         }
     }
 

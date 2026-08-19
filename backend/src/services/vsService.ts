@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { and, eq, gt, inArray } from 'drizzle-orm';
+import { and, eq, gt, inArray, sql } from 'drizzle-orm';
+import { avatarPublicUrl } from '../utils/avatarUrl.js';
 import { db } from '../db/index.js';
 import {
   users,
@@ -108,6 +109,7 @@ export class VsError extends Error {
 export type VsPlayerView = {
   userId: string;
   displayName: string;
+  avatarUrl?: string | null;
   score: number | null;
   displayScore: number | null;
   completed: boolean;
@@ -330,14 +332,32 @@ async function markExpired(row: VsChallenge): Promise<VsChallenge> {
   return updated ?? { ...row, status: 'expired' };
 }
 
-async function loadUsers(ids: string[]): Promise<Map<string, string>> {
+type VsUserInfo = { displayName: string; avatarUrl?: string };
+
+async function loadUsers(ids: string[]): Promise<Map<string, VsUserInfo>> {
   const unique = [...new Set(ids.filter(Boolean))];
   if (unique.length === 0) return new Map();
   const rows = await db
-    .select({ id: users.id, displayName: users.displayName })
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      hasAvatar: sql<boolean>`(${users.avatarJpeg} is not null)`,
+    })
     .from(users)
     .where(inArray(users.id, unique));
-  return new Map(rows.map((r) => [r.id, r.displayName]));
+  return new Map(
+    rows.map((r) => [
+      r.id,
+      {
+        displayName: r.displayName,
+        avatarUrl: avatarPublicUrl(r.id, Boolean(r.hasAvatar)),
+      },
+    ])
+  );
+}
+
+function displayNameOf(names: Map<string, VsUserInfo>, userId: string): string {
+  return names.get(userId)?.displayName ?? 'Player';
 }
 
 function isoOrNull(value: Date | string | null | undefined): string | null {
@@ -405,7 +425,7 @@ function liveViewFor(
     const slotMeta = puzzle.slots.find((s) => s.id === pick.slotId);
     return {
       userId: pick.userId,
-      displayName: names.get(pick.userId) ?? 'Player',
+      displayName: displayNameOf(names, pick.userId) ?? 'Player',
       isYou: pick.userId === userId,
       slotId: pick.slotId,
       slotLabel: slotMeta ? shortSlotLabel(slotMeta.position) : '—',
@@ -434,7 +454,7 @@ function liveViewFor(
       const pick = slotId ? picksFor(live, p.userId).find((x) => x.slotId === slotId) : undefined;
       return {
         userId: p.userId,
-        displayName: names.get(p.userId) ?? 'Player',
+        displayName: displayNameOf(names, p.userId) ?? 'Player',
         isYou: p.userId === userId,
         total: totalFor(live, p.userId),
         locked: pick != null,
@@ -480,14 +500,14 @@ function hotseatViewFor(
     namedPlayerIds: [...namedPlayerIds(hotseat)],
     players: people.map((p) => ({
       userId: p.userId,
-      displayName: names.get(p.userId) ?? 'Player',
+      displayName: displayNameOf(names, p.userId) ?? 'Player',
       isYou: p.userId === userId,
       alive: hotseat.remaining.includes(p.userId),
       namedCount: namedCount(hotseat, p.userId),
     })),
     named: hotseat.named.map((n) => ({
       userId: n.userId,
-      displayName: names.get(n.userId) ?? 'Player',
+      displayName: displayNameOf(names, n.userId) ?? 'Player',
       playerId: n.playerId,
       playerName: n.playerName,
       headshotUrl: n.headshotUrl,
@@ -531,7 +551,7 @@ function targetManViewFor(
   const reveal = live.finished;
   const pickViews = allTargetManPicks(live).map((pick) => ({
     userId: pick.userId,
-    displayName: names.get(pick.userId) ?? 'Player',
+    displayName: displayNameOf(names, pick.userId) ?? 'Player',
     isYou: pick.userId === userId,
     slotIndex: pick.slotIndex,
     playerId: pick.playerId,
@@ -555,7 +575,7 @@ function targetManViewFor(
     unit: meta.unit,
     board: people.map((p) => ({
       userId: p.userId,
-      displayName: names.get(p.userId) ?? 'Player',
+      displayName: displayNameOf(names, p.userId) ?? 'Player',
       isYou: p.userId === userId,
       pickCount: targetManPicksFor(live, p.userId).filter((x) => x.playerId).length,
       locked: targetManHasLocked(live, p.userId, live.slotIndex),
@@ -591,7 +611,7 @@ function darts501ViewFor(
       const board = darts501PlayerState(live, p.userId);
       return {
         userId: p.userId,
-        displayName: names.get(p.userId) ?? 'Player',
+        displayName: displayNameOf(names, p.userId) ?? 'Player',
         isYou: p.userId === userId,
         remaining: board.remaining,
         inCheckout: board.inCheckout,
@@ -601,7 +621,7 @@ function darts501ViewFor(
     }),
     throws: live.throws.map((t) => ({
       userId: t.userId,
-      displayName: names.get(t.userId) ?? 'Player',
+      displayName: displayNameOf(names, t.userId) ?? 'Player',
       isYou: t.userId === userId,
       playerId: t.playerId,
       playerName: t.playerName,
@@ -907,7 +927,8 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
     const score = p.displayScore ?? liveScore ?? null;
     return {
       userId: p.userId,
-      displayName: names.get(p.userId) ?? 'Player',
+      displayName: displayNameOf(names, p.userId),
+      avatarUrl: names.get(p.userId)?.avatarUrl ?? null,
       score,
       displayScore: score,
       completed: p.completedAt != null,
@@ -939,7 +960,7 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
         })
         .map((p) => ({
           userId: p.userId,
-          displayName: names.get(p.userId) ?? 'Player',
+          displayName: displayNameOf(names, p.userId) ?? 'Player',
           score: p.score,
           displayScore: p.displayScore,
         }))
