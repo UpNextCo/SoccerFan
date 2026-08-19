@@ -77,6 +77,21 @@ function applyBust(
   };
 }
 
+/** Live VS: same busts/lives, but a third bust is never game over. */
+export function resolveDarts501ThrowLive(input: {
+  remaining: number;
+  score: number;
+  inCheckout: boolean;
+  checkoutBusts: number;
+  wrongCategory?: boolean;
+}): Darts501ThrowResolution {
+  const result = resolveDarts501Throw(input);
+  if (result.kind === 'game_over') {
+    return { ...result, kind: 'bust' };
+  }
+  return result;
+}
+
 export function resolveDarts501Throw(input: {
   remaining: number;
   score: number;

@@ -623,6 +623,11 @@ actor APIClient {
         return try await request("vs/\(id)/target", method: "POST", body: Body(playerId: playerId))
     }
 
+    func vsDartsThrow(id: String, playerId: String) async throws -> VsChallengeDTO {
+        struct Body: Encodable { let playerId: String }
+        return try await request("vs/\(id)/darts", method: "POST", body: Body(playerId: playerId))
+    }
+
     func vsGiveUp(id: String) async throws -> VsChallengeDTO {
         try await request("vs/\(id)/giveup", method: "POST", body: EmptyBody())
     }

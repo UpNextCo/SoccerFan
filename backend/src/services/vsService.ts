@@ -40,7 +40,7 @@ import {
   parseDarts501Puzzle,
   playerValuesForDarts501,
 } from './darts501Generator.js';
-import { resolveDarts501Throw } from './darts501Scoring.js';
+import { DARTS501_CHECKOUT_LIVES, DARTS501_START, resolveDarts501Throw, resolveDarts501ThrowLive } from './darts501Scoring.js';
 import {
   generateVsPuzzle,
   isVsModeId,
@@ -74,6 +74,17 @@ import {
   VS_TARGET_MAN_TURN_MS,
   type VsTargetManState,
 } from './vsLiveTargetMan.js';
+import {
+  applyThrow as applyDarts501Throw,
+  applyTimeouts as applyDarts501Timeouts,
+  dropUser as dropDarts501User,
+  initDarts501,
+  livesLeft as darts501LivesLeft,
+  parseDarts501,
+  playerState as darts501PlayerState,
+  usedPlayerIds as darts501UsedPlayerIds,
+  type VsDarts501State,
+} from './vsLiveDarts501.js';
 import {
   playerMatchesBackYourselfCategory,
   resolveBackYourselfPlayerCard,
@@ -141,6 +152,7 @@ export type VsChallengeView = {
   live: VsLiveView | null;
   hotseat: VsHotseatView | null;
   targetMan: VsTargetManView | null;
+  darts501: VsDarts501View | null;
 };
 
 export type VsHotseatPlayerView = {
@@ -212,6 +224,45 @@ export type VsTargetManPickView = {
   playerName: string;
   headshotUrl: string | null;
   statValue: number | null;
+};
+
+export type VsDarts501BoardRow = {
+  userId: string;
+  displayName: string;
+  isYou: boolean;
+  remaining: number;
+  inCheckout: boolean;
+  checkoutBusts: number;
+  livesLeft: number;
+};
+
+export type VsDarts501ThrowView = {
+  userId: string;
+  displayName: string;
+  isYou: boolean;
+  playerId: string;
+  playerName: string;
+  headshotUrl: string | null;
+  score: number;
+  kind: string;
+  bustReason: string | null;
+  remainingAfter: number;
+};
+
+export type VsDarts501View = {
+  turnUserId: string;
+  yourTurn: boolean;
+  deadlineAt: string;
+  finished: boolean;
+  winnerUserId: string | null;
+  usedPlayerIds: string[];
+  formulaLabel: string;
+  audience: string;
+  formulaDetail: string;
+  checkoutLives: number;
+  startScore: number;
+  board: VsDarts501BoardRow[];
+  throws: VsDarts501ThrowView[];
 };
 
 export type VsTargetManView = {
@@ -514,6 +565,55 @@ function targetManViewFor(
   };
 }
 
+function darts501ViewFor(
+  row: VsChallenge,
+  userId: string,
+  names: Map<string, string>
+): VsDarts501View | null {
+  if (row.modeId !== 'darts_501' || (row.status !== 'active' && row.status !== 'complete')) return null;
+  const live = parseDarts501(row.liveJson);
+  if (!live) return null;
+  const puzzle = parseDarts501Puzzle(row.puzzleJson);
+  const people = participantsOf(row);
+  return {
+    turnUserId: live.turnUserId,
+    yourTurn: !live.finished && live.turnUserId === userId,
+    deadlineAt: live.deadlineAt,
+    finished: live.finished,
+    winnerUserId: live.winnerUserId,
+    usedPlayerIds: [...darts501UsedPlayerIds(live)],
+    formulaLabel: puzzle?.formulaLabel ?? 'Football 501',
+    audience: puzzle?.audience ?? 'Any player',
+    formulaDetail: puzzle?.formulaDetail ?? '',
+    checkoutLives: puzzle?.checkoutLives ?? DARTS501_CHECKOUT_LIVES,
+    startScore: puzzle?.startScore ?? DARTS501_START,
+    board: people.map((p) => {
+      const board = darts501PlayerState(live, p.userId);
+      return {
+        userId: p.userId,
+        displayName: names.get(p.userId) ?? 'Player',
+        isYou: p.userId === userId,
+        remaining: board.remaining,
+        inCheckout: board.inCheckout,
+        checkoutBusts: board.checkoutBusts,
+        livesLeft: darts501LivesLeft(board.checkoutBusts, puzzle?.checkoutLives ?? DARTS501_CHECKOUT_LIVES),
+      };
+    }),
+    throws: live.throws.map((t) => ({
+      userId: t.userId,
+      displayName: names.get(t.userId) ?? 'Player',
+      isYou: t.userId === userId,
+      playerId: t.playerId,
+      playerName: t.playerName,
+      headshotUrl: t.headshotUrl,
+      score: t.score,
+      kind: t.kind,
+      bustReason: t.bustReason ?? null,
+      remainingAfter: t.remainingAfter,
+    })),
+  };
+}
+
 async function persistRow(
   id: string,
   patch: Partial<typeof vsChallenges.$inferInsert>
@@ -573,7 +673,9 @@ async function syncLiveDraft(row: VsChallenge): Promise<VsChallenge> {
   return row;
 }
 
-function draftLiveForStart(row: VsChallenge): VsLiveState | VsHotseatState | VsTargetManState | null {
+function draftLiveForStart(
+  row: VsChallenge
+): VsLiveState | VsHotseatState | VsTargetManState | VsDarts501State | null {
   const ids = participantsOf(row).map((p) => p.userId);
   if (row.modeId === 'draft_master') {
     return liveStateOf(row) ?? initLiveState(ids);
@@ -583,6 +685,9 @@ function draftLiveForStart(row: VsChallenge): VsLiveState | VsHotseatState | VsT
   }
   if (row.modeId === 'target_man') {
     return parseTargetMan(row.liveJson) ?? initTargetMan(ids);
+  }
+  if (row.modeId === 'darts_501') {
+    return parseDarts501(row.liveJson) ?? initDarts501(ids);
   }
   return null;
 }
@@ -596,6 +701,9 @@ function liveJsonForActive(row: VsChallenge, userIds: string[]): unknown {
   }
   if (row.modeId === 'target_man') {
     return parseTargetMan(row.liveJson) ?? initTargetMan(userIds);
+  }
+  if (row.modeId === 'darts_501') {
+    return parseDarts501(row.liveJson) ?? initDarts501(userIds);
   }
   return row.liveJson;
 }
@@ -702,6 +810,57 @@ async function syncTargetMan(row: VsChallenge): Promise<VsChallenge> {
   return row;
 }
 
+async function finishDarts501(row: VsChallenge, live: VsDarts501State): Promise<VsChallenge> {
+  const now = new Date();
+  const finished = { ...live, finished: true };
+  const next = participantsOf(row).map((p) => {
+    const board = darts501PlayerState(finished, p.userId);
+    const throwCount = finished.throws.filter((t) => t.userId === p.userId).length;
+    const won = finished.winnerUserId === p.userId;
+    return {
+      ...p,
+      score: won ? 10_000 - throwCount : -board.remaining,
+      displayScore: board.remaining,
+      answerJson: { playerIds: finished.throws.filter((t) => t.userId === p.userId).map((t) => t.playerId) },
+      completedAt: p.completedAt ?? now.toISOString(),
+    };
+  });
+  const host = next.find((p) => p.userId === row.hostUserId);
+  const guest = next.find((p) => p.userId !== row.hostUserId);
+  const updated = await persistRow(row.id, {
+    liveJson: finished,
+    participantsJson: next,
+    status: 'complete',
+    hostScore: host?.displayScore ?? null,
+    hostAnswerJson: host?.answerJson ?? null,
+    hostCompletedAt: now,
+    guestScore: guest?.displayScore ?? null,
+    guestAnswerJson: guest?.answerJson ?? null,
+    guestCompletedAt: guest ? now : null,
+  });
+  return updated ?? { ...row, status: 'complete', liveJson: finished, participantsJson: next };
+}
+
+async function syncDarts501(row: VsChallenge): Promise<VsChallenge> {
+  if (row.modeId !== 'darts_501' || row.status !== 'active') return row;
+  const userIds = participantsOf(row).map((p) => p.userId);
+  let live = parseDarts501(row.liveJson);
+  if (!live) {
+    live = initDarts501(userIds);
+    const updated = await persistRow(row.id, { liveJson: live });
+    return updated ?? { ...row, liveJson: live };
+  }
+  const advanced = applyDarts501Timeouts(live);
+  if (advanced.finished && !live.finished) {
+    return finishDarts501(row, advanced);
+  }
+  if (advanced.turnUserId !== live.turnUserId || advanced.deadlineAt !== live.deadlineAt) {
+    const updated = await persistRow(row.id, { liveJson: advanced });
+    return updated ?? { ...row, liveJson: advanced };
+  }
+  return row;
+}
+
 function rankingWinner(
   completed: Array<{ userId: string; score: number }>
 ): { winnerUserId: string | null; isDraw: boolean } {
@@ -719,16 +878,22 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
   const youCompleted = you?.completedAt != null;
   const hotseat = parseHotseat(row.liveJson);
   const targetMan = parseTargetMan(row.liveJson);
+  const darts501 = parseDarts501(row.liveJson);
   const allDone =
     hotseat?.finished === true ||
     targetMan?.finished === true ||
+    darts501?.finished === true ||
     (people.length >= 2 && people.every((p) => p.completedAt != null));
   const completed = people
     .filter((p) => p.completedAt != null && p.score != null)
     .map((p) => ({ userId: p.userId, score: p.score as number, displayScore: p.displayScore ?? p.score ?? 0 }));
   const ranked = allDone ? rankingWinner(completed) : { winnerUserId: null, isDraw: false };
-  const winnerUserId = hotseat?.finished ? hotseat.winnerUserId : ranked.winnerUserId;
-  const isDraw = hotseat?.finished ? false : ranked.isDraw;
+  const winnerUserId = hotseat?.finished
+    ? hotseat.winnerUserId
+    : darts501?.finished
+      ? darts501.winnerUserId
+      : ranked.winnerUserId;
+  const isDraw = hotseat?.finished || darts501?.finished ? false : ranked.isDraw;
 
   const publicPuzzle = sanitizePublicPuzzle(row.modeId, row.puzzleJson);
   const meta = vsPuzzleMeta(row.modeId, row.puzzleJson);
@@ -761,7 +926,7 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
   const rankings: VsRankingView[] = allDone
     ? [...completed]
         .sort((a, b) => {
-          if (hotseat?.finished && winnerUserId) {
+          if ((hotseat?.finished || darts501?.finished) && winnerUserId) {
             if (a.userId === winnerUserId) return -1;
             if (b.userId === winnerUserId) return 1;
           }
@@ -811,6 +976,7 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
     live: liveViewFor(row, userId, names),
     hotseat: hotseatViewFor(row, userId, names),
     targetMan: targetManViewFor(row, userId, names),
+    darts501: darts501ViewFor(row, userId, names),
   };
 }
 
@@ -820,7 +986,9 @@ async function viewFor(row: VsChallenge, userId: string): Promise<VsChallengeVie
       ? await syncHotseat(row)
       : row.modeId === 'target_man'
         ? await syncTargetMan(row)
-        : await syncLiveDraft(row);
+        : row.modeId === 'darts_501'
+          ? await syncDarts501(row)
+          : await syncLiveDraft(row);
   const ids = participantsOf(synced).map((p) => p.userId);
   const names = await loadUsers(ids);
   return toView(synced, userId, names);
@@ -1188,6 +1356,9 @@ export async function submitVsChallenge(
   if (row.modeId === 'target_man' && parseTargetMan(row.liveJson)) {
     throw new VsError('This Target Man is live — name on your turn instead', 400, 'LIVE');
   }
+  if (row.modeId === 'darts_501' && parseDarts501(row.liveJson)) {
+    throw new VsError('This Football 501 is live — throw on your turn instead', 400, 'LIVE');
+  }
 
   const people = participantsOf(row);
   const you = people.find((p) => p.userId === userId);
@@ -1354,6 +1525,77 @@ export async function pickVsTargetMan(userId: string, challengeId: string, playe
   return viewFor(updated ?? { ...row, liveJson: advanced }, userId);
 }
 
+export async function throwVsDarts501(userId: string, challengeId: string, playerId: string): Promise<VsChallengeView> {
+  const row = await syncDarts501(await requireParticipant(challengeId, userId));
+  if (row.status === 'expired') throw new VsError('This challenge has expired', 410, 'EXPIRED');
+  if (row.status !== 'active' || row.modeId !== 'darts_501') {
+    throw new VsError('This challenge is not a live Football 501', 400, 'INVALID_STATUS');
+  }
+  const live = parseDarts501(row.liveJson);
+  if (!live || live.finished) return viewFor(row, userId);
+  if (live.turnUserId !== userId) {
+    throw new VsError('Wait for your turn', 400, 'NOT_YOUR_TURN');
+  }
+  if (Date.now() >= Date.parse(live.deadlineAt)) {
+    return viewFor(row, userId);
+  }
+  if (darts501UsedPlayerIds(live).has(playerId)) {
+    throw new VsError('Someone already named that player', 400, 'PLAYER_USED');
+  }
+
+  const puzzle = parseDarts501Puzzle(row.puzzleJson);
+  const formula = puzzle ? darts501FormulaById(puzzle.formulaId) : undefined;
+  if (!puzzle || !formula) {
+    throw new VsError('Football 501 puzzle is missing a formula', 500, 'PUZZLE_FAILED');
+  }
+
+  const values = await playerValuesForDarts501(formula, [playerId]);
+  const resolved = values.get(playerId);
+  const board = darts501PlayerState(live, userId);
+  const result = resolveDarts501ThrowLive({
+    remaining: board.remaining,
+    score: resolved?.score ?? 0,
+    inCheckout: board.inCheckout,
+    checkoutBusts: board.checkoutBusts,
+    wrongCategory: !resolved?.eligible,
+  });
+
+  const card = await resolveBackYourselfPlayerCard(playerId);
+  if (!card) {
+    throw new VsError('Unknown player', 400, 'INVALID_ANSWER');
+  }
+
+  const kind = result.kind === 'perfect' || result.kind === 'checkout' || result.kind === 'score' || result.kind === 'bust'
+    ? result.kind
+    : 'bust';
+
+  const next = applyDarts501Throw(
+    live,
+    {
+      userId,
+      playerId,
+      playerName: card.name,
+      headshotUrl: card.headshotUrl ?? null,
+      score: resolved?.score ?? 0,
+      kind,
+      bustReason: result.bustReason,
+      remainingAfter: result.remaining,
+      thrownAt: new Date().toISOString(),
+    },
+    {
+      remaining: result.remaining,
+      inCheckout: result.inCheckout,
+      checkoutBusts: result.checkoutBusts,
+    }
+  );
+
+  if (next.finished) {
+    return viewFor(await finishDarts501(row, next), userId);
+  }
+  const updated = await persistRow(row.id, { liveJson: next });
+  return viewFor(updated ?? { ...row, liveJson: next }, userId);
+}
+
 export type VsLeaveResult = {
   ended: boolean;
 };
@@ -1366,6 +1608,10 @@ function liveJsonAfterLeave(row: VsChallenge, userId: string, remainingIds: stri
   if (row.modeId === 'back_yourself') {
     const hotseat = parseHotseat(row.liveJson);
     return hotseat ? eliminatePlayer(hotseat, userId) : row.liveJson;
+  }
+  if (row.modeId === 'darts_501') {
+    const live = parseDarts501(row.liveJson);
+    return live ? dropDarts501User(live, userId) : row.liveJson;
   }
   if (row.modeId === 'target_man') {
     const live = parseTargetMan(row.liveJson);
@@ -1432,6 +1678,7 @@ export async function leaveVsChallenge(userId: string, challengeId: string): Pro
   const hotseat = parseHotseat(liveJson);
   const live = parseLiveState(liveJson);
   const targetMan = parseTargetMan(liveJson);
+  const darts501 = parseDarts501(liveJson);
   const allSubmitted = next.length >= 2 && next.every((p) => p.completedAt != null);
 
   if (hotseat?.finished) {
@@ -1444,6 +1691,10 @@ export async function leaveVsChallenge(userId: string, challengeId: string): Pro
   }
   if (targetMan?.finished && row.modeId === 'target_man') {
     await finishTargetMan({ ...row, participantsJson: next, liveJson }, targetMan);
+    return { ended: false };
+  }
+  if (darts501?.finished && row.modeId === 'darts_501') {
+    await finishDarts501({ ...row, participantsJson: next, liveJson }, darts501);
     return { ended: false };
   }
 

@@ -113,6 +113,21 @@ final class VsViewModel {
         }
     }
 
+    func throwDarts501(playerId: String) async -> Bool {
+        guard let id = challenge?.id else { return false }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            challenge = try await APIClient.shared.vsDartsThrow(id: id, playerId: playerId)
+            VsMonitor.shared.track(challenge)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func pickTargetMan(playerId: String) async -> Bool {
         guard let id = challenge?.id else { return false }
         isBusy = true
@@ -324,7 +339,9 @@ struct VsTabView: View {
                 )
             }
         case GameModeID.darts501.rawValue:
-            if let puzzle = viewModel.darts501Puzzle {
+            if viewModel.challenge?.darts501 != nil {
+                VsDarts501LiveView(viewModel: viewModel)
+            } else if let puzzle = viewModel.darts501Puzzle {
                 Darts501View(
                     dailyDate: nil,
                     puzzle: puzzle,
@@ -472,6 +489,16 @@ struct VsTabView: View {
                     waitingCard(
                         title: challenge.youAreHost ? "Waiting for friends" : "Waiting to start",
                         message: "Five rows, one at a time. Shared names. Closest to the target wins — scores stay hidden until the end."
+                    )
+                } else if viewModel.challenge?.isLiveDarts501 == true {
+                    waitingCard(
+                        title: "Live Football 501",
+                        message: "Take turns naming players. Shared names. First to checkout wins. Lives stay — three busts doesn’t end it."
+                    )
+                } else if challenge.modeId == GameModeID.darts501.rawValue, challenge.status == "waiting" {
+                    waitingCard(
+                        title: challenge.youAreHost ? "Waiting for friends" : "Waiting to start",
+                        message: "Take turns naming players. Shared names. First to checkout wins. Lives stay — three busts doesn’t end it."
                     )
                 } else if viewModel.youHavePlayed {
                     waitingCard(

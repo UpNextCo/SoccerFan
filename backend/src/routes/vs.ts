@@ -12,6 +12,7 @@ import {
   lockVsPick,
   nameVsHotseat,
   pickVsTargetMan,
+  throwVsDarts501,
   startVsChallenge,
   submitVsChallenge,
   VsError,
@@ -125,6 +126,19 @@ vsRouter.post('/:id/target', requireAuth, async (req, res) => {
     sendSuccess(res, await pickVsTargetMan(req.auth!.userId, String(req.params.id), parsed.data.playerId));
   } catch (err) {
     handleVsError(res, err, 'Failed to lock pick');
+  }
+});
+
+vsRouter.post('/:id/darts', requireAuth, async (req, res) => {
+  const parsed = nameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    sendSuccess(res, await throwVsDarts501(req.auth!.userId, String(req.params.id), parsed.data.playerId));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to throw');
   }
 });
 
