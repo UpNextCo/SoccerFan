@@ -966,7 +966,7 @@ struct ProfileSetupStep: View {
                             Image(uiImage: avatarImage).resizable().scaledToFill()
                         } else {
                             BKTheme.cardElevated.overlay {
-                                Ph.userCircle.fill.color(BKTheme.accent).frame(width: 52, height: 52)
+                                Ph.userCircle.fill.color(BKTheme.avatarPlaceholder).frame(width: 52, height: 52)
                             }
                         }
                     }

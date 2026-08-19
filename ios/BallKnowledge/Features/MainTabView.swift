@@ -225,6 +225,7 @@ struct LeaguesTabView: View {
     @State private var scope: LeagueScope = .weekly
     @State private var viewModel = LeaguesViewModel()
     @State private var weeklyIntroPayload: WeeklyLeagueIntroPayload?
+    @State private var didPresentWeeklyIntroThisVisit = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -251,13 +252,12 @@ struct LeaguesTabView: View {
     }
 
     private func presentWeeklyIntroIfNeeded() {
-        guard scope == .weekly else { return }
-        guard !WeeklyLeagueIntro.hasShown else { return }
-        guard let weekly = viewModel.weekly else { return }
-        WeeklyLeagueIntro.markShown()
+        // Always present once per Leagues visit while iterating on this UI.
+        guard !didPresentWeeklyIntroThisVisit else { return }
+        didPresentWeeklyIntroThisVisit = true
         weeklyIntroPayload = WeeklyLeagueIntroPayload(
-            division: weekly.division ?? "sunday_league",
-            divisionLabel: weekly.divisionLabel ?? "Sunday League"
+            division: "champions_league",
+            divisionLabel: "Champions League"
         )
     }
 
@@ -284,23 +284,33 @@ struct LeaguesTabView: View {
 
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text((weekly?.divisionLabel ?? "Sunday League").uppercased())
-                        .font(BKFont.title(28))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .tracking(0.6)
-                    Text(viewModel.caption)
-                        .font(BKFont.caption(12))
-                        .foregroundStyle(BKTheme.textMuted)
-                    if let status = weekly?.statusLine, !status.isEmpty {
-                        Text(status)
-                            .font(BKFont.body(14))
-                            .foregroundStyle(BKTheme.accent)
-                            .padding(.top, 2)
+                HStack(alignment: .center, spacing: 14) {
+                    weeklyDivisionThumb(division: weekly?.division ?? "sunday_league")
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text((weekly?.divisionLabel ?? "Sunday League").uppercased())
+                            .font(BKFont.title(24))
+                            .foregroundStyle(BKTheme.textPrimary)
+                            .tracking(0.6)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.78)
+
+                        TimelineView(.periodic(from: .now, by: 60)) { context in
+                            Text(
+                                WeeklyLeagueIntro.endsCaption(
+                                    weekEnd: weekly?.weekEnd,
+                                    weekStart: weekly?.weekStart,
+                                    now: context.date
+                                )
+                            )
+                            .font(BKFont.body(13))
+                            .foregroundStyle(BKTheme.textMuted)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
+                .padding(.top, 18)
 
                 if !participated {
                     emptyState(
@@ -414,6 +424,28 @@ struct LeaguesTabView: View {
         }
     }
 
+    @ViewBuilder
+    private func weeklyDivisionThumb(division: String) -> some View {
+        let size: CGFloat = 66
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        if let image = WeeklyLeagueIntro.loadImage(named: WeeklyLeagueIntro.imageName(forDivisionId: division)) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(shape)
+        } else {
+            shape
+                .fill(BKTheme.cardElevated)
+                .frame(width: size, height: size)
+                .overlay {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(BKTheme.accent)
+                }
+        }
+    }
+
     private func zoneLabel(_ text: String) -> some View {
         Text(text)
             .font(BKFont.caption(10))
@@ -519,7 +551,7 @@ private struct WeeklyLeagueStandingRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(borderColor, lineWidth: isCurrentUser ? 1.5 : 1)
+                .stroke(borderColor, lineWidth: borderWidth)
         )
     }
 
@@ -533,7 +565,13 @@ private struct WeeklyLeagueStandingRow: View {
     }
 
     private var rowBackground: Color {
-        if isCurrentUser { return BKTheme.cardElevated }
+        if isCurrentUser {
+            switch zone {
+            case .promotion: return BKTheme.accent.opacity(0.16)
+            case .relegation: return BKTheme.wrong.opacity(0.16)
+            case .none: return BKTheme.cardElevated
+            }
+        }
         switch zone {
         case .promotion: return BKTheme.accent.opacity(0.06)
         case .relegation: return BKTheme.wrong.opacity(0.06)
@@ -542,12 +580,23 @@ private struct WeeklyLeagueStandingRow: View {
     }
 
     private var borderColor: Color {
-        if isCurrentUser { return BKTheme.accent.opacity(0.6) }
+        if isCurrentUser {
+            switch zone {
+            case .promotion: return BKTheme.accent.opacity(0.6)
+            case .relegation: return BKTheme.wrong.opacity(0.75)
+            case .none: return BKTheme.accent.opacity(0.6)
+            }
+        }
         switch zone {
         case .promotion: return BKTheme.accent.opacity(0.18)
         case .relegation: return BKTheme.wrong.opacity(0.18)
         case .none: return .clear
         }
+    }
+
+    private var borderWidth: CGFloat {
+        if isCurrentUser { return zone == .relegation ? 2 : 1.5 }
+        return 1
     }
 
     @ViewBuilder
@@ -561,7 +610,7 @@ private struct WeeklyLeagueStandingRow: View {
                 BKTheme.cardElevated
                     .overlay {
                         Ph.userCircle.fill
-                            .color(BKTheme.accent)
+                            .color(BKTheme.avatarPlaceholder)
                             .frame(width: 22, height: 22)
                     }
             }
@@ -736,7 +785,7 @@ struct PlayerStandingRow: View {
                 BKTheme.cardElevated
                     .overlay {
                         Ph.userCircle.fill
-                            .color(BKTheme.accent)
+                            .color(BKTheme.avatarPlaceholder)
                             .frame(width: 22, height: 22)
                     }
             }
@@ -963,7 +1012,7 @@ private struct TeamFanRow: View {
                         BKTheme.cardElevated
                             .overlay {
                                 Ph.userCircle.fill
-                                    .color(BKTheme.accent)
+                                    .color(BKTheme.avatarPlaceholder)
                                     .frame(width: 16, height: 16)
                             }
                     }
@@ -1251,12 +1300,6 @@ struct ProfileTabView: View {
         LocalProfile.nameOverride ?? auth.user?.displayName ?? "Player"
     }
 
-    private var initials: String {
-        let parts = displayName.split(separator: " ")
-        let letters = parts.prefix(2).compactMap { $0.first.map(String.init) }.joined()
-        return letters.isEmpty ? "BK" : letters.uppercased()
-    }
-
     private var currentXp: Int { auth.user?.xp ?? 0 }
     private var rankProgress: PlayerRankProgress { PlayerRank.progress(for: currentXp) }
 
@@ -1436,16 +1479,12 @@ struct ProfileTabView: View {
                     .scaledToFill()
             } else {
                 PlayerAvatar(urlString: auth.user?.avatarUrl, size: 96) {
-                    LinearGradient(
-                        colors: [BKTheme.cardElevated, BKTheme.card],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .overlay {
-                        Text(initials)
-                            .font(.system(size: 34, weight: .black, design: .rounded))
-                            .foregroundStyle(BKTheme.accent)
-                    }
+                    BKTheme.cardElevated
+                        .overlay {
+                            Ph.userCircle.fill
+                                .color(BKTheme.avatarPlaceholder)
+                                .frame(width: 52, height: 52)
+                        }
                 }
             }
         }

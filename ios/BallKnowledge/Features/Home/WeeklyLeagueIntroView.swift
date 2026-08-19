@@ -15,44 +15,66 @@ enum WeeklyLeagueIntro {
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.weeklyLeagueIntroShown)
     }
 
-    /// Drop PNGs into `Resources/leaguepics/` as `league1`…`league7` (CL → Sunday).
+    /// Trophy art in `Resources/GameTiles/` — filenames match the files dropped there.
     static let pyramid: [(id: String, label: String, imageName: String)] = [
-        ("champions_league", "Champions League", "league1"),
-        ("premier_league", "Premier League", "league2"),
-        ("championship", "Championship", "league3"),
-        ("league_one", "League One", "league4"),
-        ("league_two", "League Two", "league5"),
-        ("non_league", "Non-League", "league6"),
-        ("sunday_league", "Sunday League", "league7"),
+        ("champions_league", "Champions League", "championsleague"),
+        ("premier_league", "Premier League", "premierleague"),
+        ("championship", "Championship", "championship"),
+        ("league_one", "League One", "leagueone"),
+        ("league_two", "League Two", "leaguetwo"),
+        ("non_league", "Non-League", "nonleague"),
+        ("sunday_league", "Sunday League", "sundayleague"),
     ]
 
     static func imageName(forDivisionId id: String) -> String {
-        pyramid.first(where: { $0.id == id })?.imageName ?? "league7"
+        pyramid.first(where: { $0.id == id })?.imageName ?? "sundayleague"
     }
 
     static func loadImage(named name: String) -> UIImage? {
-        let extensions = ["png", "PNG", "jpg", "jpeg"]
-        for ext in extensions {
-            if let url = Bundle.main.url(forResource: name, withExtension: ext),
-               let image = UIImage(contentsOfFile: url.path) {
-                return image
-            }
-            if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "leaguepics"),
-               let image = UIImage(contentsOfFile: url.path) {
-                return image
-            }
-            if let path = Bundle.main.path(forResource: name, ofType: ext, inDirectory: "leaguepics"),
-               let image = UIImage(contentsOfFile: path) {
-                return image
-            }
+        guard let url = GameModeTileArt.imageURL(named: name) else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }
+
+    /// Sunday 24:00 Europe/London for the current weekly league week.
+    static func weekEndDate(weekEnd: String?, weekStart: String?) -> Date? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/London") ?? .gmt
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        if let weekEnd, let sunday = formatter.date(from: weekEnd) {
+            return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: sunday))
         }
-        if let resourcePath = Bundle.main.resourcePath {
-            for ext in extensions {
-                let path = (resourcePath as NSString).appendingPathComponent("leaguepics/\(name).\(ext)")
-                if let image = UIImage(contentsOfFile: path) { return image }
-            }
+        if let weekStart, let monday = formatter.date(from: weekStart) {
+            return calendar.date(byAdding: .day, value: 7, to: calendar.startOfDay(for: monday))
         }
         return nil
+    }
+
+    static func endsCaption(weekEnd: String?, weekStart: String?, now: Date = .now) -> String {
+        guard let end = weekEndDate(weekEnd: weekEnd, weekStart: weekStart) else {
+            return "Ends Sunday"
+        }
+        let remaining = end.timeIntervalSince(now)
+        if remaining <= 0 { return "Ends soon" }
+
+        let hoursTotal = Int(remaining / 3600)
+        let days = hoursTotal / 24
+        let hours = hoursTotal % 24
+
+        if days >= 1 {
+            let dayPart = days == 1 ? "1 day" : "\(days) days"
+            if hours == 0 { return "Ends in \(dayPart)" }
+            let hourPart = hours == 1 ? "1 hour" : "\(hours) hours"
+            return "Ends in \(dayPart) \(hourPart)"
+        }
+        if hoursTotal >= 1 {
+            return hoursTotal == 1 ? "Ends in 1 hour" : "Ends in \(hoursTotal) hours"
+        }
+        let minutes = max(1, Int(remaining / 60))
+        return minutes == 1 ? "Ends in 1 minute" : "Ends in \(minutes) minutes"
     }
 }
 
@@ -78,94 +100,84 @@ struct WeeklyLeagueIntroView: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             BKTheme.background.ignoresSafeArea()
 
             heroBackground
 
-            VStack(spacing: 0) {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 22) {
-                        headerBlock
-                            .opacity(showChrome ? 1 : 0)
-                            .offset(y: showChrome ? 0 : 16)
-                            .padding(.top, 28)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 22) {
+                    headerBlock
+                        .opacity(showChrome ? 1 : 0)
+                        .offset(y: showChrome ? 0 : 16)
+                        .padding(.top, 28)
 
-                        ladderBlock
-                            .opacity(showLadder ? 1 : 0)
-                            .offset(y: showLadder ? 0 : 18)
+                    ladderBlock
+                        .opacity(showLadder ? 1 : 0)
+                        .offset(y: showLadder ? 0 : 18)
 
-                        footerBlock
-                            .opacity(showFooter ? 1 : 0)
-                            .offset(y: showFooter ? 0 : 14)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 20)
+                    footerBlock
+                        .opacity(showFooter ? 1 : 0)
+                        .offset(y: showFooter ? 0 : 14)
                 }
-
-                GameResultExitBar(title: "BEGIN PLAYING", action: onDismiss)
-                    .opacity(ctaRevealed ? 1 : 0)
-                    .allowsHitTesting(ctaRevealed)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 120)
             }
+
+            GameResultExitBar(title: "BEGIN PLAYING", showsBackground: false, action: onDismiss)
+                .opacity(ctaRevealed ? 1 : 0)
+                .allowsHitTesting(ctaRevealed)
 
             FootballConfettiView(burstToken: confettiToken)
                 .allowsHitTesting(false)
         }
+        .presentationBackground(BKTheme.background)
         .task { await runSequence() }
     }
 
     private var heroBackground: some View {
         GeometryReader { geo in
-            let topPad = geo.safeAreaInsets.top + 36
+            let heroHeight = max(geo.size.width * 1.05, geo.size.height * 0.50)
+            let fadeHeight = min(160, heroHeight * 0.38)
             ZStack(alignment: .top) {
-                RadialGradient(
-                    colors: [BKTheme.accent.opacity(0.22), .clear],
-                    center: .top,
-                    startRadius: 12,
-                    endRadius: 300
-                )
-                .frame(height: geo.size.height * 0.55)
-
                 if let heroImage {
                     Image(uiImage: heroImage)
                         .resizable()
-                        .scaledToFit()
-                        .frame(width: geo.size.width * 0.72)
-                        .opacity(0.88)
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: heroHeight)
+                        .clipped()
                         .mask(
                             VStack(spacing: 0) {
                                 Color.white
                                 LinearGradient(
                                     stops: [
                                         .init(color: .white, location: 0),
-                                        .init(color: .white.opacity(0.3), location: 0.4),
+                                        .init(color: .white.opacity(0.35), location: 0.42),
                                         .init(color: .clear, location: 1),
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
-                                .frame(height: 56)
+                                .frame(height: fadeHeight)
                             }
                         )
                         .overlay(alignment: .bottom) {
                             LinearGradient(
                                 stops: [
                                     .init(color: .clear, location: 0),
-                                    .init(color: BKTheme.background.opacity(0.55), location: 0.4),
+                                    .init(color: BKTheme.background.opacity(0.45), location: 0.4),
                                     .init(color: BKTheme.background, location: 1),
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
-                            .frame(height: 80)
+                            .frame(height: fadeHeight)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, topPad)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
-        .ignoresSafeArea()
+        .ignoresSafeArea(edges: .top)
         .allowsHitTesting(false)
     }
 
@@ -188,7 +200,7 @@ struct WeeklyLeagueIntroView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, heroImage == nil ? 48 : 160)
+        .padding(.top, heroImage == nil ? 48 : 236)
     }
 
     private var ladderBlock: some View {
@@ -246,7 +258,7 @@ struct WeeklyLeagueIntroView: View {
                 .foregroundStyle(BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text("Earn XP to join your table of 20. Finish top 5 to promote — finish bottom 5 and you drop a division. Champions League is one table: the 20 highest scorers across Champions League and Premier League.")
+            Text("Earn XP to join a 20-player league. Top 5 are promoted, bottom 5 relegated. Champions League is the top 20 scorers across CL and Premier League.")
                 .font(BKFont.body(13))
                 .foregroundStyle(BKTheme.textSecondary)
                 .multilineTextAlignment(.center)

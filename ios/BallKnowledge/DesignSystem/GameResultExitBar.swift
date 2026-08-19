@@ -3,6 +3,7 @@ import SwiftUI
 /// Fixed bottom exit button for full-screen game result views.
 struct GameResultExitBar: View {
     var title: String = "BACK TO GAMES"
+    var showsBackground: Bool = true
     let action: () -> Void
 
     var body: some View {
@@ -18,7 +19,7 @@ struct GameResultExitBar: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 16)
-        .background(BKTheme.background)
+        .background(showsBackground ? BKTheme.background : Color.clear)
     }
 }
 

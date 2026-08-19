@@ -56,5 +56,6 @@ enum UserDefaultsKeys {
     /// Local calendar date (YYYY-MM-DD) for which the first-game streak toast was already shown.
     static let dailyCompleteCelebratedDate = "dailyCompleteCelebratedDate"
     /// One-shot weekly pyramid league intro (Leagues → Weekly).
-    static let weeklyLeagueIntroShown = "weeklyLeagueIntroShown"
+    /// Bumped to V2 so the new GameTiles trophy art is shown once.
+    static let weeklyLeagueIntroShown = "weeklyLeagueIntroShownV2"
 }

@@ -397,7 +397,7 @@ struct HomeHeaderView: View {
                     BKTheme.cardElevated
                         .overlay {
                             Ph.userCircle.fill
-                                .color(BKTheme.accent)
+                                .color(BKTheme.avatarPlaceholder)
                                 .frame(width: 26, height: 26)
                         }
                 }

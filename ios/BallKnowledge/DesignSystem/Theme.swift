@@ -13,6 +13,7 @@ enum BKTheme {
     static let textPrimary = Color.white
     static let textSecondary = Color(hex: "AAAAAA")
     static let textMuted = Color(hex: "666666")
+    static let avatarPlaceholder = Color(hex: "888888")
     static let wrong = Color(hex: "FF4444")
     static let partial = Color(hex: "FFAA00")
     static let correct = Color(hex: "00FF66")

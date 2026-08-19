@@ -16,6 +16,7 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
     let xp: Int
     let timesEarned: Int
     let hero: Hero
+    var playsUnlock: Bool = true
 
     static func perfect(mode: GameModeID, image: String, timesEarned: Int = 1) -> TrophyUnlockPayload {
         TrophyUnlockPayload(
@@ -30,6 +31,24 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         )
     }
 
+    static func weeklyLeague(title: String, image: String) -> TrophyUnlockPayload {
+        imageOnly(title: title, subtitle: "WEEKLY LEAGUE", image: image)
+    }
+
+    static func imageOnly(title: String, subtitle: String, image: String) -> TrophyUnlockPayload {
+        TrophyUnlockPayload(
+            id: "badge-\(image)",
+            eyebrow: "TROPHY UNLOCKED",
+            kicker: subtitle,
+            gameTitle: title,
+            detail: "",
+            xp: 0,
+            timesEarned: 1,
+            hero: .bundleImage(image),
+            playsUnlock: false
+        )
+    }
+
     /// Home daily order. Image names match `Resources/GameTiles/`.
     static let previewGameTrophies: [TrophyUnlockPayload] = [
         .perfect(mode: .footballBingo, image: "bingotrophy"),
@@ -40,6 +59,14 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         .perfect(mode: .lastManStanding, image: "trophylms"),
         .perfect(mode: .backYourself, image: "backyourselftrophy"),
         .perfect(mode: .darts501, image: "trophydarts", timesEarned: 2),
+        .weeklyLeague(title: "Champions League", image: "cltrophy"),
+        .weeklyLeague(title: "Premier League", image: "pltrophy"),
+        .weeklyLeague(title: "Championship", image: "championshiptrophy"),
+        .weeklyLeague(title: "League One", image: "l1trophy"),
+        .weeklyLeague(title: "League Two", image: "l2trophy"),
+        .weeklyLeague(title: "Non-League", image: "nltrophy"),
+        .weeklyLeague(title: "Sunday League", image: "sltrophy"),
+        .imageOnly(title: "Daily Leaderboard", subtitle: "Most XP", image: "dailytrophy"),
     ]
 
     static let dartsPerfect = previewGameTrophies.first { $0.id == "perfect-darts_501" }!
@@ -243,6 +270,7 @@ struct TrophyCabinetView: View {
                                 isLocked: false,
                                 showsDivider: index < TrophyUnlockPayload.previewGameTrophies.count - 1
                             ) {
+                                guard payload.playsUnlock else { return }
                                 unlock = payload
                             }
                         }
@@ -346,9 +374,11 @@ private struct TrophyCabinetRow: View {
                             .foregroundStyle(BKTheme.accent)
                     }
 
-                    Ph.caretRight.bold
-                        .color(BKTheme.textMuted)
-                        .frame(width: 12, height: 12)
+                    if payload.playsUnlock {
+                        Ph.caretRight.bold
+                            .color(BKTheme.textMuted)
+                            .frame(width: 12, height: 12)
+                    }
                 }
                 .padding(.vertical, 14)
                 .opacity(isLocked ? 0.55 : 1)
