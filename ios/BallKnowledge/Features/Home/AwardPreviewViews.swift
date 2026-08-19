@@ -66,7 +66,12 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         .weeklyLeague(title: "League Two", image: "l2trophy"),
         .weeklyLeague(title: "Non-League", image: "nltrophy"),
         .weeklyLeague(title: "Sunday League", image: "sltrophy"),
-        .imageOnly(title: "Daily Leaderboard", subtitle: "Most XP", image: "dailytrophy"),
+        .imageOnly(title: "Daily Leaderboard", subtitle: "MOST XP", image: "dailytrophy"),
+        .imageOnly(title: "50k Overall XP", subtitle: "OVERALL XP", image: "50ktrophy"),
+        .imageOnly(title: "100k Overall XP", subtitle: "OVERALL XP", image: "100ktrophy"),
+        .imageOnly(title: "250k Overall XP", subtitle: "OVERALL XP", image: "250ktrophy"),
+        .imageOnly(title: "500k Overall XP", subtitle: "OVERALL XP", image: "500ktrophy"),
+        .imageOnly(title: "1M Overall XP", subtitle: "OVERALL XP", image: "1mtrophy"),
     ]
 
     static let dartsPerfect = previewGameTrophies.first { $0.id == "perfect-darts_501" }!
