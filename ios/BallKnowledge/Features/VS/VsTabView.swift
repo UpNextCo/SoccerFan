@@ -69,10 +69,13 @@ final class VsViewModel {
     func poll() async {
         guard let id = challenge?.id else { return }
         do {
-            challenge = try await APIClient.shared.vsGet(id: id)
-            VsMonitor.shared.track(challenge)
+            applyPolled(try await APIClient.shared.vsGet(id: id))
         } catch {
-            // Keep last known state while polling.
+            if case APIError.server(let message) = error,
+               message.localizedCaseInsensitiveContains("expired") {
+                playing = false
+                clearChallenge()
+            }
         }
     }
 
@@ -138,6 +141,33 @@ final class VsViewModel {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    func abandonChallenge() async {
+        guard let challenge else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            if challenge.youAreHost {
+                _ = try await APIClient.shared.vsCancel(id: challenge.id)
+            } else {
+                _ = try await APIClient.shared.vsLeave(id: challenge.id)
+            }
+            playing = false
+            clearChallenge()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func applyPolled(_ updated: VsChallengeDTO) {
+        if updated.status == "expired" {
+            playing = false
+            clearChallenge()
+            return
+        }
+        challenge = updated
+        VsMonitor.shared.track(challenge)
     }
 
     func clearChallenge() {
@@ -206,6 +236,9 @@ struct VsTabView: View {
                         .font(BKFont.caption(13)).tracking(1.5)
                         .foregroundStyle(BKTheme.accent)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    VsChallengeOverflowMenu(viewModel: viewModel)
+                }
             }
         }
         .task { await viewModel.refresh() }
@@ -231,7 +264,10 @@ struct VsTabView: View {
             }
         }
         .onChange(of: viewModel.challenge?.status) {
-            if viewModel.challenge?.isLivePlay == true {
+            if viewModel.challenge?.status == "expired" {
+                viewModel.playing = false
+                viewModel.clearChallenge()
+            } else if viewModel.challenge?.isLivePlay == true {
                 viewModel.playing = true
             }
         }
@@ -637,6 +673,52 @@ struct VsTabView: View {
         .padding(22)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+struct VsChallengeOverflowMenu: View {
+    var viewModel: VsViewModel
+    @State private var confirm = false
+
+    private var challenge: VsChallengeDTO? { viewModel.challenge }
+    private var isHost: Bool { challenge?.youAreHost == true }
+    private var canAbandon: Bool {
+        guard let challenge else { return false }
+        return challenge.status == "waiting" || challenge.status == "active"
+    }
+
+    var body: some View {
+        if canAbandon {
+            Menu {
+                Button(isHost ? "Cancel challenge" : "Leave challenge", role: .destructive) {
+                    confirm = true
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .alert(isHost ? "Cancel challenge?" : "Leave challenge?", isPresented: $confirm) {
+                Button(isHost ? "Keep it" : "Stay", role: .cancel) {}
+                Button(isHost ? "Cancel challenge" : "Leave", role: .destructive) {
+                    Task { await viewModel.abandonChallenge() }
+                }
+            } message: {
+                Text(alertMessage)
+            }
+        }
+    }
+
+    private var alertMessage: String {
+        if isHost {
+            return "Everyone will be sent back to the lobby."
+        }
+        if (challenge?.players.count ?? 0) <= 2 {
+            return "You're one of two players, so this will end the challenge."
+        }
+        return "The others will keep playing."
     }
 }
 

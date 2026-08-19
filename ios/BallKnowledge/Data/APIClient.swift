@@ -621,6 +621,14 @@ actor APIClient {
     func vsGiveUp(id: String) async throws -> VsChallengeDTO {
         try await request("vs/\(id)/giveup", method: "POST", body: EmptyBody())
     }
+
+    func vsCancel(id: String) async throws -> VsLeaveDTO {
+        try await request("vs/\(id)/cancel", method: "POST", body: EmptyBody())
+    }
+
+    func vsLeave(id: String) async throws -> VsLeaveDTO {
+        try await request("vs/\(id)/leave", method: "POST", body: EmptyBody())
+    }
 }
 
 private struct EmptyBody: Encodable {}

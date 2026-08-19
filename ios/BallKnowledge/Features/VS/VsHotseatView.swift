@@ -83,6 +83,9 @@ struct VsHotseatView: View {
                         .font(BKFont.caption(13)).tracking(1)
                         .foregroundStyle(BKTheme.accent)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    VsChallengeOverflowMenu(viewModel: viewModel)
+                }
             }
         }
         .onReceive(Timer.publish(every: 0.25, on: .main, in: .common).autoconnect()) { now = $0 }
@@ -94,6 +97,9 @@ struct VsHotseatView: View {
         }
         .onChange(of: viewModel.challenge?.result.allDone) { _, done in
             if done == true { dismiss() }
+        }
+        .onChange(of: viewModel.challenge?.id) { _, id in
+            if id == nil { dismiss() }
         }
         .task(id: viewModel.challenge?.id) {
             while !Task.isCancelled {

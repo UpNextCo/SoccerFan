@@ -2,11 +2,13 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
 import {
+  cancelVsChallenge,
   createVsChallenge,
   getActiveVsChallenge,
   getVsChallenge,
   joinVsChallenge,
   giveUpVsHotseat,
+  leaveVsChallenge,
   lockVsPick,
   nameVsHotseat,
   startVsChallenge,
@@ -117,6 +119,22 @@ vsRouter.post('/:id/giveup', requireAuth, async (req, res) => {
     sendSuccess(res, await giveUpVsHotseat(req.auth!.userId, String(req.params.id)));
   } catch (err) {
     handleVsError(res, err, 'Failed to give up');
+  }
+});
+
+vsRouter.post('/:id/cancel', requireAuth, async (req, res) => {
+  try {
+    sendSuccess(res, await cancelVsChallenge(req.auth!.userId, String(req.params.id)));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to cancel challenge');
+  }
+});
+
+vsRouter.post('/:id/leave', requireAuth, async (req, res) => {
+  try {
+    sendSuccess(res, await leaveVsChallenge(req.auth!.userId, String(req.params.id)));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to leave challenge');
   }
 });
 

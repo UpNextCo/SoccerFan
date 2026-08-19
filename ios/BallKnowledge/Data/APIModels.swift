@@ -548,6 +548,10 @@ struct VsLiveDTO: Codable, Equatable {
     }
 }
 
+struct VsLeaveDTO: Codable, Equatable {
+    let ended: Bool
+}
+
 struct VsPickDTO: Encodable {
     let slotId: String
     let constraintId: String

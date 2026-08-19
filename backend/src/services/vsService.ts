@@ -906,9 +906,6 @@ export async function lockVsPick(
 
 export async function getVsChallenge(userId: string, challengeId: string): Promise<VsChallengeView> {
   const row = await requireParticipant(challengeId, userId);
-  if (row.status === 'expired') {
-    throw new VsError('This challenge has expired', 410, 'EXPIRED');
-  }
   return viewFor(row, userId);
 }
 
@@ -1048,4 +1045,92 @@ export async function giveUpVsHotseat(userId: string, challengeId: string): Prom
   if (next.finished) return viewFor(await finishHotseat(row, next), userId);
   const updated = await persistRow(row.id, { liveJson: next });
   return viewFor(updated ?? { ...row, liveJson: next }, userId);
+}
+
+export type VsLeaveResult = {
+  ended: boolean;
+};
+
+async function expireChallenge(row: VsChallenge): Promise<void> {
+  await persistRow(row.id, { status: 'expired' });
+}
+
+function liveJsonAfterLeave(row: VsChallenge, userId: string, remainingIds: string[]): unknown {
+  if (row.modeId === 'back_yourself') {
+    const hotseat = parseHotseat(row.liveJson);
+    return hotseat ? eliminatePlayer(hotseat, userId) : row.liveJson;
+  }
+  if (row.modeId === 'draft_master') {
+    const live = liveStateOf(row);
+    if (!live) return row.liveJson;
+    const picksByUser = { ...live.picksByUser };
+    delete picksByUser[userId];
+    const next = { ...live, picksByUser };
+    const puzzle = row.puzzleJson as BattlePuzzleJson;
+    if (Array.isArray(puzzle.slots) && puzzle.slots.length > 0) {
+      return advanceIfNeeded(puzzle, next, remainingIds);
+    }
+    return next;
+  }
+  return row.liveJson;
+}
+
+export async function cancelVsChallenge(userId: string, challengeId: string): Promise<VsLeaveResult> {
+  const row = await requireParticipant(challengeId, userId);
+  if (row.hostUserId !== userId) {
+    throw new VsError('Only the host can cancel this challenge', 403, 'FORBIDDEN');
+  }
+  if (row.status === 'complete') {
+    throw new VsError('This challenge is already finished', 400, 'INVALID_STATUS');
+  }
+  if (row.status !== 'expired') {
+    await expireChallenge(row);
+  }
+  return { ended: true };
+}
+
+export async function leaveVsChallenge(userId: string, challengeId: string): Promise<VsLeaveResult> {
+  const row = await requireParticipant(challengeId, userId);
+  if (row.status === 'expired') return { ended: true };
+  if (row.status === 'complete') {
+    throw new VsError('This challenge is already finished', 400, 'INVALID_STATUS');
+  }
+  if (row.hostUserId === userId) {
+    throw new VsError('The host should cancel the challenge instead', 400, 'HOST_CANCEL');
+  }
+
+  const people = participantsOf(row);
+  if (!people.some((p) => p.userId === userId)) {
+    throw new VsError('Not in this challenge', 403, 'FORBIDDEN');
+  }
+
+  if (people.length <= 2) {
+    await expireChallenge(row);
+    return { ended: true };
+  }
+
+  const next = people.filter((p) => p.userId !== userId);
+  const remainingIds = next.map((p) => p.userId);
+  const liveJson = liveJsonAfterLeave(row, userId, remainingIds);
+  const hotseat = parseHotseat(liveJson);
+  const live = parseLiveState(liveJson);
+  const allSubmitted = next.length >= 2 && next.every((p) => p.completedAt != null);
+
+  if (hotseat?.finished) {
+    await finishHotseat({ ...row, participantsJson: next, liveJson }, hotseat);
+    return { ended: false };
+  }
+  if (live?.finished && row.modeId === 'draft_master') {
+    await finishLiveDraft({ ...row, participantsJson: next, liveJson }, live);
+    return { ended: false };
+  }
+
+  const guest = next.find((p) => p.userId !== row.hostUserId);
+  await persistRow(row.id, {
+    participantsJson: next,
+    guestUserId: guest?.userId ?? null,
+    liveJson,
+    ...(allSubmitted ? { status: 'complete' } : {}),
+  });
+  return { ended: false };
 }
