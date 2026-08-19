@@ -79,15 +79,44 @@ export function playerState(state: VsDarts501State, userId: string): VsDarts501P
   return state.players[userId] ?? { remaining: DARTS501_START, inCheckout: false, checkoutBusts: 0 };
 }
 
-export function passTurn(state: VsDarts501State, fromUserId: string, now = Date.now()): VsDarts501State {
-  if (state.finished || state.order.length === 0) return state;
-  const idx = Math.max(0, state.order.indexOf(fromUserId));
-  const next = state.order[(idx + 1) % state.order.length] ?? state.order[0]!;
+export function livingOrder(state: VsDarts501State, totalLives = DARTS501_CHECKOUT_LIVES): string[] {
+  return state.order.filter((id) => livesLeft(playerState(state, id).checkoutBusts, totalLives) > 0);
+}
+
+/** Closest remaining wins. Same remaining is a draw (`winnerUserId` null). */
+export function finishByClosest(state: VsDarts501State, now = Date.now()): VsDarts501State {
+  if (state.finished) return state;
+  const rows = state.order.map((id) => ({
+    id,
+    remaining: playerState(state, id).remaining,
+  }));
+  const best = rows.length === 0 ? 0 : Math.min(...rows.map((row) => row.remaining));
+  const tied = rows.filter((row) => row.remaining === best);
   return {
     ...state,
-    turnUserId: next,
-    deadlineAt: new Date(now + VS_DARTS501_TURN_MS).toISOString(),
+    finished: true,
+    winnerUserId: tied.length === 1 ? tied[0]!.id : null,
+    turnUserId: tied[0]?.id ?? state.turnUserId,
+    deadlineAt: new Date(now).toISOString(),
   };
+}
+
+export function passTurn(state: VsDarts501State, fromUserId: string, now = Date.now()): VsDarts501State {
+  if (state.finished || state.order.length === 0) return state;
+  const living = livingOrder(state);
+  if (living.length === 0) return finishByClosest(state, now);
+  const idx = Math.max(0, state.order.indexOf(fromUserId));
+  for (let step = 1; step <= state.order.length; step++) {
+    const id = state.order[(idx + step) % state.order.length]!;
+    if (living.includes(id)) {
+      return {
+        ...state,
+        turnUserId: id,
+        deadlineAt: new Date(now + VS_DARTS501_TURN_MS).toISOString(),
+      };
+    }
+  }
+  return finishByClosest(state, now);
 }
 
 export function applyThrow(
@@ -111,6 +140,7 @@ export function applyThrow(
       deadlineAt: new Date(now).toISOString(),
     };
   }
+  if (livingOrder(next).length === 0) return finishByClosest(next, now);
   return passTurn(next, throwRow.userId, now);
 }
 

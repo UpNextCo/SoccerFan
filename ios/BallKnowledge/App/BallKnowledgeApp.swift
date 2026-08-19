@@ -49,6 +49,7 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .sessionUnauthorized)) { _ in
             Task { await auth.handleUnauthorized(context: modelContext) }
         }
+        .dismissesKeyboardOnDragUp()
     }
 }
 

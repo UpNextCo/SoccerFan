@@ -41,15 +41,13 @@ struct VsDraftLiveView: View {
                         scoreboard
                         BattleConstraintsStrip(
                             constraints: battle.constraints,
-                            usedIds: draft.state.usedConstraintIds
+                            usedIds: Set(live?.usedConstraintIds ?? []).union(draft.state.usedConstraintIds)
                         )
                         BattlePitchView(
                             slots: battle.slots,
                             state: draft.state,
                             highlightedSlotId: live?.slotId,
                             interactiveSlotId: live?.yourTurn == true ? live?.slotId : "",
-                            focusSlotId: live?.slotId,
-                            visibleFraction: 0.36,
                             onTapSlot: { open($0) },
                             onDropConstraint: { id, slot in
                                 guard live?.yourTurn == true, slot.id == live?.slotId else { return }
@@ -110,6 +108,9 @@ struct VsDraftLiveView: View {
         .onChange(of: live?.yourPicks.map(\.id)) { _, _ in syncPitch() }
         .onChange(of: live?.usedPlayerIds) { _, ids in
             draft.extraUsedPlayerIds = Set(ids ?? [])
+        }
+        .onChange(of: live?.usedConstraintIds) { _, ids in
+            draft.extraUsedConstraintIds = Set(ids ?? [])
         }
         .onChange(of: live?.yourTurn) { _, yourTurn in
             if yourTurn != true { draft.closeSlot() }
@@ -184,6 +185,7 @@ struct VsDraftLiveView: View {
 
     private func wireDraft() {
         draft.extraUsedPlayerIds = Set(live?.usedPlayerIds ?? [])
+        draft.extraUsedConstraintIds = Set(live?.usedConstraintIds ?? [])
         let model = draft
         model.confirmPick = { [weak model] dto in
             guard let model,
@@ -195,7 +197,9 @@ struct VsDraftLiveView: View {
                 return false
             }
             let ok = await viewModel.lockPick(slotId: live.slotId, constraintId: constraint.id, playerId: dto.id)
-            if !ok {
+            if ok {
+                model.lockConfirmedPick(slotId: slot.id, constraint: constraint, player: dto)
+            } else {
                 model.selectionError = viewModel.errorMessage ?? "Couldn't lock that pick"
             }
             return ok

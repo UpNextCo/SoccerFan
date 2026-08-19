@@ -97,3 +97,38 @@ test('live resolver keeps lives but never ends on a third bust', () => {
   assert.equal(third.checkoutBusts, 3);
   assert.equal(third.remaining, 40);
 });
+
+test('last player losing their lives finishes by closest remaining', () => {
+  let live = initDarts501(['a', 'b']);
+  live = applyThrow(
+    live,
+    throwRow('a', 'p1', 'bust', 180),
+    { remaining: 180, inCheckout: true, checkoutBusts: 3 }
+  );
+  assert.equal(live.finished, false);
+  assert.equal(live.turnUserId, 'b');
+
+  live = applyThrow(
+    live,
+    throwRow('b', 'p2', 'bust', 90),
+    { remaining: 90, inCheckout: true, checkoutBusts: 3 }
+  );
+  assert.equal(live.finished, true);
+  assert.equal(live.winnerUserId, 'b');
+});
+
+test('all lives gone with the same remaining is a draw', () => {
+  let live = initDarts501(['a', 'b']);
+  live = applyThrow(
+    live,
+    throwRow('a', 'p1', 'bust', 120),
+    { remaining: 120, inCheckout: true, checkoutBusts: 3 }
+  );
+  live = applyThrow(
+    live,
+    throwRow('b', 'p2', 'bust', 120),
+    { remaining: 120, inCheckout: true, checkoutBusts: 3 }
+  );
+  assert.equal(live.finished, true);
+  assert.equal(live.winnerUserId, null);
+});

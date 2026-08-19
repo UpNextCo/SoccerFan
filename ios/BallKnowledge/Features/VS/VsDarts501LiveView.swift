@@ -8,27 +8,35 @@ struct VsDarts501LiveView: View {
     @State private var now = Date()
 
     private var live: VsDarts501DTO? { viewModel.challenge?.darts501 }
-    private var you: VsDarts501BoardDTO? { live?.board.first(where: \.isYou) }
     private var turnPlayer: VsDarts501BoardDTO? {
         live?.board.first { $0.userId == live?.turnUserId }
     }
-    private var latestThrow: VsDarts501ThrowDTO? { live?.throwLog.last }
+
+    private var showResult: Bool {
+        live?.finished == true || viewModel.challenge?.result.allDone == true
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                scoreboard
-                remainingHero
-                formulaCard
-                history
-                Spacer(minLength: 0)
-                turnFooter
+            ZStack {
+                VStack(spacing: 0) {
+                    scoreboard
+                    turnBar
+                    formulaCard
+                    history
+                    Spacer(minLength: 0)
+                    turnFooter
+                }
+                .background(StadiumBackground(glowIntensity: 0.32))
+
+                if showResult {
+                    resultScreen
+                }
             }
-            .background(StadiumBackground(glowIntensity: 0.32))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
+                    Button(action: leaveToLobby) {
                         Ph.x.bold.color(BKTheme.textPrimary).frame(width: 15, height: 15)
                     }
                 }
@@ -37,8 +45,10 @@ struct VsDarts501LiveView: View {
                         .font(BKFont.caption(13)).tracking(1)
                         .foregroundStyle(BKTheme.accent)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    VsChallengeOverflowMenu(viewModel: viewModel)
+                if !showResult {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        VsChallengeOverflowMenu(viewModel: viewModel)
+                    }
                 }
             }
         }
@@ -48,9 +58,6 @@ struct VsDarts501LiveView: View {
                 search.reset()
                 searchFocused = false
             }
-        }
-        .onChange(of: viewModel.challenge?.result.allDone) { _, done in
-            if done == true { dismiss() }
         }
         .onChange(of: viewModel.challenge?.id) { _, id in
             if id == nil { dismiss() }
@@ -98,42 +105,23 @@ struct VsDarts501LiveView: View {
         .animation(.easeOut(duration: 0.25), value: live?.board.map(\.remaining))
     }
 
-    private var remainingHero: some View {
-        let focus = live?.yourTurn == true ? you : turnPlayer
-        return VStack(spacing: 6) {
-            HStack {
-                Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
-                    .font(BKFont.caption(11)).tracking(1)
-                    .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
-                Spacer()
-                Text(timerLabel)
-                    .font(BKFont.headline(16))
-                    .foregroundStyle(secondsLeft <= 12 ? BKTheme.wrong : BKTheme.accent)
-                    .monospacedDigit()
-            }
-            .padding(.horizontal, 20)
-
-            if focus?.inCheckout == true {
+    private var turnBar: some View {
+        HStack(spacing: 8) {
+            Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
+                .font(BKFont.caption(11)).tracking(1)
+                .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
+            if turnPlayer?.inCheckout == true {
                 Text("CHECKOUT")
-                    .font(BKFont.caption(12)).tracking(2)
+                    .font(BKFont.caption(10)).tracking(1)
                     .foregroundStyle(BKTheme.partial)
             }
-            Text("\(focus?.remaining ?? live?.startScore ?? 501)")
-                .font(BKFont.title(52))
-                .foregroundStyle(BKTheme.textPrimary)
-                .contentTransition(.numericText())
-            Text("REMAINING")
-                .font(BKFont.caption(11)).tracking(1.4)
-                .foregroundStyle(BKTheme.textMuted)
-
-            if let latest = latestThrow {
-                Text(latestLine(latest))
-                    .font(BKFont.caption(12))
-                    .foregroundStyle(isBust(latest) ? BKTheme.wrong : BKTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16)
-            }
+            Spacer()
+            Text(timerLabel)
+                .font(BKFont.headline(16))
+                .foregroundStyle(secondsLeft <= 12 ? BKTheme.wrong : BKTheme.accent)
+                .monospacedDigit()
         }
+        .padding(.horizontal, 20)
         .padding(.vertical, 8)
     }
 
@@ -146,12 +134,6 @@ struct VsDarts501LiveView: View {
                 .font(BKFont.headline(15))
                 .foregroundStyle(BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
-            if let detail = live?.formulaDetail, !detail.isEmpty, detail != live?.formulaLabel {
-                Text(detail)
-                    .font(BKFont.caption(12))
-                    .foregroundStyle(BKTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(14)
@@ -185,9 +167,7 @@ struct VsDarts501LiveView: View {
                                     .foregroundStyle(BKTheme.textMuted)
                             }
                             Spacer()
-                            Text(throwValue(row))
-                                .font(BKFont.headline(14))
-                                .foregroundStyle(isBust(row) ? BKTheme.wrong : BKTheme.textPrimary)
+                            throwValueLabel(row)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
@@ -274,21 +254,27 @@ struct VsDarts501LiveView: View {
         row.kind == "bust" || row.bustReason != nil
     }
 
-    private func throwValue(_ row: VsDarts501ThrowDTO) -> String {
-        if row.kind == "perfect" { return "0" }
-        if row.kind == "checkout" { return "\(row.remainingAfter)" }
-        if row.bustReason == "wrong_category" { return "MISS" }
-        if isBust(row) { return "BUST" }
-        return "\(row.score)"
-    }
-
-    private func latestLine(_ row: VsDarts501ThrowDTO) -> String {
-        let who = row.isYou ? "You" : row.displayName
-        if row.kind == "perfect" { return "\(who) — perfect checkout" }
-        if row.kind == "checkout" { return "\(who) checked out" }
-        if row.bustReason == "wrong_category" { return "\(who) missed — \(row.playerName) doesn’t fit" }
-        if isBust(row) { return "\(who) bust on \(row.playerName)" }
-        return "\(who) scored \(row.score) with \(row.playerName)"
+    @ViewBuilder
+    private func throwValueLabel(_ row: VsDarts501ThrowDTO) -> some View {
+        if row.bustReason == "wrong_category" {
+            Text("MISS")
+                .font(BKFont.headline(14))
+                .foregroundStyle(BKTheme.wrong)
+        } else if isBust(row) {
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(row.score)")
+                    .font(BKFont.headline(14))
+                    .foregroundStyle(BKTheme.wrong)
+                Text("BUST")
+                    .font(BKFont.caption(9))
+                    .tracking(0.6)
+                    .foregroundStyle(BKTheme.wrong)
+            }
+        } else {
+            Text(row.kind == "perfect" ? "0" : row.kind == "checkout" ? "\(row.remainingAfter)" : "\(row.score)")
+                .font(BKFont.headline(14))
+                .foregroundStyle(BKTheme.textPrimary)
+        }
     }
 
     private var secondsLeft: Int {
@@ -308,6 +294,78 @@ struct VsDarts501LiveView: View {
     private var timerLabel: String {
         let total = secondsLeft
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    private var resultScreen: some View {
+        GameResultScreen(exitTitle: "BACK TO VS", onExit: leaveToLobby) {
+            VStack(spacing: 20) {
+                VStack(spacing: 8) {
+                    Text("FOOTBALL 501")
+                        .font(BKFont.caption(11))
+                        .tracking(1)
+                        .foregroundStyle(BKTheme.textMuted)
+                    Text(resultHeadline)
+                        .font(BKFont.title(32))
+                        .foregroundStyle(resultHeadline == "YOU LOSE" ? BKTheme.wrong : BKTheme.accent)
+                        .multilineTextAlignment(.center)
+                    Text(resultSubline)
+                        .font(BKFont.body(14))
+                        .foregroundStyle(BKTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 24)
+
+                VStack(spacing: 10) {
+                    ForEach(live?.board ?? [], id: \.userId) { row in
+                        HStack {
+                            Text(row.isYou ? "YOU" : row.displayName.uppercased())
+                                .font(BKFont.headline(14))
+                                .foregroundStyle(BKTheme.textPrimary)
+                            Spacer()
+                            Text("\(row.remaining)")
+                                .font(BKFont.title(22))
+                                .foregroundStyle(row.userId == live?.winnerUserId || resultHeadline == "IT'S A DRAW"
+                                                 ? BKTheme.accent : BKTheme.textPrimary)
+                        }
+                    }
+                }
+                .padding(18)
+                .background(BKTheme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                Text("REMAINING")
+                    .font(BKFont.caption(10)).tracking(1)
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private var resultHeadline: String {
+        switch viewModel.challenge?.result.winner {
+        case "draw": return "IT'S A DRAW"
+        case "you": return "YOU WIN"
+        case "other": return "YOU LOSE"
+        default:
+            guard let live else { return "CHALLENGE COMPLETE" }
+            if live.winnerUserId == nil { return "IT'S A DRAW" }
+            return live.board.first(where: \.isYou)?.userId == live.winnerUserId ? "YOU WIN" : "YOU LOSE"
+        }
+    }
+
+    private var resultSubline: String {
+        if live?.board.contains(where: { $0.livesLeft == 0 }) == true,
+           live?.board.allSatisfy({ $0.livesLeft == 0 }) == true {
+            return "Everyone’s out of lives. Closest remaining wins."
+        }
+        if live?.throwLog.last?.kind == "perfect" { return "Perfect checkout." }
+        if live?.throwLog.last?.kind == "checkout" { return "Checked out." }
+        return "Challenge complete."
+    }
+
+    private func leaveToLobby() {
+        viewModel.playing = false
+        dismiss()
     }
 
     private func throwPlayer(_ hit: PlayerSearchResultDTO) async {

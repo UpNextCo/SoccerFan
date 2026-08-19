@@ -12,6 +12,7 @@ import {
 import {
   refreshBackYourselfAnswer,
   type BackYourselfCategory,
+  type BackYourselfPlayerCard,
   type BackYourselfPuzzlePublic,
 } from './backYourselfGenerator.js';
 import { LMS_PUZZLE_VERSION } from './lastManStanding/types.js';
@@ -530,7 +531,7 @@ export async function enrichAdminBackYourselfPuzzle(
   puzzleJson: unknown,
   answerJson: unknown,
   opts?: { requirePoolBounds?: boolean }
-): Promise<{ puzzleJson: unknown; answerJson: unknown }> {
+): Promise<{ puzzleJson: unknown; answerJson: unknown; poolPlayers: BackYourselfPlayerCard[] }> {
   const puzzle = structuredClone(puzzleJson) as BackYourselfPuzzlePublic;
   if (!puzzle?.category) {
     throw new Error('Back Yourself puzzle is missing a category');
@@ -549,7 +550,11 @@ export async function enrichAdminBackYourselfPuzzle(
     validPlayerIds: refreshed.validPlayerIds,
     ...((answerJson && typeof answerJson === 'object' ? answerJson : {}) as object),
   };
-  return { puzzleJson: puzzle, answerJson: { ...answer, validPlayerIds: refreshed.validPlayerIds } };
+  return {
+    puzzleJson: puzzle,
+    answerJson: { ...answer, validPlayerIds: refreshed.validPlayerIds },
+    poolPlayers: refreshed.poolPlayers,
+  };
 }
 
 export async function enrichAdminPuzzleForSave(

@@ -13,42 +13,46 @@ struct MainTabView: View {
     @State private var vsMonitor = VsMonitor.shared
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Group {
-                switch selectedTab {
-                case .today:
-                    HomeView(selectedTab: $selectedTab)
-                case .vs:
-                    VsTabView()
-                case .leagues:
-                    LeaguesTabView()
-                case .you:
-                    ProfileTabView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            bottomFadeLayer
-
-            BKTabBar(selection: $selectedTab, vsBadge: vsMonitor.hasTabBadge)
-
-            if let banner = vsMonitor.banner {
-                VStack {
-                    VsInAppBanner(banner: banner) {
-                        vsMonitor.dismissBanner()
-                        vsMonitor.markAlertsRead()
-                        selectedTab = .vs
-                    } onDismiss: {
-                        vsMonitor.dismissBanner()
+        KeyboardLift { keyboardHeight in
+            ZStack(alignment: .bottom) {
+                Group {
+                    switch selectedTab {
+                    case .today:
+                        HomeView(selectedTab: $selectedTab)
+                    case .vs:
+                        VsTabView()
+                    case .leagues:
+                        LeaguesTabView()
+                    case .you:
+                        ProfileTabView()
                     }
-                    Spacer()
                 }
-                .padding(.top, 8)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .zIndex(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if keyboardHeight < 8 {
+                    bottomFadeLayer
+
+                    BKTabBar(selection: $selectedTab, vsBadge: vsMonitor.hasTabBadge)
+                }
+
+                if let banner = vsMonitor.banner {
+                    VStack {
+                        VsInAppBanner(banner: banner) {
+                            vsMonitor.dismissBanner()
+                            vsMonitor.markAlertsRead()
+                            selectedTab = .vs
+                        } onDismiss: {
+                            vsMonitor.dismissBanner()
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(20)
+                }
             }
+            .background(BKTheme.background.ignoresSafeArea())
         }
-        .background(BKTheme.background.ignoresSafeArea())
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: vsMonitor.banner)
         .task {
             vsMonitor.start()
@@ -282,51 +286,23 @@ struct LeaguesTabView: View {
         let participated = weekly?.participated ?? false
         let zones = weekly?.zones
 
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 14) {
-                    weeklyDivisionThumb(division: weekly?.division ?? "sunday_league")
+        VStack(alignment: .leading, spacing: 14) {
+            weeklyHeader(weekly: weekly)
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text((weekly?.divisionLabel ?? "Sunday League").uppercased())
-                            .font(BKFont.title(24))
-                            .foregroundStyle(BKTheme.textPrimary)
-                            .tracking(0.6)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.78)
-
-                        TimelineView(.periodic(from: .now, by: 60)) { context in
-                            Text(
-                                WeeklyLeagueIntro.endsCaption(
-                                    weekEnd: weekly?.weekEnd,
-                                    weekStart: weekly?.weekStart,
-                                    now: context.date
-                                )
-                            )
-                            .font(BKFont.body(13))
-                            .foregroundStyle(BKTheme.textMuted)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 18)
-
-                if !participated {
-                    emptyState(
-                        icon: "sportscourt.fill",
-                        title: "Join this week's league",
-                        message: "Play a game to join this week's league."
-                    )
-                    .frame(minHeight: 280)
-                } else if viewModel.players.isEmpty {
-                    emptyState(
-                        icon: "trophy.fill",
-                        title: "No standings yet",
-                        message: "Play a game to join this week's league."
-                    )
-                    .frame(minHeight: 280)
-                } else {
+            if !participated {
+                emptyState(
+                    icon: "sportscourt.fill",
+                    title: "Join this week's league",
+                    message: "Play a game to join this week's league."
+                )
+            } else if viewModel.players.isEmpty {
+                emptyState(
+                    icon: "trophy.fill",
+                    title: "No standings yet",
+                    message: "Play a game to join this week's league."
+                )
+            } else {
+                ScrollView(showsIndicators: false) {
                     let rankWidth = LeaderboardRankColumn.width(forMaxRank: viewModel.players.map(\.rank).max() ?? 0)
                     VStack(spacing: 0) {
                         ForEach(Array(viewModel.players.enumerated()), id: \.element.id) { index, player in
@@ -354,6 +330,38 @@ struct LeaguesTabView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private func weeklyHeader(weekly: MyLeagueDTO?) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            weeklyDivisionThumb(division: weekly?.division ?? "sunday_league")
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text((weekly?.divisionLabel ?? "Sunday League").uppercased())
+                    .font(BKFont.title(24))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .tracking(0.6)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.78)
+
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    Text(
+                        WeeklyLeagueIntro.endsCaption(
+                            weekEnd: weekly?.weekEnd,
+                            weekStart: weekly?.weekStart,
+                            now: context.date
+                        )
+                    )
+                    .font(BKFont.body(13))
+                    .foregroundStyle(BKTheme.textMuted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
     }
 
     @ViewBuilder
@@ -466,21 +474,23 @@ struct LeaguesTabView: View {
 
     private func emptyState(icon: String, title: String, message: String) -> some View {
         VStack(spacing: 14) {
-            Spacer()
+            Spacer(minLength: 0)
             Image(systemName: icon)
                 .font(.system(size: 44, weight: .bold))
                 .foregroundStyle(BKTheme.accent)
             Text(title)
                 .font(BKFont.headline(18))
                 .foregroundStyle(BKTheme.textPrimary)
+                .multilineTextAlignment(.center)
             Text(message)
                 .font(BKFont.body(14))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(BKTheme.textSecondary)
                 .padding(.horizontal, 40)
-            Spacer()
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, BKTabBar.scrollClearance)
     }
 }
 

@@ -1,6 +1,13 @@
-import { useRef, useState } from 'react'
-import { api, type AdminLeagueHit, type AdminPlayerHit, type AdminTeamHit } from '../api'
+import { useEffect, useRef, useState } from 'react'
+import {
+  api,
+  type AdminBackYourselfPoolPlayer,
+  type AdminLeagueHit,
+  type AdminPlayerHit,
+  type AdminTeamHit,
+} from '../api'
 import { EntityPicker } from '../components/EntityPicker'
+import { nationalityFlag } from '../countryFlags'
 import './game-editors.css'
 
 type CategoryType =
@@ -248,8 +255,12 @@ export function BackYourselfEditor({
   const needsFinal = type === 'final'
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [poolPlayers, setPoolPlayers] = useState<AdminBackYourselfPoolPlayer[]>([])
   const latestRef = useRef({ p, a })
+  const poolReqRef = useRef(0)
+  const lastResolvedKey = useRef('')
   latestRef.current = { p, a }
+  const poolKey = (a.validPlayerIds ?? []).join(',')
 
   function commit(nextPuzzle: Puzzle, nextAnswer: Answer) {
     latestRef.current = { p: nextPuzzle, a: nextAnswer }
@@ -303,7 +314,13 @@ export function BackYourselfEditor({
     applyCategory({ anchorBId: hit.id, anchorBName: hit.name }, true)
   }
 
+  function applyPool(players: AdminBackYourselfPoolPlayer[], ids?: string[]) {
+    setPoolPlayers(players)
+    lastResolvedKey.current = (ids ?? players.map((player) => player.id)).join(',')
+  }
+
   async function recalculatePool() {
+    const req = ++poolReqRef.current
     setBusy(true)
     setError(null)
     try {
@@ -311,13 +328,41 @@ export function BackYourselfEditor({
         puzzleJson: latestRef.current.p,
         answerJson: latestRef.current.a,
       })
-      commit(result.puzzleJson as Puzzle, result.answerJson as Answer)
+      if (req !== poolReqRef.current) return
+      const nextAnswer = result.answerJson as Answer
+      commit(result.puzzleJson as Puzzle, nextAnswer)
+      applyPool(result.poolPlayers ?? [], nextAnswer.validPlayerIds)
     } catch (err) {
+      if (req !== poolReqRef.current) return
       setError(err instanceof Error ? err.message : 'Failed to recalculate pool')
     } finally {
-      setBusy(false)
+      if (req === poolReqRef.current) setBusy(false)
     }
   }
+
+  useEffect(() => {
+    if (poolKey === lastResolvedKey.current) return
+    const ids = latestRef.current.a.validPlayerIds ?? []
+    if (ids.length === 0) {
+      applyPool([])
+      return
+    }
+    const req = ++poolReqRef.current
+    setBusy(true)
+    void api
+      .resolvePlayers(ids)
+      .then((players) => {
+        if (req !== poolReqRef.current) return
+        applyPool(players, ids)
+      })
+      .catch((err) => {
+        if (req !== poolReqRef.current) return
+        setError(err instanceof Error ? err.message : 'Failed to load player pool')
+      })
+      .finally(() => {
+        if (req === poolReqRef.current) setBusy(false)
+      })
+  }, [poolKey])
 
   const selectedAward = awardOptionValue(
     category.award ?? AWARD_OPTIONS[0].award,
@@ -349,8 +394,8 @@ export function BackYourselfEditor({
           <strong>{p.xpCap != null ? `${p.xpCap}+` : '—'}</strong>
         </div>
         <div>
-          <span className="muted tiny">Valid ids</span>
-          <strong>{a.validPlayerIds?.length ?? 0}</strong>
+          <span className="muted tiny">Pool</span>
+          <strong>{poolPlayers.length || a.validPlayerIds?.length || 0}</strong>
         </div>
         <div>
           <span className="muted tiny">Lives</span>
@@ -627,6 +672,49 @@ export function BackYourselfEditor({
         <p className="muted tiny">
           Pool size must stay between 10 and 120. XP maxes at pledge {p.xpCap ?? 40}+ even when the pool is larger. The pool refreshes when you change the category; recalculate again before approving if the count looks stale.
         </p>
+      </div>
+
+      <div className="editor-clean-section by-pool-section">
+        <header>
+          <div>
+            <strong>Player pool</strong>
+            <p className="muted tiny">
+              {busy
+                ? 'Updating who matches this category…'
+                : poolPlayers.length === 0
+                  ? 'No matching players yet — finish the category or recalculate'
+                  : `${poolPlayers.length} player${poolPlayers.length === 1 ? '' : 's'} match this chip`}
+            </p>
+          </div>
+        </header>
+        {poolPlayers.length === 0 && !busy ? (
+          <p className="muted tiny">The pool appears here after the category has enough to match.</p>
+        ) : (
+          <div className={`by-pool-grid${busy ? ' busy' : ''}`}>
+            {poolPlayers.map((player) => {
+              const meta = [
+                player.position,
+                player.nationality
+                  ? `${nationalityFlag(player.nationality)} ${player.nationality}`
+                  : undefined,
+                player.club,
+              ].filter((value): value is string => Boolean(value))
+              return (
+                <article key={player.id} className="by-pool-card">
+                  {player.headshotUrl ? (
+                    <img src={player.headshotUrl} alt="" />
+                  ) : (
+                    <span className="by-pool-placeholder" />
+                  )}
+                  <div>
+                    <strong>{player.name || 'Unknown player'}</strong>
+                    <span className="muted tiny">{meta.join(' · ') || 'Details unavailable'}</span>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

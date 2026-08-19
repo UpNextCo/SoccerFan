@@ -928,23 +928,20 @@ export async function generateBackYourselfPuzzle(
   return { puzzle, answer };
 }
 
-export async function resolveBackYourselfPlayerCard(
-  playerId: string
-): Promise<BackYourselfPlayerCard | null> {
-  const rows = (await db.execute(sql`
-    SELECT id, name, current_club, nationality, position, api_football_id
-    FROM players WHERE id = ${playerId}::uuid LIMIT 1
-  `)) as unknown as Array<{
+const PLAYER_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function toPlayerCard(
+  row: {
     id: string;
     name: string;
     current_club: string;
     nationality: string;
     position: string;
     api_football_id: number | null;
-  }>;
-  const row = rows[0];
-  if (!row) return null;
-  const overrides = await getPhotoOverrides();
+  },
+  overrides: Map<string, string>
+): BackYourselfPlayerCard {
   return {
     id: row.id,
     name: row.name,
@@ -955,6 +952,36 @@ export async function resolveBackYourselfPlayerCard(
   };
 }
 
+/** Batch-resolve pool cards for Quiz Ops (name, club, headshot). */
+export async function resolveBackYourselfPlayerCards(
+  playerIds: string[]
+): Promise<BackYourselfPlayerCard[]> {
+  const unique = [...new Set(playerIds.filter((id) => PLAYER_ID_RE.test(id)))];
+  if (unique.length === 0) return [];
+  const overrides = await getPhotoOverrides();
+  const rows = (await db.execute(sql`
+    SELECT id, name, current_club, nationality, position, api_football_id
+    FROM players
+    WHERE id IN (${sql.join(unique.map((id) => sql`${id}::uuid`), sql`, `)})
+    ORDER BY name
+  `)) as unknown as Array<{
+    id: string;
+    name: string;
+    current_club: string;
+    nationality: string;
+    position: string;
+    api_football_id: number | null;
+  }>;
+  return rows.map((row) => toPlayerCard(row, overrides));
+}
+
+export async function resolveBackYourselfPlayerCard(
+  playerId: string
+): Promise<BackYourselfPlayerCard | null> {
+  const [card] = await resolveBackYourselfPlayerCards([playerId]);
+  return card ?? null;
+}
+
 /** Recalculate maxPool + xpCap + valid ids for Ops after category edits (full pool, no clip). */
 export async function refreshBackYourselfAnswer(
   category: BackYourselfCategory
@@ -962,6 +989,7 @@ export async function refreshBackYourselfAnswer(
   maxPool: number;
   xpCap: number;
   validPlayerIds: string[];
+  poolPlayers: BackYourselfPlayerCard[];
   category: BackYourselfCategory;
 }> {
   const decorated = await decorateCategory({
@@ -969,10 +997,12 @@ export async function refreshBackYourselfAnswer(
     label: category.label || categoryLabel(category),
   });
   const validPlayerIds = await listMatchingPlayerIds(decorated);
+  const poolPlayers = await resolveBackYourselfPlayerCards(validPlayerIds);
   return {
     maxPool: validPlayerIds.length,
     xpCap: backYourselfXpCap(validPlayerIds.length),
     validPlayerIds,
+    poolPlayers,
     category: { ...decorated, label: decorated.label || categoryLabel(decorated) },
   };
 }

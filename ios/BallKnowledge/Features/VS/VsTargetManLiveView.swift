@@ -174,11 +174,14 @@ struct VsTargetManLiveView: View {
                 .foregroundStyle(BKTheme.textMuted)
                 .lineLimit(1)
             if let pick {
-                Text(pick.playerName)
-                    .font(BKFont.headline(12))
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
+                HStack(alignment: .center, spacing: 6) {
+                    PlayerAvatar(urlString: pick.headshotUrl, size: 28)
+                    Text(pick.playerName.isEmpty ? "Skipped" : pick.playerName)
+                        .font(BKFont.headline(12))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.75)
+                }
             } else if waiting {
                 Text("…")
                     .font(BKFont.headline(16))

@@ -486,9 +486,18 @@ export const api = {
       body: JSON.stringify({ categoryId, playerIds }),
     }),
   recomputeBackYourself: (body: { puzzleJson: unknown; answerJson?: unknown }) =>
-    request<{ puzzleJson: unknown; answerJson: unknown }>('/puzzle/recompute-back-yourself', {
+    request<{
+      puzzleJson: unknown
+      answerJson: unknown
+      poolPlayers: AdminBackYourselfPoolPlayer[]
+    }>('/puzzle/recompute-back-yourself', {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+  resolvePlayers: (ids: string[]) =>
+    request<AdminBackYourselfPoolPlayer[]>('/resolve/players', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
     }),
   recomputeClubChain: (body: { startPlayerId: string; targetPlayerId: string }) =>
     request<{ shortestPathPlayerIds: string[]; shortestPathLength: number }>(
@@ -671,6 +680,15 @@ export const api = {
     ),
   resolveTeam: (id: number) =>
     request<AdminTeamResolved>(`/resolve/team/${id}`),
+}
+
+export type AdminBackYourselfPoolPlayer = {
+  id: string
+  name: string
+  club: string
+  nationality: string
+  position: string
+  headshotUrl?: string
 }
 
 export type AdminPlayerHit = {

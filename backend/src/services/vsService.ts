@@ -893,7 +893,11 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
     : darts501?.finished
       ? darts501.winnerUserId
       : ranked.winnerUserId;
-  const isDraw = hotseat?.finished || darts501?.finished ? false : ranked.isDraw;
+  const isDraw = darts501?.finished
+    ? darts501.winnerUserId == null
+    : hotseat?.finished
+      ? false
+      : ranked.isDraw;
 
   const publicPuzzle = sanitizePublicPuzzle(row.modeId, row.puzzleJson);
   const meta = vsPuzzleMeta(row.modeId, row.puzzleJson);
@@ -930,6 +934,7 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
             if (a.userId === winnerUserId) return -1;
             if (b.userId === winnerUserId) return 1;
           }
+          if (darts501?.finished) return a.displayScore - b.displayScore;
           return b.score - a.score;
         })
         .map((p) => ({

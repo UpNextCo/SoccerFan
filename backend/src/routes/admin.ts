@@ -38,6 +38,7 @@ import {
   resolveAdminPlayer,
   resolveAdminTeam,
 } from '../services/adminEntitySearch.js';
+import { resolveBackYourselfPlayerCards } from '../services/backYourselfGenerator.js';
 import { adminQuestionEngineRouter } from './adminQuestionEngine.js';
 import { adminPuzzleValidationRouter } from './adminPuzzleValidation.js';
 import { adminMonthGenerationRouter } from './adminMonthGeneration.js';
@@ -474,6 +475,21 @@ adminRouter.get('/search/nationalities', requireAdmin, async (req, res) => {
   const q = String(req.query.q ?? '');
   try {
     sendSuccess(res, await adminSearchNationalities(q));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : String(err), 500);
+  }
+});
+
+adminRouter.post('/resolve/players', requireAdmin, async (req, res) => {
+  const body = z
+    .object({ ids: z.array(z.string()).max(150) })
+    .safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 'Invalid body', 400);
+    return;
+  }
+  try {
+    sendSuccess(res, await resolveBackYourselfPlayerCards(body.data.ids));
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : String(err), 500);
   }

@@ -256,6 +256,8 @@ final class VsViewModel {
 
 struct VsTabView: View {
     @State private var viewModel = VsViewModel()
+    @FocusState private var joinCodeFocused: Bool
+    @Environment(\.keyboardHeight) private var keyboardHeight
 
     var body: some View {
         NavigationStack {
@@ -305,7 +307,8 @@ struct VsTabView: View {
                     if viewModel.challenge?.isLivePlay == true {
                         viewModel.playing = true
                     }
-                    if viewModel.challenge?.result.allDone == true {
+                    if viewModel.challenge?.result.allDone == true,
+                       viewModel.challenge?.modeId != GameModeID.darts501.rawValue {
                         viewModel.playing = false
                     }
                 } else {
@@ -372,7 +375,8 @@ struct VsTabView: View {
     }
 
     private var lobbyContent: some View {
-        ScrollView(showsIndicators: false) {
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 VStack(spacing: 8) {
                     Text("Challenge your mates")
@@ -439,6 +443,11 @@ struct VsTabView: View {
                         .padding(.vertical, 14)
                         .background(BKTheme.card)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .focused($joinCodeFocused)
+                        .submitLabel(.join)
+                        .onSubmit {
+                            Task { await viewModel.join() }
+                        }
 
                     Button {
                         Task { await viewModel.join() }
@@ -454,6 +463,7 @@ struct VsTabView: View {
                     .disabled(viewModel.isBusy)
                     .buttonStyle(.plain)
                 }
+                .id("vsJoinCode")
 
                 if let error = viewModel.errorMessage {
                     Text(error)
@@ -463,7 +473,24 @@ struct VsTabView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, BKTabBar.scrollClearance)
+            .padding(.bottom, keyboardHeight > 8 ? 16 : BKTabBar.scrollClearance)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .onChange(of: joinCodeFocused) { _, focused in
+            guard focused else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(80))
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo("vsJoinCode", anchor: .bottom)
+                }
+            }
+        }
+        .onChange(of: keyboardHeight) { _, height in
+            guard joinCodeFocused, height > 8 else { return }
+            withAnimation(.easeOut(duration: 0.25)) {
+                proxy.scrollTo("vsJoinCode", anchor: .bottom)
+            }
+        }
         }
     }
 
@@ -525,12 +552,12 @@ struct VsTabView: View {
                 } else if viewModel.challenge?.isLiveDarts501 == true {
                     waitingCard(
                         title: "Live Football 501",
-                        message: "Take turns naming players. Shared names. First to checkout wins. Lives stay — three busts doesn’t end it."
+                        message: "Take turns naming players. Shared names. First to checkout wins. Three busts and you’re out — if everyone’s out, closest remaining wins."
                     )
                 } else if challenge.modeId == GameModeID.darts501.rawValue, challenge.status == "waiting" {
                     waitingCard(
                         title: challenge.youAreHost ? "Waiting for friends" : "Waiting to start",
-                        message: "Take turns naming players. Shared names. First to checkout wins. Lives stay — three busts doesn’t end it."
+                        message: "Take turns naming players. Shared names. First to checkout wins. Three busts and you’re out — if everyone’s out, closest remaining wins."
                     )
                 } else if viewModel.youHavePlayed {
                     waitingCard(
@@ -714,6 +741,38 @@ struct VsTabView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    private func targetManPickBreakdown(for userId: String, in challenge: VsChallengeDTO) -> some View {
+        let picks = (challenge.targetMan?.picks ?? [])
+            .filter { $0.userId == userId }
+            .sorted { $0.slotIndex < $1.slotIndex }
+        let unit = challenge.targetMan?.unit
+        return VStack(spacing: 6) {
+            ForEach(picks) { pick in
+                HStack(spacing: 8) {
+                    PlayerAvatar(urlString: pick.headshotUrl, size: 26)
+                    Text(pick.playerName.isEmpty ? "Skipped" : pick.playerName)
+                        .font(BKFont.body(13))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(formatTargetManValue(pick.statValue, unit: unit))
+                        .font(BKFont.headline(13))
+                        .foregroundStyle(BKTheme.accent)
+                }
+            }
+        }
+        .padding(picks.isEmpty ? 0 : 10)
+        .background(BKTheme.cardElevated)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .opacity(picks.isEmpty ? 0 : 1)
+    }
+
+    private func formatTargetManValue(_ value: Int?, unit: String?) -> String {
+        guard let value else { return "—" }
+        if unit == "eur_m" { return "€\(value)m" }
+        return "\(value)"
+    }
+
     private func winnerCard(_ challenge: VsChallengeDTO) -> some View {
         let headline: String = {
             switch challenge.result.winner {
@@ -734,18 +793,23 @@ struct VsTabView: View {
                 .foregroundStyle(BKTheme.accent)
                 .multilineTextAlignment(.center)
 
-            VStack(spacing: 10) {
+            VStack(spacing: 14) {
                 ForEach(challenge.result.rankings, id: \.userId) { row in
-                    HStack {
-                        Text(row.displayName + (row.userId == challenge.players.first(where: \.isYou)?.userId ? " (you)" : ""))
-                            .font(BKFont.headline(14))
-                            .foregroundStyle(BKTheme.textPrimary)
-                            .lineLimit(1)
-                        Spacer()
-                        Text("\(row.displayScore)")
-                            .font(BKFont.title(22))
-                            .foregroundStyle(row.userId == challenge.result.winnerUserId || challenge.result.winner == "draw"
-                                             ? BKTheme.accent : BKTheme.textPrimary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(row.displayName + (row.userId == challenge.players.first(where: \.isYou)?.userId ? " (you)" : ""))
+                                .font(BKFont.headline(14))
+                                .foregroundStyle(BKTheme.textPrimary)
+                                .lineLimit(1)
+                            Spacer()
+                            Text("\(row.displayScore)")
+                                .font(BKFont.title(22))
+                                .foregroundStyle(row.userId == challenge.result.winnerUserId || challenge.result.winner == "draw"
+                                                 ? BKTheme.accent : BKTheme.textPrimary)
+                        }
+                        if challenge.modeId == GameModeID.targetMan.rawValue {
+                            targetManPickBreakdown(for: row.userId, in: challenge)
+                        }
                     }
                 }
             }

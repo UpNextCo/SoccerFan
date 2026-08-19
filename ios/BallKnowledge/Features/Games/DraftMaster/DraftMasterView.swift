@@ -21,6 +21,8 @@ final class DraftMasterViewModel {
     var lastDraftXpPop = 0
     /// Players already taken by anyone (VS shared pool).
     var extraUsedPlayerIds: Set<String> = []
+    /// Constraints you already burned (VS is per-player — opponents’ chips stay free).
+    var extraUsedConstraintIds: Set<String> = []
     /// When set, picking a player asks the server before locking the slot.
     var confirmPick: ((BattlePlayerDTO) async -> Bool)?
 
@@ -54,7 +56,20 @@ final class DraftMasterViewModel {
         mutate { next in
             next.phase = .building
             for row in rows {
-                guard let constraint = next.challenge.constraints.first(where: { $0.id == row.constraintId }) else { continue }
+                guard !row.playerId.isEmpty else { continue }
+                let constraint = next.challenge.constraints.first(where: { $0.id == row.constraintId })
+                    ?? next.challenge.constraints.first(where: { $0.label.caseInsensitiveCompare(row.constraintLabel) == .orderedSame })
+                    ?? BattleConstraint(
+                        id: row.constraintId,
+                        type: .club,
+                        label: row.constraintLabel,
+                        club: nil,
+                        teamId: nil,
+                        logoUrl: nil,
+                        leagueId: nil,
+                        leagueName: nil,
+                        nationality: nil
+                    )
                 next.assignments[row.slotId] = constraint
                 next.picks[row.slotId] = BattlePick(
                     constraint: constraint,
@@ -86,7 +101,33 @@ final class DraftMasterViewModel {
 
     // MARK: Constraint assignment (one chip per slot)
 
-    var unusedConstraints: [BattleConstraint] { challenge.constraints.filter { !state.usedConstraintIds.contains($0.id) } }
+    var unusedConstraints: [BattleConstraint] {
+        challenge.constraints.filter {
+            !state.usedConstraintIds.contains($0.id) && !extraUsedConstraintIds.contains($0.id)
+        }
+    }
+
+    func isConstraintUsed(_ id: String) -> Bool {
+        extraUsedConstraintIds.contains(id)
+            || state.assignments.contains(where: { $0.value.id == id && state.isLocked($0.key) })
+    }
+
+    func lockConfirmedPick(slotId: String, constraint: BattleConstraint, player: BattlePlayerDTO) {
+        extraUsedConstraintIds.insert(constraint.id)
+        mutate {
+            $0.assignments[slotId] = constraint
+            $0.picks[slotId] = BattlePick(
+                constraint: constraint,
+                player: BattlePlayer(
+                    id: player.id,
+                    name: player.name,
+                    statValue: player.statValue,
+                    headshotUrl: player.headshotUrl
+                ),
+                correct: true
+            )
+        }
+    }
 
     /// Mutate a copy then reassign so @Observable always publishes nested dictionary/struct edits.
     private func mutate(_ body: (inout BattleGameState) -> Void) {
@@ -104,7 +145,7 @@ final class DraftMasterViewModel {
         // Locked slots are final — can't drop onto them, and a chip burned on a locked slot
         // can't be moved/reused elsewhere.
         if state.isLocked(slotId) { return }
-        if state.assignments.contains(where: { $0.value.id == constraint.id && state.isLocked($0.key) }) { return }
+        if isConstraintUsed(constraint.id) { return }
         mutate { next in
             // A chip can only sit on one slot: pull it off any other (unlocked) slot first.
             let staleSlots = next.assignments
@@ -546,9 +587,7 @@ struct BattleConstraintsStrip: View {
                     ForEach(constraints) { constraint in
                         let used = usedIds.contains(constraint.id)
                         ConstraintChip(constraint: constraint, used: used)
-                            .draggable(constraint.id) {
-                                ConstraintIcon(constraint: constraint, size: 44)
-                            }
+                            .modifier(ConstraintDragIfAvailable(constraint: constraint, enabled: !used))
                     }
                 }
                 .padding(.horizontal, 16)
@@ -556,6 +595,21 @@ struct BattleConstraintsStrip: View {
             }
         }
         .padding(.vertical, 8)
+    }
+}
+
+private struct ConstraintDragIfAvailable: ViewModifier {
+    let constraint: BattleConstraint
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.draggable(constraint.id) {
+                ConstraintIcon(constraint: constraint, size: 44)
+            }
+        } else {
+            content
+        }
     }
 }
 

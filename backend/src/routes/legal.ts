@@ -1,4 +1,5 @@
 import { Router, type Response } from 'express';
+import { sendHomePage } from './homePage.js';
 
 export const legalRouter = Router();
 
@@ -7,7 +8,8 @@ const contactEmail = 'contact@upnextapp.co';
 const appStoreUrl = 'https://apps.apple.com/app/id6791646115';
 /** Native App Store scheme — sometimes escapes TikTok/IG in-app browsers when https is blocked. */
 const appStoreItmsUrl = 'itms-apps://apps.apple.com/app/id6791646115';
-const siteOrigin = 'https://ballknowledge-production.up.railway.app';
+const siteOrigin = 'https://ballknowledgetrivia.com';
+const admobAppAdsLine = 'google.com, pub-2181321682904255, DIRECT, f08c47fec0942fa0';
 
 function sendPage(res: Response, title: string, content: string): void {
   res
@@ -25,9 +27,9 @@ function sendPage(res: Response, title: string, content: string): void {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${title} · Ball Knowledge</title>
   <style>
-    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    :root { color-scheme: dark; font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
-    body { margin: 0; color: #f7f7f7; background: #090909; line-height: 1.6; }
+    body { margin: 0; color: #fff; background: #0A0A0A; line-height: 1.6; }
     main { width: min(760px, calc(100% - 40px)); margin: 0 auto; padding: 56px 0 80px; }
     nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 52px; }
     nav a { color: #00ff66; font-weight: 750; text-decoration: none; }
@@ -339,17 +341,19 @@ function sendGetAppPage(res: Response): void {
 </html>`);
 }
 
+legalRouter.get('/app-ads.txt', (_req, res) => {
+  res
+    .status(200)
+    .set({
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'public, max-age=300',
+      'X-Content-Type-Options': 'nosniff',
+    })
+    .send(`${admobAppAdsLine}\n`);
+});
+
 legalRouter.get('/', (_req, res) => {
-  sendPage(
-    res,
-    'Football games, every day',
-    `<section class="hero">
-      <h1>Know the game.</h1>
-      <p>Seven daily football challenges covering players, clubs, careers and the moments that matter. <a href="/get">Download on the App Store</a>.</p>
-    </section>
-    <h2>About Ball Knowledge</h2>
-    <p>Play the daily set, earn XP, build a streak and represent your club on the Teams leaderboard.</p>`
-  );
+  sendHomePage(res, { siteOrigin, contactEmail, appStoreUrl, appStoreItmsUrl });
 });
 
 legalRouter.get('/get', (_req, res) => {
