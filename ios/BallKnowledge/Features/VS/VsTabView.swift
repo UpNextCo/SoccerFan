@@ -544,32 +544,15 @@ struct VsTabView: View {
                         title: "Live Target Man",
                         message: "Five rows, one at a time. Shared names. Closest to the target wins — scores stay hidden until the end."
                     )
-                } else if challenge.modeId == GameModeID.targetMan.rawValue, challenge.status == "waiting" {
-                    waitingCard(
-                        title: challenge.youAreHost ? "Waiting for friends" : "Waiting to start",
-                        message: "Five rows, one at a time. Shared names. Closest to the target wins — scores stay hidden until the end."
-                    )
                 } else if viewModel.challenge?.isLiveDarts501 == true {
                     waitingCard(
                         title: "Live Football 501",
-                        message: "Take turns naming players. Shared names. First to checkout wins. Three busts and you’re out — if everyone’s out, closest remaining wins."
-                    )
-                } else if challenge.modeId == GameModeID.darts501.rawValue, challenge.status == "waiting" {
-                    waitingCard(
-                        title: challenge.youAreHost ? "Waiting for friends" : "Waiting to start",
                         message: "Take turns naming players. Shared names. First to checkout wins. Three busts and you’re out — if everyone’s out, closest remaining wins."
                     )
                 } else if viewModel.youHavePlayed {
                     waitingCard(
                         title: "Score locked in",
                         message: "Waiting for everyone else to finish."
-                    )
-                } else if challenge.status == "waiting" {
-                    waitingCard(
-                        title: challenge.youAreHost ? "Waiting for friends" : "Waiting to start",
-                        message: challenge.youAreHost
-                            ? "Share your code. Start once at least one mate has joined — up to 3."
-                            : "The host will start once everyone’s in."
                     )
                 }
 
@@ -659,7 +642,12 @@ struct VsTabView: View {
 
     private func playersCard(_ challenge: VsChallengeDTO) -> some View {
         let openSlots = max(0, challenge.maxPlayers - challenge.players.count)
-        return VStack(spacing: 12) {
+        return VStack(alignment: .leading, spacing: 12) {
+            if challenge.status == "waiting" {
+                Text(challenge.youAreHost ? "Waiting for friends" : "Waiting to start")
+                    .font(BKFont.headline(16))
+                    .foregroundStyle(BKTheme.textPrimary)
+            }
             ForEach(Array(challenge.players.enumerated()), id: \.element.userId) { index, player in
                 if index > 0 { Divider().overlay(BKTheme.textMuted.opacity(0.25)) }
                 playerRow(player, noun: challenge.categoryNoun, modeId: challenge.modeId)

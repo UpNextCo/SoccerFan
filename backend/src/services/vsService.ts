@@ -410,7 +410,7 @@ function liveStateOf(row: VsChallenge): VsLiveState | null {
 function liveViewFor(
   row: VsChallenge,
   userId: string,
-  names: Map<string, string>
+  names: Map<string, VsUserInfo>
 ): VsLiveView | null {
   if (row.modeId !== 'draft_master' || row.status !== 'active') return null;
   const live = liveStateOf(row);
@@ -486,7 +486,7 @@ function liveTotals(row: VsChallenge): Map<string, number> | null {
 function hotseatViewFor(
   row: VsChallenge,
   userId: string,
-  names: Map<string, string>
+  names: Map<string, VsUserInfo>
 ): VsHotseatView | null {
   if (row.modeId !== 'back_yourself' || (row.status !== 'active' && row.status !== 'complete')) return null;
   const hotseat = parseHotseat(row.liveJson);
@@ -539,7 +539,7 @@ function targetManPuzzleMeta(puzzle: unknown): {
 function targetManViewFor(
   row: VsChallenge,
   userId: string,
-  names: Map<string, string>
+  names: Map<string, VsUserInfo>
 ): VsTargetManView | null {
   if (row.modeId !== 'target_man' || (row.status !== 'active' && row.status !== 'complete')) return null;
   const live = parseTargetMan(row.liveJson);
@@ -588,7 +588,7 @@ function targetManViewFor(
 function darts501ViewFor(
   row: VsChallenge,
   userId: string,
-  names: Map<string, string>
+  names: Map<string, VsUserInfo>
 ): VsDarts501View | null {
   if (row.modeId !== 'darts_501' || (row.status !== 'active' && row.status !== 'complete')) return null;
   const live = parseDarts501(row.liveJson);
@@ -891,7 +891,7 @@ function rankingWinner(
   return { winnerUserId: tied[0]!.userId, isDraw: false };
 }
 
-function toView(row: VsChallenge, userId: string, names: Map<string, string>): VsChallengeView {
+function toView(row: VsChallenge, userId: string, names: Map<string, VsUserInfo>): VsChallengeView {
   const people = participantsOf(row);
   const youAreHost = row.hostUserId === userId;
   const you = people.find((p) => p.userId === userId);
