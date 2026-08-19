@@ -519,6 +519,37 @@ struct VsLiveBoardDTO: Codable, Equatable {
     let headshotUrl: String?
 }
 
+struct VsLivePickFeedDTO: Codable, Equatable, Identifiable {
+    let userId: String
+    let displayName: String
+    let isYou: Bool
+    let slotId: String
+    let slotLabel: String
+    let constraintId: String
+    let constraintLabel: String
+    let playerId: String
+    let playerName: String
+    let statValue: Int
+    let headshotUrl: String?
+
+    var id: String { "\(userId)-\(slotId)-\(playerId)" }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try c.decode(String.self, forKey: .userId)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        isYou = try c.decodeIfPresent(Bool.self, forKey: .isYou) ?? false
+        slotId = try c.decode(String.self, forKey: .slotId)
+        slotLabel = try c.decodeIfPresent(String.self, forKey: .slotLabel) ?? ""
+        constraintId = try c.decodeIfPresent(String.self, forKey: .constraintId) ?? ""
+        constraintLabel = try c.decodeIfPresent(String.self, forKey: .constraintLabel) ?? ""
+        playerId = try c.decodeIfPresent(String.self, forKey: .playerId) ?? ""
+        playerName = try c.decode(String.self, forKey: .playerName)
+        statValue = try c.decodeIfPresent(Int.self, forKey: .statValue) ?? 0
+        headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
+    }
+}
+
 struct VsLiveDTO: Codable, Equatable {
     let slotIndex: Int
     let slotCount: Int
@@ -526,11 +557,15 @@ struct VsLiveDTO: Codable, Equatable {
     let slotLabel: String
     let slotPosition: String
     let deadlineAt: String
+    let turnUserId: String?
+    let yourTurn: Bool
     let youLocked: Bool
     let finished: Bool
     let usedConstraintIds: [String]
     let usedPlayerIds: [String]
     let board: [VsLiveBoardDTO]
+    let picks: [VsLivePickFeedDTO]
+    let yourPicks: [VsLivePickFeedDTO]
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -540,11 +575,15 @@ struct VsLiveDTO: Codable, Equatable {
         slotLabel = try c.decode(String.self, forKey: .slotLabel)
         slotPosition = try c.decode(String.self, forKey: .slotPosition)
         deadlineAt = try c.decode(String.self, forKey: .deadlineAt)
+        turnUserId = try c.decodeIfPresent(String.self, forKey: .turnUserId)
+        yourTurn = try c.decodeIfPresent(Bool.self, forKey: .yourTurn) ?? false
         youLocked = try c.decodeIfPresent(Bool.self, forKey: .youLocked) ?? false
         finished = try c.decodeIfPresent(Bool.self, forKey: .finished) ?? false
         usedConstraintIds = try c.decodeIfPresent([String].self, forKey: .usedConstraintIds) ?? []
         usedPlayerIds = try c.decodeIfPresent([String].self, forKey: .usedPlayerIds) ?? []
         board = try c.decodeIfPresent([VsLiveBoardDTO].self, forKey: .board) ?? []
+        picks = try c.decodeIfPresent([VsLivePickFeedDTO].self, forKey: .picks) ?? []
+        yourPicks = try c.decodeIfPresent([VsLivePickFeedDTO].self, forKey: .yourPicks) ?? []
     }
 }
 

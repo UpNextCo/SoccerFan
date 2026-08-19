@@ -76,11 +76,18 @@ export function hasLocked(live: VsLiveState, userId: string, slotId: string): bo
 }
 
 export function usedConstraintIds(live: VsLiveState, userId: string): Set<string> {
-  return new Set(picksFor(live, userId).map((p) => p.constraintId));
+  return new Set(picksFor(live, userId).map((p) => p.constraintId).filter(Boolean));
 }
 
-export function usedPlayerIds(live: VsLiveState, userId: string): Set<string> {
-  return new Set(picksFor(live, userId).map((p) => p.playerId));
+/** Every named player across the table — VS picks are shared. */
+export function usedPlayerIds(live: VsLiveState, _userId?: string): Set<string> {
+  const ids = new Set<string>();
+  for (const picks of Object.values(live.picksByUser)) {
+    for (const pick of picks) {
+      if (pick.playerId) ids.add(pick.playerId);
+    }
+  }
+  return ids;
 }
 
 export function totalFor(live: VsLiveState, userId: string): number {
@@ -89,6 +96,39 @@ export function totalFor(live: VsLiveState, userId: string): number {
 
 export function allUsersLocked(live: VsLiveState, userIds: string[], slotId: string): boolean {
   return userIds.length > 0 && userIds.every((id) => hasLocked(live, id, slotId));
+}
+
+/** First participant who has not locked the current slot — that's whose turn it is. */
+export function turnUserId(live: VsLiveState, userIds: string[], slotId: string): string | null {
+  return userIds.find((id) => !hasLocked(live, id, slotId)) ?? null;
+}
+
+export function skipPick(slotId: string, now = Date.now()): VsLivePickRecord {
+  return {
+    slotId,
+    constraintId: '',
+    playerId: '',
+    playerName: '',
+    headshotUrl: null,
+    constraintLabel: '',
+    statValue: 0,
+    lockedAt: new Date(now).toISOString(),
+  };
+}
+
+function withDeadline(live: VsLiveState, now: number): VsLiveState {
+  return { ...live, deadlineAt: new Date(now + VS_SLOT_TIMEOUT_MS).toISOString() };
+}
+
+export function allNamedPicks(live: VsLiveState): Array<VsLivePickRecord & { userId: string }> {
+  const rows: Array<VsLivePickRecord & { userId: string }> = [];
+  for (const [userId, picks] of Object.entries(live.picksByUser)) {
+    for (const pick of picks) {
+      if (pick.playerId) rows.push({ ...pick, userId });
+    }
+  }
+  rows.sort((a, b) => a.lockedAt.localeCompare(b.lockedAt));
+  return rows;
 }
 
 export function advanceIfNeeded(
@@ -103,35 +143,72 @@ export function advanceIfNeeded(
   };
   if (next.finished) return next;
 
-  while (!next.finished) {
+  let guard = 0;
+  while (!next.finished && guard < 48) {
+    guard += 1;
     const slot = puzzle.slots[next.slotIndex];
     if (!slot) {
       next = { ...next, finished: true };
       break;
     }
-    const timedOut = now >= Date.parse(next.deadlineAt);
-    const locked = allUsersLocked(next, userIds, slot.id);
-    if (!timedOut && !locked) break;
 
-    if (next.slotIndex + 1 >= puzzle.slots.length) {
-      next = { ...next, finished: true };
-      break;
+    if (allUsersLocked(next, userIds, slot.id)) {
+      if (next.slotIndex + 1 >= puzzle.slots.length) {
+        next = { ...next, finished: true };
+        break;
+      }
+      next = withDeadline(
+        {
+          ...next,
+          slotIndex: next.slotIndex + 1,
+        },
+        now
+      );
+      continue;
     }
-    next = {
-      ...next,
-      slotIndex: next.slotIndex + 1,
-      deadlineAt: new Date(now + VS_SLOT_TIMEOUT_MS).toISOString(),
-    };
+
+    const currentTurn = turnUserId(next, userIds, slot.id);
+    if (currentTurn && now >= Date.parse(next.deadlineAt)) {
+      next = withDeadline(
+        {
+          ...next,
+          picksByUser: {
+            ...next.picksByUser,
+            [currentTurn]: [...picksFor(next, currentTurn), skipPick(slot.id, now)],
+          },
+        },
+        now
+      );
+      continue;
+    }
+
+    break;
   }
   return next;
 }
 
+export function afterSuccessfulPick(
+  puzzle: BattlePuzzleJson,
+  live: VsLiveState,
+  userIds: string[],
+  now = Date.now()
+): VsLiveState {
+  const advanced = advanceIfNeeded(puzzle, live, userIds, now);
+  if (advanced.finished) return advanced;
+  if (advanced.slotIndex === live.slotIndex && advanced.deadlineAt === live.deadlineAt) {
+    return withDeadline(advanced, now);
+  }
+  return advanced;
+}
+
 export function answerFromLive(live: VsLiveState, userId: string): { picks: Array<{ slotId: string; constraintId: string; playerId: string }> } {
   return {
-    picks: picksFor(live, userId).map((p) => ({
-      slotId: p.slotId,
-      constraintId: p.constraintId,
-      playerId: p.playerId,
-    })),
+    picks: picksFor(live, userId)
+      .filter((p) => p.playerId && p.constraintId)
+      .map((p) => ({
+        slotId: p.slotId,
+        constraintId: p.constraintId,
+        playerId: p.playerId,
+      })),
   };
 }

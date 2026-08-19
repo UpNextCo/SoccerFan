@@ -14,6 +14,8 @@ import {
 } from './battleGenerator.js';
 import {
   advanceIfNeeded,
+  afterSuccessfulPick,
+  allNamedPicks,
   answerFromLive,
   currentSlot,
   hasLocked,
@@ -22,8 +24,10 @@ import {
   picksFor,
   shortSlotLabel,
   totalFor,
+  turnUserId,
   usedConstraintIds,
   usedPlayerIds,
+  VS_SLOT_TIMEOUT_MS,
   type VsLiveState,
 } from './vsLiveDraft.js';
 import { sanitizePublicPuzzle } from './dailyService.js';
@@ -160,6 +164,20 @@ export type VsLiveBoardRow = {
   headshotUrl: string | null;
 };
 
+export type VsLivePickView = {
+  userId: string;
+  displayName: string;
+  isYou: boolean;
+  slotId: string;
+  slotLabel: string;
+  constraintId: string;
+  constraintLabel: string;
+  playerId: string;
+  playerName: string;
+  statValue: number;
+  headshotUrl: string | null;
+};
+
 export type VsLiveView = {
   slotIndex: number;
   slotCount: number;
@@ -167,11 +185,15 @@ export type VsLiveView = {
   slotLabel: string;
   slotPosition: string;
   deadlineAt: string;
+  turnUserId: string | null;
+  yourTurn: boolean;
   youLocked: boolean;
   finished: boolean;
   usedConstraintIds: string[];
   usedPlayerIds: string[];
   board: VsLiveBoardRow[];
+  picks: VsLivePickView[];
+  yourPicks: VsLivePickView[];
 };
 
 type VsScoreResult = {
@@ -270,7 +292,25 @@ function liveViewFor(
   if (!live || !Array.isArray(puzzle.slots)) return null;
   const slot = currentSlot(puzzle, live);
   const people = participantsOf(row);
+  const userIds = people.map((p) => p.userId);
   const slotId = slot?.id ?? '';
+  const currentTurn = slotId ? turnUserId(live, userIds, slotId) : null;
+  const pickViews = allNamedPicks(live).map((pick) => {
+    const slotMeta = puzzle.slots.find((s) => s.id === pick.slotId);
+    return {
+      userId: pick.userId,
+      displayName: names.get(pick.userId) ?? 'Player',
+      isYou: pick.userId === userId,
+      slotId: pick.slotId,
+      slotLabel: slotMeta ? shortSlotLabel(slotMeta.position) : '—',
+      constraintId: pick.constraintId,
+      constraintLabel: pick.constraintLabel,
+      playerId: pick.playerId,
+      playerName: pick.playerName,
+      statValue: pick.statValue,
+      headshotUrl: pick.headshotUrl,
+    };
+  });
   return {
     slotIndex: live.slotIndex,
     slotCount: puzzle.slots.length,
@@ -278,10 +318,12 @@ function liveViewFor(
     slotLabel: slot ? shortSlotLabel(slot.position) : '—',
     slotPosition: slot?.position ?? '',
     deadlineAt: live.deadlineAt,
+    turnUserId: currentTurn,
+    yourTurn: currentTurn === userId && !live.finished,
     youLocked: slotId ? hasLocked(live, userId, slotId) : true,
     finished: live.finished,
     usedConstraintIds: [...usedConstraintIds(live, userId)],
-    usedPlayerIds: [...usedPlayerIds(live, userId)],
+    usedPlayerIds: [...usedPlayerIds(live)],
     board: people.map((p) => {
       const pick = slotId ? picksFor(live, p.userId).find((x) => x.slotId === slotId) : undefined;
       return {
@@ -290,12 +332,14 @@ function liveViewFor(
         isYou: p.userId === userId,
         total: totalFor(live, p.userId),
         locked: pick != null,
-        playerName: pick?.playerName ?? null,
-        constraintLabel: pick?.constraintLabel ?? null,
-        statValue: pick?.statValue ?? null,
+        playerName: pick?.playerName || null,
+        constraintLabel: pick?.constraintLabel || null,
+        statValue: pick?.playerId ? pick.statValue : null,
         headshotUrl: pick?.headshotUrl ?? null,
       };
     }),
+    picks: pickViews,
+    yourPicks: pickViews.filter((p) => p.userId === userId),
   };
 }
 
@@ -845,9 +889,13 @@ export async function lockVsPick(
     return viewFor(row, userId);
   }
 
+  const userIds = participantsOf(row).map((p) => p.userId);
   const slot = currentSlot(puzzle, live);
   if (!slot || slot.id !== input.slotId) {
     throw new VsError('That position is not open right now', 400, 'WRONG_SLOT');
+  }
+  if (turnUserId(live, userIds, slot.id) !== userId) {
+    throw new VsError('Wait for your turn', 400, 'NOT_YOUR_TURN');
   }
   if (Date.now() >= Date.parse(live.deadlineAt)) {
     return viewFor(row, userId);
@@ -858,8 +906,8 @@ export async function lockVsPick(
   if (usedConstraintIds(live, userId).has(input.constraintId)) {
     throw new VsError('You already used that constraint', 400, 'CONSTRAINT_USED');
   }
-  if (usedPlayerIds(live, userId).has(input.playerId)) {
-    throw new VsError('That player is already in your XI', 400, 'PLAYER_USED');
+  if (usedPlayerIds(live).has(input.playerId)) {
+    throw new VsError('Someone already named that player', 400, 'PLAYER_USED');
   }
 
   const constraint = puzzle.constraints.find((c) => c.id === input.constraintId);
@@ -894,8 +942,7 @@ export async function lockVsPick(
     },
   };
 
-  const userIds = participantsOf(row).map((p) => p.userId);
-  const advanced = advanceIfNeeded(puzzle, nextLive, userIds);
+  const advanced = afterSuccessfulPick(puzzle, nextLive, userIds);
   if (advanced.finished) {
     return viewFor(await finishLiveDraft(row, advanced), userId);
   }
@@ -1068,7 +1115,9 @@ function liveJsonAfterLeave(row: VsChallenge, userId: string, remainingIds: stri
     const next = { ...live, picksByUser };
     const puzzle = row.puzzleJson as BattlePuzzleJson;
     if (Array.isArray(puzzle.slots) && puzzle.slots.length > 0) {
-      return advanceIfNeeded(puzzle, next, remainingIds);
+      const advanced = advanceIfNeeded(puzzle, next, remainingIds);
+      if (advanced.finished) return advanced;
+      return { ...advanced, deadlineAt: new Date(Date.now() + VS_SLOT_TIMEOUT_MS).toISOString() };
     }
     return next;
   }

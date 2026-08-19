@@ -19,6 +19,10 @@ final class DraftMasterViewModel {
     /// Fires a +XP pop on the pitch when a correct pick bumps running XP.
     var draftXpPopTrigger = 0
     var lastDraftXpPop = 0
+    /// Players already taken by anyone (VS shared pool).
+    var extraUsedPlayerIds: Set<String> = []
+    /// When set, picking a player asks the server before locking the slot.
+    var confirmPick: ((BattlePlayerDTO) async -> Bool)?
 
     init(challenge: BattleChallenge) {
         state = BattleGameState(challenge: challenge)
@@ -43,6 +47,31 @@ final class DraftMasterViewModel {
     }
 
     func start() { HapticManager.light(); state.phase = .building }
+
+    func applyLockedPicks(_ rows: [VsLivePickFeedDTO], preservingSlot slotId: String?) {
+        let keepChip = slotId.flatMap { state.constraint(forSlot: $0) }
+        let keepUnlocked = slotId.map { !state.isLocked($0) } ?? false
+        mutate { next in
+            next.phase = .building
+            for row in rows {
+                guard let constraint = next.challenge.constraints.first(where: { $0.id == row.constraintId }) else { continue }
+                next.assignments[row.slotId] = constraint
+                next.picks[row.slotId] = BattlePick(
+                    constraint: constraint,
+                    player: BattlePlayer(
+                        id: row.playerId,
+                        name: row.playerName,
+                        statValue: row.statValue,
+                        headshotUrl: row.headshotUrl
+                    ),
+                    correct: true
+                )
+            }
+            if let slotId, let keepChip, keepUnlocked, next.picks[slotId] == nil {
+                next.assignments[slotId] = keepChip
+            }
+        }
+    }
 
     func restart() {
         state = BattleGameState(challenge: state.challenge)
@@ -141,7 +170,7 @@ final class DraftMasterViewModel {
             let res = try await APIClient.shared.battlePlayers(
                 categoryId: category.id, constraint: constraint, position: slot.position, query: q
             )
-            let used = state.usedPlayerIds
+            let used = state.usedPlayerIds.union(extraUsedPlayerIds)
             let currentId = state.pick(forSlot: slot.id)?.player.id
             results = res.filter { !used.contains($0.id) || $0.id == currentId }
         } catch {
@@ -151,9 +180,26 @@ final class DraftMasterViewModel {
 
     func selectPlayer(_ dto: BattlePlayerDTO) {
         guard let slot = activeSlot, let constraint = state.constraint(forSlot: slot.id) else { return }
+        if extraUsedPlayerIds.contains(dto.id), state.pick(forSlot: slot.id)?.player.id != dto.id {
+            selectionError = "Someone already named that player"
+            HapticManager.error()
+            return
+        }
         if state.usedPlayerIds.contains(dto.id), state.pick(forSlot: slot.id)?.player.id != dto.id {
             selectionError = "Already in your XI"
             HapticManager.error()
+            return
+        }
+        if let confirmPick {
+            Task {
+                let ok = await confirmPick(dto)
+                if ok {
+                    HapticManager.success()
+                    closeSlot()
+                } else {
+                    HapticManager.error()
+                }
+            }
             return
         }
         let player = BattlePlayer(id: dto.id, name: dto.name, statValue: dto.statValue, headshotUrl: dto.headshotUrl)
@@ -462,7 +508,7 @@ private struct BattleCategoryOverlay: View {
 
 // MARK: - Build header
 
-private struct BattleBuildHeader: View {
+struct BattleBuildHeader: View {
     let category: BattleCategory
     let formationId: String
     let total: Int
@@ -489,7 +535,7 @@ private struct BattleBuildHeader: View {
 
 // MARK: - Constraints strip
 
-private struct BattleConstraintsStrip: View {
+struct BattleConstraintsStrip: View {
     let constraints: [BattleConstraint]
     let usedIds: Set<String>
 
@@ -609,9 +655,11 @@ struct ConstraintIcon: View {
 
 // MARK: - Pitch
 
-private struct BattlePitchView: View {
+struct BattlePitchView: View {
     let slots: [BattleSlot]
     let state: BattleGameState
+    var highlightedSlotId: String? = nil
+    var interactiveSlotId: String? = nil
     var onTapSlot: (BattleSlot) -> Void
     var onDropConstraint: (String, BattleSlot) -> Void
 
@@ -622,10 +670,13 @@ private struct BattlePitchView: View {
             ZStack {
                 PitchBackground()
                 ForEach(slots) { slot in
+                    let interactive = interactiveSlotId == nil || interactiveSlotId == slot.id
                     BattlePitchSlot(
                         slot: slot,
                         constraint: state.constraint(forSlot: slot.id),
                         pick: state.pick(forSlot: slot.id),
+                        highlighted: highlightedSlotId == slot.id,
+                        interactive: interactive,
                         onTap: { onTapSlot(slot) },
                         onDrop: { id in onDropConstraint(id, slot) }
                     )
@@ -639,10 +690,12 @@ private struct BattlePitchView: View {
     }
 }
 
-private struct BattlePitchSlot: View {
+struct BattlePitchSlot: View {
     let slot: BattleSlot
     let constraint: BattleConstraint?
     let pick: BattlePick?
+    var highlighted: Bool = false
+    var interactive: Bool = true
     var onTap: () -> Void
     var onDrop: (String) -> Void
 
@@ -652,7 +705,7 @@ private struct BattlePitchSlot: View {
     private static let ringColor = Color(red: 0.80, green: 0.93, blue: 0.84).opacity(0.85)
 
     private var strokeColor: Color {
-        if targeted { return BKTheme.accent }
+        if targeted || highlighted { return BKTheme.accent }
         if let pick { return pick.correct ? BKTheme.accent : BKTheme.wrong }
         return Self.ringColor
     }
@@ -665,8 +718,9 @@ private struct BattlePitchSlot: View {
                     .fill(pick != nil ? Color.black.opacity(0.30) : Color(white: 0.14).opacity(0.72))
                     .frame(width: 46, height: 46)
                     .overlay(
-                        Circle().stroke(strokeColor, lineWidth: targeted ? 2.5 : 1.1)
+                        Circle().stroke(strokeColor, lineWidth: (targeted || highlighted) ? 2.8 : 1.1)
                     )
+                    .shadow(color: highlighted ? BKTheme.accent.opacity(0.55) : .clear, radius: 8)
                 if let pick {
                     PlayerAvatar(urlString: pick.player.headshotUrl, size: 42)
                         .grayscale(pick.correct ? 0 : 0.85)
@@ -679,7 +733,7 @@ private struct BattlePitchSlot: View {
             }
             Text(slot.label)
                 .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(Color.white.opacity(0.95))
+                .foregroundStyle(highlighted ? BKTheme.accent : Color.white.opacity(0.95))
             if let pick {
                 Text(shortName(pick.player.name))
                     .font(.system(size: 9, weight: .bold, design: .rounded))
@@ -697,12 +751,12 @@ private struct BattlePitchSlot: View {
         .shadow(color: .black.opacity(0.35), radius: 1, x: 0, y: 1)
         .frame(width: 76)
         .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
+        .onTapGesture { if interactive { onTap() } }
         .dropDestination(for: String.self) { items, _ in
-            guard let name = items.first else { return false }
+            guard interactive, let name = items.first else { return false }
             onDrop(name)
             return true
-        } isTargeted: { targeted = $0 }
+        } isTargeted: { targeted = interactive && $0 }
     }
 
     private func shortName(_ name: String) -> String {
@@ -901,7 +955,7 @@ struct PitchBackground: View {
 
 // MARK: - Search sheet
 
-private struct BattleSearchSheet: View {
+struct BattleSearchSheet: View {
     @Bindable var viewModel: DraftMasterViewModel
     let slot: BattleSlot
     @FocusState private var focused: Bool
@@ -927,7 +981,7 @@ private struct BattleSearchSheet: View {
                             .font(BKFont.headline(16)).foregroundStyle(BKTheme.accent)
                     }
                     Spacer()
-                    if viewModel.state.pick(forSlot: slot.id) != nil {
+                    if viewModel.confirmPick == nil, viewModel.state.pick(forSlot: slot.id) != nil {
                         Button {
                             viewModel.removePick(slot.id)
                             dismiss()

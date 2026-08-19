@@ -440,7 +440,7 @@ struct VsTabView: View {
                 } else if viewModel.challenge?.isLiveDraft == true {
                     waitingCard(
                         title: "Live draft",
-                        message: "Same position, same time. Lock your pick — then you’ll see everyone else’s."
+                        message: "Same pitch, one at a time. Drag a chip onto the highlighted slot — players can’t be reused."
                     )
                 } else if viewModel.challenge?.isLiveHotseat == true {
                     waitingCard(
