@@ -11,6 +11,7 @@ import {
   leaveVsChallenge,
   lockVsPick,
   nameVsHotseat,
+  pickVsTargetMan,
   startVsChallenge,
   submitVsChallenge,
   VsError,
@@ -111,6 +112,19 @@ vsRouter.post('/:id/name', requireAuth, async (req, res) => {
     sendSuccess(res, await nameVsHotseat(req.auth!.userId, String(req.params.id), parsed.data.playerId));
   } catch (err) {
     handleVsError(res, err, 'Failed to name player');
+  }
+});
+
+vsRouter.post('/:id/target', requireAuth, async (req, res) => {
+  const parsed = nameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    sendSuccess(res, await pickVsTargetMan(req.auth!.userId, String(req.params.id), parsed.data.playerId));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to lock pick');
   }
 });
 

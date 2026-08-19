@@ -113,6 +113,21 @@ final class VsViewModel {
         }
     }
 
+    func pickTargetMan(playerId: String) async -> Bool {
+        guard let id = challenge?.id else { return false }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            challenge = try await APIClient.shared.vsTargetPick(id: id, playerId: playerId)
+            VsMonitor.shared.track(challenge)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func namePlayer(playerId: String) async -> Bool {
         guard let id = challenge?.id else { return false }
         isBusy = true
@@ -236,9 +251,11 @@ struct VsTabView: View {
                         Ph.users.weight(.fill)
                             .color(BKTheme.accent)
                             .frame(width: 14, height: 14)
-                        Text("VS")
-                            .font(BKFont.caption(13)).tracking(1.5)
+                        Text(viewModel.challenge.map { "\($0.modeTitle) VS" } ?? "VS")
+                            .font(BKFont.caption(13)).tracking(1.2)
                             .foregroundStyle(BKTheme.accent)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -293,7 +310,9 @@ struct VsTabView: View {
                 VsHotseatView(viewModel: viewModel, puzzle: puzzle)
             }
         case GameModeID.targetMan.rawValue:
-            if let challenge = viewModel.targetManChallenge {
+            if viewModel.challenge?.targetMan != nil {
+                VsTargetManLiveView(viewModel: viewModel)
+            } else if let challenge = viewModel.targetManChallenge {
                 TargetManView(
                     challenge: challenge,
                     allowReplay: true,
@@ -421,17 +440,12 @@ struct VsTabView: View {
     @ViewBuilder
     private func challengeContent(_ challenge: VsChallengeDTO) -> some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 24) {
-                VStack(spacing: 8) {
-                    Text(challenge.modeTitle)
-                        .font(BKFont.caption(11)).tracking(1.2)
-                        .foregroundStyle(BKTheme.accent)
-                    Text(challenge.title)
-                        .font(BKFont.title(26))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 28)
+            VStack(spacing: 16) {
+                Text(challenge.title)
+                    .font(BKFont.title(26))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 4)
 
                 codeCard(challenge.code)
 
@@ -448,6 +462,16 @@ struct VsTabView: View {
                     waitingCard(
                         title: "Live Back Yourself",
                         message: "Take turns naming players. Shared names, 30 seconds each. Last one standing wins."
+                    )
+                } else if viewModel.challenge?.isLiveTargetMan == true {
+                    waitingCard(
+                        title: "Live Target Man",
+                        message: "Five rows, one at a time. Shared names. Closest to the target wins — scores stay hidden until the end."
+                    )
+                } else if challenge.modeId == GameModeID.targetMan.rawValue, challenge.status == "waiting" {
+                    waitingCard(
+                        title: challenge.youAreHost ? "Waiting for friends" : "Waiting to start",
+                        message: "Five rows, one at a time. Shared names. Closest to the target wins — scores stay hidden until the end."
                     )
                 } else if viewModel.youHavePlayed {
                     waitingCard(

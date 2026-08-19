@@ -59,6 +59,22 @@ import {
   type VsHotseatState,
 } from './vsLiveHotseat.js';
 import {
+  advanceIfNeeded as advanceTargetMan,
+  afterSuccessfulPick as afterTargetManPick,
+  allNamedPicks as allTargetManPicks,
+  combinedFor as targetManCombined,
+  dropUser as dropTargetManUser,
+  hasLocked as targetManHasLocked,
+  initTargetMan,
+  parseTargetMan,
+  picksFor as targetManPicksFor,
+  turnUserId as targetManTurnUserId,
+  usedPlayerIds as targetManUsedPlayerIds,
+  VS_TARGET_MAN_SLOT_COUNT,
+  VS_TARGET_MAN_TURN_MS,
+  type VsTargetManState,
+} from './vsLiveTargetMan.js';
+import {
   playerMatchesBackYourselfCategory,
   resolveBackYourselfPlayerCard,
   type BackYourselfCategory,
@@ -124,6 +140,7 @@ export type VsChallengeView = {
   };
   live: VsLiveView | null;
   hotseat: VsHotseatView | null;
+  targetMan: VsTargetManView | null;
 };
 
 export type VsHotseatPlayerView = {
@@ -176,6 +193,44 @@ export type VsLivePickView = {
   playerName: string;
   statValue: number;
   headshotUrl: string | null;
+};
+
+export type VsTargetManBoardRow = {
+  userId: string;
+  displayName: string;
+  isYou: boolean;
+  pickCount: number;
+  locked: boolean;
+};
+
+export type VsTargetManPickView = {
+  userId: string;
+  displayName: string;
+  isYou: boolean;
+  slotIndex: number;
+  playerId: string;
+  playerName: string;
+  headshotUrl: string | null;
+  statValue: number | null;
+};
+
+export type VsTargetManView = {
+  slotIndex: number;
+  slotCount: number;
+  deadlineAt: string;
+  turnUserId: string | null;
+  yourTurn: boolean;
+  youLocked: boolean;
+  finished: boolean;
+  usedPlayerIds: string[];
+  target: number;
+  categoryLabel: string;
+  valueNoun: string;
+  offNoun: string;
+  unit: string | null;
+  board: VsTargetManBoardRow[];
+  picks: VsTargetManPickView[];
+  yourPicks: VsTargetManPickView[];
 };
 
 export type VsLiveView = {
@@ -389,6 +444,76 @@ function hotseatViewFor(
   };
 }
 
+function targetManPuzzleMeta(puzzle: unknown): {
+  target: number;
+  categoryId: string;
+  categoryLabel: string;
+  valueNoun: string;
+  offNoun: string;
+  unit: string | null;
+  pool: unknown;
+} {
+  const p = puzzle && typeof puzzle === 'object' ? (puzzle as Record<string, unknown>) : {};
+  return {
+    target: typeof p.target === 'number' ? p.target : 0,
+    categoryId: typeof p.categoryId === 'string' ? p.categoryId : '',
+    categoryLabel: typeof p.categoryLabel === 'string' ? p.categoryLabel : 'Target Man',
+    valueNoun: typeof p.valueNoun === 'string' ? p.valueNoun : 'pts',
+    offNoun: typeof p.offNoun === 'string' ? p.offNoun : 'off',
+    unit: typeof p.unit === 'string' ? p.unit : null,
+    pool: p.pool,
+  };
+}
+
+function targetManViewFor(
+  row: VsChallenge,
+  userId: string,
+  names: Map<string, string>
+): VsTargetManView | null {
+  if (row.modeId !== 'target_man' || (row.status !== 'active' && row.status !== 'complete')) return null;
+  const live = parseTargetMan(row.liveJson);
+  if (!live) return null;
+  const meta = targetManPuzzleMeta(row.puzzleJson);
+  const people = participantsOf(row);
+  const userIds = people.map((p) => p.userId);
+  const currentTurn = targetManTurnUserId(live, userIds, live.slotIndex);
+  const reveal = live.finished;
+  const pickViews = allTargetManPicks(live).map((pick) => ({
+    userId: pick.userId,
+    displayName: names.get(pick.userId) ?? 'Player',
+    isYou: pick.userId === userId,
+    slotIndex: pick.slotIndex,
+    playerId: pick.playerId,
+    playerName: pick.playerName,
+    headshotUrl: pick.headshotUrl,
+    statValue: reveal ? pick.statValue : null,
+  }));
+  return {
+    slotIndex: live.slotIndex,
+    slotCount: VS_TARGET_MAN_SLOT_COUNT,
+    deadlineAt: live.deadlineAt,
+    turnUserId: currentTurn,
+    yourTurn: currentTurn === userId && !live.finished,
+    youLocked: targetManHasLocked(live, userId, live.slotIndex),
+    finished: live.finished,
+    usedPlayerIds: [...targetManUsedPlayerIds(live)],
+    target: meta.target,
+    categoryLabel: meta.categoryLabel,
+    valueNoun: meta.valueNoun,
+    offNoun: meta.offNoun,
+    unit: meta.unit,
+    board: people.map((p) => ({
+      userId: p.userId,
+      displayName: names.get(p.userId) ?? 'Player',
+      isYou: p.userId === userId,
+      pickCount: targetManPicksFor(live, p.userId).filter((x) => x.playerId).length,
+      locked: targetManHasLocked(live, p.userId, live.slotIndex),
+    })),
+    picks: pickViews,
+    yourPicks: pickViews.filter((p) => p.userId === userId),
+  };
+}
+
 async function persistRow(
   id: string,
   patch: Partial<typeof vsChallenges.$inferInsert>
@@ -448,13 +573,16 @@ async function syncLiveDraft(row: VsChallenge): Promise<VsChallenge> {
   return row;
 }
 
-function draftLiveForStart(row: VsChallenge): VsLiveState | VsHotseatState | null {
+function draftLiveForStart(row: VsChallenge): VsLiveState | VsHotseatState | VsTargetManState | null {
   const ids = participantsOf(row).map((p) => p.userId);
   if (row.modeId === 'draft_master') {
     return liveStateOf(row) ?? initLiveState(ids);
   }
   if (row.modeId === 'back_yourself') {
     return parseHotseat(row.liveJson) ?? initHotseat(ids);
+  }
+  if (row.modeId === 'target_man') {
+    return parseTargetMan(row.liveJson) ?? initTargetMan(ids);
   }
   return null;
 }
@@ -465,6 +593,9 @@ function liveJsonForActive(row: VsChallenge, userIds: string[]): unknown {
   }
   if (row.modeId === 'back_yourself') {
     return parseHotseat(row.liveJson) ?? initHotseat(userIds);
+  }
+  if (row.modeId === 'target_man') {
+    return parseTargetMan(row.liveJson) ?? initTargetMan(userIds);
   }
   return row.liveJson;
 }
@@ -518,6 +649,59 @@ async function syncHotseat(row: VsChallenge): Promise<VsChallenge> {
   return row;
 }
 
+async function finishTargetMan(row: VsChallenge, live: VsTargetManState): Promise<VsChallenge> {
+  const now = new Date();
+  const finished = { ...live, finished: true };
+  const meta = targetManPuzzleMeta(row.puzzleJson);
+  const next = participantsOf(row).map((p) => {
+    const picks = targetManPicksFor(finished, p.userId);
+    const playerIds = Array.from({ length: VS_TARGET_MAN_SLOT_COUNT }, (_, i) => picks.find((x) => x.slotIndex === i)?.playerId ?? '');
+    const combined = targetManCombined(finished, p.userId);
+    const off = Math.abs(combined - meta.target);
+    return {
+      ...p,
+      score: 1_000_000 - off,
+      displayScore: off,
+      answerJson: { playerIds },
+      completedAt: p.completedAt ?? now.toISOString(),
+    };
+  });
+  const host = next.find((p) => p.userId === row.hostUserId);
+  const guest = next.find((p) => p.userId !== row.hostUserId);
+  const updated = await persistRow(row.id, {
+    liveJson: finished,
+    participantsJson: next,
+    status: 'complete',
+    hostScore: host?.displayScore ?? null,
+    hostAnswerJson: host?.answerJson ?? null,
+    hostCompletedAt: now,
+    guestScore: guest?.displayScore ?? null,
+    guestAnswerJson: guest?.answerJson ?? null,
+    guestCompletedAt: guest ? now : null,
+  });
+  return updated ?? { ...row, status: 'complete', liveJson: finished, participantsJson: next };
+}
+
+async function syncTargetMan(row: VsChallenge): Promise<VsChallenge> {
+  if (row.modeId !== 'target_man' || row.status !== 'active') return row;
+  const userIds = participantsOf(row).map((p) => p.userId);
+  let live = parseTargetMan(row.liveJson);
+  if (!live) {
+    live = initTargetMan(userIds);
+    const updated = await persistRow(row.id, { liveJson: live });
+    return updated ?? { ...row, liveJson: live };
+  }
+  const advanced = advanceTargetMan(live, userIds);
+  if (advanced.finished && !live.finished) {
+    return finishTargetMan(row, advanced);
+  }
+  if (advanced.slotIndex !== live.slotIndex || advanced.deadlineAt !== live.deadlineAt) {
+    const updated = await persistRow(row.id, { liveJson: advanced });
+    return updated ?? { ...row, liveJson: advanced };
+  }
+  return row;
+}
+
 function rankingWinner(
   completed: Array<{ userId: string; score: number }>
 ): { winnerUserId: string | null; isDraw: boolean } {
@@ -534,8 +718,11 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
   const you = people.find((p) => p.userId === userId);
   const youCompleted = you?.completedAt != null;
   const hotseat = parseHotseat(row.liveJson);
+  const targetMan = parseTargetMan(row.liveJson);
   const allDone =
-    hotseat?.finished === true || (people.length >= 2 && people.every((p) => p.completedAt != null));
+    hotseat?.finished === true ||
+    targetMan?.finished === true ||
+    (people.length >= 2 && people.every((p) => p.completedAt != null));
   const completed = people
     .filter((p) => p.completedAt != null && p.score != null)
     .map((p) => ({ userId: p.userId, score: p.score as number, displayScore: p.displayScore ?? p.score ?? 0 }));
@@ -623,11 +810,17 @@ function toView(row: VsChallenge, userId: string, names: Map<string, string>): V
     },
     live: liveViewFor(row, userId, names),
     hotseat: hotseatViewFor(row, userId, names),
+    targetMan: targetManViewFor(row, userId, names),
   };
 }
 
 async function viewFor(row: VsChallenge, userId: string): Promise<VsChallengeView> {
-  const synced = row.modeId === 'back_yourself' ? await syncHotseat(row) : await syncLiveDraft(row);
+  const synced =
+    row.modeId === 'back_yourself'
+      ? await syncHotseat(row)
+      : row.modeId === 'target_man'
+        ? await syncTargetMan(row)
+        : await syncLiveDraft(row);
   const ids = participantsOf(synced).map((p) => p.userId);
   const names = await loadUsers(ids);
   return toView(synced, userId, names);
@@ -992,6 +1185,9 @@ export async function submitVsChallenge(
   if (row.modeId === 'back_yourself' && parseHotseat(row.liveJson)) {
     throw new VsError('This Back Yourself is live — name on your turn instead', 400, 'LIVE');
   }
+  if (row.modeId === 'target_man' && parseTargetMan(row.liveJson)) {
+    throw new VsError('This Target Man is live — name on your turn instead', 400, 'LIVE');
+  }
 
   const people = participantsOf(row);
   const you = people.find((p) => p.userId === userId);
@@ -1094,6 +1290,70 @@ export async function giveUpVsHotseat(userId: string, challengeId: string): Prom
   return viewFor(updated ?? { ...row, liveJson: next }, userId);
 }
 
+export async function pickVsTargetMan(userId: string, challengeId: string, playerId: string): Promise<VsChallengeView> {
+  const row = await syncTargetMan(await requireParticipant(challengeId, userId));
+  if (row.status === 'expired') throw new VsError('This challenge has expired', 410, 'EXPIRED');
+  if (row.status !== 'active' || row.modeId !== 'target_man') {
+    throw new VsError('This challenge is not a live Target Man', 400, 'INVALID_STATUS');
+  }
+  const live = parseTargetMan(row.liveJson);
+  if (!live || live.finished) return viewFor(row, userId);
+
+  const userIds = participantsOf(row).map((p) => p.userId);
+  if (targetManTurnUserId(live, userIds, live.slotIndex) !== userId) {
+    throw new VsError('Wait for your turn', 400, 'NOT_YOUR_TURN');
+  }
+  if (Date.now() >= Date.parse(live.deadlineAt)) {
+    return viewFor(row, userId);
+  }
+  if (targetManHasLocked(live, userId, live.slotIndex)) {
+    return viewFor(row, userId);
+  }
+  if (targetManUsedPlayerIds(live).has(playerId)) {
+    throw new VsError('Someone already named that player', 400, 'PLAYER_USED');
+  }
+
+  const meta = targetManPuzzleMeta(row.puzzleJson);
+  if (!meta.categoryId) {
+    throw new VsError('Target Man puzzle is missing a category', 500, 'PUZZLE_FAILED');
+  }
+  const values = await playerValuesForCategory(meta.categoryId, [playerId], normalizeTargetManPool(meta.pool));
+  const resolved = values[0];
+  if (resolved && resolved.inPool === false) {
+    throw new VsError("Doesn't fit this Target Man", 400, 'INVALID_ANSWER');
+  }
+
+  const card = await resolveBackYourselfPlayerCard(playerId);
+  if (!card) {
+    throw new VsError('Unknown player', 400, 'INVALID_ANSWER');
+  }
+
+  const nextLive: VsTargetManState = {
+    ...live,
+    picksByUser: {
+      ...live.picksByUser,
+      [userId]: [
+        ...targetManPicksFor(live, userId),
+        {
+          slotIndex: live.slotIndex,
+          playerId,
+          playerName: card.name,
+          headshotUrl: card.headshotUrl ?? null,
+          statValue: resolved?.value ?? 0,
+          lockedAt: new Date().toISOString(),
+        },
+      ],
+    },
+  };
+
+  const advanced = afterTargetManPick(nextLive, userIds);
+  if (advanced.finished) {
+    return viewFor(await finishTargetMan(row, advanced), userId);
+  }
+  const updated = await persistRow(row.id, { liveJson: advanced });
+  return viewFor(updated ?? { ...row, liveJson: advanced }, userId);
+}
+
 export type VsLeaveResult = {
   ended: boolean;
 };
@@ -1106,6 +1366,14 @@ function liveJsonAfterLeave(row: VsChallenge, userId: string, remainingIds: stri
   if (row.modeId === 'back_yourself') {
     const hotseat = parseHotseat(row.liveJson);
     return hotseat ? eliminatePlayer(hotseat, userId) : row.liveJson;
+  }
+  if (row.modeId === 'target_man') {
+    const live = parseTargetMan(row.liveJson);
+    if (!live) return row.liveJson;
+    const next = dropTargetManUser(live, userId);
+    const advanced = advanceTargetMan(next, remainingIds);
+    if (advanced.finished) return advanced;
+    return { ...advanced, deadlineAt: new Date(Date.now() + VS_TARGET_MAN_TURN_MS).toISOString() };
   }
   if (row.modeId === 'draft_master') {
     const live = liveStateOf(row);
@@ -1163,6 +1431,7 @@ export async function leaveVsChallenge(userId: string, challengeId: string): Pro
   const liveJson = liveJsonAfterLeave(row, userId, remainingIds);
   const hotseat = parseHotseat(liveJson);
   const live = parseLiveState(liveJson);
+  const targetMan = parseTargetMan(liveJson);
   const allSubmitted = next.length >= 2 && next.every((p) => p.completedAt != null);
 
   if (hotseat?.finished) {
@@ -1171,6 +1440,10 @@ export async function leaveVsChallenge(userId: string, challengeId: string): Pro
   }
   if (live?.finished && row.modeId === 'draft_master') {
     await finishLiveDraft({ ...row, participantsJson: next, liveJson }, live);
+    return { ended: false };
+  }
+  if (targetMan?.finished && row.modeId === 'target_man') {
+    await finishTargetMan({ ...row, participantsJson: next, liveJson }, targetMan);
     return { ended: false };
   }
 

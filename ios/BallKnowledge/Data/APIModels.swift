@@ -431,11 +431,13 @@ struct VsChallengeDTO: Codable, Equatable {
     let result: VsResultDTO
     let live: VsLiveDTO?
     let hotseat: VsHotseatDTO?
+    let targetMan: VsTargetManDTO?
 
     var gameMode: GameModeID? { GameModeID(rawValue: modeId) }
     var isLiveDraft: Bool { modeId == GameModeID.draftMaster.rawValue && live != nil && status == "active" && !result.allDone }
     var isLiveHotseat: Bool { modeId == GameModeID.backYourself.rawValue && hotseat != nil && status == "active" && !result.allDone }
-    var isLivePlay: Bool { isLiveDraft || isLiveHotseat }
+    var isLiveTargetMan: Bool { modeId == GameModeID.targetMan.rawValue && targetMan != nil && status == "active" && !result.allDone }
+    var isLivePlay: Bool { isLiveDraft || isLiveHotseat || isLiveTargetMan }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -465,6 +467,67 @@ struct VsChallengeDTO: Codable, Equatable {
         result = try c.decode(VsResultDTO.self, forKey: .result)
         live = try c.decodeIfPresent(VsLiveDTO.self, forKey: .live)
         hotseat = try c.decodeIfPresent(VsHotseatDTO.self, forKey: .hotseat)
+        targetMan = try c.decodeIfPresent(VsTargetManDTO.self, forKey: .targetMan)
+    }
+}
+
+struct VsTargetManBoardDTO: Codable, Equatable {
+    let userId: String
+    let displayName: String
+    let isYou: Bool
+    let pickCount: Int
+    let locked: Bool
+}
+
+struct VsTargetManPickDTO: Codable, Equatable, Identifiable {
+    let userId: String
+    let displayName: String
+    let isYou: Bool
+    let slotIndex: Int
+    let playerId: String
+    let playerName: String
+    let headshotUrl: String?
+    let statValue: Int?
+
+    var id: String { "\(userId)-\(slotIndex)-\(playerId)" }
+}
+
+struct VsTargetManDTO: Codable, Equatable {
+    let slotIndex: Int
+    let slotCount: Int
+    let deadlineAt: String
+    let turnUserId: String?
+    let yourTurn: Bool
+    let youLocked: Bool
+    let finished: Bool
+    let usedPlayerIds: [String]
+    let target: Int
+    let categoryLabel: String
+    let valueNoun: String
+    let offNoun: String
+    let unit: String?
+    let board: [VsTargetManBoardDTO]
+    let picks: [VsTargetManPickDTO]
+    let yourPicks: [VsTargetManPickDTO]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        slotIndex = try c.decodeIfPresent(Int.self, forKey: .slotIndex) ?? 0
+        slotCount = try c.decodeIfPresent(Int.self, forKey: .slotCount) ?? 5
+        deadlineAt = try c.decode(String.self, forKey: .deadlineAt)
+        turnUserId = try c.decodeIfPresent(String.self, forKey: .turnUserId)
+        yourTurn = try c.decodeIfPresent(Bool.self, forKey: .yourTurn) ?? false
+        youLocked = try c.decodeIfPresent(Bool.self, forKey: .youLocked) ?? false
+        finished = try c.decodeIfPresent(Bool.self, forKey: .finished) ?? false
+        usedPlayerIds = try c.decodeIfPresent([String].self, forKey: .usedPlayerIds) ?? []
+        target = try c.decodeIfPresent(Int.self, forKey: .target) ?? 0
+        categoryLabel = try c.decodeIfPresent(String.self, forKey: .categoryLabel) ?? "Target Man"
+        valueNoun = try c.decodeIfPresent(String.self, forKey: .valueNoun) ?? "pts"
+        offNoun = try c.decodeIfPresent(String.self, forKey: .offNoun) ?? "off"
+        unit = try c.decodeIfPresent(String.self, forKey: .unit)
+        board = try c.decodeIfPresent([VsTargetManBoardDTO].self, forKey: .board) ?? []
+        picks = try c.decodeIfPresent([VsTargetManPickDTO].self, forKey: .picks) ?? []
+        yourPicks = try c.decodeIfPresent([VsTargetManPickDTO].self, forKey: .yourPicks) ?? []
     }
 }
 

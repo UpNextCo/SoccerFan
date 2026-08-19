@@ -42,7 +42,8 @@ export function shortSlotLabel(position: string): string {
 
 export function parseLiveState(raw: unknown): VsLiveState | null {
   if (!raw || typeof raw !== 'object') return null;
-  const o = raw as Partial<VsLiveState>;
+  const o = raw as Partial<VsLiveState> & { kind?: string };
+  if (o.kind === 'target_man' || o.kind === 'back_yourself') return null;
   if (typeof o.slotIndex !== 'number' || typeof o.deadlineAt !== 'string') return null;
   return {
     slotIndex: o.slotIndex,

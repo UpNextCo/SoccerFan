@@ -53,6 +53,7 @@
 		6F9FA384153993B846306F36 /* VsTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F3425FAE4627ACF24B2A24 /* VsTabView.swift */; };
 		4B9D2F3158CA503B02E7F6D9 /* VsDraftLiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A8C1E2047B94F2A91D6E5C8 /* VsDraftLiveView.swift */; };
 		A8C2F41E7B6D4E0A91F3C5D8 /* VsHotseatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7D3E52F8C7E5F1B02A4D6E9 /* VsHotseatView.swift */; };
+		C1D4E63F8A7B5C2D01E4F6A8 /* VsTargetManLiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E5F74A9B8C6D3E12F5A7B9 /* VsTargetManLiveView.swift */; };
 		7C5047652E40EF95CBED6746 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AFBA05CCBDE605C50036267 /* APIModels.swift */; };
 		7DEC678F67265F07FEA08B60 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38AA789FF4DE956F1A855448 /* APIClient.swift */; };
 		7EDECC7A6DDDD3D4000E43F9 /* ActivityFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89413FFF0304FFD7F1E83476 /* ActivityFeed.swift */; };
@@ -122,6 +123,7 @@
 		10B304CF6798F341ADC5389C /* VsMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VsMonitor.swift; sourceTree = "<group>"; };
 		3A8C1E2047B94F2A91D6E5C8 /* VsDraftLiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VsDraftLiveView.swift; sourceTree = "<group>"; };
 		B7D3E52F8C7E5F1B02A4D6E9 /* VsHotseatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VsHotseatView.swift; sourceTree = "<group>"; };
+		D2E5F74A9B8C6D3E12F5A7B9 /* VsTargetManLiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VsTargetManLiveView.swift; sourceTree = "<group>"; };
 		16EDE9609F259A27C5480B51 /* WeeklyLeagueIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeeklyLeagueIntroView.swift; sourceTree = "<group>"; };
 		19BE49785C49F03DC8047026 /* FootballTowerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballTowerView.swift; sourceTree = "<group>"; };
 		1D508783416F037C0979FF52 /* TargetManModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetManModels.swift; sourceTree = "<group>"; };
@@ -495,6 +497,7 @@
 				10B304CF6798F341ADC5389C /* VsMonitor.swift */,
 				3A8C1E2047B94F2A91D6E5C8 /* VsDraftLiveView.swift */,
 				B7D3E52F8C7E5F1B02A4D6E9 /* VsHotseatView.swift */,
+				D2E5F74A9B8C6D3E12F5A7B9 /* VsTargetManLiveView.swift */,
 				F4F3425FAE4627ACF24B2A24 /* VsTabView.swift */,
 			);
 			path = VS;
@@ -729,6 +732,7 @@
 				6B295782E7D5D359515BA1A0 /* VsMonitor.swift in Sources */,
 				4B9D2F3158CA503B02E7F6D9 /* VsDraftLiveView.swift in Sources */,
 				A8C2F41E7B6D4E0A91F3C5D8 /* VsHotseatView.swift in Sources */,
+				C1D4E63F8A7B5C2D01E4F6A8 /* VsTargetManLiveView.swift in Sources */,
 				6F9FA384153993B846306F36 /* VsTabView.swift in Sources */,
 				F6513CD000CF16A6411507E5 /* WeeklyLeagueIntroView.swift in Sources */,
 				FA6776AED5C7DA3C6291EA66 /* WorldCupXIModels.swift in Sources */,
