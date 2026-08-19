@@ -17,7 +17,7 @@ export const VS_MODE_TITLES: Record<VsModeId, string> = {
   target_man: 'TARGET MAN',
 };
 
-export const VS_MAX_PLAYERS = 5;
+export const VS_MAX_PLAYERS = 4;
 
 export function isVsModeId(value: string): value is VsModeId {
   return (VS_MODE_IDS as readonly string[]).includes(value);
@@ -47,7 +47,11 @@ function backYourselfPoolSize(puzzle: unknown, answer: unknown): number {
 }
 
 /** Instant VS create: pick a recent already-built daily instead of generating live. */
-async function storedDailyPuzzle(modeId: VsModeId, seedKey: string): Promise<VsGeneratedPuzzle | null> {
+async function storedDailyPuzzle(
+  modeId: VsModeId,
+  seedKey: string,
+  excludeTitle?: string
+): Promise<VsGeneratedPuzzle | null> {
   const rows = await db
     .select({
       puzzleJson: dailyPuzzles.puzzleJson,
@@ -64,6 +68,10 @@ async function storedDailyPuzzle(modeId: VsModeId, seedKey: string): Promise<VsG
   if (modeId === 'back_yourself') {
     const wide = rows.filter((row) => backYourselfPoolSize(row.puzzleJson, row.answerJson) >= 40);
     if (wide.length > 0) pool = wide;
+  }
+  if (excludeTitle) {
+    const different = pool.filter((row) => vsPuzzleMeta(modeId, row.puzzleJson).title !== excludeTitle);
+    if (different.length > 0) pool = different;
   }
 
   const chosen = pool[hashSeed(seedKey) % pool.length]!;
@@ -102,8 +110,12 @@ async function generateFreshVsPuzzle(modeId: VsModeId, seedKey: string): Promise
   }
 }
 
-export async function generateVsPuzzle(modeId: VsModeId, seedKey: string): Promise<VsGeneratedPuzzle> {
-  const stored = await storedDailyPuzzle(modeId, seedKey);
+export async function generateVsPuzzle(
+  modeId: VsModeId,
+  seedKey: string,
+  opts?: { excludeTitle?: string }
+): Promise<VsGeneratedPuzzle> {
+  const stored = await storedDailyPuzzle(modeId, seedKey, opts?.excludeTitle);
   if (stored) return stored;
   return generateFreshVsPuzzle(modeId, seedKey);
 }

@@ -4,6 +4,7 @@ import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
 import {
   cancelVsChallenge,
   createVsChallenge,
+  reshuffleVsChallenge,
   getActiveVsChallenge,
   getVsChallenge,
   joinVsChallenge,
@@ -69,6 +70,14 @@ vsRouter.get('/active', requireAuth, async (req, res) => {
     sendSuccess(res, await getActiveVsChallenge(req.auth!.userId));
   } catch (err) {
     handleVsError(res, err, 'Failed to load challenge');
+  }
+});
+
+vsRouter.post('/:id/reshuffle', requireAuth, async (req, res) => {
+  try {
+    sendSuccess(res, await reshuffleVsChallenge(req.auth!.userId, String(req.params.id)));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to change category');
   }
 });
 

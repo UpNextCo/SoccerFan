@@ -451,7 +451,7 @@ struct VsChallengeDTO: Codable, Equatable {
         status = try c.decode(String.self, forKey: .status)
         expiresAt = try c.decode(String.self, forKey: .expiresAt)
         youAreHost = try c.decode(Bool.self, forKey: .youAreHost)
-        maxPlayers = try c.decodeIfPresent(Int.self, forKey: .maxPlayers) ?? 5
+        maxPlayers = try c.decodeIfPresent(Int.self, forKey: .maxPlayers) ?? 4
         canStart = try c.decodeIfPresent(Bool.self, forKey: .canStart) ?? false
         if let decoded = try c.decodeIfPresent([VsPlayerDTO].self, forKey: .players), !decoded.isEmpty {
             players = decoded

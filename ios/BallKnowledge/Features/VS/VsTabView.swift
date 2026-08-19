@@ -53,6 +53,19 @@ final class VsViewModel {
         }
     }
 
+    func reshuffleCategory() async {
+        guard let id = challenge?.id else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            challenge = try await APIClient.shared.vsReshuffle(id: id)
+            VsMonitor.shared.track(challenge)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func start() async {
         guard let id = challenge?.id else { return }
         isBusy = true
@@ -365,7 +378,7 @@ struct VsTabView: View {
                     Text("Challenge your mates")
                         .font(BKFont.title(28))
                         .foregroundStyle(BKTheme.textPrimary)
-                    Text("Pick a game, share a code, invite up to 4 friends. Live turns for Back Yourself and Draft XI. No XP.")
+                    Text("Pick a game, share a code, invite up to 3 friends. Live turns for Back Yourself and Draft XI. No XP.")
                         .font(BKFont.body(14))
                         .foregroundStyle(BKTheme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -458,11 +471,30 @@ struct VsTabView: View {
     private func challengeContent(_ challenge: VsChallengeDTO) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
-                Text(challenge.title)
-                    .font(BKFont.title(26))
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 4)
+                HStack(alignment: .center, spacing: 10) {
+                    Text(challenge.title)
+                        .font(BKFont.title(26))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .multilineTextAlignment(.center)
+                    if challenge.youAreHost && challenge.status == "waiting" {
+                        Button {
+                            Task { await viewModel.reshuffleCategory() }
+                        } label: {
+                            if viewModel.isBusy {
+                                ProgressView().tint(BKTheme.accent)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(BKTheme.accent)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isBusy)
+                        .accessibilityLabel("Change category")
+                    }
+                }
+                .padding(.top, 4)
+                .animation(.easeOut(duration: 0.2), value: challenge.title)
 
                 codeCard(challenge.code)
 
@@ -509,7 +541,7 @@ struct VsTabView: View {
                     waitingCard(
                         title: challenge.youAreHost ? "Waiting for friends" : "Waiting to start",
                         message: challenge.youAreHost
-                            ? "Share your code. Start once at least one mate has joined — up to 4."
+                            ? "Share your code. Start once at least one mate has joined — up to 3."
                             : "The host will start once everyone’s in."
                     )
                 }

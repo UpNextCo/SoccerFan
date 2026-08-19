@@ -490,13 +490,13 @@ private enum WeeklyRowZone {
 
 private enum LeaderboardRankColumn {
     static func width(forMaxRank rank: Int) -> CGFloat {
-        if rank >= 1000 { return 44 }
+        if rank >= 1000 { return 56 }
         if rank >= 100 { return 38 }
         return 28
     }
 
     static func compactWidth(forMaxRank rank: Int) -> CGFloat {
-        if rank >= 1000 { return 36 }
+        if rank >= 1000 { return 48 }
         if rank >= 100 { return 30 }
         return 22
     }
@@ -511,11 +511,12 @@ private struct WeeklyLeagueStandingRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("\(player.rank)")
+            Text(player.rank.formatted())
                 .font(.system(size: 15, weight: .black, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(rankColor)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .frame(width: rankWidth, alignment: .center)
 
             avatarView
@@ -735,11 +736,12 @@ struct PlayerStandingRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("\(player.rank)")
+            Text(player.rank.formatted())
                 .font(.system(size: 15, weight: .black, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(player.rank <= 3 ? BKTheme.accent : BKTheme.textMuted)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .frame(width: rankWidth, alignment: .center)
 
             avatarView
@@ -953,18 +955,20 @@ struct TeamStandingRow: View {
                     .font(BKFont.caption(10))
                     .foregroundStyle(BKTheme.textMuted)
             }
-
-            Spacer(minLength: 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(spacing: 4) {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(BKTheme.accent)
-                    Text("\(team.totalXp)")
+                    Text(team.totalXp.formatted())
                         .font(BKFont.headline(15))
                         .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(1)
+                        .monospacedDigit()
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 Text("total XP")
                     .font(BKFont.caption(9))
                     .foregroundStyle(BKTheme.textMuted)

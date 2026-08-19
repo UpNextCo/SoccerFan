@@ -1153,6 +1153,35 @@ export async function createVsChallenge(hostUserId: string, modeIdRaw: string): 
   throw new VsError('Failed to allocate a challenge code', 500, 'CODE_FAILED');
 }
 
+export async function reshuffleVsChallenge(userId: string, challengeId: string): Promise<VsChallengeView> {
+  const row = await requireParticipant(challengeId, userId);
+  if (row.hostUserId !== userId) {
+    throw new VsError('Only the host can change the category', 403, 'FORBIDDEN');
+  }
+  if (row.status !== 'waiting') {
+    throw new VsError('The game has already started', 400, 'STARTED');
+  }
+  if (!isVsModeId(row.modeId)) {
+    throw new VsError('Unsupported VS mode', 400, 'INVALID_MODE');
+  }
+
+  const currentTitle = vsPuzzleMeta(row.modeId, row.puzzleJson).title;
+  const seedKey = `vs:${row.modeId}:${randomUUID()}`;
+  let generated: { puzzle: unknown; answer: unknown };
+  try {
+    generated = await generateVsPuzzle(row.modeId, seedKey, { excludeTitle: currentTitle });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not change the category right now. Try again.';
+    throw new VsError(message, 503, 'PUZZLE_FAILED');
+  }
+
+  const updated = await persistRow(row.id, {
+    puzzleJson: generated.puzzle,
+    answerJson: generated.answer,
+  });
+  return viewFor(updated ?? { ...row, puzzleJson: generated.puzzle, answerJson: generated.answer }, userId);
+}
+
 export async function joinVsChallenge(userId: string, rawCode: string): Promise<VsChallengeView> {
   const code = rawCode.trim().toUpperCase();
   if (!code) throw new VsError('Enter a code', 400, 'INVALID_CODE');

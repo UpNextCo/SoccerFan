@@ -593,6 +593,10 @@ actor APIClient {
         return try await request("vs/join", method: "POST", body: Body(code: code))
     }
 
+    func vsReshuffle(id: String) async throws -> VsChallengeDTO {
+        try await request("vs/\(id)/reshuffle", method: "POST", body: EmptyBody())
+    }
+
     func vsStart(id: String) async throws -> VsChallengeDTO {
         try await request("vs/\(id)/start", method: "POST", body: EmptyBody())
     }

@@ -779,7 +779,7 @@ export const appMeta = pgTable('app_meta', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** VS lobby: host + up to 4 friends, one of the four VS modes. Scores are game totals — no XP. */
+/** VS lobby: host + up to 3 friends, one of the four VS modes. Scores are game totals — no XP. */
 export type VsParticipantRecord = {
   userId: string;
   score: number | null;

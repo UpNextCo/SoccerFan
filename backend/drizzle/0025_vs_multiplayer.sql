@@ -1,4 +1,4 @@
--- VS: four modes + host and up to 4 friends (participants_json).
+-- VS: four modes + host and up to 3 friends (participants_json).
 ALTER TABLE "vs_challenges" ADD COLUMN IF NOT EXISTS "answer_json" jsonb;
 ALTER TABLE "vs_challenges" ADD COLUMN IF NOT EXISTS "participants_json" jsonb DEFAULT '[]'::jsonb NOT NULL;
 --> statement-breakpoint

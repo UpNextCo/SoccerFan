@@ -44,7 +44,7 @@ export {
  * doesn't appear at all rather than showing a real rank — keep it well clear of the player count.
  */
 const LEADERBOARD_LIMIT = 500;
-const OVERALL_LEADERBOARD_LIMIT = 1000;
+const OVERALL_LEADERBOARD_LIMIT = 2000;
 
 export interface PlayerStanding {
   userId: string;
