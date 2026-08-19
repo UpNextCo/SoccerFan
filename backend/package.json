@@ -21,6 +21,7 @@
     "test:career-seasons": "node --import tsx --test src/services/careerSeasonReconciler.test.ts src/utils/nationalTeam.test.ts",
     "test:tm-competitions": "node --import tsx --test src/utils/tmCompetitions.test.ts",
     "test:ingest-config": "node --import tsx --test src/jobs/ingest-config.test.ts",
+    "test:teams": "node --import tsx --test src/services/teamService.test.ts",
     "test:player-names": "node --import tsx --test src/utils/playerSearch.test.ts",
     "start": "node dist/db/migrate.js && node dist/index.js",
     "db:generate": "drizzle-kit generate",

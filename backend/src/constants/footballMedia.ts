@@ -7,6 +7,16 @@ export function teamLogoUrl(teamId: number): string {
   return `${TEAM_LOGO_CDN}/${teamId}.png`;
 }
 
+/** FBref historical import hashes club names into this range — they are not API-Football ids. */
+export const SYNTHETIC_TEAM_ID_MIN = 900_000_000;
+
+export function isSyntheticTeamId(id: number): boolean {
+  return id >= SYNTHETIC_TEAM_ID_MIN;
+}
+
+/** Competitions that must never be a club's "home" league on the teams registry. */
+export const CUP_OR_TOURNAMENT_LEAGUE_IDS = new Set([1, 2, 3, 4, 6, 9, 45, 48, 848]);
+
 /** Player headshot from the public CDN (quota-free). Null when we have no API-Football id. */
 export function playerHeadshotUrl(apiFootballId: number | null | undefined): string | null {
   return apiFootballId ? `${PLAYER_PHOTO_CDN}/${apiFootballId}.png` : null;

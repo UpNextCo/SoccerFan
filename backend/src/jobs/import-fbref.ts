@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { players, playerStats } from '../db/schema.js';
+import { SYNTHETIC_TEAM_ID_MIN } from '../constants/footballMedia.js';
 import { buildPlayerSearchFields, normalizeSearchText } from '../utils/playerSearch.js';
 import { canonicalNationality } from '../utils/nationality.js';
 import { isEflLeagueId } from './ingest-config.js';
@@ -73,7 +74,7 @@ function syntheticTeamId(teamName: string): number {
   for (let i = 0; i < norm.length; i += 1) {
     hash = (hash * 31 + norm.charCodeAt(i)) | 0;
   }
-  return 900_000_000 + (Math.abs(hash) % 90_000_000);
+  return SYNTHETIC_TEAM_ID_MIN + (Math.abs(hash) % 90_000_000);
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {

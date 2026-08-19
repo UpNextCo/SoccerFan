@@ -2,7 +2,10 @@ import { inArray, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { teams } from '../db/schema.js';
 import {
+  CUP_OR_TOURNAMENT_LEAGUE_IDS,
   LEAGUE_ID_BY_NAME,
+  SYNTHETIC_TEAM_ID_MIN,
+  isSyntheticTeamId,
   teamLogoUrl,
 } from '../constants/footballMedia.js';
 import { isYouthOrReserveSide } from '../utils/nationalTeam.js';
@@ -57,6 +60,39 @@ export type TeamLogoMatch = {
 };
 
 const TOP5_LEAGUE_IDS = new Set([39, 140, 135, 78, 61]);
+const EFL_LEAGUE_IDS = new Set([40, 41, 42]);
+
+function homeLeagueTier(leagueId: number | null | undefined): number {
+  if (leagueId == null) return 8;
+  if (CUP_OR_TOURNAMENT_LEAGUE_IDS.has(leagueId)) return 7;
+  if (TOP5_LEAGUE_IDS.has(leagueId)) return 0;
+  if (EFL_LEAGUE_IDS.has(leagueId)) return 1;
+  return 3;
+}
+
+/** Domestic league a club should live under on the registry (never a cup). */
+export function pickHomeLeagueId(
+  rows: Array<{ leagueId: number; appearances: number }>
+): number | null {
+  const usable = rows.filter((r) => r.leagueId > 0);
+  if (usable.length === 0) return null;
+  return [...usable].sort((a, b) => {
+    const tier = homeLeagueTier(a.leagueId) - homeLeagueTier(b.leagueId);
+    if (tier !== 0) return tier;
+    return b.appearances - a.appearances;
+  })[0]!.leagueId;
+}
+
+function compareTeamCandidates(
+  a: { id: number; leagueId: number | null },
+  b: { id: number; leagueId: number | null }
+): number {
+  const syn = Number(isSyntheticTeamId(a.id)) - Number(isSyntheticTeamId(b.id));
+  if (syn !== 0) return syn;
+  const tier = homeLeagueTier(a.leagueId) - homeLeagueTier(b.leagueId);
+  if (tier !== 0) return tier;
+  return a.id - b.id;
+}
 
 function pairKey(club: string, league: string): string {
   return `${normalizeTeamName(club)}|${normalizeSearchText(league)}`;
@@ -135,13 +171,14 @@ export async function lookupTeamLogos(
     // Prefer the exact league match; otherwise favour a real (top-5) league club over a
     // league-less duplicate, since name collisions like "Athletic Club" (Bilbao vs an obscure
     // Brazilian side with no league) would otherwise resolve to the wrong, unrecognisable crest.
+    const real = candidates.filter((row) => !isSyntheticTeamId(row.id));
+    const pool = real.length > 0 ? real : candidates;
     const match =
       (pair.leagueId != null
-        ? candidates.find((row) => row.leagueId === pair.leagueId)
-        : undefined) ??
-      candidates.find((row) => row.leagueId != null && TOP5_LEAGUE_IDS.has(row.leagueId)) ??
-      candidates.find((row) => row.leagueId != null) ??
-      candidates[0];
+        ? [...pool]
+            .filter((row) => row.leagueId === pair.leagueId)
+            .sort(compareTeamCandidates)[0]
+        : undefined) ?? [...pool].sort(compareTeamCandidates)[0];
 
     result.set(key, { teamId: match.id, logoUrl: match.logoUrl });
   }
@@ -181,7 +218,9 @@ export async function resolveClubLogo(club: string): Promise<TeamLogoMatch | nul
   const norm = tokens.join(' ');
   const rows = (await db.execute(sql`
     SELECT id, name_norm AS "nameNorm", logo_url AS "logoUrl", league_id AS "leagueId"
-    FROM teams WHERE name_norm = ${norm} OR name_norm LIKE ${first + '%'}
+    FROM teams
+    WHERE (name_norm = ${norm} OR name_norm LIKE ${first + '%'})
+      AND id < ${SYNTHETIC_TEAM_ID_MIN}
     LIMIT 300
   `)) as unknown as Array<{ id: number; nameNorm: string; logoUrl: string; leagueId: number | null }>;
 
@@ -196,8 +235,10 @@ export async function resolveClubLogo(club: string): Promise<TeamLogoMatch | nul
     const overlap = tt.filter((t) => clubSet.has(t)).length;
     let score = overlap * 10;
     if (tt.join(' ') === norm) score += 100; // exact
-    if (r.leagueId != null && TOP5_LEAGUE_IDS.has(r.leagueId)) score += 6;
-    else if (r.leagueId != null) score += 3; // real senior club over a youth/reserve side
+    if (isSyntheticTeamId(r.id)) score -= 50;
+    else score += 8;
+    score += Math.max(0, 7 - homeLeagueTier(r.leagueId));
+    if (r.id < 2000) score += 2; // prefer canonical API-Football ids
     if (!best || score > best.score) best = { row: r, score };
   }
   return best ? { teamId: best.row.id, logoUrl: best.row.logoUrl } : null;
@@ -236,14 +277,16 @@ export async function searchTeams(query: string, limit = 30): Promise<TeamSearch
           SELECT id, name, logo_url, league_id, country
           FROM teams
           WHERE name_norm LIKE ${like}
+            AND id < ${SYNTHETIC_TEAM_ID_MIN}
             AND ${seniorClubNameSql('name')}
           ORDER BY
             CASE
               WHEN league_id = ${PREMIER_LEAGUE_ID} THEN 0
               WHEN league_id IN (140, 135, 78, 61) THEN 1
-              WHEN league_id IN (40, 88, 94, 179, 203, 253, 262, 71, 307) THEN 2
-              WHEN league_id IS NOT NULL THEN 3
-              ELSE 4
+              WHEN league_id IN (40, 41, 42, 88, 94, 179, 203, 253, 262, 71, 307) THEN 2
+              WHEN league_id IS NOT NULL AND league_id NOT IN (1, 2, 3, 4, 6, 9, 45, 48, 848) THEN 3
+              WHEN league_id IS NOT NULL THEN 4
+              ELSE 5
             END ASC,
             (name_norm = ${q}) DESC,
             (name_norm LIKE ${prefix}) DESC,
@@ -285,9 +328,28 @@ export async function upsertTeam(row: {
   leagueId?: number | null;
   country?: string | null;
   logoUrl?: string;
+  /** overwrite existing row (API-Football). Default: insert-only so player-data cannot rename a club. */
+  overwrite?: boolean;
 }): Promise<void> {
+  if (isSyntheticTeamId(row.id)) return;
+
   const nameNorm = normalizeTeamName(row.name);
-  // Never wipe a known league/country with null — player-data backfill often lacks both.
+  const logoUrl = row.logoUrl ?? teamLogoUrl(row.id);
+  const values = {
+    id: row.id,
+    name: row.name,
+    nameNorm,
+    leagueId: row.leagueId ?? null,
+    country: row.country ?? null,
+    logoUrl,
+    updatedAt: new Date(),
+  };
+
+  if (!row.overwrite) {
+    await db.insert(teams).values(values).onConflictDoNothing();
+    return;
+  }
+
   const patch: {
     name: string;
     nameNorm: string;
@@ -298,7 +360,7 @@ export async function upsertTeam(row: {
   } = {
     name: row.name,
     nameNorm,
-    logoUrl: row.logoUrl ?? teamLogoUrl(row.id),
+    logoUrl,
     updatedAt: new Date(),
   };
   if (row.leagueId != null) patch.leagueId = row.leagueId;
@@ -306,15 +368,7 @@ export async function upsertTeam(row: {
 
   await db
     .insert(teams)
-    .values({
-      id: row.id,
-      name: row.name,
-      nameNorm,
-      leagueId: row.leagueId ?? null,
-      country: row.country ?? null,
-      logoUrl: row.logoUrl ?? teamLogoUrl(row.id),
-      updatedAt: new Date(),
-    })
+    .values(values)
     .onConflictDoUpdate({
       target: teams.id,
       set: patch,
