@@ -30,9 +30,44 @@ enum WeeklyLeagueIntro {
         pyramid.first(where: { $0.id == id })?.imageName ?? "sundayleague"
     }
 
+    private static var fullCache: [String: UIImage] = [:]
+    private static var thumbCache: [String: UIImage] = [:]
+
     static func loadImage(named name: String) -> UIImage? {
-        guard let url = GameModeTileArt.imageURL(named: name) else { return nil }
-        return UIImage(contentsOfFile: url.path)
+        if let cached = fullCache[name] { return cached }
+        guard let url = GameModeTileArt.imageURL(named: name),
+              let image = UIImage(contentsOfFile: url.path) else { return nil }
+        fullCache[name] = image
+        return image
+    }
+
+    /// Downsampled square for the ladder — avoids uploading full stadium tiles as GPU textures.
+    static func loadThumb(named name: String, pointSize: CGFloat = 44) -> UIImage? {
+        let key = "\(name)-\(Int(pointSize))"
+        if let cached = thumbCache[key] { return cached }
+        guard let full = loadImage(named: name) else { return nil }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = UIScreen.main.scale
+        format.opaque = true
+        let size = CGSize(width: pointSize, height: pointSize)
+        let thumb = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            let scale = max(size.width / full.size.width, size.height / full.size.height)
+            let drawSize = CGSize(width: full.size.width * scale, height: full.size.height * scale)
+            let origin = CGPoint(
+                x: (size.width - drawSize.width) / 2,
+                y: (size.height - drawSize.height) / 2
+            )
+            full.draw(in: CGRect(origin: origin, size: drawSize))
+        }
+        thumbCache[key] = thumb
+        return thumb
+    }
+
+    static func preloadPyramidThumbs() {
+        for tier in pyramid {
+            _ = loadThumb(named: tier.imageName)
+        }
     }
 
     /// Sunday 24:00 Europe/London for the current weekly league week.
@@ -114,7 +149,6 @@ struct WeeklyLeagueIntroView: View {
 
                     ladderBlock
                         .opacity(showLadder ? 1 : 0)
-                        .offset(y: showLadder ? 0 : 18)
 
                     footerBlock
                         .opacity(showFooter ? 1 : 0)
@@ -128,8 +162,12 @@ struct WeeklyLeagueIntroView: View {
                 .opacity(ctaRevealed ? 1 : 0)
                 .allowsHitTesting(ctaRevealed)
 
-            FootballConfettiView(burstToken: confettiToken)
-                .allowsHitTesting(false)
+            FootballConfettiView(
+                burstToken: confettiToken,
+                particleCount: 36,
+                includesSoccerBalls: false
+            )
+            .allowsHitTesting(false)
         }
         .presentationBackground(BKTheme.background)
         .task { await runSequence() }
@@ -269,7 +307,7 @@ struct WeeklyLeagueIntroView: View {
     @ViewBuilder
     private func leagueThumb(named name: String, highlighted: Bool) -> some View {
         let size: CGFloat = highlighted ? 44 : 36
-        if let image = WeeklyLeagueIntro.loadImage(named: name) {
+        if let image = WeeklyLeagueIntro.loadThumb(named: name) {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
@@ -289,6 +327,8 @@ struct WeeklyLeagueIntroView: View {
 
     @MainActor
     private func runSequence() async {
+        WeeklyLeagueIntro.preloadPyramidThumbs()
+
         try? await Task.sleep(for: .milliseconds(180))
         withAnimation(.spring(response: 0.48, dampingFraction: 0.78)) {
             showChrome = true
@@ -297,7 +337,7 @@ struct WeeklyLeagueIntroView: View {
         HapticManager.success()
 
         try? await Task.sleep(for: .milliseconds(380))
-        withAnimation(.spring(response: 0.48, dampingFraction: 0.8)) {
+        withAnimation(.easeOut(duration: 0.26)) {
             showLadder = true
         }
         HapticManager.light()

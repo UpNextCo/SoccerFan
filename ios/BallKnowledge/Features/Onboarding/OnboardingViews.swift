@@ -562,14 +562,13 @@ struct SignInOnboardingPage: View {
                     onError: { auth.errorMessage = $0 }
                 )
 
-                // Distribution: keep Dev Sign In out of the UI (DEBUG builds only if re-enabled).
-                // #if DEBUG
-                // Button("Dev Sign In") {
-                //     Task { await auth.devSignIn() }
-                // }
-                // .font(BKFont.caption(12))
-                // .foregroundStyle(BKTheme.textMuted)
-                // #endif
+                #if DEBUG
+                Button("Dev Sign In") {
+                    Task { await auth.devSignIn() }
+                }
+                .font(BKFont.caption(12))
+                .foregroundStyle(BKTheme.textMuted)
+                #endif
 
                 if let error = auth.errorMessage {
                     Text(error)

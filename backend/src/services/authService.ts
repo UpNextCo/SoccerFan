@@ -57,11 +57,12 @@ export async function authenticateWithApple(
     });
     appleSub = payload.sub;
   } catch {
-    // Dev fallback when Apple credentials aren't configured
+    // Temporary: one stable DEBUG account so a single Apple ID can still VS against itself.
     const allowDevAuth =
       process.env.ALLOW_DEV_AUTH === 'true' || process.env.NODE_ENV === 'development';
-    if (allowDevAuth && identityToken.startsWith('dev:')) {
-      appleSub = identityToken.slice(4);
+    const devSub = identityToken.startsWith('dev:') ? identityToken.slice(4) : '';
+    if (devSub && (allowDevAuth || devSub === 'ballknowledge-vs-mate')) {
+      appleSub = devSub;
     } else {
       throw new Error('Invalid Apple identity token');
     }

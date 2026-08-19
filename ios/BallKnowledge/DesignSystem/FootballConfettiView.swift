@@ -3,6 +3,8 @@ import SwiftUI
 /// Full-screen confetti burst. Pass an incrementing `burstToken` each time you want a new burst.
 struct FootballConfettiView: View {
     let burstToken: Int
+    var particleCount: Int = 100
+    var includesSoccerBalls: Bool = true
 
     @State private var particles: [ConfettiParticle] = []
     @State private var startTime: Date?
@@ -32,7 +34,10 @@ struct FootballConfettiView: View {
             guard burstToken > 0 else { return }
             startTime = Date()
             now = Date()
-            particles = ConfettiParticle.makeBurst()
+            particles = ConfettiParticle.makeBurst(
+                count: particleCount,
+                includesSoccerBalls: includesSoccerBalls
+            )
             isActive = true
             try? await Task.sleep(for: .seconds(GuessWhoTiming.confettiDuration))
             isActive = false
@@ -103,7 +108,7 @@ private struct ConfettiParticle: Identifiable {
     let delay: Double
     let lifetime: Double
 
-    static func makeBurst(count: Int = 100) -> [ConfettiParticle] {
+    static func makeBurst(count: Int = 100, includesSoccerBalls: Bool = true) -> [ConfettiParticle] {
         let colors: [Color] = [
             BKTheme.accent,
             BKTheme.accentMuted,
@@ -115,7 +120,7 @@ private struct ConfettiParticle: Identifiable {
         return (0..<count).map { i in
             let roll = Double.random(in: 0...1)
             let kind: Kind
-            if roll < 0.12 {
+            if includesSoccerBalls, roll < 0.12 {
                 kind = .soccerball
             } else if roll < 0.55 {
                 kind = .rectangle
