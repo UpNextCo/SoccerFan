@@ -1,3 +1,6 @@
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../db/index.js';
+import { dailyPuzzles } from '../db/schema.js';
 import { generateBattlePuzzleFromSeed, type BattlePuzzleJson } from './battleGenerator.js';
 import { generateBackYourselfPuzzle } from './backYourselfGenerator.js';
 import { generateDarts501Puzzle } from './darts501Generator.js';
@@ -25,7 +28,49 @@ export type VsGeneratedPuzzle = {
   answer: unknown;
 };
 
-export async function generateVsPuzzle(modeId: VsModeId, seedKey: string): Promise<VsGeneratedPuzzle> {
+function hashSeed(input: string): number {
+  let h = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    h = (h << 5) - h + input.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
+}
+
+function backYourselfPoolSize(puzzle: unknown, answer: unknown): number {
+  const p = puzzle && typeof puzzle === 'object' ? (puzzle as { maxPool?: number }) : {};
+  if (typeof p.maxPool === 'number') return p.maxPool;
+  const ids = answer && typeof answer === 'object'
+    ? (answer as { validPlayerIds?: unknown }).validPlayerIds
+    : null;
+  return Array.isArray(ids) ? ids.length : 0;
+}
+
+/** Instant VS create: pick a recent already-built daily instead of generating live. */
+async function storedDailyPuzzle(modeId: VsModeId, seedKey: string): Promise<VsGeneratedPuzzle | null> {
+  const rows = await db
+    .select({
+      puzzleJson: dailyPuzzles.puzzleJson,
+      answerJson: dailyPuzzles.answerJson,
+    })
+    .from(dailyPuzzles)
+    .where(eq(dailyPuzzles.modeId, modeId))
+    .orderBy(desc(dailyPuzzles.date))
+    .limit(45);
+
+  if (rows.length === 0) return null;
+
+  let pool = rows;
+  if (modeId === 'back_yourself') {
+    const wide = rows.filter((row) => backYourselfPoolSize(row.puzzleJson, row.answerJson) >= 40);
+    if (wide.length > 0) pool = wide;
+  }
+
+  const chosen = pool[hashSeed(seedKey) % pool.length]!;
+  return { puzzle: chosen.puzzleJson, answer: chosen.answerJson };
+}
+
+async function generateFreshVsPuzzle(modeId: VsModeId, seedKey: string): Promise<VsGeneratedPuzzle> {
   const today = new Date().toISOString().slice(0, 10);
 
   switch (modeId) {
@@ -55,6 +100,12 @@ export async function generateVsPuzzle(modeId: VsModeId, seedKey: string): Promi
       return { puzzle: generated.puzzleJson, answer: generated.answerJson };
     }
   }
+}
+
+export async function generateVsPuzzle(modeId: VsModeId, seedKey: string): Promise<VsGeneratedPuzzle> {
+  const stored = await storedDailyPuzzle(modeId, seedKey);
+  if (stored) return stored;
+  return generateFreshVsPuzzle(modeId, seedKey);
 }
 
 export function vsPuzzleMeta(modeId: string, puzzle: unknown): { modeTitle: string; title: string; scoreNoun: string } {

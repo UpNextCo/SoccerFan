@@ -170,21 +170,30 @@ struct TeamBadgeImage<Fallback: View>: View {
     }
 
     private var resolvedURL: URL? {
-        if let logoURL { return logoURL }
-        if let fetchedLogoURL { return fetchedLogoURL }
-        if let resolvedTeamId, let url = TeamBadgeResolver.apiSportsLogoURL(teamId: resolvedTeamId) {
+        let blocked = blockedURLKey
+        if let logoURL, blocked != logoURL.absoluteString { return logoURL }
+        if let fetchedLogoURL, blocked != fetchedLogoURL.absoluteString { return fetchedLogoURL }
+        if let resolvedTeamId, let url = TeamBadgeResolver.apiSportsLogoURL(teamId: resolvedTeamId),
+           blocked != url.absoluteString {
             return url
         }
-        return TeamBadgeResolver.logoURL(club: club, league: league)
+        if let cdn = TeamBadgeResolver.logoURL(club: club, league: league), blocked != cdn.absoluteString {
+            return cdn
+        }
+        if !league.isEmpty, let cdn = TeamBadgeResolver.logoURL(club: club, league: ""),
+           blocked != cdn.absoluteString {
+            return cdn
+        }
+        return nil
     }
 
-    private var shouldFetchFromAPI: Bool {
-        logoURL == nil && teamId == nil && !club.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    private var canLookupClub: Bool {
+        !club.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
         Group {
-            if let url = resolvedURL, blockedURLKey != url.absoluteString {
+            if let url = resolvedURL {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -195,7 +204,10 @@ struct TeamBadgeImage<Fallback: View>: View {
                             .frame(width: size, height: size)
                     case .failure:
                         fallback()
-                            .onAppear { blockedURLKey = url.absoluteString }
+                            .task {
+                                blockedURLKey = url.absoluteString
+                                await fetchLogo(force: true)
+                            }
                     case .empty:
                         ProgressView()
                             .scaleEffect(0.55)
@@ -213,13 +225,28 @@ struct TeamBadgeImage<Fallback: View>: View {
             blockedURLKey = nil
             fetchedTeamId = nil
             fetchedLogoURL = nil
-            guard shouldFetchFromAPI else { return }
-            let match = await TeamLogoCache.shared.lookup(club: club, league: league)
-            fetchedTeamId = match.teamId
-            fetchedLogoURL = match.logoURL
+            await fetchLogo(force: logoURL == nil && teamId == nil)
         }
-        .onChange(of: fetchedLogoURL) { _, _ in blockedURLKey = nil }
-        .onChange(of: fetchedTeamId) { _, _ in blockedURLKey = nil }
+        .onChange(of: fetchedLogoURL) { _, new in
+            if let new, blockedURLKey == new.absoluteString { return }
+            blockedURLKey = nil
+        }
+        .onChange(of: fetchedTeamId) { _, _ in
+            if let url = resolvedTeamId.flatMap(TeamBadgeResolver.apiSportsLogoURL),
+               blockedURLKey == url.absoluteString { return }
+            blockedURLKey = nil
+        }
+    }
+
+    private func fetchLogo(force: Bool) async {
+        guard canLookupClub else { return }
+        if !force, fetchedLogoURL != nil || fetchedTeamId != nil { return }
+        var match = await TeamLogoCache.shared.lookup(club: club, league: league)
+        if match.logoURL == nil, match.teamId == nil, !league.isEmpty {
+            match = await TeamLogoCache.shared.lookup(club: club, league: "")
+        }
+        fetchedTeamId = match.teamId
+        fetchedLogoURL = match.logoURL
     }
 }
 

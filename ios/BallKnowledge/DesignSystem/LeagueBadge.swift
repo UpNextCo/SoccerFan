@@ -31,8 +31,22 @@ enum LeagueBadgeResolver {
         "carabao cup": 48,
         "liga mx": 262,
         "brasileirao": 71,
+        "serie a brazil": 71,
         "serie b": 136,
         "2. bundesliga": 79,
+        "efl championship": 40,
+        "efl league one": 41,
+        "efl league two": 42,
+        "champions league": 2,
+        "uefa champions league": 2,
+        "europa league": 3,
+        "uefa europa league": 3,
+        "conference league": 848,
+        "uefa conference league": 848,
+        "coppa italia": 137,
+        "copa del rey": 143,
+        "dfb pokal": 81,
+        "coupe de france": 66,
     ]
 
     static func logoURL(league: String) -> URL? {
@@ -68,6 +82,8 @@ enum LeagueBadgeResolver {
 struct LeagueBadgeImage<Fallback: View>: View {
     let league: String
     var size: CGFloat = 32
+    var leagueId: Int? = nil
+    var logoURL: URL? = nil
     /// Soft light circle so dark crests (Premier League, Ligue 1, etc.) read on dark UI.
     var lightBackdrop: Bool = false
     @ViewBuilder var fallback: () -> Fallback
@@ -97,7 +113,7 @@ struct LeagueBadgeImage<Fallback: View>: View {
 
     @ViewBuilder
     private var badgeContent: some View {
-        if !loadFailed, let url = LeagueBadgeResolver.logoURL(league: league) {
+        if !loadFailed, let url = resolvedURL {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
@@ -119,5 +135,11 @@ struct LeagueBadgeImage<Fallback: View>: View {
         } else {
             fallback()
         }
+    }
+
+    private var resolvedURL: URL? {
+        if let logoURL { return logoURL }
+        if let leagueId { return URL(string: "https://media.api-sports.io/football/leagues/\(leagueId).png") }
+        return LeagueBadgeResolver.logoURL(league: league)
     }
 }

@@ -15,7 +15,7 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { lookupTeamLogo } from './teamService.js';
-import { leagueLogoUrl, resolveHeadshot } from '../constants/footballMedia.js';
+import { leagueLogoUrl, resolveHeadshot, teamLogoUrl } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import {
   DRAFT_POSITION_COMPATIBILITY_VERSION,
@@ -647,10 +647,14 @@ async function assembleBattlePuzzle(opts: {
       let teamId: number | null = null;
       let logoUrl: string | null = null;
       if ((c.type === 'club' || c.type === 'nat_club') && c.club) {
-        const leagueName = clubs.find((k) => k.club === c.club)?.leagueId;
-        const logo = await lookupTeamLogo(c.club, leagueName != null ? (LEAGUE_NAME[leagueName] ?? '') : '');
+        const leagueHint = c.leagueId != null
+          ? (LEAGUE_NAME[c.leagueId] ?? '')
+          : (clubs.find((k) => k.club === c.club)?.leagueId != null
+            ? (LEAGUE_NAME[clubs.find((k) => k.club === c.club)!.leagueId] ?? '')
+            : '');
+        const logo = await lookupTeamLogo(c.club, leagueHint);
         teamId = logo?.teamId ?? null;
-        logoUrl = logo?.logoUrl ?? null;
+        logoUrl = logo?.logoUrl || (teamId != null ? teamLogoUrl(teamId) : null);
       } else if ((c.type === 'league' || c.type === 'nat_league') && c.leagueId != null) {
         logoUrl = leagueLogoUrl(c.leagueId);
       }

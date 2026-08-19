@@ -614,8 +614,8 @@ struct ConstraintIcon: View {
 
     private var crest: some View {
         TeamBadgeImage(
-            club: constraint.club ?? "",
-            league: constraint.leagueName ?? "",
+            club: constraint.club ?? constraint.label,
+            league: "",
             teamId: constraint.teamId,
             logoURL: constraint.logoUrl.flatMap(URL.init(string:)),
             size: size
@@ -630,7 +630,13 @@ struct ConstraintIcon: View {
     }
 
     private var leagueBadge: some View {
-        LeagueBadgeImage(league: constraint.leagueName ?? "", size: size, lightBackdrop: true) {
+        LeagueBadgeImage(
+            league: constraint.leagueName ?? "",
+            size: size,
+            leagueId: constraint.leagueId,
+            logoURL: constraint.logoUrl.flatMap(URL.init(string:)),
+            lightBackdrop: true
+        ) {
             Circle().fill(BKTheme.cardElevated).frame(width: size, height: size)
                 .overlay(
                     Text(GuessWhoDisplay.leagueAbbrev(constraint.leagueName ?? ""))
@@ -660,17 +666,39 @@ struct BattlePitchView: View {
     let state: BattleGameState
     var highlightedSlotId: String? = nil
     var interactiveSlotId: String? = nil
+    /// When set, the pitch is drawn taller than the viewport and slides so this slot stays on screen.
+    var focusSlotId: String? = nil
+    /// How much of the full pitch height is visible while focused (1 = no zoom).
+    var visibleFraction: CGFloat = 0.4
     var onTapSlot: (BattleSlot) -> Void
     var onDropConstraint: (String, BattleSlot) -> Void
 
     var body: some View {
         GeometryReader { geo in
-            let verticalInset: CGFloat = 14
-            let usableHeight = max(0, geo.size.height - verticalInset * 2)
-            ZStack {
+            let zoomed = focusSlotId != nil
+            let viewportH = geo.size.height
+            let fraction = zoomed ? max(0.22, visibleFraction) : 1
+            let virtualH = viewportH / fraction
+            let verticalInset: CGFloat = zoomed ? 28 : 14
+            let usableHeight = max(0, virtualH - verticalInset * 2)
+            let focusVirtualY: CGFloat = {
+                guard let id = focusSlotId, let slot = slots.first(where: { $0.id == id }) else {
+                    return virtualH / 2
+                }
+                return verticalInset + slot.point.y * usableHeight
+            }()
+            let target = viewportH * 0.46
+            let offsetY = min(max(focusVirtualY - target, 0), max(0, virtualH - viewportH))
+
+            ZStack(alignment: .topLeading) {
                 PitchBackground()
+                    .frame(width: geo.size.width, height: virtualH)
+                    .offset(y: -offsetY)
+                    .allowsHitTesting(false)
+
                 ForEach(slots) { slot in
                     let interactive = interactiveSlotId == nil || interactiveSlotId == slot.id
+                    let virtualY = verticalInset + slot.point.y * usableHeight
                     BattlePitchSlot(
                         slot: slot,
                         constraint: state.constraint(forSlot: slot.id),
@@ -682,11 +710,14 @@ struct BattlePitchView: View {
                     )
                     .position(
                         x: slot.point.x * geo.size.width,
-                        y: verticalInset + slot.point.y * usableHeight
+                        y: virtualY - offsetY
                     )
                 }
             }
+            .frame(width: geo.size.width, height: viewportH, alignment: .topLeading)
+            .clipped()
         }
+        .animation(.spring(response: 0.55, dampingFraction: 0.86), value: focusSlotId)
     }
 }
 

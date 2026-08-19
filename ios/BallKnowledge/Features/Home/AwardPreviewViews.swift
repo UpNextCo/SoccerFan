@@ -67,6 +67,7 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         .weeklyLeague(title: "Non-League", image: "nltrophy"),
         .weeklyLeague(title: "Sunday League", image: "sltrophy"),
         .imageOnly(title: "Daily Leaderboard", subtitle: "MOST XP", image: "dailytrophy"),
+        .imageOnly(title: "6k Overall XP", subtitle: "IN A DAY", image: "6ktrophy"),
         .imageOnly(title: "50k Overall XP", subtitle: "OVERALL XP", image: "50ktrophy"),
         .imageOnly(title: "100k Overall XP", subtitle: "OVERALL XP", image: "100ktrophy"),
         .imageOnly(title: "250k Overall XP", subtitle: "OVERALL XP", image: "250ktrophy"),

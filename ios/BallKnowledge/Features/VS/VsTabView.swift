@@ -232,9 +232,14 @@ struct VsTabView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("VS")
-                        .font(BKFont.caption(13)).tracking(1.5)
-                        .foregroundStyle(BKTheme.accent)
+                    HStack(spacing: 6) {
+                        Ph.users.weight(.fill)
+                            .color(BKTheme.accent)
+                            .frame(width: 14, height: 14)
+                        Text("VS")
+                            .font(BKFont.caption(13)).tracking(1.5)
+                            .foregroundStyle(BKTheme.accent)
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     VsChallengeOverflowMenu(viewModel: viewModel)
@@ -319,11 +324,8 @@ struct VsTabView: View {
 
     private var lobbyContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 28) {
-                VStack(spacing: 10) {
-                    Ph.users.weight(.fill)
-                        .color(BKTheme.accent)
-                        .frame(width: 44, height: 44)
+            VStack(spacing: 20) {
+                VStack(spacing: 8) {
                     Text("Challenge your mates")
                         .font(BKFont.title(28))
                         .foregroundStyle(BKTheme.textPrimary)
@@ -333,7 +335,7 @@ struct VsTabView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
                 }
-                .padding(.top, 28)
+                .padding(.top, 8)
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("PICK A GAME")
@@ -358,12 +360,12 @@ struct VsTabView: View {
                 } label: {
                     HStack {
                         if viewModel.isBusy {
-                            ProgressView().tint(BKTheme.textPrimary)
+                            ProgressView().tint(BKTheme.background)
                         }
                         Text("CREATE CHALLENGE")
                             .font(BKFont.headline(14))
                     }
-                    .foregroundStyle(BKTheme.textPrimary)
+                    .foregroundStyle(BKTheme.background)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(BKTheme.accent)
@@ -467,12 +469,12 @@ struct VsTabView: View {
                     } label: {
                         HStack {
                             if viewModel.isBusy {
-                                ProgressView().tint(BKTheme.textPrimary)
+                                ProgressView().tint(BKTheme.background)
                             }
                             Text("START GAME")
                                 .font(BKFont.headline(14))
                         }
-                        .foregroundStyle(BKTheme.textPrimary)
+                        .foregroundStyle(BKTheme.background)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(BKTheme.accent)
@@ -490,7 +492,7 @@ struct VsTabView: View {
                              ? "REJOIN \(challenge.modeTitle)"
                              : "PLAY \(challenge.modeTitle)")
                             .font(BKFont.headline(14))
-                            .foregroundStyle(BKTheme.textPrimary)
+                            .foregroundStyle(BKTheme.background)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(BKTheme.accent)

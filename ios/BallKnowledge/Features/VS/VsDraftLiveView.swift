@@ -23,6 +23,7 @@ struct VsDraftLiveView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                categoryHeader
                 scoreboard
                 turnBar
                 BattleConstraintsStrip(
@@ -34,6 +35,8 @@ struct VsDraftLiveView: View {
                     state: draft.state,
                     highlightedSlotId: live?.slotId,
                     interactiveSlotId: live?.yourTurn == true ? live?.slotId : "",
+                    focusSlotId: live?.slotId,
+                    visibleFraction: 0.28,
                     onTapSlot: { open($0) },
                     onDropConstraint: { id, slot in
                         guard live?.yourTurn == true, slot.id == live?.slotId else { return }
@@ -41,14 +44,18 @@ struct VsDraftLiveView: View {
                         draft.openSlot(slot)
                     }
                 )
-                .frame(maxHeight: .infinity)
+                .frame(height: 208)
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.top, 6)
                 .padding(.bottom, 4)
 
                 pickFeed
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
-            .background(StadiumBackground())
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background {
+                StadiumBackground().ignoresSafeArea()
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -99,6 +106,24 @@ struct VsDraftLiveView: View {
         }
     }
 
+    private var categoryHeader: some View {
+        VStack(spacing: 3) {
+            Text(battle.category.title.uppercased())
+                .font(BKFont.headline(15)).tracking(1)
+                .foregroundStyle(BKTheme.textPrimary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+                .multilineTextAlignment(.center)
+            Text(BattleFormations.displayName(for: battle.formationId).uppercased())
+                .font(BKFont.caption(11)).tracking(1.1)
+                .foregroundStyle(BKTheme.textMuted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+    }
+
     private var scoreboard: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
@@ -126,7 +151,7 @@ struct VsDraftLiveView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.top, 4)
         }
         .animation(.easeOut(duration: 0.25), value: live?.board.map(\.total))
     }
@@ -192,9 +217,9 @@ struct VsDraftLiveView: View {
                         }
                     }
                 }
-                .frame(maxHeight: 132)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
     }
