@@ -151,6 +151,7 @@ struct FootballBingoView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: FootballBingoViewModel
+    @State private var showHelp = false
     @State private var wrongFlashOpacity: Double = 0
     private let allowReplay: Bool
     private let dailyDate: String?
@@ -224,15 +225,7 @@ struct FootballBingoView: View {
                             .tracking(1)
                             .foregroundStyle(BKTheme.accent)
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {} label: {
-                            Ph.sealQuestion.fill
-                                .color(BKTheme.textMuted)
-                                .frame(width: 16, height: 16)
-                        }
-                        .disabled(true)
-                        .opacity(0.35)
-                    }
+                    GameHelpToolbarButton(isPresented: $showHelp)
                 }
             }
 
@@ -244,6 +237,7 @@ struct FootballBingoView: View {
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
                 .zIndex(999)
         }
+        .gameHelpOverlay(mode: .footballBingo, isPresented: $showHelp)
         .animation(.spring(response: FootballBingoTiming.playerSlide, dampingFraction: 0.82), value: viewModel.playerPanelToken)
         .persistsGameProgress(
             viewModel.snapshot,
@@ -379,12 +373,15 @@ private struct FootballBingoTurnTimerBar: View {
     let isActive: Bool
     var onExpired: () -> Void
 
+    @Environment(\.isGameHelpPresented) private var isHelpPresented
     @State private var turnStart = Date()
     @State private var didExpire = false
+    @State private var pauseStartedAt: Date?
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
-            let elapsed = timeline.date.timeIntervalSince(turnStart)
+            let now = pauseStartedAt ?? timeline.date
+            let elapsed = now.timeIntervalSince(turnStart)
             let remaining = max(0, 1 - elapsed / FootballBingoTiming.turnDuration)
 
             GeometryReader { geo in
@@ -398,7 +395,7 @@ private struct FootballBingoTurnTimerBar: View {
             }
             .frame(height: 4)
             .onChange(of: remaining) { _, value in
-                guard isActive, value <= 0, !didExpire else { return }
+                guard isActive, !isHelpPresented, value <= 0, !didExpire else { return }
                 didExpire = true
                 onExpired()
             }
@@ -408,15 +405,26 @@ private struct FootballBingoTurnTimerBar: View {
         .onChange(of: turnToken) { _, _ in
             turnStart = Date()
             didExpire = false
+            pauseStartedAt = isHelpPresented ? Date() : nil
         }
         .onChange(of: isActive) { _, active in
             if active {
                 turnStart = Date()
                 didExpire = false
+                pauseStartedAt = isHelpPresented ? Date() : nil
+            }
+        }
+        .onChange(of: isHelpPresented) { _, paused in
+            if paused {
+                pauseStartedAt = Date()
+            } else if let pauseStartedAt {
+                turnStart = turnStart.addingTimeInterval(Date().timeIntervalSince(pauseStartedAt))
+                self.pauseStartedAt = nil
             }
         }
         .onAppear {
             turnStart = Date()
+            pauseStartedAt = isHelpPresented ? Date() : nil
         }
     }
 }

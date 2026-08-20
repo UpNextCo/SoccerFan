@@ -25,6 +25,16 @@ final class DraftMasterViewModel {
     var extraUsedConstraintIds: Set<String> = []
     /// When set, picking a player asks the server before locking the slot.
     var confirmPick: ((BattlePlayerDTO) async -> Bool)?
+    /// Off-turn queued pick (VS). Plays automatically when your turn starts.
+    var premove: DraftPremove?
+    /// Search sheet copy: this pick will be queued, not locked yet.
+    var queuesPremove = false
+
+    struct DraftPremove: Equatable {
+        let slotId: String
+        let constraint: BattleConstraint
+        let player: BattlePlayerDTO
+    }
 
     init(challenge: BattleChallenge) {
         state = BattleGameState(challenge: challenge)
@@ -32,6 +42,20 @@ final class DraftMasterViewModel {
 
     var challenge: BattleChallenge { state.challenge }
     var category: BattleCategory { state.challenge.category }
+
+    var premovePick: BattlePick? {
+        guard let premove else { return nil }
+        return BattlePick(
+            constraint: premove.constraint,
+            player: BattlePlayer(
+                id: premove.player.id,
+                name: premove.player.name,
+                statValue: premove.player.statValue,
+                headshotUrl: premove.player.headshotUrl
+            ),
+            correct: true
+        )
+    }
 
     /// Mid-build and worth saving: started assigning clubs or picking players.
     var isResumable: Bool {
@@ -85,6 +109,9 @@ final class DraftMasterViewModel {
             if let slotId, let keepChip, keepUnlocked, next.picks[slotId] == nil {
                 next.assignments[slotId] = keepChip
             }
+            if let premove, next.picks[premove.slotId] == nil {
+                next.assignments[premove.slotId] = premove.constraint
+            }
         }
     }
 
@@ -129,6 +156,38 @@ final class DraftMasterViewModel {
         }
     }
 
+    func setPremove(slotId: String, constraint: BattleConstraint, player: BattlePlayerDTO) {
+        mutate { next in
+            if let old = premove, old.slotId != slotId {
+                next.assignments[old.slotId] = nil
+                next.picks[old.slotId] = nil
+            }
+            next.assignments[slotId] = constraint
+        }
+        premove = DraftPremove(slotId: slotId, constraint: constraint, player: player)
+        HapticManager.light()
+    }
+
+    func clearPremove() {
+        if let old = premove {
+            mutate {
+                if $0.picks[old.slotId] == nil {
+                    $0.assignments[old.slotId] = nil
+                }
+            }
+        }
+        premove = nil
+    }
+
+    /// Opponent took this player (or the slot locked) — drop the queue so you can pick again.
+    func invalidatePremoveIfTaken(usedPlayerIds: Set<String>) -> Bool {
+        guard let premove else { return false }
+        guard usedPlayerIds.contains(premove.player.id) else { return false }
+        clearPremove()
+        flashWrong("Premove cancelled — player taken")
+        return true
+    }
+
     func flashWrong(_ message: String) {
         HapticManager.error()
         shakeToken += 1
@@ -156,7 +215,15 @@ final class DraftMasterViewModel {
         // can't be moved/reused elsewhere.
         if state.isLocked(slotId) { return }
         if isConstraintUsed(constraint.id) { return }
+        let stalePremoveSlot = (premove?.slotId != slotId) ? premove?.slotId : nil
+        if let pre = premove, !(pre.slotId == slotId && pre.constraint.id == constraint.id) {
+            premove = nil
+        }
         mutate { next in
+            if let stalePremoveSlot {
+                next.assignments[stalePremoveSlot] = nil
+                next.picks[stalePremoveSlot] = nil
+            }
             // A chip can only sit on one slot: pull it off any other (unlocked) slot first.
             let staleSlots = next.assignments
                 .filter { $0.value.id == constraint.id && $0.key != slotId }
@@ -182,7 +249,7 @@ final class DraftMasterViewModel {
     }
 
     func closeSlot() {
-        if let slot = activeSlot, !state.isLocked(slot.id) {
+        if let slot = activeSlot, !state.isLocked(slot.id), premove?.slotId != slot.id {
             mutate { $0.assignments[slot.id] = nil }
         }
         activeSlot = nil
@@ -324,6 +391,7 @@ struct DraftMasterView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: DraftMasterViewModel
+    @State private var showHelp = false
     private let allowReplay: Bool
     private let showsXp: Bool
     private let dailyDate: String?
@@ -374,12 +442,14 @@ struct DraftMasterView: View {
                         Text("DRAFT XI")
                             .font(BKFont.caption(13)).tracking(1).foregroundStyle(BKTheme.accent)
                     }
+                    GameHelpToolbarButton(isPresented: $showHelp)
                 }
             }
 
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
                 .zIndex(999)
         }
+        .gameHelpOverlay(mode: .draftMaster, isPresented: $showHelp)
         .animation(.spring(response: 0.38, dampingFraction: 0.82), value: viewModel.state.phase)
         .persistsGameProgress(
             viewModel.state,
@@ -727,6 +797,8 @@ struct BattlePitchView: View {
     let state: BattleGameState
     var highlightedSlotId: String? = nil
     var interactiveSlotId: String? = nil
+    var pendingSlotId: String? = nil
+    var pendingPick: BattlePick? = nil
     /// When set, the pitch is drawn taller than the viewport and slides so this slot stays on screen.
     var focusSlotId: String? = nil
     /// How much of the full pitch height is visible while focused (1 = no zoom).
@@ -771,6 +843,7 @@ struct BattlePitchView: View {
                         slot: slot,
                         constraint: state.constraint(forSlot: slot.id),
                         pick: state.pick(forSlot: slot.id),
+                        pendingPick: pendingSlotId == slot.id ? pendingPick : nil,
                         highlighted: highlightedSlotId == slot.id,
                         interactive: interactive,
                         scale: slotScale,
@@ -794,6 +867,7 @@ struct BattlePitchSlot: View {
     let slot: BattleSlot
     let constraint: BattleConstraint?
     let pick: BattlePick?
+    var pendingPick: BattlePick? = nil
     var highlighted: Bool = false
     var interactive: Bool = true
     var scale: CGFloat = 1
@@ -809,9 +883,13 @@ struct BattlePitchSlot: View {
     /// Soft whitish-green for empty slot rings + the plus.
     private static let ringColor = Color(red: 0.80, green: 0.93, blue: 0.84).opacity(0.85)
 
+    private var shownPick: BattlePick? { pick ?? pendingPick }
+    private var isPending: Bool { pick == nil && pendingPick != nil }
+
     private var strokeColor: Color {
         if targeted || highlighted { return BKTheme.accent }
         if let pick { return pick.correct ? BKTheme.accent : BKTheme.wrong }
+        if isPending { return BKTheme.accent.opacity(0.85) }
         return Self.ringColor
     }
 
@@ -820,16 +898,20 @@ struct BattlePitchSlot: View {
             ZStack {
                 Circle()
                     // Darker-grey fill so slots sit clearly on the grass; thin whitish-green ring.
-                    .fill(pick != nil ? Color.black.opacity(0.30) : Color(white: 0.14).opacity(0.72))
+                    .fill(shownPick != nil ? Color.black.opacity(0.30) : Color(white: 0.14).opacity(0.72))
                     .frame(width: ring, height: ring)
-                    .overlay(
-                        Circle().stroke(strokeColor, lineWidth: (targeted || highlighted) ? 2.4 : 1)
-                    )
+                    .overlay {
+                        if isPending {
+                            Circle().stroke(strokeColor, style: StrokeStyle(lineWidth: 1.6, dash: [4, 3]))
+                        } else {
+                            Circle().stroke(strokeColor, lineWidth: (targeted || highlighted) ? 2.4 : 1)
+                        }
+                    }
                     .shadow(color: highlighted ? BKTheme.accent.opacity(0.55) : .clear, radius: 7 * scale)
-                if let pick {
-                    PlayerAvatar(urlString: pick.player.headshotUrl, size: avatar)
-                        .grayscale(pick.correct ? 0 : 0.85)
-                        .opacity(pick.correct ? 1 : 0.55)
+                if let shownPick {
+                    PlayerAvatar(urlString: shownPick.player.headshotUrl, size: avatar)
+                        .grayscale(shownPick.correct ? 0 : 0.85)
+                        .opacity(isPending ? 0.72 : (shownPick.correct ? 1 : 0.55))
                 } else if let constraint {
                     ConstraintIcon(constraint: constraint, size: chip)
                 } else {
@@ -839,14 +921,14 @@ struct BattlePitchSlot: View {
             Text(slot.label)
                 .font(.system(size: 9 * scale + 1, weight: .bold, design: .rounded))
                 .foregroundStyle(highlighted ? BKTheme.accent : Color.white.opacity(0.95))
-            if let pick {
-                Text(shortName(pick.player.name))
+            if let shownPick {
+                Text(shortName(shownPick.player.name))
                     .font(.system(size: 8 * scale + 1, weight: .bold, design: .rounded))
-                    .foregroundStyle(pick.correct ? .white : BKTheme.wrong)
+                    .foregroundStyle(shownPick.correct ? .white : BKTheme.wrong)
                     .lineLimit(1).frame(maxWidth: 56 * scale + 8)
-                Text(pick.correct ? "\(pick.player.statValue)" : "0")
+                Text(isPending ? "PREMOVE" : (shownPick.correct ? "\(shownPick.player.statValue)" : "0"))
                     .font(.system(size: 8 * scale + 1, weight: .heavy, design: .rounded))
-                    .foregroundStyle(pick.correct ? .white : BKTheme.wrong)
+                    .foregroundStyle(isPending ? BKTheme.accent : (shownPick.correct ? .white : BKTheme.wrong))
             } else if constraint != nil {
                 Text("TAP TO PICK")
                     .font(.system(size: 6 * scale + 1, weight: .bold, design: .rounded))
@@ -1084,9 +1166,21 @@ struct BattleSearchSheet: View {
                             .font(BKFont.caption(10)).foregroundStyle(BKTheme.textMuted)
                         Text(assignedConstraint?.label.uppercased() ?? "CHOOSE A CHIP")
                             .font(BKFont.headline(16)).foregroundStyle(BKTheme.accent)
+                        if viewModel.queuesPremove {
+                            Text("PLAYS AUTOMATICALLY ON YOUR TURN")
+                                .font(BKFont.caption(9)).tracking(0.4)
+                                .foregroundStyle(BKTheme.textMuted)
+                        }
                     }
                     Spacer()
-                    if viewModel.confirmPick == nil, viewModel.state.pick(forSlot: slot.id) != nil {
+                    if viewModel.premove?.slotId == slot.id {
+                        Button {
+                            viewModel.clearPremove()
+                            dismiss()
+                        } label: {
+                            Text("CLEAR").font(BKFont.caption(10)).foregroundStyle(BKTheme.wrong)
+                        }
+                    } else if viewModel.confirmPick == nil, viewModel.state.pick(forSlot: slot.id) != nil {
                         Button {
                             viewModel.removePick(slot.id)
                             dismiss()

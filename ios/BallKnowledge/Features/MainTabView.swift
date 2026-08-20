@@ -1066,6 +1066,7 @@ enum LocalProfile {
     private static let nameKey = "profile.displayNameOverride"
     private static let remindersKey = "profile.dailyRemindersOn"
     private static let remindersOptedOutKey = "profile.dailyRemindersOptedOut"
+    private static let featuredTrophyKey = "profile.featuredTrophyId"
 
     private static var avatarURL: URL {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -1112,10 +1113,19 @@ enum LocalProfile {
         set { UserDefaults.standard.set(newValue, forKey: remindersOptedOutKey) }
     }
 
+    static var featuredTrophyId: String? {
+        get {
+            let value = UserDefaults.standard.string(forKey: featuredTrophyKey)
+            return (value?.isEmpty == false) ? value : nil
+        }
+        set { UserDefaults.standard.set(newValue, forKey: featuredTrophyKey) }
+    }
+
     /// Clear on-device profile (avatar + name override) so it doesn't carry over to the next account.
     static func reset() {
         removeAvatar()
         UserDefaults.standard.removeObject(forKey: nameKey)
+        UserDefaults.standard.removeObject(forKey: featuredTrophyKey)
     }
 
     /// Downscale to ≤256px and JPEG-compress for upload / local storage.
@@ -1362,6 +1372,8 @@ struct ProfileTabView: View {
     @State private var showIntrosResetAlert = false
     @State private var xpBreakdownScope: ProfileXpScope?
     @State private var showTrophyCabinet = false
+    @State private var showFeaturedTrophyPicker = false
+    @AppStorage("profile.featuredTrophyId") private var featuredTrophyId = ""
 
     private var displayName: String {
         LocalProfile.nameOverride ?? auth.user?.displayName ?? "Player"
@@ -1475,27 +1487,42 @@ struct ProfileTabView: View {
                 showTrophyCabinet = false
             }
         }
+        .sheet(isPresented: $showFeaturedTrophyPicker) {
+            FeaturedTrophyPicker(selectedId: featuredTrophyId.isEmpty ? nil : featuredTrophyId) { trophy in
+                featuredTrophyId = trophy?.id ?? ""
+            }
+        }
     }
 
     // MARK: Header
 
     private var header: some View {
         VStack(spacing: 14) {
-            Button { showAvatarOptions = true } label: {
-                ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                Button { showAvatarOptions = true } label: {
                     avatarView
-                    Circle()
-                        .fill(BKTheme.accent)
-                        .frame(width: 30, height: 30)
-                        .overlay {
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(BKTheme.background)
-                        }
-                        .overlay(Circle().stroke(BKTheme.background, lineWidth: 3))
                 }
+                .buttonStyle(.plain)
+
+                Button { showAvatarOptions = true } label: {
+                    avatarChromeButton(systemName: "camera.fill")
+                }
+                .buttonStyle(.plain)
+                .offset(x: -40, y: -40)
+
+                Button { showFeaturedTrophyPicker = true } label: {
+                    if let featured = TrophyUnlockPayload.earnedTrophy(id: featuredTrophyId),
+                       let imageName = featured.bundleImageName {
+                        FeaturedTrophyBadge(imageName: imageName, size: 38)
+                    } else {
+                        avatarChromeButton(systemName: "plus")
+                    }
+                }
+                .buttonStyle(.plain)
+                .offset(x: 40, y: 40)
             }
-            .buttonStyle(.plain)
+            .frame(width: 96, height: 96)
+            .padding(18)
 
             Button {
                 draftName = displayName
@@ -1536,6 +1563,18 @@ struct ProfileTabView: View {
         .frame(width: 96, height: 96)
         .clipShape(Circle())
         .overlay(Circle().stroke(BKTheme.accent.opacity(0.4), lineWidth: 2))
+    }
+
+    private func avatarChromeButton(systemName: String) -> some View {
+        Circle()
+            .fill(BKTheme.accent)
+            .frame(width: 30, height: 30)
+            .overlay {
+                Image(systemName: systemName)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(BKTheme.background)
+            }
+            .overlay(Circle().stroke(BKTheme.background, lineWidth: 3))
     }
 
     // MARK: Stats

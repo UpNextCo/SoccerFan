@@ -206,8 +206,44 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         .imageOnly(title: "6k Overall XP", subtitle: "IN A DAY", image: "6ktrophy"),
     ]
 
+    static let megaEarnedThrough = 0
+    static let leagueEarnedThrough = 2
+    static let winnerEarnedThrough = 1
+    static let totalXpEarnedThrough = 0
+
     static let dartsPerfect = TrophyUnlockPayload.perfect(mode: .darts501, image: "trophydarts", timesEarned: 2)
     static let lmsPerfect = TrophyUnlockPayload.perfect(mode: .lastManStanding, image: "trophylms")
+
+    static func earned(from levels: [TrophyUnlockPayload], through index: Int) -> [TrophyUnlockPayload] {
+        guard index >= 0 else { return [] }
+        return Array(levels.prefix(index + 1))
+    }
+
+    static var earnedPreviewGroups: [(title: String, trophies: [TrophyUnlockPayload])] {
+        var groups: [(String, [TrophyUnlockPayload])] = []
+        for strip in previewLevelStrips {
+            let earned = earned(from: strip.levels, through: strip.earnedThrough)
+            if !earned.isEmpty { groups.append((strip.title, earned)) }
+        }
+        let mega = earned(from: megaTrophies, through: megaEarnedThrough)
+        if !mega.isEmpty { groups.append(("MEGA TROPHIES", mega)) }
+        let leagues = earned(from: leagueTrophies, through: leagueEarnedThrough)
+        if !leagues.isEmpty { groups.append(("LEAGUES REACHED", leagues)) }
+        let winners = earned(from: leagueWinnerTrophies, through: winnerEarnedThrough)
+        if !winners.isEmpty { groups.append(("LEAGUE WINNER", winners)) }
+        let xp = earned(from: totalXpTrophies, through: totalXpEarnedThrough)
+        if !xp.isEmpty { groups.append(("TOTAL XP", xp)) }
+        if !previewGameTrophies.isEmpty { groups.append(("MILESTONES", previewGameTrophies)) }
+        return groups
+    }
+
+    static var earnedPreviewTrophies: [TrophyUnlockPayload] {
+        earnedPreviewGroups.flatMap(\.trophies)
+    }
+
+    static func earnedTrophy(id: String) -> TrophyUnlockPayload? {
+        earnedPreviewTrophies.first { $0.id == id }
+    }
 }
 
 struct TrophyUnlockView: View {
@@ -406,7 +442,7 @@ struct TrophyCabinetView: View {
                     GameLevelsPreviewRow(
                         title: "MEGA TROPHIES",
                         levels: TrophyUnlockPayload.megaTrophies,
-                        earnedThroughIndex: 0
+                        earnedThroughIndex: TrophyUnlockPayload.megaEarnedThrough
                     ) { payload in
                         unlock = payload
                     }
@@ -414,7 +450,7 @@ struct TrophyCabinetView: View {
                     GameLevelsPreviewRow(
                         title: "LEAGUES REACHED",
                         levels: TrophyUnlockPayload.leagueTrophies,
-                        earnedThroughIndex: 2
+                        earnedThroughIndex: TrophyUnlockPayload.leagueEarnedThrough
                     ) { payload in
                         unlock = payload
                     }
@@ -422,7 +458,7 @@ struct TrophyCabinetView: View {
                     GameLevelsPreviewRow(
                         title: "LEAGUE WINNER",
                         levels: TrophyUnlockPayload.leagueWinnerTrophies,
-                        earnedThroughIndex: 1
+                        earnedThroughIndex: TrophyUnlockPayload.winnerEarnedThrough
                     ) { payload in
                         unlock = payload
                     }
@@ -430,7 +466,7 @@ struct TrophyCabinetView: View {
                     GameLevelsPreviewRow(
                         title: "TOTAL XP",
                         levels: TrophyUnlockPayload.totalXpTrophies,
-                        earnedThroughIndex: 0
+                        earnedThroughIndex: TrophyUnlockPayload.totalXpEarnedThrough
                     ) { payload in
                         unlock = payload
                     }
@@ -757,7 +793,7 @@ private struct TrophyCabinetRow: View {
     }
 }
 
-private struct TrophyArtTile: View {
+struct TrophyArtTile: View {
     let imageName: String?
     var size: CGFloat
     var fills: Bool = true
@@ -791,6 +827,124 @@ private struct TrophyCountingNumber: AnimatableModifier {
 
     func body(content: Content) -> some View {
         Text("\(Int(value.rounded()).formatted())XP")
+    }
+}
+
+struct FeaturedTrophyBadge: View {
+    let imageName: String
+    var size: CGFloat = 38
+
+    var body: some View {
+        TrophyArtTile(imageName: imageName, size: size, fills: false, showsBackdrop: false)
+            .frame(width: size, height: size)
+            .background {
+                Circle()
+                    .fill(BKTheme.background)
+                    .frame(width: size + 8, height: size + 8)
+            }
+            .overlay {
+                Circle()
+                    .stroke(BKTheme.background, lineWidth: 3)
+                    .frame(width: size + 6, height: size + 6)
+            }
+            .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+    }
+}
+
+struct FeaturedTrophyPicker: View {
+    var selectedId: String?
+    var onSelect: (TrophyUnlockPayload?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text("Pick a trophy you've earned. It shows on your profile picture.")
+                        .font(BKFont.body(14))
+                        .foregroundStyle(BKTheme.textSecondary)
+
+                    if selectedId != nil {
+                        Button {
+                            onSelect(nil)
+                            dismiss()
+                        } label: {
+                            Text("Remove featured trophy")
+                                .font(BKFont.headline(14))
+                                .foregroundStyle(BKTheme.accent)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(BKTheme.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    ForEach(TrophyUnlockPayload.earnedPreviewGroups, id: \.title) { group in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(group.title)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(BKTheme.textMuted)
+                                .tracking(0.4)
+
+                            LazyVGrid(columns: columns, spacing: 14) {
+                                ForEach(group.trophies) { trophy in
+                                    Button {
+                                        onSelect(trophy)
+                                        dismiss()
+                                    } label: {
+                                        VStack(spacing: 6) {
+                                            TrophyArtTile(
+                                                imageName: trophy.bundleImageName,
+                                                size: 64,
+                                                fills: false,
+                                                showsBackdrop: false
+                                            )
+                                            .padding(6)
+                                            .background {
+                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                    .fill(BKTheme.card)
+                                            }
+                                            .overlay {
+                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                    .stroke(
+                                                        selectedId == trophy.id ? BKTheme.accent : .clear,
+                                                        lineWidth: 2
+                                                    )
+                                            }
+
+                                            Text(trophy.kicker)
+                                                .font(BKFont.caption(9))
+                                                .foregroundStyle(BKTheme.textSecondary)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.8)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 28)
+            }
+            .background(BKTheme.background.ignoresSafeArea())
+            .navigationTitle("Featured Trophy")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(BKTheme.accent)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 }
 

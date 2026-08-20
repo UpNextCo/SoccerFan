@@ -13,7 +13,6 @@ final class Darts501ViewModel {
     var isAnimating = false
     var feedback: String?
     var showResult = false
-    var showRules = false
     var confettiBurstToken = 0
     var displayedRemaining: Int
     var revealName: String?
@@ -305,6 +304,7 @@ struct Darts501View: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: Darts501ViewModel
+    @State private var showHelp = false
     @FocusState private var isSearchFocused: Bool
     private let allowReplay: Bool
     private let showsXp: Bool
@@ -390,19 +390,14 @@ struct Darts501View: View {
                             .tracking(1)
                             .foregroundStyle(BKTheme.accent)
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { viewModel.showRules = true } label: {
-                            Ph.sealQuestion.bold
-                                .color(BKTheme.textSecondary)
-                                .frame(width: 16, height: 16)
-                        }
-                    }
+                    GameHelpToolbarButton(isPresented: $showHelp)
                 }
             }
 
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
                 .zIndex(999)
         }
+        .gameHelpOverlay(mode: .darts501, isPresented: $showHelp)
         .persistsGameProgress(
             viewModel.state,
             isResumable: viewModel.isResumable,
@@ -421,9 +416,6 @@ struct Darts501View: View {
                     context: modelContext
                   ) else { return }
             viewModel.restore(saved)
-        }
-        .sheet(isPresented: $viewModel.showRules) {
-            Darts501RulesSheet()
         }
         .sheet(item: $viewModel.selectedThrow) { row in
             Darts501ThrowDetailSheet(row: row, category: viewModel.state.puzzle.category)
@@ -875,51 +867,6 @@ private struct Darts501ThrowDetailSheet: View {
             }
         }
         .presentationDetents([.medium])
-    }
-}
-
-// MARK: - Rules
-
-private struct Darts501RulesSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    private let lines = [
-        "Start on 501.",
-        "Every player's value is deducted from your total.",
-        "Scores must be valid darts scores between 0–180.",
-        "These scores bust: 163, 166, 169, 172, 173, 175, 176, 178, 179.",
-        "Players cannot be reused.",
-        "Finish between 0 and -10.",
-        "Exactly 0 is a Perfect Checkout.",
-        "A player who doesn't fit today's category is a bust.",
-        "You have three hearts. Every bust costs a heart. Lose all three and it's game over.",
-    ]
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(BKFont.body(15))
-                            .foregroundStyle(BKTheme.textSecondary)
-                    }
-                }
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .background(BKTheme.background.ignoresSafeArea())
-            .navigationTitle("Rules")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .font(BKFont.headline(14))
-                        .foregroundStyle(BKTheme.accent)
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
     }
 }
 

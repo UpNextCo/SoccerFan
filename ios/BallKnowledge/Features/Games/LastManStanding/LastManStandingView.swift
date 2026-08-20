@@ -308,6 +308,7 @@ struct LastManStandingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: LastManStandingViewModel
+    @State private var showHelp = false
     @FocusState private var customSearchFocused: Bool
     private let allowReplay: Bool
     private let dailyDate: String?
@@ -365,6 +366,7 @@ struct LastManStandingView: View {
                             .tracking(1.1)
                             .foregroundStyle(BKTheme.textPrimary)
                     }
+                    GameHelpToolbarButton(isPresented: $showHelp)
                 }
             }
 
@@ -384,6 +386,7 @@ struct LastManStandingView: View {
                 .allowsHitTesting(false)
                 .zIndex(999)
         }
+        .gameHelpOverlay(mode: .lastManStanding, isPresented: $showHelp)
         .animation(.easeOut(duration: 0.21), value: state.currentQuestionIndex)
         .animation(.easeOut(duration: 0.18), value: customSearchFocused)
         .onChange(of: state.currentQuestionIndex) { _, _ in

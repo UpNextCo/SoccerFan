@@ -137,8 +137,8 @@ export function PlayerReviewPage() {
           <p className="eyebrow">Quiz Ops</p>
           <h1>Player data review</h1>
           <p className="muted">
-            Check a random famous player the same way the games do: clubs only, no national sides
-            mixed in. Approve it or flag what’s wrong.
+            Check a random well-known player (fame tier 4+) the same way the games do: clubs
+            only, no national sides mixed in. Approve it or flag what’s wrong.
           </p>
         </div>
         {counts && (
@@ -165,7 +165,7 @@ export function PlayerReviewPage() {
             <option value="unreviewed">Unreviewed</option>
             <option value="flagged">Flagged</option>
             <option value="approved">Approved</option>
-            <option value="any">Any famous player</option>
+            <option value="any">Any well-known player</option>
           </select>
         </label>
         <EntityPicker

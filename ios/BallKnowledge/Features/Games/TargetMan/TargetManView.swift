@@ -185,6 +185,7 @@ struct TargetManView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: TargetManViewModel
+    @State private var showHelp = false
     @FocusState private var isSearchFocused: Bool
     private let allowReplay: Bool
     private let showsXp: Bool
@@ -285,6 +286,7 @@ struct TargetManView: View {
                             .tracking(1)
                             .foregroundStyle(BKTheme.accent)
                     }
+                    GameHelpToolbarButton(isPresented: $showHelp)
                     // Dev-only replay (allowReplay) re-runs today's daily; hidden for real users.
                     ToolbarItem(placement: .topBarTrailing) {
                         if allowReplay, viewModel.state.phase == .selecting {
@@ -303,6 +305,7 @@ struct TargetManView: View {
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
                 .zIndex(999)
         }
+        .gameHelpOverlay(mode: .targetMan, isPresented: $showHelp)
         .persistsGameProgress(
             viewModel.state,
             isResumable: viewModel.isResumable,

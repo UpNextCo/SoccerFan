@@ -289,6 +289,7 @@ struct HomeHeaderView: View {
     var dailyComplete: Bool = false
     @State private var avatarImage: UIImage?
     @State private var showNotifications = false
+    @AppStorage("profile.featuredTrophyId") private var featuredTrophyId = ""
 
     private var hasUnread: Bool {
         // Read VsMonitor so the bell badge updates when a VS alert lands.
@@ -388,6 +389,13 @@ struct HomeHeaderView: View {
         }
         .frame(width: 44, height: 44)
         .clipShape(Circle())
+        .overlay(alignment: .bottomTrailing) {
+            if let featured = TrophyUnlockPayload.earnedTrophy(id: featuredTrophyId),
+               let imageName = featured.bundleImageName {
+                FeaturedTrophyBadge(imageName: imageName, size: 18)
+                    .offset(x: 4, y: 4)
+            }
+        }
     }
 }
 

@@ -147,6 +147,7 @@ struct ClubChainView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: ClubChainViewModel
+    @State private var showHelp = false
     @FocusState private var isSearchFocused: Bool
     private let allowReplay: Bool
     private let dailyDate: String?
@@ -202,6 +203,7 @@ struct ClubChainView: View {
                             .tracking(1.5)
                             .foregroundStyle(BKTheme.textSecondary)
                     }
+                    GameHelpToolbarButton(isPresented: $showHelp)
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
@@ -211,6 +213,7 @@ struct ClubChainView: View {
                     .allowsHitTesting(false)
             }
         }
+        .gameHelpOverlay(mode: .clubChain, isPresented: $showHelp)
         .persistsGameProgress(
             viewModel.state,
             isResumable: viewModel.state.isResumable,

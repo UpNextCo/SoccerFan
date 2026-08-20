@@ -211,6 +211,7 @@ struct OneMoreView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: OneMoreViewModel
+    @State private var showHelp = false
     private let allowReplay: Bool
     private let dailyDate: String?
     var onComplete: () -> Void
@@ -324,6 +325,7 @@ struct OneMoreView: View {
                             .tracking(1.5)
                             .foregroundStyle(BKTheme.textSecondary)
                     }
+                    GameHelpToolbarButton(isPresented: $showHelp)
                 }
             }
 
@@ -339,6 +341,7 @@ struct OneMoreView: View {
             FootballConfettiView(burstToken: viewModel.confettiBurstToken)
                 .zIndex(999)
         }
+        .gameHelpOverlay(mode: .oneMore, isPresented: $showHelp)
         .persistsGameProgress(
             viewModel.state,
             isResumable: viewModel.isResumable,
@@ -434,9 +437,12 @@ private struct OneMoreRoundTimerBar: View {
     let isActive: Bool
     var onExpired: () -> Void
 
+    @Environment(\.isGameHelpPresented) private var isHelpPresented
     @State private var accumulated: TimeInterval = 0
     @State private var runningSince: Date?
     @State private var didExpire = false
+
+    private var clockRunning: Bool { isActive && !isHelpPresented }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
@@ -465,7 +471,7 @@ private struct OneMoreRoundTimerBar: View {
                     .frame(width: 22, alignment: .trailing)
             }
             .onChange(of: remainingSeconds) { _, value in
-                guard isActive, value <= 0, !didExpire else { return }
+                guard clockRunning, value <= 0, !didExpire else { return }
                 didExpire = true
                 onExpired()
             }
@@ -475,8 +481,8 @@ private struct OneMoreRoundTimerBar: View {
         .onChange(of: roundToken) { _, _ in
             restartClock()
         }
-        .onChange(of: isActive) { _, active in
-            if active {
+        .onChange(of: clockRunning) { _, running in
+            if running {
                 if runningSince == nil { runningSince = Date() }
             } else if let start = runningSince {
                 accumulated += Date().timeIntervalSince(start)
@@ -484,13 +490,13 @@ private struct OneMoreRoundTimerBar: View {
             }
         }
         .onAppear {
-            if isActive { runningSince = Date() }
+            if clockRunning { runningSince = Date() }
         }
     }
 
     private func restartClock() {
         accumulated = 0
-        runningSince = isActive ? Date() : nil
+        runningSince = clockRunning ? Date() : nil
         didExpire = false
     }
 }

@@ -9,6 +9,7 @@ struct VsDraftLiveView: View {
     @State private var seenPickIds: Set<String> = []
     @State private var seededPicks = false
     @State private var mateToast: VsLivePickFeedDTO?
+    @State private var isFiringPremove = false
 
     init(viewModel: VsViewModel, battle: BattleChallenge) {
         self.viewModel = viewModel
@@ -42,20 +43,22 @@ struct VsDraftLiveView: View {
                             scoreboard
                             BattleConstraintsStrip(
                                 constraints: battle.constraints,
-                                usedIds: Set(live?.usedConstraintIds ?? []).union(draft.state.usedConstraintIds)
+                                usedIds: stripUsedIds
                             )
                             .padding(.top, 6)
                             ZStack(alignment: .bottom) {
                                 BattlePitchView(
                                     slots: battle.slots,
                                     state: draft.state,
-                                    highlightedSlotId: nil,
-                                    interactiveSlotId: live?.yourTurn == true ? nil : "",
+                                    highlightedSlotId: draft.premove?.slotId,
+                                    interactiveSlotId: nil,
+                                    pendingSlotId: draft.premove?.slotId,
+                                    pendingPick: draft.premovePick,
                                     compact: true,
                                     slotScale: 0.88,
                                     onTapSlot: { open($0) },
                                     onDropConstraint: { id, slot in
-                                        guard live?.yourTurn == true, !isFilled(slot.id) else { return }
+                                        guard !isFilled(slot.id) else { return }
                                         draft.assignConstraint(id: id, toSlot: slot.id)
                                         draft.openSlot(slot)
                                     }
@@ -87,6 +90,7 @@ struct VsDraftLiveView: View {
                             live: live,
                             picksBySlot: picksBySlot,
                             turnName: turnName,
+                            premoveName: draft.premove?.player.name,
                             collapsedHeight: collapsedH,
                             expandedHeight: expandedH,
                             safeBottom: safeBottom,
@@ -139,13 +143,20 @@ struct VsDraftLiveView: View {
         }
         .onChange(of: live?.yourPicks.map(\.id)) { _, _ in syncPitch() }
         .onChange(of: live?.usedPlayerIds) { _, ids in
-            draft.extraUsedPlayerIds = Set(ids ?? [])
+            let used = Set(ids ?? [])
+            draft.extraUsedPlayerIds = used
+            _ = draft.invalidatePremoveIfTaken(usedPlayerIds: used)
         }
         .onChange(of: live?.usedConstraintIds) { _, ids in
             draft.extraUsedConstraintIds = Set(ids ?? [])
         }
         .onChange(of: live?.yourTurn) { _, yourTurn in
-            if yourTurn != true { draft.closeSlot() }
+            draft.queuesPremove = yourTurn != true && live?.finished != true
+            if yourTurn == true {
+                Task { await firePremoveIfNeeded() }
+            } else {
+                draft.closeSlot()
+            }
         }
         .onChange(of: viewModel.challenge?.result.allDone) { _, done in
             if done == true { dismiss() }
@@ -157,6 +168,7 @@ struct VsDraftLiveView: View {
             while !Task.isCancelled {
                 await viewModel.poll()
                 if viewModel.challenge?.result.allDone == true { break }
+                await firePremoveIfNeeded()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
@@ -203,32 +215,98 @@ struct VsDraftLiveView: View {
     private func wireDraft() {
         draft.extraUsedPlayerIds = Set(live?.usedPlayerIds ?? [])
         draft.extraUsedConstraintIds = Set(live?.usedConstraintIds ?? [])
+        draft.queuesPremove = live?.yourTurn != true && live?.finished != true
+        _ = draft.invalidatePremoveIfTaken(usedPlayerIds: Set(live?.usedPlayerIds ?? []))
         let model = draft
         model.confirmPick = { [weak model] dto in
             guard let model,
                   let slot = model.activeSlot,
                   let constraint = model.state.constraint(forSlot: slot.id) else { return false }
-            let ok = await viewModel.lockPick(slotId: slot.id, constraintId: constraint.id, playerId: dto.id)
-            if ok {
-                let locked = viewModel.challenge?.live?.yourPicks.last(where: { $0.slotId == slot.id })
-                let correct = locked?.correct ?? (dto.satisfiesConstraint ?? true)
-                model.lockConfirmedPick(slotId: slot.id, constraint: constraint, player: dto, correct: correct)
-                if correct {
-                    HapticManager.success()
-                } else {
-                    let msg = locked?.wrongReason ?? constraint.rejectReason(player: dto.name)
-                    model.flashWrong(msg)
-                }
-            } else {
-                model.selectionError = viewModel.errorMessage ?? "Couldn't lock that pick"
+            if viewModel.challenge?.live?.yourTurn != true {
+                model.setPremove(slotId: slot.id, constraint: constraint, player: dto)
+                return true
             }
-            return ok
+            return await lockDraftPick(model: model, slotId: slot.id, constraint: constraint, player: dto)
         }
         syncPitch()
+        if live?.yourTurn == true {
+            Task { await firePremoveIfNeeded() }
+        }
+    }
+
+    @discardableResult
+    private func lockDraftPick(
+        model: DraftMasterViewModel,
+        slotId: String,
+        constraint: BattleConstraint,
+        player: BattlePlayerDTO
+    ) async -> Bool {
+        let ok = await viewModel.lockPick(slotId: slotId, constraintId: constraint.id, playerId: player.id)
+        if ok {
+            let locked = viewModel.challenge?.live?.yourPicks.last(where: { $0.slotId == slotId })
+            let correct = locked?.correct ?? (player.satisfiesConstraint ?? true)
+            model.lockConfirmedPick(slotId: slotId, constraint: constraint, player: player, correct: correct)
+            if correct {
+                HapticManager.success()
+            } else {
+                let msg = locked?.wrongReason ?? constraint.rejectReason(player: player.name)
+                model.flashWrong(msg)
+            }
+        } else {
+            model.selectionError = viewModel.errorMessage ?? "Couldn't lock that pick"
+        }
+        return ok
+    }
+
+    private func firePremoveIfNeeded() async {
+        guard !isFiringPremove,
+              live?.yourTurn == true,
+              live?.finished != true,
+              let pre = draft.premove else { return }
+        isFiringPremove = true
+        defer { isFiringPremove = false }
+        let used = Set(live?.usedPlayerIds ?? [])
+        if used.contains(pre.player.id) {
+            draft.clearPremove()
+            draft.flashWrong("Premove cancelled — player taken")
+            return
+        }
+        if isFilled(pre.slotId) {
+            draft.clearPremove()
+            return
+        }
+        draft.closeSlot()
+        let ok = await lockDraftPick(
+            model: draft,
+            slotId: pre.slotId,
+            constraint: pre.constraint,
+            player: pre.player
+        )
+        if ok {
+            draft.premove = nil
+        } else {
+            let msg = viewModel.errorMessage ?? ""
+            if msg.localizedCaseInsensitiveContains("your turn") { return }
+            draft.clearPremove()
+            draft.flashWrong(
+                msg.localizedCaseInsensitiveContains("already named")
+                    ? "Premove cancelled — player taken"
+                    : (msg.isEmpty ? "Premove cancelled" : msg)
+            )
+        }
+    }
+
+    private var stripUsedIds: Set<String> {
+        var ids = Set(live?.usedConstraintIds ?? []).union(draft.state.usedConstraintIds)
+        if let chipId = draft.premove?.constraint.id { ids.remove(chipId) }
+        return ids
     }
 
     private func syncPitch() {
-        draft.applyLockedPicks(live?.yourPicks ?? [], preservingSlot: live?.yourTurn == true ? draft.activeSlot?.id : nil)
+        draft.applyLockedPicks(
+            live?.yourPicks ?? [],
+            preservingSlot: draft.activeSlot?.id ?? draft.premove?.slotId
+        )
     }
 
     private func isFilled(_ slotId: String) -> Bool {
@@ -237,7 +315,7 @@ struct VsDraftLiveView: View {
     }
 
     private func open(_ slot: BattleSlot) {
-        guard live?.yourTurn == true, !isFilled(slot.id) else { return }
+        guard !isFilled(slot.id) else { return }
         draft.openSlot(slot)
     }
 
@@ -309,6 +387,7 @@ private struct VsDraftPicksSheet: View {
     let live: VsLiveDTO?
     let picksBySlot: [(slot: BattleSlot, rows: [VsLivePickFeedDTO])]
     let turnName: String
+    var premoveName: String? = nil
     let collapsedHeight: CGFloat
     let expandedHeight: CGFloat
     let safeBottom: CGFloat
@@ -348,7 +427,9 @@ private struct VsDraftPicksSheet: View {
                         if picksBySlot.isEmpty {
                             Text(live?.yourTurn == true
                                  ? "Drag a chip onto any empty slot, then name a player."
-                                 : "Waiting for \(turnName) to pick.")
+                                 : (premoveName != nil
+                                    ? "Premove set — it plays when it's your turn."
+                                    : "Waiting for \(turnName). You can set a premove now."))
                                 .font(BKFont.body(13))
                                 .foregroundStyle(BKTheme.textSecondary)
                         } else {
@@ -396,11 +477,19 @@ private struct VsDraftPicksSheet: View {
                     Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
                         .font(BKFont.headline(13)).tracking(0.8)
                         .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
-                    Text(live?.yourTurn == true ? "ANY POSITION" : "WAITING")
+                    Text(live?.yourTurn == true
+                         ? "ANY POSITION"
+                         : (premoveName != nil ? "PREMOVE READY" : "WAITING"))
                         .font(BKFont.title(18))
                         .foregroundStyle(BKTheme.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
+                    if let premoveName, live?.yourTurn != true {
+                        Text(premoveName.uppercased())
+                            .font(BKFont.caption(11)).tracking(0.4)
+                            .foregroundStyle(BKTheme.accent)
+                            .lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 8)
                 Text(timerLabel)

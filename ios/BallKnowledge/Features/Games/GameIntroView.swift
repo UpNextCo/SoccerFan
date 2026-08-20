@@ -170,8 +170,75 @@ struct GameModeArtImage: View {
     }
 }
 
+private struct GameHelpPresentedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// True while the in-game how-to-play overlay is up (so clocks can pause).
+    var isGameHelpPresented: Bool {
+        get { self[GameHelpPresentedKey.self] }
+        set { self[GameHelpPresentedKey.self] = newValue }
+    }
+}
+
+/// Top-right question mark used by every single-player game.
+struct GameHelpToolbarButton: ToolbarContent {
+    @Binding var isPresented: Bool
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.28)) { isPresented = true }
+            } label: {
+                Ph.question.regular
+                    .color(BKTheme.textPrimary)
+                    .frame(width: 15, height: 15)
+            }
+            .accessibilityLabel("How to play")
+        }
+    }
+}
+
+private struct GameHelpOverlayModifier: ViewModifier {
+    let mode: GameModeID
+    @Binding var isPresented: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.isGameHelpPresented, isPresented)
+            .overlay {
+                if isPresented {
+                    GameIntroView(
+                        mode: mode,
+                        onPlay: { dismissHelp() },
+                        onPlayAndHide: {
+                            GameIntroPreferences.hide(mode)
+                            dismissHelp()
+                        },
+                        onClose: { dismissHelp() }
+                    )
+                    .transition(.opacity)
+                    .zIndex(2000)
+                }
+            }
+    }
+
+    private func dismissHelp() {
+        withAnimation(.easeInOut(duration: 0.28)) { isPresented = false }
+    }
+}
+
+extension View {
+    /// Overlays the shared how-to-play screen on top of the current game.
+    func gameHelpOverlay(mode: GameModeID, isPresented: Binding<Bool>) -> some View {
+        modifier(GameHelpOverlayModifier(mode: mode, isPresented: isPresented))
+    }
+}
+
 /// Consistent "how to play" screen shown before every game. Tile art on top, explanation in the
 /// middle, and two ways in at the bottom: Play (shown again next time) or Play & don't show again.
+/// The same screen overlays gameplay when the player taps the top-right question mark.
 struct GameIntroView: View {
     let mode: GameModeID
     var onPlay: () -> Void

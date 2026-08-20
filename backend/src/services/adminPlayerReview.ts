@@ -225,7 +225,8 @@ export interface PlayerDossier {
   }>;
 }
 
-const FAMOUS_TIER = 3;
+/** Same household bar as LMS / Draft — tier 3 is the schema default and is full of unknowns. */
+const FAMOUS_TIER = 4;
 
 function isoDate(value: Date | string | null | undefined): string | null {
   if (!value) return null;
