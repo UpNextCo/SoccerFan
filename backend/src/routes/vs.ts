@@ -7,6 +7,7 @@ import {
   reshuffleVsChallenge,
   getActiveVsChallenge,
   getVsChallenge,
+  listVsHistory,
   joinVsChallenge,
   giveUpVsHotseat,
   leaveVsChallenge,
@@ -70,6 +71,14 @@ vsRouter.get('/active', requireAuth, async (req, res) => {
     sendSuccess(res, await getActiveVsChallenge(req.auth!.userId));
   } catch (err) {
     handleVsError(res, err, 'Failed to load challenge');
+  }
+});
+
+vsRouter.get('/history', requireAuth, async (req, res) => {
+  try {
+    sendSuccess(res, await listVsHistory(req.auth!.userId));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to load history');
   }
 });
 

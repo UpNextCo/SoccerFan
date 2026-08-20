@@ -99,9 +99,15 @@ export function allUsersLocked(live: VsLiveState, userIds: string[], slotId: str
   return userIds.length > 0 && userIds.every((id) => hasLocked(live, id, slotId));
 }
 
-/** First participant who has not locked the current slot — that's whose turn it is. */
+/** Snake order so first pick swaps each position: A-B then B-A, or A-B-C then C-B-A. */
+export function draftTurnOrder(userIds: string[], slotIndex: number): string[] {
+  if (userIds.length < 2 || slotIndex % 2 === 0) return userIds;
+  return [...userIds].reverse();
+}
+
+/** Next person in snake order who has not locked the current slot. */
 export function turnUserId(live: VsLiveState, userIds: string[], slotId: string): string | null {
-  return userIds.find((id) => !hasLocked(live, id, slotId)) ?? null;
+  return draftTurnOrder(userIds, live.slotIndex).find((id) => !hasLocked(live, id, slotId)) ?? null;
 }
 
 export function skipPick(slotId: string, now = Date.now()): VsLivePickRecord {

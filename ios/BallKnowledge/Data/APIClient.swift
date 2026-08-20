@@ -622,6 +622,10 @@ actor APIClient {
         try await requestOptional("vs/active")
     }
 
+    func vsHistory() async throws -> VsHistoryDTO {
+        try await request("vs/history")
+    }
+
     func vsGet(id: String) async throws -> VsChallengeDTO {
         try await request("vs/\(id)")
     }

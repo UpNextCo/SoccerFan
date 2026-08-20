@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   afterSuccessfulPick,
   advanceIfNeeded,
+  draftTurnOrder,
   initLiveState,
   turnUserId,
   usedPlayerIds,
@@ -31,11 +32,24 @@ function namedPick(slotId: string, playerId: string): VsLivePickRecord {
   };
 }
 
-test('turnUserId is the first player who has not locked the slot', () => {
+test('turnUserId is the first player in snake order who has not locked the slot', () => {
   const live = initLiveState(['a', 'b']);
   assert.equal(turnUserId(live, ['a', 'b'], 'gk'), 'a');
   live.picksByUser.a = [namedPick('gk', 'p1')];
   assert.equal(turnUserId(live, ['a', 'b'], 'gk'), 'b');
+});
+
+test('two players snake: A B, then B A, then A B', () => {
+  assert.deepEqual(draftTurnOrder(['a', 'b'], 0), ['a', 'b']);
+  assert.deepEqual(draftTurnOrder(['a', 'b'], 1), ['b', 'a']);
+  assert.deepEqual(draftTurnOrder(['a', 'b'], 2), ['a', 'b']);
+});
+
+test('three and four players snake back after a full round', () => {
+  assert.deepEqual(draftTurnOrder(['a', 'b', 'c'], 0), ['a', 'b', 'c']);
+  assert.deepEqual(draftTurnOrder(['a', 'b', 'c'], 1), ['c', 'b', 'a']);
+  assert.deepEqual(draftTurnOrder(['a', 'b', 'c', 'd'], 0), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(draftTurnOrder(['a', 'b', 'c', 'd'], 1), ['d', 'c', 'b', 'a']);
 });
 
 test('usedPlayerIds are shared across the table', () => {
@@ -69,7 +83,22 @@ test('when everyone has locked a slot, the next position opens', () => {
   };
   const next = afterSuccessfulPick(puzzle, live, ['a', 'b'], now + 500);
   assert.equal(next.slotIndex, 1);
-  assert.equal(turnUserId(next, ['a', 'b'], 'st'), 'a');
+  assert.equal(turnUserId(next, ['a', 'b'], 'st'), 'b');
+});
+
+test('three players reverse after everyone locks the first slot', () => {
+  const now = Date.parse('2026-08-19T00:00:00.000Z');
+  const live: VsLiveState = {
+    ...initLiveState(['a', 'b', 'c'], now),
+    picksByUser: {
+      a: [namedPick('gk', 'p1')],
+      b: [namedPick('gk', 'p2')],
+      c: [namedPick('gk', 'p3')],
+    },
+  };
+  const next = afterSuccessfulPick(puzzle, live, ['a', 'b', 'c'], now + 500);
+  assert.equal(next.slotIndex, 1);
+  assert.equal(turnUserId(next, ['a', 'b', 'c'], 'st'), 'c');
 });
 
 test('timeout only skips the person whose turn it is', () => {

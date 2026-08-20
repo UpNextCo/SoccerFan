@@ -385,8 +385,50 @@ struct VsPlayerDTO: Codable, Equatable {
 struct VsRankingDTO: Codable, Equatable {
     let userId: String
     let displayName: String
+    let avatarUrl: String?
     let score: Int
     let displayScore: Int
+
+    init(userId: String, displayName: String, avatarUrl: String?, score: Int, displayScore: Int) {
+        self.userId = userId
+        self.displayName = displayName
+        self.avatarUrl = avatarUrl
+        self.score = score
+        self.displayScore = displayScore
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try c.decode(String.self, forKey: .userId)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        avatarUrl = try c.decodeIfPresent(String.self, forKey: .avatarUrl)
+        score = try c.decode(Int.self, forKey: .score)
+        displayScore = try c.decodeIfPresent(Int.self, forKey: .displayScore) ?? score
+    }
+}
+
+struct VsH2hDTO: Codable, Equatable {
+    let opponentUserId: String
+    let opponentName: String
+    let opponentAvatarUrl: String?
+    let youWins: Int
+    let theyWins: Int
+    let draws: Int
+}
+
+struct VsHistoryGameDTO: Codable, Equatable, Identifiable {
+    let id: String
+    let modeId: String
+    let modeTitle: String
+    let title: String
+    let completedAt: String
+    let winner: String?
+    let players: [VsPlayerDTO]
+}
+
+struct VsHistoryDTO: Codable, Equatable {
+    let games: [VsHistoryGameDTO]
+    let records: [VsH2hDTO]
 }
 
 struct VsResultDTO: Codable, Equatable {
@@ -397,6 +439,7 @@ struct VsResultDTO: Codable, Equatable {
     let yourScore: Int?
     let theirScore: Int?
     let rankings: [VsRankingDTO]
+    let h2h: VsH2hDTO?
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -409,6 +452,7 @@ struct VsResultDTO: Codable, Equatable {
         yourScore = try c.decodeIfPresent(Int.self, forKey: .yourScore)
         theirScore = try c.decodeIfPresent(Int.self, forKey: .theirScore)
         rankings = try c.decodeIfPresent([VsRankingDTO].self, forKey: .rankings) ?? []
+        h2h = try c.decodeIfPresent(VsH2hDTO.self, forKey: .h2h)
     }
 }
 

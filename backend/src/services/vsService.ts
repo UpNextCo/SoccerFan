@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { and, eq, gt, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, or, sql } from 'drizzle-orm';
 import { avatarPublicUrl } from '../utils/avatarUrl.js';
 import { db } from '../db/index.js';
 import {
@@ -120,8 +120,33 @@ export type VsPlayerView = {
 export type VsRankingView = {
   userId: string;
   displayName: string;
+  avatarUrl: string | null;
   score: number;
   displayScore: number;
+};
+
+export type VsH2hView = {
+  opponentUserId: string;
+  opponentName: string;
+  opponentAvatarUrl: string | null;
+  youWins: number;
+  theyWins: number;
+  draws: number;
+};
+
+export type VsHistoryGameView = {
+  id: string;
+  modeId: string;
+  modeTitle: string;
+  title: string;
+  completedAt: string;
+  winner: 'you' | 'other' | 'draw' | null;
+  players: VsPlayerView[];
+};
+
+export type VsHistoryView = {
+  games: VsHistoryGameView[];
+  records: VsH2hView[];
 };
 
 export type VsChallengeView = {
@@ -150,6 +175,7 @@ export type VsChallengeView = {
     yourScore: number | null;
     theirScore: number | null;
     rankings: VsRankingView[];
+    h2h: VsH2hView | null;
   };
   live: VsLiveView | null;
   hotseat: VsHotseatView | null;
@@ -961,6 +987,7 @@ function toView(row: VsChallenge, userId: string, names: Map<string, VsUserInfo>
         .map((p) => ({
           userId: p.userId,
           displayName: displayNameOf(names, p.userId) ?? 'Player',
+          avatarUrl: names.get(p.userId)?.avatarUrl ?? null,
           score: p.score,
           displayScore: p.displayScore,
         }))
@@ -998,6 +1025,7 @@ function toView(row: VsChallenge, userId: string, names: Map<string, VsUserInfo>
       yourScore: you?.displayScore ?? running?.get(userId) ?? null,
       theirScore: opponent ? (opponent.displayScore ?? running?.get(opponent.userId) ?? null) : null,
       rankings,
+      h2h: null,
     },
     live: liveViewFor(row, userId, names),
     hotseat: hotseatViewFor(row, userId, names),
@@ -1017,7 +1045,125 @@ async function viewFor(row: VsChallenge, userId: string): Promise<VsChallengeVie
           : await syncLiveDraft(row);
   const ids = participantsOf(synced).map((p) => p.userId);
   const names = await loadUsers(ids);
-  return toView(synced, userId, names);
+  const view = toView(synced, userId, names);
+  if (view.result.allDone && view.players.length === 2) {
+    const opponent = view.players.find((p) => !p.isYou);
+    if (opponent) {
+      view.result.h2h = await h2hAgainst(userId, opponent.userId, names);
+    }
+  }
+  return view;
+}
+
+function winnerUserIdOf(row: VsChallenge): { winnerUserId: string | null; isDraw: boolean } {
+  const people = participantsOf(row);
+  const hotseat = parseHotseat(row.liveJson);
+  if (hotseat?.finished) return { winnerUserId: hotseat.winnerUserId, isDraw: false };
+  const darts501 = parseDarts501(row.liveJson);
+  if (darts501?.finished) return { winnerUserId: darts501.winnerUserId, isDraw: darts501.winnerUserId == null };
+  const completed = people
+    .filter((p) => p.completedAt != null && p.score != null)
+    .map((p) => ({ userId: p.userId, score: p.score as number }));
+  return rankingWinner(completed);
+}
+
+function completedAtOf(row: VsChallenge): string {
+  const times = participantsOf(row)
+    .map((p) => p.completedAt)
+    .filter((t): t is string => typeof t === 'string' && t.length > 0)
+    .sort();
+  return times.at(-1) ?? row.hostCompletedAt?.toISOString() ?? row.createdAt.toISOString();
+}
+
+async function completedGamesFor(userId: string, limit = 120): Promise<VsChallenge[]> {
+  const like = `%${userId}%`;
+  const rows = await db
+    .select()
+    .from(vsChallenges)
+    .where(
+      and(
+        eq(vsChallenges.status, 'complete'),
+        or(
+          eq(vsChallenges.hostUserId, userId),
+          eq(vsChallenges.guestUserId, userId),
+          sql`${vsChallenges.participantsJson}::text like ${like}`
+        )
+      )
+    )
+    .orderBy(desc(vsChallenges.createdAt))
+    .limit(limit);
+  return rows.filter((row) => participantsOf(row).some((p) => p.userId === userId));
+}
+
+async function h2hAgainst(
+  userId: string,
+  opponentUserId: string,
+  names: Map<string, VsUserInfo>
+): Promise<VsH2hView> {
+  const games = await completedGamesFor(userId, 200);
+  let youWins = 0;
+  let theyWins = 0;
+  let draws = 0;
+  for (const row of games) {
+    const people = participantsOf(row);
+    if (!people.some((p) => p.userId === opponentUserId)) continue;
+    const { winnerUserId, isDraw } = winnerUserIdOf(row);
+    if (isDraw) draws += 1;
+    else if (winnerUserId === userId) youWins += 1;
+    else if (winnerUserId === opponentUserId) theyWins += 1;
+  }
+  return {
+    opponentUserId,
+    opponentName: displayNameOf(names, opponentUserId) ?? 'Player',
+    opponentAvatarUrl: names.get(opponentUserId)?.avatarUrl ?? null,
+    youWins,
+    theyWins,
+    draws,
+  };
+}
+
+export async function listVsHistory(userId: string): Promise<VsHistoryView> {
+  const mine = (await completedGamesFor(userId, 160)).slice(0, 30);
+  const allIds = [...new Set(mine.flatMap((row) => participantsOf(row).map((p) => p.userId)))];
+  const names = await loadUsers(allIds);
+  const games: VsHistoryGameView[] = [];
+  const recordMap = new Map<string, VsH2hView>();
+
+  for (const row of mine) {
+    const view = toView(row, userId, names);
+    const completedAt = completedAtOf(row);
+    games.push({
+      id: view.id,
+      modeId: view.modeId,
+      modeTitle: view.modeTitle,
+      title: view.title,
+      completedAt,
+      winner: view.result.winner,
+      players: view.players,
+    });
+
+    const { winnerUserId, isDraw } = winnerUserIdOf(row);
+    for (const person of participantsOf(row)) {
+      if (person.userId === userId) continue;
+      const current = recordMap.get(person.userId) ?? {
+        opponentUserId: person.userId,
+        opponentName: displayNameOf(names, person.userId) ?? 'Player',
+        opponentAvatarUrl: names.get(person.userId)?.avatarUrl ?? null,
+        youWins: 0,
+        theyWins: 0,
+        draws: 0,
+      };
+      if (isDraw) current.draws += 1;
+      else if (winnerUserId === userId) current.youWins += 1;
+      else if (winnerUserId === person.userId) current.theyWins += 1;
+      recordMap.set(person.userId, current);
+    }
+  }
+
+  const records = [...recordMap.values()].sort(
+    (a, b) => b.youWins + b.theyWins + b.draws - (a.youWins + a.theyWins + a.draws)
+  );
+  return { games, records };
 }
 
 async function requireParticipant(challengeId: string, userId: string): Promise<VsChallenge> {
