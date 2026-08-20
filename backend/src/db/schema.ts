@@ -788,6 +788,22 @@ export type VsParticipantRecord = {
   completedAt: string | null;
 };
 
+export const vsPuzzleBank = pgTable(
+  'vs_puzzle_bank',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    modeId: text('mode_id').notNull(),
+    title: text('title').notNull(),
+    puzzleJson: jsonb('puzzle_json').notNull(),
+    answerJson: jsonb('answer_json'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('vs_puzzle_bank_mode_title_unique').on(table.modeId, table.title),
+    index('vs_puzzle_bank_mode_idx').on(table.modeId),
+  ]
+);
+
 export const vsChallenges = pgTable(
   'vs_challenges',
   {
@@ -825,6 +841,7 @@ export type XpLedgerEntry = typeof xpLedger.$inferSelect;
 export type LeagueCohort = typeof leagueCohorts.$inferSelect;
 export type LeagueMembership = typeof leagueMemberships.$inferSelect;
 export type VsChallenge = typeof vsChallenges.$inferSelect;
+export type VsPuzzleBankRow = typeof vsPuzzleBank.$inferSelect;
 export type Player = typeof players.$inferSelect;
 export type PlayerStat = typeof playerStats.$inferSelect;
 export type PlayerTransfer = typeof playerTransfers.$inferSelect;

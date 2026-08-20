@@ -183,18 +183,16 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         .leagueReached(title: "1M", image: "1mtrophy"),
     ]
 
+    static let leagueWinnerTrophies: [TrophyUnlockPayload] = [
+        .leagueReached(title: "Sunday League", image: "winnertrophy/sundayleaguewinner"),
+        .leagueReached(title: "Non-League", image: "winnertrophy/nonleaguewinner"),
+        .leagueReached(title: "League Two", image: "winnertrophy/league2winner"),
+        .leagueReached(title: "League One", image: "winnertrophy/league1winner"),
+        .leagueReached(title: "Premier League", image: "winnertrophy/plwinner"),
+        .leagueReached(title: "Champions League", image: "winnertrophy/championsleaguewinner"),
+    ]
+
     static let previewGameTrophies: [TrophyUnlockPayload] = [
-        TrophyUnlockPayload(
-            id: "badge-plwinner",
-            eyebrow: "TROPHY UNLOCKED",
-            kicker: "WEEKLY LEAGUE",
-            gameTitle: "LEAGUE WINNER",
-            detail: "",
-            xp: 0,
-            timesEarned: 1,
-            hero: .bundleImage("plwinner"),
-            playsUnlock: true
-        ),
         .imageOnly(title: "Daily Leaderboard", subtitle: "MOST XP", image: "dailytrophy"),
         .imageOnly(title: "6k Overall XP", subtitle: "IN A DAY", image: "6ktrophy"),
     ]
@@ -400,6 +398,14 @@ struct TrophyCabinetView: View {
                         title: "LEAGUES REACHED",
                         levels: TrophyUnlockPayload.leagueTrophies,
                         earnedThroughIndex: 2
+                    ) { payload in
+                        unlock = payload
+                    }
+
+                    GameLevelsPreviewRow(
+                        title: "LEAGUE WINNER",
+                        levels: TrophyUnlockPayload.leagueWinnerTrophies,
+                        earnedThroughIndex: 1
                     ) { payload in
                         unlock = payload
                     }

@@ -1,4 +1,5 @@
 import { ensureLastManStandingPuzzle } from './dailyService.js';
+import { startVsPuzzleBank } from './vsPuzzleBank.js';
 import { todayUTC } from '../utils/dailyDate.js';
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1_000;
@@ -29,6 +30,7 @@ async function preGenerateLastManStanding(): Promise<void> {
  */
 export function startDailyPreGeneration(): void {
   void preGenerateLastManStanding();
+  startVsPuzzleBank();
   const timer = setInterval(() => {
     void preGenerateLastManStanding();
   }, CHECK_INTERVAL_MS);

@@ -78,7 +78,7 @@ async function storedDailyPuzzle(
   return { puzzle: chosen.puzzleJson, answer: chosen.answerJson };
 }
 
-async function generateFreshVsPuzzle(
+export async function generateFreshVsPuzzle(
   modeId: VsModeId,
   seedKey: string,
   excludeTitle?: string
@@ -137,13 +137,16 @@ export async function generateVsPuzzle(
   seedKey: string,
   opts?: { excludeTitle?: string }
 ): Promise<VsGeneratedPuzzle> {
-  try {
-    return await generateFreshVsPuzzle(modeId, seedKey, opts?.excludeTitle);
-  } catch {
-    const stored = await storedDailyPuzzle(modeId, seedKey, opts?.excludeTitle);
-    if (stored) return stored;
-    throw new Error('Could not generate a VS challenge right now. Try again.');
-  }
+  const { scheduleVsBankFill, takeVsBankPuzzle } = await import('./vsPuzzleBank.js');
+  scheduleVsBankFill(modeId);
+
+  const banked = await takeVsBankPuzzle(modeId, seedKey, opts?.excludeTitle);
+  if (banked) return banked;
+
+  const stored = await storedDailyPuzzle(modeId, seedKey, opts?.excludeTitle);
+  if (stored) return stored;
+
+  throw new Error('Could not generate a VS challenge right now. Try again.');
 }
 
 export function vsPuzzleMeta(modeId: string, puzzle: unknown): { modeTitle: string; title: string; scoreNoun: string } {

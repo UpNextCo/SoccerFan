@@ -882,7 +882,32 @@ export async function generateBackYourselfPuzzle(
   let pool = pickWeightedPool(candidates, seed);
   if (pool.length === 0) pool = candidates;
   const chosen = seededShuffle(pool, seed)[0]!;
+  return materializeBackYourselfCandidate(chosen, date, opts?.seedKey);
+}
 
+/** Every live Back Yourself category — used to prefill the VS bank. */
+export async function generateAllBackYourselfPuzzles(
+  date: string,
+  opts?: { minPool?: number }
+): Promise<Array<{ puzzle: BackYourselfPuzzlePublic; answer: BackYourselfPuzzleAnswer }>> {
+  let candidates = await getCandidates();
+  if (opts?.minPool != null) {
+    const wide = candidates.filter((c) => c.maxPool >= opts.minPool!);
+    if (wide.length > 0) candidates = wide;
+  }
+  const out: Array<{ puzzle: BackYourselfPuzzlePublic; answer: BackYourselfPuzzleAnswer }> = [];
+  for (const [index, chosen] of candidates.entries()) {
+    out.push(await materializeBackYourselfCandidate(chosen, date, `vs-bank-by-${index}`));
+  }
+  return out;
+}
+
+async function materializeBackYourselfCandidate(
+  chosen: Candidate,
+  date: string,
+  seedKey?: string
+): Promise<{ puzzle: BackYourselfPuzzlePublic; answer: BackYourselfPuzzleAnswer }> {
+  const seed = hashString(seedKey ?? `${date}:back_yourself`);
   const category = await decorateCategory({
     type: chosen.type,
     label: chosen.label,
@@ -909,23 +934,24 @@ export async function generateBackYourselfPuzzle(
   });
 
   const xpCap = backYourselfXpCap(chosen.maxPool);
-  const puzzleId = opts?.seedKey
-    ? `vs-${opts.seedKey.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || String(seed)}-back_yourself`
+  const puzzleId = seedKey
+    ? `vs-${seedKey.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || String(seed)}-back_yourself`
     : `${date}-back_yourself`;
-  const puzzle: BackYourselfPuzzlePublic = {
-    modeId: 'back_yourself',
-    puzzleId,
-    date,
-    category,
-    maxPool: chosen.maxPool,
-    xpCap,
-    mistakesAllowed: BACK_YOURSELF_MISTAKES_ALLOWED,
+  return {
+    puzzle: {
+      modeId: 'back_yourself',
+      puzzleId,
+      date,
+      category,
+      maxPool: chosen.maxPool,
+      xpCap,
+      mistakesAllowed: BACK_YOURSELF_MISTAKES_ALLOWED,
+    },
+    answer: {
+      modeId: 'back_yourself',
+      validPlayerIds: chosen.validPlayerIds,
+    },
   };
-  const answer: BackYourselfPuzzleAnswer = {
-    modeId: 'back_yourself',
-    validPlayerIds: chosen.validPlayerIds,
-  };
-  return { puzzle, answer };
 }
 
 const PLAYER_ID_RE =

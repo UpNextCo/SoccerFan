@@ -127,6 +127,16 @@ export function presentDarts501Formula(formula: Darts501Formula): Darts501Presen
   };
 }
 
+export function allDarts501PublicPuzzles(date: string): Array<{
+  puzzle: Darts501PuzzlePublic;
+  answer: { formulaId: string };
+}> {
+  return DARTS501_FORMULAS.map((formula) => ({
+    puzzle: publicPuzzle(date, formula),
+    answer: { formulaId: formula.id },
+  }));
+}
+
 function publicPuzzle(date: string, formula: Darts501Formula): Darts501PuzzlePublic {
   const presentation = presentDarts501Formula(formula);
   return {
