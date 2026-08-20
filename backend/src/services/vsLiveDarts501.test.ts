@@ -72,6 +72,92 @@ test('checkout finishes and names a winner', () => {
   assert.equal(next.winnerUserId, 'a');
 });
 
+test('checkout starts redemption when a later player can finish', () => {
+  const now = Date.parse('2026-08-19T00:00:00.000Z');
+  const live = initDarts501(['a', 'b'], now);
+  const next = applyThrow(
+    live,
+    throwRow('a', 'haaland', 'checkout', 0),
+    { remaining: 0, inCheckout: true, checkoutBusts: 0 },
+    now + 1_000,
+    ['b']
+  );
+  assert.equal(next.finished, false);
+  assert.equal(next.turnUserId, 'b');
+  assert.deepEqual(next.checkedOutUserIds, ['a']);
+  assert.deepEqual(next.redemptionQueue, ['b']);
+});
+
+test('failed redemption leaves the original checkout as the winner', () => {
+  const now = Date.parse('2026-08-19T00:00:00.000Z');
+  let live = initDarts501(['a', 'b'], now);
+  live = applyThrow(
+    live,
+    throwRow('a', 'haaland', 'checkout', 0),
+    { remaining: 0, inCheckout: true, checkoutBusts: 0 },
+    now + 1_000,
+    ['b']
+  );
+  const next = applyThrow(
+    live,
+    throwRow('b', 'kane', 'score', 12),
+    { remaining: 12, inCheckout: true, checkoutBusts: 0 },
+    now + 2_000
+  );
+  assert.equal(next.finished, true);
+  assert.equal(next.winnerUserId, 'a');
+});
+
+test('successful redemption finishes as a draw', () => {
+  const now = Date.parse('2026-08-19T00:00:00.000Z');
+  let live = initDarts501(['a', 'b'], now);
+  live = applyThrow(
+    live,
+    throwRow('a', 'haaland', 'checkout', 0),
+    { remaining: 0, inCheckout: true, checkoutBusts: 0 },
+    now + 1_000,
+    ['b']
+  );
+  const next = applyThrow(
+    live,
+    throwRow('b', 'salah', 'checkout', 0),
+    { remaining: 0, inCheckout: true, checkoutBusts: 0 },
+    now + 2_000
+  );
+  assert.equal(next.finished, true);
+  assert.equal(next.winnerUserId, null);
+});
+
+test('only later players on a finish get redemption', () => {
+  const now = Date.parse('2026-08-19T00:00:00.000Z');
+  const live = initDarts501(['a', 'b', 'c'], now);
+  const next = applyThrow(
+    live,
+    throwRow('a', 'haaland', 'checkout', 0),
+    { remaining: 0, inCheckout: true, checkoutBusts: 0 },
+    now + 1_000,
+    ['c']
+  );
+  assert.equal(next.finished, false);
+  assert.equal(next.turnUserId, 'c');
+  assert.deepEqual(next.redemptionQueue, ['c']);
+});
+
+test('timeout during redemption skips to the next eligible player', () => {
+  const now = Date.parse('2026-08-19T00:00:00.000Z');
+  let live = initDarts501(['a', 'b', 'c'], now);
+  live = applyThrow(
+    live,
+    throwRow('a', 'haaland', 'checkout', 0),
+    { remaining: 0, inCheckout: true, checkoutBusts: 0 },
+    now + 1_000,
+    ['b', 'c']
+  );
+  const later = applyTimeouts(live, Date.parse(live.deadlineAt) + 1);
+  assert.equal(later.turnUserId, 'c');
+  assert.equal(later.finished, false);
+});
+
 test('timeout passes the turn without a bust', () => {
   const now = Date.parse('2026-08-19T00:00:00.000Z');
   const started = initDarts501(['a', 'b'], now);

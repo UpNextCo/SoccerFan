@@ -85,6 +85,7 @@ struct VsDarts501LiveView: View {
                         .foregroundStyle(BKTheme.textMuted)
                 }
                 let isTurn = row.userId == live?.turnUserId && live?.finished != true
+                let hasCheckedOut = live?.checkedOutUserIds.contains(row.userId) == true
                 VStack(spacing: 3) {
                     Text(row.isYou ? "YOU" : row.displayName.uppercased())
                         .font(BKFont.caption(nameSize))
@@ -105,8 +106,8 @@ struct VsDarts501LiveView: View {
                             .minimumScaleFactor(0.7)
                     }
                 }
-                .foregroundStyle(isTurn ? BKTheme.accent : BKTheme.textPrimary)
-                .opacity(isTurn ? 1 : 0.55)
+                .foregroundStyle(isTurn || hasCheckedOut ? BKTheme.accent : BKTheme.textPrimary)
+                .opacity(isTurn || hasCheckedOut ? 1 : 0.55)
             }
         }
         .frame(maxWidth: .infinity)
@@ -169,7 +170,7 @@ struct VsDarts501LiveView: View {
                     .font(BKFont.caption(10)).tracking(0.8)
                     .foregroundStyle(BKTheme.textMuted)
                 if live?.throwLog.isEmpty != false {
-                    Text("Name a player. Shared names. First to checkout wins.")
+                    Text("Name a player. Shared names. If someone checks out, later players still on a finish get a redemption dart.")
                         .font(BKFont.body(13))
                         .foregroundStyle(BKTheme.textSecondary)
                 } else {
@@ -220,7 +221,11 @@ struct VsDarts501LiveView: View {
                     Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
                         .font(BKFont.headline(13)).tracking(0.8)
                         .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
-                    if turnPlayer?.inCheckout == true {
+                    if live?.redemption == true {
+                        Text(live?.yourTurn == true ? "REDEMPTION · CHECKOUT TO TIE" : "REDEMPTION")
+                            .font(BKFont.caption(10)).tracking(1)
+                            .foregroundStyle(BKTheme.partial)
+                    } else if turnPlayer?.inCheckout == true {
                         Text("CHECKOUT")
                             .font(BKFont.caption(10)).tracking(1)
                             .foregroundStyle(BKTheme.partial)
@@ -276,7 +281,11 @@ struct VsDarts501LiveView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .padding(.horizontal, 24)
             } else {
-                Text(live?.finished == true ? "Challenge over" : "Waiting for \(turnName)")
+                Text(live?.finished == true
+                     ? "Challenge over"
+                     : (live?.redemption == true
+                        ? "Redemption — waiting for \(turnName)"
+                        : "Waiting for \(turnName)"))
                     .font(BKFont.body(14))
                     .foregroundStyle(BKTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)

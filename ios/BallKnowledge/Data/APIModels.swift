@@ -579,6 +579,8 @@ struct VsDarts501DTO: Codable, Equatable {
     let pendingDraw: Bool
     let drawAcceptedCount: Int
     let drawNeededCount: Int
+    let redemption: Bool
+    let checkedOutUserIds: [String]
 
     enum CodingKeys: String, CodingKey {
         case turnUserId, yourTurn, deadlineAt, finished, winnerUserId, usedPlayerIds
@@ -586,6 +588,7 @@ struct VsDarts501DTO: Codable, Equatable {
         case throwLog = "throws"
         case drawOfferedBy, drawOfferedByName, youOfferedDraw, youAcceptedDraw
         case pendingDraw, drawAcceptedCount, drawNeededCount
+        case redemption, checkedOutUserIds
     }
 
     init(from decoder: Decoder) throws {
@@ -610,6 +613,8 @@ struct VsDarts501DTO: Codable, Equatable {
         pendingDraw = try c.decodeIfPresent(Bool.self, forKey: .pendingDraw) ?? false
         drawAcceptedCount = try c.decodeIfPresent(Int.self, forKey: .drawAcceptedCount) ?? 0
         drawNeededCount = try c.decodeIfPresent(Int.self, forKey: .drawNeededCount) ?? 0
+        redemption = try c.decodeIfPresent(Bool.self, forKey: .redemption) ?? false
+        checkedOutUserIds = try c.decodeIfPresent([String].self, forKey: .checkedOutUserIds) ?? []
     }
 }
 

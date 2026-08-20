@@ -84,8 +84,10 @@ import {
   dropUser as dropDarts501User,
   initDarts501,
   livesLeft as darts501LivesLeft,
+  isRedemption as darts501IsRedemption,
   offerDraw as offerDarts501Draw,
   parseDarts501,
+  playersAfter as darts501PlayersAfter,
   playerState as darts501PlayerState,
   usedPlayerIds as darts501UsedPlayerIds,
   type VsDarts501State,
@@ -305,6 +307,8 @@ export type VsDarts501View = {
   pendingDraw: boolean;
   drawAcceptedCount: number;
   drawNeededCount: number;
+  redemption: boolean;
+  checkedOutUserIds: string[];
 };
 
 export type VsTargetManView = {
@@ -680,6 +684,8 @@ function darts501ViewFor(
     pendingDraw: live.drawOfferedBy != null && !live.finished,
     drawAcceptedCount: live.drawAcceptedBy.length,
     drawNeededCount: live.order.length,
+    redemption: darts501IsRedemption(live),
+    checkedOutUserIds: live.checkedOutUserIds,
   };
 }
 
@@ -1836,6 +1842,16 @@ export async function throwVsDarts501(userId: string, challengeId: string, playe
     ? result.kind
     : 'bust';
 
+  const canCheckoutIds: string[] = [];
+  if ((kind === 'checkout' || kind === 'perfect') && live.redemptionQueue.length === 0) {
+    const used = [...darts501UsedPlayerIds(live), playerId];
+    for (const id of darts501PlayersAfter(live.order, userId)) {
+      const later = darts501PlayerState(live, id);
+      const options = await countDarts501CheckoutsForPuzzle(puzzle, later.remaining, used);
+      if (options > 0) canCheckoutIds.push(id);
+    }
+  }
+
   const next = applyDarts501Throw(
     live,
     {
@@ -1853,7 +1869,9 @@ export async function throwVsDarts501(userId: string, challengeId: string, playe
       remaining: result.remaining,
       inCheckout: result.inCheckout,
       checkoutBusts: result.checkoutBusts,
-    }
+    },
+    Date.now(),
+    canCheckoutIds
   );
 
   if (next.finished) {

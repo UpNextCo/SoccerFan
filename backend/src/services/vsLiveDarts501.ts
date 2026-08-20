@@ -31,6 +31,10 @@ export type VsDarts501State = {
   throws: VsDarts501ThrowRecord[];
   drawOfferedBy: string | null;
   drawAcceptedBy: string[];
+  /** Players who have already checked out this finishing visit. */
+  checkedOutUserIds: string[];
+  /** Later players still owed a redemption dart. */
+  redemptionQueue: string[];
 };
 
 export function parseDarts501(raw: unknown): VsDarts501State | null {
@@ -52,6 +56,12 @@ export function parseDarts501(raw: unknown): VsDarts501State | null {
     drawAcceptedBy: Array.isArray(o.drawAcceptedBy)
       ? o.drawAcceptedBy.filter((id): id is string => typeof id === 'string')
       : [],
+    checkedOutUserIds: Array.isArray(o.checkedOutUserIds)
+      ? o.checkedOutUserIds.filter((id): id is string => typeof id === 'string')
+      : [],
+    redemptionQueue: Array.isArray(o.redemptionQueue)
+      ? o.redemptionQueue.filter((id): id is string => typeof id === 'string')
+      : [],
   };
 }
 
@@ -70,6 +80,47 @@ export function initDarts501(userIds: string[], now = Date.now()): VsDarts501Sta
     order,
     players,
     throws: [],
+    drawOfferedBy: null,
+    drawAcceptedBy: [],
+    checkedOutUserIds: [],
+    redemptionQueue: [],
+  };
+}
+
+export function playersAfter(order: string[], userId: string): string[] {
+  const idx = order.indexOf(userId);
+  if (idx < 0) return [];
+  return order.slice(idx + 1);
+}
+
+export function isRedemption(state: VsDarts501State): boolean {
+  return !state.finished && state.redemptionQueue.length > 0;
+}
+
+function finishWithCheckouts(state: VsDarts501State, now: number): VsDarts501State {
+  const ids = state.checkedOutUserIds.filter((id) => state.order.includes(id));
+  return {
+    ...state,
+    finished: true,
+    winnerUserId: ids.length === 1 ? ids[0]! : null,
+    redemptionQueue: [],
+    turnUserId: ids[0] ?? state.turnUserId,
+    drawOfferedBy: null,
+    drawAcceptedBy: [],
+    deadlineAt: new Date(now).toISOString(),
+  };
+}
+
+function nextRedemptionTurn(state: VsDarts501State, queue: string[], now: number): VsDarts501State {
+  const remaining = queue.filter((id) => state.order.includes(id));
+  if (remaining.length === 0) return finishWithCheckouts(state, now);
+  return {
+    ...state,
+    redemptionQueue: remaining,
+    turnUserId: remaining[0]!,
+    deadlineAt: new Date(now + VS_DARTS501_TURN_MS).toISOString(),
+    finished: false,
+    winnerUserId: null,
     drawOfferedBy: null,
     drawAcceptedBy: [],
   };
@@ -122,6 +173,7 @@ function maybeFinishDraw(state: VsDarts501State, now: number): VsDarts501State {
     ...state,
     finished: true,
     winnerUserId: null,
+    redemptionQueue: [],
     deadlineAt: new Date(now).toISOString(),
   };
 }
@@ -139,6 +191,7 @@ export function finishByClosest(state: VsDarts501State, now = Date.now()): VsDar
     ...state,
     finished: true,
     winnerUserId: tied.length === 1 ? tied[0]!.id : null,
+    redemptionQueue: [],
     turnUserId: tied[0]?.id ?? state.turnUserId,
     deadlineAt: new Date(now).toISOString(),
   };
@@ -146,6 +199,13 @@ export function finishByClosest(state: VsDarts501State, now = Date.now()): VsDar
 
 export function passTurn(state: VsDarts501State, fromUserId: string, now = Date.now()): VsDarts501State {
   if (state.finished || state.order.length === 0) return state;
+  if (state.redemptionQueue.length > 0) {
+    return nextRedemptionTurn(
+      state,
+      state.redemptionQueue.filter((id) => id !== fromUserId),
+      now
+    );
+  }
   const living = livingOrder(state);
   if (living.length === 0) return finishByClosest(state, now);
   const idx = Math.max(0, state.order.indexOf(fromUserId));
@@ -166,26 +226,34 @@ export function applyThrow(
   state: VsDarts501State,
   throwRow: VsDarts501ThrowRecord,
   nextPlayer: VsDarts501PlayerState,
-  now = Date.now()
+  now = Date.now(),
+  canCheckoutIds: string[] = []
 ): VsDarts501State {
   const checkedOut = throwRow.kind === 'checkout' || throwRow.kind === 'perfect';
+  const thrower = throwRow.userId;
   const next: VsDarts501State = {
     ...state,
-    players: { ...state.players, [throwRow.userId]: nextPlayer },
+    players: { ...state.players, [thrower]: nextPlayer },
     throws: [...state.throws, throwRow],
   };
   if (checkedOut) {
-    return {
-      ...next,
-      finished: true,
-      winnerUserId: throwRow.userId,
-      turnUserId: throwRow.userId,
-      drawOfferedBy: null,
-      drawAcceptedBy: [],
-      deadlineAt: new Date(now).toISOString(),
-    };
+    const checkedOutUserIds = state.checkedOutUserIds.includes(thrower)
+      ? state.checkedOutUserIds
+      : [...state.checkedOutUserIds, thrower];
+    const withCheckouts = { ...next, checkedOutUserIds };
+    const queue = state.redemptionQueue.length > 0
+      ? state.redemptionQueue.filter((id) => id !== thrower)
+      : playersAfter(state.order, thrower).filter((id) => canCheckoutIds.includes(id));
+    return nextRedemptionTurn(withCheckouts, queue, now);
   }
-  return passTurn(next, throwRow.userId, now);
+  if (state.redemptionQueue.length > 0) {
+    return nextRedemptionTurn(
+      next,
+      state.redemptionQueue.filter((id) => id !== thrower),
+      now
+    );
+  }
+  return passTurn(next, thrower, now);
 }
 
 export function applyTimeouts(state: VsDarts501State, now = Date.now()): VsDarts501State {
@@ -204,10 +272,14 @@ export function dropUser(state: VsDarts501State, userId: string, now = Date.now(
   delete players[userId];
   const offeredBy = state.drawOfferedBy === userId ? null : state.drawOfferedBy;
   const acceptedBy = (state.drawAcceptedBy ?? []).filter((id) => id !== userId && order.includes(id));
+  const checkedOutUserIds = (state.checkedOutUserIds ?? []).filter((id) => order.includes(id));
+  const redemptionQueue = (state.redemptionQueue ?? []).filter((id) => order.includes(id));
   const next: VsDarts501State = {
     ...state,
     order,
     players,
+    checkedOutUserIds,
+    redemptionQueue,
     drawOfferedBy: offeredBy,
     drawAcceptedBy: offeredBy ? acceptedBy : [],
   };
@@ -224,6 +296,12 @@ export function dropUser(state: VsDarts501State, userId: string, now = Date.now(
   }
   const drawn = maybeFinishDraw(next, now);
   if (drawn.finished) return drawn;
+  if (redemptionQueue.length > 0) {
+    if (!redemptionQueue.includes(next.turnUserId)) {
+      return nextRedemptionTurn(next, redemptionQueue, now);
+    }
+    return next;
+  }
   if (next.turnUserId === userId || !order.includes(next.turnUserId)) {
     return {
       ...next,
