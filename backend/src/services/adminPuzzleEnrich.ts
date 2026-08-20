@@ -430,6 +430,12 @@ export async function enrichAdminBingoPuzzle(puzzleJson: unknown): Promise<unkno
             logo2Url: lb?.logoUrl ?? cat.logo2Url,
           };
         }
+        if (iconType === 'clubLeague' || type === 'clubLeague') {
+          const club = String(cat.matchingRule ?? '').split('|')[0] ?? '';
+          if (!club) return cat;
+          const logo = await lookupTeamLogo(club, '');
+          return { ...cat, logoUrl: logo?.logoUrl ?? cat.logoUrl };
+        }
         return cat;
       })
     );

@@ -77,7 +77,7 @@ test('a recent award leaves its preferred slot open for another fresh type', () 
 
 test('normal top-up respects per-type concentration caps', () => {
   const selected = selectBingoCategories(candidates(), new Map(), 42);
-  const counts = new Map<CatType, number>();
+  const counts = new Map<string, number>();
   for (const tile of selected) counts.set(tile.type, (counts.get(tile.type) ?? 0) + 1);
   for (const type of types) {
     assert.ok((counts.get(type) ?? 0) <= BINGO_TYPE_CAPS[type], `${type} exceeded its cap`);
@@ -92,7 +92,7 @@ test('balanced recent tiles are preferred over fresh tiles that exceed a type ca
     for (const tile of pool[type]) usage.set(tile.id, used(1, 2));
   }
   const selected = selectBingoCategories(pool, usage, 42);
-  const counts = new Map<CatType, number>();
+  const counts = new Map<string, number>();
   for (const tile of selected) counts.set(tile.type, (counts.get(tile.type) ?? 0) + 1);
   assert.equal(selected.length, 16);
   for (const type of types) {

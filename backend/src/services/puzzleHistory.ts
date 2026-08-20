@@ -192,6 +192,7 @@ function clubsFromStoredBingoCategory(value: unknown): string[] {
   if (category.type === 'playedForClub') return [rule];
   if (category.type === 'nationClub') return [rule.split('|')[1] ?? ''];
   if (category.type === 'clubCombo') return rule.split('|').slice(0, 2);
+  if (category.type === 'clubLeague') return [rule.split('|')[0] ?? ''];
   return [];
 }
 

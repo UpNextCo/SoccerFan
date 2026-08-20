@@ -66,6 +66,22 @@
   margin-left: -8px;
 }
 
+.bingo-preview-flag-badge {
+  margin-left: -4px;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.bingo-cat select {
+  width: 100%;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+}
+
 .bingo-preview-flag,
 .bingo-preview-fallback {
   font-size: 1.75rem;

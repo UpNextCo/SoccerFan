@@ -1,6 +1,19 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
+import { CUP_OR_TOURNAMENT_LEAGUE_IDS } from '../constants/footballMedia.js';
 import { canonicalNationality } from './nationality.js';
+
+/** True for a domestic club league — not World Cup / Euro / AFCON / UEFA club competitions. */
+export function isDomesticClubLeague(leagueId: number | null | undefined): boolean {
+  return leagueId != null && leagueId > 0 && !CUP_OR_TOURNAMENT_LEAGUE_IDS.has(leagueId);
+}
+
+function cupLeagueIdSql(): SQL {
+  return sql.join(
+    [...CUP_OR_TOURNAMENT_LEAGUE_IDS].sort((a, b) => a - b).map((id) => sql`${id}`),
+    sql`, `
+  );
+}
 
 let NATION_SET: Set<string> | null = null;
 
@@ -72,16 +85,43 @@ export function isNationalTeam(name: string, nations: Set<string>): boolean {
   return keys.has(nationalityKey(n)) || keys.has(nationalityKey(base));
 }
 
+/** England U19 / Ghana U20 / Nigeria Olympic — never a club, even if `teams.league_id` is domestic. */
+export function isYouthNationalOrOlympicSide(name: string, nations: Set<string>): boolean {
+  const n = name.trim();
+  return withoutAgeGroup(n) !== n && isNationalTeam(n, nations);
+}
+
+/**
+ * Drop this career row from club-teammate graphs.
+ * Senior nationals (England) drop unless the team_id is a real domestic club (Monaco).
+ * Youth / Olympic nationals always drop (Ghana U20 was stamped with Premier League id 39).
+ */
+export function isExcludedNationalSpell(
+  teamId: number,
+  teamName: string,
+  nations: Set<string>,
+  clubs: Set<number>
+): boolean {
+  if (!isNationalTeam(teamName, nations)) return false;
+  if (isYouthNationalOrOlympicSide(teamName, nations)) return true;
+  return !clubs.has(teamId);
+}
+
 let CLUB_TEAM_IDS: Set<number> | null = null;
 
 /**
  * Teams with a domestic league — real clubs even when named after a country, so AS Monaco and Wales
- * (the club) are not mistaken for national sides. `clubCareerOnlySql` applies the same escape.
+ * (the club) are not mistaken for national sides. World Cup / Euro / AFCON / UEFA club competitions
+ * do not count (England has league_id 1 from the World Cup feed). `clubCareerOnlySql` uses the same
+ * escape.
  */
 export async function clubTeamIds(): Promise<Set<number>> {
   if (CLUB_TEAM_IDS) return CLUB_TEAM_IDS;
   const rows = (await db.execute(sql`
-    SELECT id FROM teams WHERE league_id IS NOT NULL AND id > 0
+    SELECT id FROM teams
+    WHERE id > 0
+      AND league_id IS NOT NULL
+      AND league_id NOT IN (${cupLeagueIdSql()})
   `)) as unknown as Array<{ id: number }>;
   CLUB_TEAM_IDS = new Set(rows.map((r) => Number(r.id)));
   return CLUB_TEAM_IDS;
@@ -93,9 +133,7 @@ export async function clubTeamIds(): Promise<Set<number>> {
  * and refuses to discard a club that merely shares a country's name.
  */
 export async function isNationalTeamRow(teamId: number, teamName: string): Promise<boolean> {
-  const clubs = await clubTeamIds();
-  if (clubs.has(teamId)) return false;
-  return isNationalTeam(teamName, await nationSet());
+  return isExcludedNationalSpell(teamId, teamName, await nationSet(), await clubTeamIds());
 }
 
 /** Reserve / youth / women's sides — not useful for career paths or the team picker. */
@@ -132,23 +170,32 @@ export function youthOrReserveSideSql(teamName: SQL): SQL {
  */
 export function clubCareerOnlySql(alias = 'pc'): SQL {
   const a = sql.raw(alias);
+  const youthOrOlympicSuffix = sql`(
+    ${a}.team_name ~* '\\s+U\\d{1,2}(\\s+W)?$'
+    OR ${a}.team_name ~* '\\s+(Olympics?|Olympic)$'
+  )`;
+  const nameIsNation = sql`(
+    EXISTS (
+      SELECT 1 FROM players _nat
+      WHERE _nat.nationality <> '' AND _nat.nationality = ${a}.team_name
+    )
+    OR EXISTS (
+      SELECT 1 FROM players _nat
+      WHERE _nat.nationality <> ''
+        AND _nat.nationality = regexp_replace(${a}.team_name, '\\s+U\\d{1,2}(\\s+W)?$', '', 'i')
+    )
+    OR ${a}.team_name ~* '\\s+(Olympics?|Olympic)$'
+  )`;
+  const isDomesticClub = sql`EXISTS (
+    SELECT 1 FROM teams _t
+    WHERE _t.id = ${a}.team_id
+      AND _t.league_id IS NOT NULL
+      AND _t.league_id NOT IN (${cupLeagueIdSql()})
+  )`;
   return sql`(
     NOT (
-      (
-        EXISTS (
-          SELECT 1 FROM players _nat
-          WHERE _nat.nationality <> '' AND _nat.nationality = ${a}.team_name
-        )
-        OR EXISTS (
-          SELECT 1 FROM players _nat
-          WHERE _nat.nationality <> ''
-            AND _nat.nationality = regexp_replace(${a}.team_name, '\\s+U\\d{1,2}(\\s+W)?$', '', 'i')
-        )
-        OR ${a}.team_name ~* '\\s+(Olympics?|Olympic)$'
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM teams _t WHERE _t.id = ${a}.team_id AND _t.league_id IS NOT NULL
-      )
+      (${youthOrOlympicSuffix} AND ${nameIsNation})
+      OR (${nameIsNation} AND NOT ${isDomesticClub})
     )
   )`;
 }

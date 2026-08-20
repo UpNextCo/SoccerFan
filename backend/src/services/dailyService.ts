@@ -549,7 +549,7 @@ async function migrateStaleBingo(date: string): Promise<void> {
   const hasStatsMap = puzzle.players.some((p) => p && Object.prototype.hasOwnProperty.call(p, 'stats'));
   // Club tiles must carry a server-resolved logoUrl (added after the headshot pass).
   const clubTiles = (puzzle.categories ?? []).filter(
-    (c) => c && (c.iconType === 'clubBadge' || c.iconType === 'nationClub' || c.iconType === 'clubCombo')
+    (c) => c && (c.iconType === 'clubBadge' || c.iconType === 'nationClub' || c.iconType === 'clubCombo' || c.iconType === 'clubLeague')
   );
   const clubTilesResolved =
     clubTiles.length === 0 ||

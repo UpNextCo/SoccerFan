@@ -577,6 +577,27 @@ private struct FootballBingoCategoryIcon: View {
                     clubBadge(club: a, league: "", logo: category.logoUrl, teamId: category.teamId, size: size * 0.78)
                     clubBadge(club: b, league: "", logo: category.logo2Url, teamId: category.team2Id, size: size * 0.78)
                 }
+            case .clubLeague:
+                let parts = category.matchingRule.split(separator: "|").map(String.init)
+                let club = parts.first ?? category.iconValue
+                let league = parts.count > 1 ? parts[1] : category.iconValue
+                clubBadge(club: club, league: league, logo: category.logoUrl, teamId: category.teamId, size: size)
+                    .overlay(alignment: .bottomTrailing) {
+                        LeagueBadgeImage(league: league, size: size * 0.48) {
+                            iconFallback(GuessWhoDisplay.leagueAbbrev(league), size: size * 0.48)
+                        }
+                        .offset(x: size * 0.16, y: size * 0.1)
+                    }
+            case .nationLeague:
+                LeagueBadgeImage(league: category.matchingRule.split(separator: "|").map(String.init).last ?? category.iconValue, size: size) {
+                    iconFallback(GuessWhoDisplay.leagueAbbrev(category.iconValue))
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    Text(GuessWhoDisplay.nationalityFlag(category.flag ?? category.matchingRule.split(separator: "|").map(String.init).first ?? ""))
+                        .font(.system(size: size * 0.5))
+                        .shadow(color: .black.opacity(0.5), radius: 1)
+                        .offset(x: size * 0.18, y: size * 0.1)
+                }
             case .league:
                 LeagueBadgeImage(league: category.iconValue, size: size) {
                     iconFallback(GuessWhoDisplay.leagueAbbrev(category.iconValue))
@@ -667,6 +688,16 @@ private enum BingoTileLabel {
             let parts = c.matchingRule.components(separatedBy: "|")
             let a = clubCode(parts.first ?? ""), b = parts.count > 1 ? clubCode(parts[1]) : ""
             return "\(a) + \(b)"
+        case .clubLeague:
+            let parts = c.matchingRule.components(separatedBy: "|")
+            let club = clubCode(parts.first ?? "")
+            let league = parts.count > 1 ? GuessWhoDisplay.leagueAbbrev(parts[1]) : ""
+            return "\(club) · \(league)"
+        case .nationLeague:
+            let parts = c.matchingRule.components(separatedBy: "|")
+            let nat = String((parts.first ?? "").prefix(3)).uppercased()
+            let league = parts.count > 1 ? GuessWhoDisplay.leagueAbbrev(parts[1]) : ""
+            return "\(nat) · \(league)"
         case .statThreshold:
             // Icon already shows the number; the title is what it counts (e.g. "Champions League Apps").
             return c.title.uppercased()

@@ -3,13 +3,15 @@
  *
  * The game: connect a START player to a TARGET player through a chain of players who were CLUB
  * TEAMMATES — i.e. two adjacent players shared the same club (same team_id) during overlapping
- * seasons. National-team links, same-league links, same-manager links and same-club-in-different-
- * eras links do NOT count — only real club-teammate overlap.
+ * seasons. Career year ranges are clipped to transfer dates when we have them, so a calendar leave
+ * year (Joe Cole left Coventry in May 2016) is not read as "also played 2016/17". National-team
+ * links, same-league links, same-manager links and same-club-in-different-eras links do NOT count
+ * — only real club-teammate overlap.
  *
- * Data source: `player_career` (team_id + season_from/season_to, one row per club spell). team_id is
- * an API-Football id, so the same club always shares an id (and a crest via the CDN) regardless of
- * name spelling. National / national-youth teams are filtered out (a shared country side is exactly
- * the "same nationality" link the game forbids).
+ * Data source: `player_career` (team_id + season_from/season_to, one row per club spell), refined by
+ * `player_transfers` dates. team_id is an API-Football id, so the same club always shares an id
+ * (and a crest via the CDN) regardless of name spelling. National / national-youth teams are
+ * filtered out (a shared country side is exactly the "same nationality" link the game forbids).
  *
  * Two things live here:
  *   1. `clubChainLink(aId, bId)` — pairwise areTeammates, used live by the play endpoint to validate
@@ -23,9 +25,17 @@
 import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { clubTeamIds, isNationalTeam, nationSet } from '../utils/nationalTeam.js';
+import { clubTeamIds, isExcludedNationalSpell, nationSet } from '../utils/nationalTeam.js';
 import { resolveHeadshot, teamLogoUrl } from '../constants/footballMedia.js';
 import { getPhotoOverrides } from './photoOverrides.js';
+import {
+  overlapSeasonYears,
+  refineCareerSpells,
+  spellsOverlap,
+  type TransferMove,
+} from './clubChainOverlap.js';
+
+export { spellsOverlap } from './clubChainOverlap.js';
 
 // A club spell: which club (team_id + name) and the year range the player was there for.
 // season_to === null means the player is still at the club → treated as the current year.
@@ -34,6 +44,8 @@ export interface ClubSpell {
   clubName: string;
   startYear: number;
   endYear: number; // null spells resolved to CURRENT_YEAR
+  startDate?: string;
+  endDate?: string;
 }
 
 // The confirmation returned after a valid move ("✓ Shared Real Madrid, 2013–2015").
@@ -151,6 +163,35 @@ interface CareerRow {
   season_to: number | null;
 }
 
+interface TransferRow {
+  player_id: string;
+  transfer_date: string;
+  from_team_id: number;
+  to_team_id: number;
+}
+
+async function loadTransfers(playerIds: string[]): Promise<Map<string, TransferMove[]>> {
+  const map = new Map<string, TransferMove[]>();
+  if (playerIds.length === 0) return map;
+  const list = sql.join(playerIds.map((id) => sql`${id}::uuid`), sql`, `);
+  const rows = (await db.execute(sql`
+    SELECT player_id, transfer_date::text, from_team_id, to_team_id
+    FROM player_transfers
+    WHERE player_id IN (${list})
+      AND transfer_date IS NOT NULL
+      AND (from_team_id > 0 OR to_team_id > 0)
+  `)) as unknown as TransferRow[];
+  for (const r of rows) {
+    const move: TransferMove = {
+      date: r.transfer_date,
+      fromTeamId: Number(r.from_team_id),
+      toTeamId: Number(r.to_team_id),
+    };
+    (map.get(r.player_id) ?? map.set(r.player_id, []).get(r.player_id)!).push(move);
+  }
+  return map;
+}
+
 async function loadSpells(playerIds: string[], nations: Set<string>): Promise<Map<string, ClubSpell[]>> {
   const map = new Map<string, ClubSpell[]>();
   if (playerIds.length === 0) return map;
@@ -161,7 +202,7 @@ async function loadSpells(playerIds: string[], nations: Set<string>): Promise<Ma
     FROM player_career WHERE player_id IN (${list}) AND team_id > 0
   `)) as unknown as CareerRow[];
   for (const r of rows) {
-    if (!clubs.has(Number(r.team_id)) && isNationalTeam(r.team_name, nations)) continue;
+    if (isExcludedNationalSpell(Number(r.team_id), r.team_name, nations, clubs)) continue;
     const spell: ClubSpell = {
       clubId: r.team_id,
       clubName: r.team_name,
@@ -170,12 +211,11 @@ async function loadSpells(playerIds: string[], nations: Set<string>): Promise<Ma
     };
     (map.get(r.player_id) ?? map.set(r.player_id, []).get(r.player_id)!).push(spell);
   }
+  const transfers = await loadTransfers(playerIds);
+  for (const [playerId, spells] of map) {
+    map.set(playerId, refineCareerSpells(spells, transfers.get(playerId) ?? []));
+  }
   return map;
-}
-
-/** Do two spells at the same club overlap by at least one season/year? */
-export function spellsOverlap(a: ClubSpell, b: ClubSpell): boolean {
-  return a.clubId === b.clubId && a.startYear <= b.endYear && b.startYear <= a.endYear;
 }
 
 /** The best shared-club overlap between two spell lists, or null. "Best" = longest overlap, then
@@ -185,20 +225,19 @@ export function bestTeammateLink(aSpells: ClubSpell[], bSpells: ClubSpell[]): Te
   for (const a of aSpells) {
     for (const b of bSpells) {
       if (!spellsOverlap(a, b)) continue;
-      const overlapStart = Math.max(a.startYear, b.startYear);
-      const overlapEnd = Math.min(a.endYear, b.endYear);
-      const span = overlapEnd - overlapStart;
-      if (best && (span < best.span || (span === best.span && overlapStart <= best.recency))) continue;
+      const years = overlapSeasonYears(a, b);
+      const span = years.end - years.start;
+      if (best && (span < best.span || (span === best.span && years.start <= best.recency))) continue;
       best = {
         link: {
           clubId: a.clubId,
           clubName: a.clubName,
-          overlapStart: String(overlapStart),
-          overlapEnd: String(overlapEnd),
+          overlapStart: String(years.start),
+          overlapEnd: String(years.end),
           clubBadgeUrl: teamLogoUrl(a.clubId),
         },
         span,
-        recency: overlapStart,
+        recency: years.start,
       };
     }
   }
@@ -276,12 +315,27 @@ async function buildGraph(): Promise<Graph> {
 
   // Group non-national spells by club so we only compare within-club rosters.
   const clubs = await clubTeamIds();
-  const byClub = new Map<number, Array<{ id: string; from: number; to: number }>>();
+  const rawByPlayer = new Map<string, ClubSpell[]>();
   for (const r of careerRows) {
     if (!players.has(r.player_id)) continue;
-    if (!clubs.has(Number(r.team_id)) && isNationalTeam(r.team_name, nations)) continue;
-    const spell = { id: r.player_id, from: r.season_from, to: r.season_to ?? CURRENT_YEAR };
-    (byClub.get(r.team_id) ?? byClub.set(r.team_id, []).get(r.team_id)!).push(spell);
+    if (isExcludedNationalSpell(Number(r.team_id), r.team_name, nations, clubs)) continue;
+    const spell: ClubSpell = {
+      clubId: r.team_id,
+      clubName: r.team_name,
+      startYear: r.season_from,
+      endYear: r.season_to ?? CURRENT_YEAR,
+    };
+    (rawByPlayer.get(r.player_id) ?? rawByPlayer.set(r.player_id, []).get(r.player_id)!).push(spell);
+  }
+  const transfers = await loadTransfers(ids);
+  const byClub = new Map<number, Array<{ id: string; spell: ClubSpell }>>();
+  for (const [playerId, raw] of rawByPlayer) {
+    for (const spell of refineCareerSpells(raw, transfers.get(playerId) ?? [])) {
+      (byClub.get(spell.clubId) ?? byClub.set(spell.clubId, []).get(spell.clubId)!).push({
+        id: playerId,
+        spell,
+      });
+    }
   }
 
   const adj = new Map<string, Set<string>>();
@@ -295,7 +349,7 @@ async function buildGraph(): Promise<Graph> {
       for (let j = i + 1; j < roster.length; j += 1) {
         const p = roster[i]!;
         const q = roster[j]!;
-        if (p.from <= q.to && q.from <= p.to) link(p.id, q.id);
+        if (spellsOverlap(p.spell, q.spell)) link(p.id, q.id);
       }
     }
   }

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../../db/index.js';
-import { isNationalTeam, isYouthOrReserveSide, nationSet } from '../../../utils/nationalTeam.js';
+import { clubCareerOnlySql, isNationalTeam, isYouthOrReserveSide, nationSet } from '../../../utils/nationalTeam.js';
 import type {
   LMSBuildContext,
   LMSBuilderResult,
@@ -56,18 +56,7 @@ export async function buildCareerPath(ctx: LMSBuildContext): Promise<LMSBuilderR
       FROM player_career pc
       JOIN players p ON p.id = pc.player_id
       WHERE p.market_value_tier >= 4 AND pc.team_id > 0
-        AND NOT (
-          (
-            EXISTS (SELECT 1 FROM players _n WHERE _n.nationality <> '' AND _n.nationality = pc.team_name)
-            OR EXISTS (
-              SELECT 1 FROM players _n
-              WHERE _n.nationality <> ''
-                AND _n.nationality = regexp_replace(pc.team_name, '\\s+U\\d{1,2}(\\s+W)?$', '', 'i')
-            )
-            OR pc.team_name ~* '\\s+(Olympics?|Olympic)$'
-          )
-          AND NOT EXISTS (SELECT 1 FROM teams _t WHERE _t.id = pc.team_id AND _t.league_id IS NOT NULL)
-        )
+        AND ${clubCareerOnlySql('pc')}
       GROUP BY pc.player_id, pc.team_name
     ),
     paths AS (

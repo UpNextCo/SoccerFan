@@ -1,8 +1,73 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, type AdminTeamHit } from '../api'
+import { api, type AdminLeagueHit, type AdminTeamHit } from '../api'
 import { EntityPicker } from '../components/EntityPicker'
 import { nationalityFlag } from '../countryFlags'
 import './bingo-lms.css'
+
+const CATEGORY_TYPES = [
+  'nationality',
+  'playedForClub',
+  'playedInLeague',
+  'nationClub',
+  'clubLeague',
+  'nationLeague',
+  'clubCombo',
+  'wonCompetition',
+  'award',
+  'statThreshold',
+] as const
+type CategoryType = (typeof CATEGORY_TYPES)[number]
+
+const CATEGORY_NAMES: Record<CategoryType, string> = {
+  nationality: 'Country',
+  playedForClub: 'Club',
+  playedInLeague: 'League',
+  nationClub: 'Club and country',
+  clubLeague: 'Club and league',
+  nationLeague: 'Country and league',
+  clubCombo: 'Two clubs',
+  wonCompetition: 'Trophy winner',
+  award: 'Award winner',
+  statThreshold: 'Stat milestone',
+}
+
+const TROPHY_OPTIONS = [
+  'Champions League',
+  'Europa League',
+  'Club World Cup',
+  'World Cup',
+  'European Championship',
+  'Copa América',
+  'Premier League',
+  'La Liga',
+  'Serie A',
+  'Bundesliga',
+  'Ligue 1',
+  'League Cup',
+]
+
+const AWARD_OPTIONS = [
+  { rule: "Ballon d'Or", title: "Ballon d'Or Winner" },
+  { rule: 'European Golden Shoe', title: 'European Golden Boot' },
+  { rule: 'World Cup Golden Boot', title: 'World Cup Golden Boot' },
+  { rule: 'World Cup Golden Ball', title: 'World Cup Golden Ball' },
+]
+
+const STAT_OPTIONS = [
+  { rule: 'intl_caps>=100', title: 'International Caps', icon: '100+' },
+  { rule: 'intl_goals>=40', title: 'International Goals', icon: '40+' },
+  { rule: 'pl_goals>=100', title: 'Premier League Goals', icon: '100+' },
+  { rule: 'pl_apps>=250', title: 'Premier League Apps', icon: '250+' },
+  { rule: 'cl_apps>=80', title: 'Champions League Apps', icon: '80+' },
+  { rule: 'cl_goals>=30', title: 'Champions League Goals', icon: '30+' },
+  { rule: 'club_apps>=500', title: 'Career Club Apps', icon: '500+' },
+  { rule: 'laliga_apps>=150', title: 'La Liga Apps', icon: '150+' },
+  { rule: 'seriea_apps>=150', title: 'Serie A Apps', icon: '150+' },
+  { rule: 'top5_leagues>=3', title: 'Top-5 Leagues Played', icon: '3+' },
+  { rule: 'top5_clubs>=4', title: 'Top-5 Clubs Played For', icon: '4+' },
+  { rule: 'transfer_eur_m>=80', title: 'Transfer Fee €80M', icon: '€80M' },
+  { rule: 'transfer_eur_m>=100', title: 'Transfer Fee €100M', icon: '€100M' },
+]
 
 type Cat = {
   id?: string
@@ -14,7 +79,7 @@ type Cat = {
   iconValue?: string
   logoUrl?: string | null
   logo2Url?: string | null
-  flag?: string
+  flag?: string | null
   [k: string]: unknown
 }
 
@@ -42,18 +107,181 @@ type Puzzle = {
   [k: string]: unknown
 }
 
-const CATEGORY_NAMES: Record<string, string> = {
-  nationality: 'Nationality',
-  playedForClub: 'Played for club',
-  nationClub: 'Nation + club',
-  clubCombo: 'Club combination',
-  wonCompetition: 'Competition winner',
-  award: 'Award winner',
-  statThreshold: 'Stat threshold',
+function isCategoryType(value: string | undefined): value is CategoryType {
+  return Boolean(value && CATEGORY_TYPES.includes(value as CategoryType))
 }
 
 function categoryName(category: Cat): string {
-  return CATEGORY_NAMES[category.type ?? ''] ?? 'Custom category'
+  return isCategoryType(category.type) ? CATEGORY_NAMES[category.type] : 'Custom category'
+}
+
+type CatParts = {
+  nation?: string
+  club?: string
+  club2?: string
+  league?: string
+  trophy?: string
+  award?: string
+  stat?: string
+}
+
+function catParts(category: Cat): CatParts {
+  const rule = String(category.matchingRule ?? '')
+  const [first, second] = rule.split('|')
+  switch (category.type) {
+    case 'nationality':
+      return { nation: rule || category.flag || undefined }
+    case 'playedForClub':
+      return { club: rule || undefined }
+    case 'playedInLeague':
+      return { league: rule || undefined }
+    case 'nationClub':
+      return { nation: first || category.flag || undefined, club: second || undefined }
+    case 'clubLeague':
+      return { club: first || undefined, league: second || undefined }
+    case 'nationLeague':
+      return { nation: first || category.flag || undefined, league: second || undefined }
+    case 'clubCombo':
+      return { club: first || undefined, club2: second || undefined }
+    case 'wonCompetition':
+      return { trophy: rule || undefined }
+    case 'award':
+      return { award: rule || undefined }
+    case 'statThreshold':
+      return { stat: rule || undefined }
+    default:
+      return {}
+  }
+}
+
+function buildCategory(type: CategoryType, parts: CatParts, previous?: Cat): Partial<Cat> {
+  const nation = parts.nation?.trim() || ''
+  const club = parts.club?.trim() || ''
+  const club2 = parts.club2?.trim() || ''
+  const league = parts.league?.trim() || ''
+  const trophy = parts.trophy?.trim() || ''
+  const award = parts.award?.trim() || ''
+  const stat = parts.stat?.trim() || ''
+  const base = {
+    type,
+    teamId: previous?.teamId ?? null,
+    team2Id: previous?.team2Id ?? null,
+    logoUrl: previous?.logoUrl ?? null,
+    logo2Url: previous?.logo2Url ?? null,
+    flag: null as string | null,
+  }
+
+  switch (type) {
+    case 'nationality':
+      return {
+        ...base,
+        iconType: 'flag',
+        matchingRule: nation,
+        iconValue: nation,
+        flag: nation || null,
+        title: nation || 'Country',
+        logoUrl: null,
+        logo2Url: null,
+      }
+    case 'playedForClub':
+      return {
+        ...base,
+        iconType: 'clubBadge',
+        matchingRule: club,
+        iconValue: club,
+        title: club ? `Played for ${club}` : 'Club',
+        logo2Url: null,
+        flag: null,
+      }
+    case 'playedInLeague':
+      return {
+        ...base,
+        iconType: 'league',
+        matchingRule: league,
+        iconValue: league,
+        title: league || 'League',
+        logoUrl: previous?.type === 'playedInLeague' || previous?.type === 'nationLeague' ? previous.logoUrl : previous?.logo2Url ?? null,
+        logo2Url: null,
+        flag: null,
+      }
+    case 'nationClub':
+      return {
+        ...base,
+        iconType: 'nationClub',
+        matchingRule: `${nation}|${club}`,
+        iconValue: club,
+        flag: nation || null,
+        title: nation && club ? `${nation} · ${club}` : 'Club and country',
+        logo2Url: null,
+      }
+    case 'clubLeague':
+      return {
+        ...base,
+        iconType: 'clubLeague',
+        matchingRule: `${club}|${league}`,
+        iconValue: `${club}|${league}`,
+        title: club && league ? `${club} · ${league}` : 'Club and league',
+        logo2Url: previous?.type === 'playedInLeague' || previous?.type === 'nationLeague' ? previous.logoUrl : previous?.logo2Url ?? null,
+        flag: null,
+      }
+    case 'nationLeague':
+      return {
+        ...base,
+        iconType: 'nationLeague',
+        matchingRule: `${nation}|${league}`,
+        iconValue: league,
+        flag: nation || null,
+        title: nation && league ? `${nation} · ${league}` : 'Country and league',
+        logoUrl: previous?.type === 'playedInLeague' || previous?.type === 'clubLeague' ? (previous.type === 'clubLeague' ? previous.logo2Url : previous.logoUrl) : previous?.logoUrl ?? null,
+        logo2Url: null,
+      }
+    case 'clubCombo':
+      return {
+        ...base,
+        iconType: 'clubCombo',
+        matchingRule: `${club}|${club2}`,
+        iconValue: `${club}|${club2}`,
+        title: club && club2 ? `${club} & ${club2}` : 'Two clubs',
+        flag: null,
+      }
+    case 'wonCompetition':
+      return {
+        ...base,
+        iconType: 'trophy',
+        matchingRule: trophy,
+        iconValue: trophy,
+        title: trophy ? `${trophy} Winner` : 'Trophy winner',
+        logoUrl: null,
+        logo2Url: null,
+        flag: null,
+      }
+    case 'award': {
+      const option = AWARD_OPTIONS.find((item) => item.rule === award)
+      return {
+        ...base,
+        iconType: 'award',
+        matchingRule: award,
+        iconValue: award,
+        title: option?.title || award || 'Award winner',
+        logoUrl: null,
+        logo2Url: null,
+        flag: null,
+      }
+    }
+    case 'statThreshold': {
+      const option = STAT_OPTIONS.find((item) => item.rule === stat) ?? STAT_OPTIONS[0]
+      return {
+        ...base,
+        iconType: 'custom',
+        matchingRule: option?.rule ?? '',
+        iconValue: option?.icon ?? '',
+        title: option?.title || 'Stat milestone',
+        logoUrl: null,
+        logo2Url: null,
+        flag: null,
+      }
+    }
+  }
 }
 
 function norm(value: string): string {
@@ -135,6 +363,16 @@ function playerMatchesCategory(player: Player, category: Cat): boolean {
       const [a, b] = rule.split('|')
       return hasClub(player, a ?? '') && hasClub(player, b ?? '')
     }
+    case 'playedInLeague':
+      return (player.leagues ?? []).some((league) => norm(league) === norm(rule))
+    case 'clubLeague': {
+      const [club, league] = rule.split('|')
+      return hasClub(player, club ?? '') && (player.leagues ?? []).some((name) => norm(name) === norm(league ?? ''))
+    }
+    case 'nationLeague': {
+      const [nation, league] = rule.split('|')
+      return norm(player.nationality ?? '') === norm(nation ?? '') && (player.leagues ?? []).some((name) => norm(name) === norm(league ?? ''))
+    }
     case 'wonCompetition':
       return (player.trophies ?? []).some((trophy) => norm(trophy) === norm(rule))
     case 'award':
@@ -174,6 +412,17 @@ function matchReason(player: Player, category: Cat): string {
       const second = player.clubs?.find((name) => clubKey(name) === clubKey(b ?? '')) || b
       return [first, second].filter(Boolean).join(' + ')
     }
+    case 'playedInLeague':
+      return player.leagues?.find((league) => norm(league) === norm(rule)) || rule
+    case 'clubLeague': {
+      const [club, league] = rule.split('|')
+      const matchedClub = player.clubs?.find((name) => clubKey(name) === clubKey(club ?? '')) || club
+      return [matchedClub, league].filter(Boolean).join(' · ')
+    }
+    case 'nationLeague': {
+      const [, league] = rule.split('|')
+      return [player.nationality, league].filter(Boolean).join(' · ')
+    }
     case 'wonCompetition':
     case 'award':
       return rule
@@ -208,6 +457,12 @@ function ruleSummary(category: Cat): string {
       return `${first || 'Nationality'} players who played for ${second || 'club'}`
     case 'clubCombo':
       return `Players who represented both ${first || 'club A'} and ${second || 'club B'}`
+    case 'playedInLeague':
+      return `Players who appeared in ${rule || 'this league'}`
+    case 'clubLeague':
+      return `${first || 'Club'} players who also played in ${second || 'league'}`
+    case 'nationLeague':
+      return `${first || 'Nationality'} players who appeared in ${second || 'league'}`
     case 'wonCompetition':
       return `Players who won ${rule || 'this competition'}`
     case 'award':
@@ -225,8 +480,15 @@ function categoryIcon(category: Cat) {
       <span className="bingo-preview-logos">
         <img src={category.logoUrl} alt="" />
         {category.logo2Url && <img src={category.logo2Url} alt="" />}
+        {(category.type === 'nationClub' || category.type === 'nationLeague') && category.flag && (
+          <span className="bingo-preview-flag-badge">{nationalityFlag(category.flag)}</span>
+        )}
       </span>
     )
+  }
+  if (category.iconType === 'league' || category.type === 'playedInLeague' || category.type === 'nationLeague') {
+    const league = category.type === 'nationLeague' ? String(category.matchingRule ?? '').split('|')[1] : String(category.iconValue || category.matchingRule || '')
+    return <span className="bingo-preview-fallback">{league ? league.slice(0, 3).toUpperCase() : 'LG'}</span>
   }
   if (category.flag || category.type === 'nationality') {
     const nationality = category.flag || String(category.matchingRule ?? '')
@@ -361,77 +623,41 @@ export function BingoEditor({
     }
   }
 
+  function changeCategoryType(idx: number, type: CategoryType) {
+    const cat = latestRef.current.categories[idx]!
+    updateCat(idx, buildCategory(type, catParts(cat), cat))
+  }
+
+  function applyParts(idx: number, patch: CatParts, extras: Partial<Cat> = {}) {
+    const cat = { ...latestRef.current.categories[idx]!, ...extras }
+    const type = isCategoryType(cat.type) ? cat.type : 'playedForClub'
+    updateCat(idx, { ...buildCategory(type, { ...catParts(cat), ...patch }, cat), ...extras })
+  }
+
   async function pickClubRule(idx: number, hit: AdminTeamHit, slot: 'primary' | 'secondary' = 'primary') {
     const team = await api.resolveTeam(hit.id)
     const cat = latestRef.current.categories[idx]!
-    const type = cat.type ?? ''
-
-    if (type === 'playedForClub' || cat.iconType === 'clubBadge') {
-      updateCat(idx, {
-        title: `Played for ${team.name}`,
-        matchingRule: team.name,
-        iconValue: `${team.name}|${team.leagueName ?? 'Premier League'}`,
-        logoUrl: team.logoUrl,
-      })
+    const parts = catParts(cat)
+    if (slot === 'secondary') {
+      applyParts(idx, { club2: team.name }, { logo2Url: team.logoUrl, team2Id: team.id })
       return
     }
-
-    if (type === 'nationClub' || cat.iconType === 'nationClub') {
-      const nation = cat.flag || String(cat.matchingRule ?? '').split('|')[0] || ''
-      const rule = `${nation}|${team.name}`
-      updateCat(idx, {
-        matchingRule: rule,
-        iconValue: `${team.name}|${team.leagueName ?? 'Premier League'}`,
-        logoUrl: team.logoUrl,
-        title: cat.title?.includes('|') ? cat.title : `${nation} · ${team.name}`,
-      })
-      return
-    }
-
-    if (type === 'clubCombo' || cat.iconType === 'clubCombo') {
-      const [a, b] = String(cat.matchingRule ?? '').split('|')
-      if (slot === 'primary') {
-        const nextA = team.name
-        const nextB = b || a || ''
-        updateCat(idx, {
-          matchingRule: `${nextA}|${nextB}`,
-          iconValue: `${nextA}|${nextB}`,
-          title: `${nextA} & ${nextB}`,
-          logoUrl: team.logoUrl,
-        })
-      } else {
-        const nextA = a || team.name
-        const nextB = team.name
-        updateCat(idx, {
-          matchingRule: `${nextA}|${nextB}`,
-          iconValue: `${nextA}|${nextB}`,
-          title: `${nextA} & ${nextB}`,
-          logo2Url: team.logoUrl,
-        })
-      }
-    }
+    applyParts(
+      idx,
+      { club: team.name, league: parts.league || team.leagueName || undefined },
+      { logoUrl: team.logoUrl, teamId: team.id }
+    )
   }
 
-  async function pickNationality(idx: number, name: string) {
+  async function pickLeagueRule(idx: number, hit: AdminLeagueHit) {
     const cat = latestRef.current.categories[idx]!
-    const type = cat.type ?? ''
-    if (type === 'nationality' || cat.iconType === 'flag') {
-      updateCat(idx, {
-        title: name,
-        matchingRule: name,
-        iconValue: name,
-        flag: name,
-      })
-      return
-    }
-    if (type === 'nationClub' || cat.iconType === 'nationClub') {
-      const club = String(cat.matchingRule ?? '').split('|')[1] || ''
-      updateCat(idx, {
-        matchingRule: `${name}|${club}`,
-        flag: name,
-        title: `${name} · ${club}`,
-      })
-    }
+    const extras =
+      cat.type === 'clubLeague' ? { logo2Url: hit.logoUrl } : { logoUrl: hit.logoUrl }
+    applyParts(idx, { league: hit.name }, extras)
+  }
+
+  function pickNationality(idx: number, name: string) {
+    applyParts(idx, { nation: name }, { flag: name })
   }
 
   return (
@@ -464,20 +690,12 @@ export function BingoEditor({
           })}
         </div>
         {categories.map((c, idx) => {
-          const type = c.type ?? ''
-          const isClub =
-            type === 'playedForClub' ||
-            type === 'nationClub' ||
-            type === 'clubCombo' ||
-            c.iconType === 'clubBadge' ||
-            c.iconType === 'nationClub' ||
-            c.iconType === 'clubCombo'
-          const isNat =
-            type === 'nationality' ||
-            type === 'nationClub' ||
-            c.iconType === 'flag' ||
-            c.iconType === 'nationClub'
-          const ruleParts = String(c.matchingRule ?? '').split('|')
+          const type = isCategoryType(c.type) ? c.type : null
+          const parts = catParts(c)
+          const needsClub = type === 'playedForClub' || type === 'nationClub' || type === 'clubLeague' || type === 'clubCombo'
+          const needsClubB = type === 'clubCombo'
+          const needsLeague = type === 'playedInLeague' || type === 'clubLeague' || type === 'nationLeague'
+          const needsNat = type === 'nationality' || type === 'nationClub' || type === 'nationLeague'
           const squarePlayers = matchersByCategory[idx] ?? []
 
           return (
@@ -499,6 +717,23 @@ export function BingoEditor({
                 </div>
               </div>
               <label className="field">
+                Category type
+                <select
+                  value={type ?? ''}
+                  disabled={locked}
+                  onChange={(e) => {
+                    if (isCategoryType(e.target.value)) changeCategoryType(idx, e.target.value)
+                  }}
+                >
+                  {!type && <option value="">Choose a type</option>}
+                  {CATEGORY_TYPES.map((categoryType) => (
+                    <option key={categoryType} value={categoryType}>
+                      {CATEGORY_NAMES[categoryType]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
                 Category name
                 <input
                   value={(c.title as string) ?? (c.label as string) ?? ''}
@@ -507,41 +742,33 @@ export function BingoEditor({
                 />
               </label>
 
-              {isNat && (
+              {needsNat && (
                 <EntityPicker
                   kind="nationality"
-                  label="Nationality"
-                  valueLabel={
-                    type === 'nationality'
-                      ? String(c.matchingRule ?? '')
-                      : ruleParts[0] || c.flag || undefined
-                  }
+                  label="Country"
+                  valueLabel={parts.nation}
                   disabled={locked}
                   onPickNationality={(hit) => pickNationality(idx, hit.name)}
                 />
               )}
 
-              {isClub && type !== 'clubCombo' && c.iconType !== 'clubCombo' && (
+              {needsClub && !needsClubB && (
                 <EntityPicker
                   kind="team"
                   label="Club"
-                  valueLabel={
-                    type === 'playedForClub'
-                      ? String(c.matchingRule ?? '')
-                      : ruleParts[1] || undefined
-                  }
+                  valueLabel={parts.club}
                   imageUrl={c.logoUrl}
                   disabled={locked}
                   onPickTeam={(hit) => pickClubRule(idx, hit, 'primary')}
                 />
               )}
 
-              {(type === 'clubCombo' || c.iconType === 'clubCombo') && (
+              {needsClubB && (
                 <div className="row">
                   <EntityPicker
                     kind="team"
                     label="Club A"
-                    valueLabel={ruleParts[0] || undefined}
+                    valueLabel={parts.club}
                     imageUrl={c.logoUrl}
                     disabled={locked}
                     onPickTeam={(hit) => pickClubRule(idx, hit, 'primary')}
@@ -549,7 +776,7 @@ export function BingoEditor({
                   <EntityPicker
                     kind="team"
                     label="Club B"
-                    valueLabel={ruleParts[1] || undefined}
+                    valueLabel={parts.club2}
                     imageUrl={c.logo2Url}
                     disabled={locked}
                     onPickTeam={(hit) => pickClubRule(idx, hit, 'secondary')}
@@ -557,7 +784,65 @@ export function BingoEditor({
                 </div>
               )}
 
-              {!isClub && !isNat && <p className="muted tiny">This category uses custom matching criteria.</p>}
+              {needsLeague && (
+                <EntityPicker
+                  kind="league"
+                  label="League"
+                  valueLabel={parts.league}
+                  imageUrl={type === 'clubLeague' ? c.logo2Url : c.logoUrl}
+                  disabled={locked}
+                  onPickLeague={(hit) => pickLeagueRule(idx, hit)}
+                />
+              )}
+
+              {type === 'wonCompetition' && (
+                <label className="field">
+                  Trophy
+                  <select
+                    value={parts.trophy ?? ''}
+                    disabled={locked}
+                    onChange={(e) => applyParts(idx, { trophy: e.target.value })}
+                  >
+                    <option value="">Choose a trophy</option>
+                    {TROPHY_OPTIONS.map((trophy) => (
+                      <option key={trophy} value={trophy}>{trophy}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {type === 'award' && (
+                <label className="field">
+                  Award
+                  <select
+                    value={parts.award ?? ''}
+                    disabled={locked}
+                    onChange={(e) => applyParts(idx, { award: e.target.value })}
+                  >
+                    <option value="">Choose an award</option>
+                    {AWARD_OPTIONS.map((award) => (
+                      <option key={award.rule} value={award.rule}>{award.title}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {type === 'statThreshold' && (
+                <label className="field">
+                  Milestone
+                  <select
+                    value={parts.stat || STAT_OPTIONS[0]?.rule || ''}
+                    disabled={locked}
+                    onChange={(e) => applyParts(idx, { stat: e.target.value })}
+                  >
+                    {STAT_OPTIONS.map((stat) => (
+                      <option key={stat.rule} value={stat.rule}>{stat.title}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {!type && <p className="muted tiny">Pick a category type to set the matching rule.</p>}
               <div className="bingo-square-players">
                 <header className="bingo-square-players-header">
                   <div>
@@ -616,10 +901,12 @@ export function BingoEditor({
                 <summary>Advanced</summary>
                 <div className="advanced-grid">
                   <label className="field">Category key<input value={c.id ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { id: e.target.value })} /></label>
-                  <label className="field">Category style<input value={type} disabled={locked} onChange={(e) => updateCat(idx, { type: e.target.value })} /></label>
+                  <label className="field">Category style<input value={c.type ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { type: e.target.value })} /></label>
                   <label className="field">Icon style<input value={c.iconType ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { iconType: e.target.value })} /></label>
                   <label className="field">Icon detail<input value={c.iconValue ?? ''} disabled={locked} onChange={(e) => updateCat(idx, { iconValue: e.target.value })} /></label>
-                  {!isClub && !isNat && <label className="field">Matching criteria<input value={String(c.matchingRule ?? '')} disabled={locked} onChange={(e) => updateCat(idx, { matchingRule: e.target.value })} /></label>}
+                  {!needsClub && !needsNat && !needsLeague && type !== 'wonCompetition' && type !== 'award' && type !== 'statThreshold' && (
+                    <label className="field">Matching criteria<input value={String(c.matchingRule ?? '')} disabled={locked} onChange={(e) => updateCat(idx, { matchingRule: e.target.value })} /></label>
+                  )}
                 </div>
               </details>
             </article>

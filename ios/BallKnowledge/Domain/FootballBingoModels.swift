@@ -12,6 +12,8 @@ enum FootballBingoCategoryType: String, Codable {
     case nationClub
     case clubCombo
     case playedInLeague
+    case clubLeague
+    case nationLeague
     case wonCompetition
     case award
     case playedWithPlayer
@@ -25,6 +27,8 @@ enum FootballBingoIconType: String, Codable {
     case clubBadge
     case nationClub
     case clubCombo
+    case clubLeague
+    case nationLeague
     case trophy
     case league
     case award

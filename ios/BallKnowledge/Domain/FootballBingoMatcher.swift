@@ -26,6 +26,18 @@ enum FootballBingoMatcher {
         case .playedInLeague:
             return player.leagues.contains { normalize($0) == normalize(category.matchingRule) }
 
+        case .clubLeague:
+            let parts = category.matchingRule.components(separatedBy: "|")
+            guard parts.count == 2 else { return false }
+            return player.clubs.contains { normalize($0) == normalize(parts[0]) }
+                && player.leagues.contains { normalize($0) == normalize(parts[1]) }
+
+        case .nationLeague:
+            let parts = category.matchingRule.components(separatedBy: "|")
+            guard parts.count == 2 else { return false }
+            return normalize(player.nationality) == normalize(parts[0])
+                && player.leagues.contains { normalize($0) == normalize(parts[1]) }
+
         case .wonCompetition:
             return player.trophies.contains { normalize($0) == normalize(category.matchingRule) }
 

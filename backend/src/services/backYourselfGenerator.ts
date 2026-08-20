@@ -8,7 +8,7 @@
  */
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { leagueLogoUrl, resolveHeadshot } from '../constants/footballMedia.js';
+import { INTERNATIONAL_COMPETITION_LEAGUE_IDS, leagueLogoUrl, resolveHeadshot } from '../constants/footballMedia.js';
 import { trustedIntlCapsSql } from './statMetrics.js';
 import { getPhotoOverrides } from './photoOverrides.js';
 import { lookupTeamLogo } from './teamService.js';
@@ -270,12 +270,19 @@ function playedForClubSql(club: string, playerRef: SQL = sql`p.id`): SQL {
 }
 
 function teammatesWithSql(anchorId: string): SQL {
+  const intlLeagues = sql.join(
+    [...INTERNATIONAL_COMPETITION_LEAGUE_IDS].sort((a, b) => a - b).map((id) => sql`${id}`),
+    sql`, `
+  );
   return sql`EXISTS (
     SELECT 1 FROM player_stats sp JOIN player_stats sa
       ON sp.team_name = sa.team_name AND sp.season = sa.season
     WHERE sp.player_id = p.id AND sa.player_id = ${anchorId}::uuid
       AND sp.appearances > 0 AND sa.appearances > 0
-      AND sp.league_id NOT IN (1, 4) AND sa.league_id NOT IN (1, 4)
+      AND sp.league_id NOT IN (${intlLeagues}) AND sa.league_id NOT IN (${intlLeagues})
+      AND NOT EXISTS (
+        SELECT 1 FROM players n WHERE n.nationality <> '' AND n.nationality = sp.team_name
+      )
   )`;
 }
 

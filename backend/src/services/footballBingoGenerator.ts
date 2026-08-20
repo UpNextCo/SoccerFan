@@ -6,6 +6,9 @@
  *  - playedForClub    (big clubs only)
  *  - nationClub       (Brazilian who played for Barcelona — the marquee combo)
  *  - clubCombo        (played for both A and B)
+ *  - playedInLeague   (ops: appeared in a league)
+ *  - clubLeague       (ops: club AND league)
+ *  - nationLeague     (ops: nationality AND league)
  *  - wonCompetition   (curated trophy whitelist; WC / CL / Euro = full squad, not final XI)
  *  - award            (Ballon d'Or, European Golden Shoe, WC Golden Boot/Ball)
  *  - statThreshold    (milestones via a generalised stats map: caps, CL apps, transfer fee…)
@@ -127,12 +130,20 @@ function demonym(nation: string): string {
 export type CatType =
   | 'nationality' | 'playedForClub' | 'nationClub' | 'clubCombo'
   | 'wonCompetition' | 'award' | 'statThreshold';
-type IconType = 'flag' | 'clubBadge' | 'trophy' | 'nationClub' | 'clubCombo' | 'award' | 'custom';
+/** Ops can author extra combos the daily generator does not currently pick. */
+export type BingoTileType =
+  | CatType
+  | 'playedInLeague'
+  | 'clubLeague'
+  | 'nationLeague';
+type IconType =
+  | 'flag' | 'clubBadge' | 'trophy' | 'nationClub' | 'clubCombo'
+  | 'award' | 'custom' | 'league' | 'clubLeague' | 'nationLeague';
 
 export interface BingoCategory {
   id: string;
   title: string;
-  type: CatType;
+  type: BingoTileType;
   iconType: IconType;
   iconValue: string;
   matchingRule: string;
@@ -192,6 +203,18 @@ export function matches(p: BingoPlayer, c: BingoCategory): boolean {
       const [key, thrStr] = c.matchingRule.split('>=');
       const thr = Number(thrStr) || 0;
       return (p.stats[key ?? ''] ?? 0) >= thr;
+    }
+    case 'playedInLeague':
+      return p.leagues.some((x) => norm(x) === norm(c.matchingRule));
+    case 'clubLeague': {
+      const [club, league] = c.matchingRule.split('|');
+      return p.clubs.some((x) => clubKey(x) === clubKey(club ?? ''))
+        && p.leagues.some((x) => norm(x) === norm(league ?? ''));
+    }
+    case 'nationLeague': {
+      const [nation, league] = c.matchingRule.split('|');
+      return norm(p.nationality) === norm(nation ?? '')
+        && p.leagues.some((x) => norm(x) === norm(league ?? ''));
     }
   }
 }
@@ -535,6 +558,14 @@ export const BINGO_TYPE_CAPS: Readonly<Record<CatType, number>> = {
   statThreshold: 2,
 };
 
+function isGeneratedCatType(type: BingoTileType): type is CatType {
+  return Object.prototype.hasOwnProperty.call(BINGO_TYPE_TARGETS, type);
+}
+
+function typeCap(type: BingoTileType): number {
+  return isGeneratedCatType(type) ? BINGO_TYPE_CAPS[type] : 2;
+}
+
 function frequencyOf(usage: ReadonlyMap<string, BingoTileUsage>, id: string): number {
   return usage.get(id)?.frequency ?? 0;
 }
@@ -558,6 +589,9 @@ export function bingoCategoryClubKeys(category: BingoCategory): string[] {
       .map(clubKey)
       .filter(Boolean);
   }
+  if (category.type === 'clubLeague') {
+    return [clubKey(category.matchingRule.split('|')[0] ?? '')].filter(Boolean);
+  }
   return [];
 }
 
@@ -575,7 +609,7 @@ export function selectBingoCategories(
 ): BingoCategory[] {
   const chosen: BingoCategory[] = [];
   const chosenIds = new Set<string>();
-  const typeCounts = new Map<CatType, number>();
+  const typeCounts = new Map<string, number>();
   const clubCounts = new Map<string, number>();
   const tie = (category: BingoCategory) => hashStr(`${seed}:bingo-tile:${category.id}`);
   const clubRecencyPenalty = (category: BingoCategory) =>
@@ -627,7 +661,7 @@ export function selectBingoCategories(
         .filter((c) => allowRecent || !isHardRecent(usage, c.id))
         // Awards are intentionally rare highlights; never recycle one inside the hard window.
         .filter((c) => c.type !== 'award' || !isHardRecent(usage, c.id))
-        .filter((c) => !enforceCaps || (typeCounts.get(c.type) ?? 0) < BINGO_TYPE_CAPS[c.type])
+        .filter((c) => !enforceCaps || (typeCounts.get(c.type) ?? 0) < typeCap(c.type))
         // Award remains genuinely optional and never exceeds one, even in emergency fallback.
         .filter((c) => c.type !== 'award' || (typeCounts.get('award') ?? 0) < BINGO_TYPE_CAPS.award);
       if (eligible.length === 0) break;
@@ -638,8 +672,8 @@ export function selectBingoCategories(
         if (recentClubs !== 0) return recentClubs;
         const historicalClubs = clubFrequency(a) - clubFrequency(b);
         if (historicalClubs !== 0) return historicalClubs;
-        const aShare = (typeCounts.get(a.type) ?? 0) / BINGO_TYPE_CAPS[a.type];
-        const bShare = (typeCounts.get(b.type) ?? 0) / BINGO_TYPE_CAPS[b.type];
+        const aShare = (typeCounts.get(a.type) ?? 0) / typeCap(a.type);
+        const bShare = (typeCounts.get(b.type) ?? 0) / typeCap(b.type);
         return aShare - bShare || tie(a) - tie(b) || a.id.localeCompare(b.id);
       });
       add(eligible[0]!);
