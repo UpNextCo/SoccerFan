@@ -832,22 +832,12 @@ private struct TrophyCountingNumber: AnimatableModifier {
 
 struct FeaturedTrophyBadge: View {
     let imageName: String
-    var size: CGFloat = 38
+    var size: CGFloat = 52
 
     var body: some View {
         TrophyArtTile(imageName: imageName, size: size, fills: false, showsBackdrop: false)
             .frame(width: size, height: size)
-            .background {
-                Circle()
-                    .fill(BKTheme.background)
-                    .frame(width: size + 8, height: size + 8)
-            }
-            .overlay {
-                Circle()
-                    .stroke(BKTheme.background, lineWidth: 3)
-                    .frame(width: size + 6, height: size + 6)
-            }
-            .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+            .shadow(color: .black.opacity(0.28), radius: 5, y: 2)
     }
 }
 

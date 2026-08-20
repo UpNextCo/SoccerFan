@@ -392,8 +392,8 @@ struct HomeHeaderView: View {
         .overlay(alignment: .bottomTrailing) {
             if let featured = TrophyUnlockPayload.earnedTrophy(id: featuredTrophyId),
                let imageName = featured.bundleImageName {
-                FeaturedTrophyBadge(imageName: imageName, size: 18)
-                    .offset(x: 4, y: 4)
+                FeaturedTrophyBadge(imageName: imageName, size: 24)
+                    .offset(x: 6, y: 6)
             }
         }
     }

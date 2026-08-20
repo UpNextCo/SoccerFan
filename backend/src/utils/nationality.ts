@@ -47,6 +47,8 @@ const ALIAS_MAP: Record<string, string> = {
   'DR Congo': 'Congo DR',
   'Cape Verde Islands': 'Cape Verde',
   'Réunion': 'Réunion',
+  'Kingdom of the Netherlands': 'Netherlands',
+  'The Netherlands': 'Netherlands',
 };
 
 export function canonicalNationality(raw: string | null | undefined): string {

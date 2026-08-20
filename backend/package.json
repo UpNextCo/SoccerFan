@@ -91,6 +91,8 @@
     "job:backfill-nat": "tsx src/jobs/backfill-nationality.ts",
     "job:tm-rename": "tsx src/jobs/tm-rename.ts",
     "job:map-tm-players": "tsx src/jobs/map-tm-players.ts",
+    "job:map-famous-stubs": "tsx src/jobs/map-famous-stub-identities.ts",
+    "job:complete-famous-stubs": "tsx src/jobs/complete-famous-stub-data.ts",
     "job:seed-managers": "tsx src/jobs/seed-managers.ts",
     "job:build-relationships": "tsx src/jobs/build-relationship-prompts.ts",
     "job:build-milestones": "tsx src/jobs/build-milestone-prompts.ts",

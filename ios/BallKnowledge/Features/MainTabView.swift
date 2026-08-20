@@ -1499,21 +1499,12 @@ struct ProfileTabView: View {
     private var header: some View {
         VStack(spacing: 14) {
             ZStack {
-                Button { showAvatarOptions = true } label: {
-                    avatarView
-                }
-                .buttonStyle(.plain)
-
-                Button { showAvatarOptions = true } label: {
-                    avatarChromeButton(systemName: "camera.fill")
-                }
-                .buttonStyle(.plain)
-                .offset(x: -40, y: -40)
+                avatarView
 
                 Button { showFeaturedTrophyPicker = true } label: {
                     if let featured = TrophyUnlockPayload.earnedTrophy(id: featuredTrophyId),
                        let imageName = featured.bundleImageName {
-                        FeaturedTrophyBadge(imageName: imageName, size: 38)
+                        FeaturedTrophyBadge(imageName: imageName, size: 52)
                     } else {
                         avatarChromeButton(systemName: "plus")
                     }
@@ -1522,7 +1513,9 @@ struct ProfileTabView: View {
                 .offset(x: 40, y: 40)
             }
             .frame(width: 96, height: 96)
-            .padding(18)
+            .padding(.horizontal, 22)
+            .padding(.top, 4)
+            .padding(.bottom, 18)
 
             Button {
                 draftName = displayName
@@ -1635,7 +1628,7 @@ struct ProfileTabView: View {
                 showEditName = true
             }
             rowDivider
-            SettingsRow(icon: "photo.fill", title: "Change photo") {
+            SettingsRow(icon: "photo.fill", title: "Change profile photo") {
                 showAvatarOptions = true
             }
             rowDivider

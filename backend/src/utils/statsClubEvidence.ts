@@ -1,4 +1,12 @@
 import { sql, type SQL } from 'drizzle-orm';
+import { INTERNATIONAL_COMPETITION_LEAGUE_IDS } from '../constants/footballMedia.js';
+
+function internationalLeagueSql(): SQL {
+  return sql.join(
+    [...INTERNATIONAL_COMPETITION_LEAGUE_IDS].sort((a, b) => a - b).map((id) => sql`${id}`),
+    sql`, `
+  );
+}
 
 /**
  * `player_stats` records a team NAME per season, so it has to be resolved to a `teams.id` before it
@@ -19,6 +27,16 @@ export function statsTeamNameKeySql(column: SQL): SQL {
     WHEN 'atletico' THEN 'atletico madrid'
     WHEN 'atlético madrid' THEN 'atletico madrid'
     WHEN 'charlton athletic' THEN 'charlton'
+    WHEN 'manchester utd' THEN 'manchester united'
+    WHEN 'bayern munich' THEN 'bayern münchen'
+    WHEN 'milan' THEN 'ac milan'
+    WHEN 'dortmund' THEN 'borussia dortmund'
+    WHEN 'roma' THEN 'as roma'
+    WHEN 'derby county' THEN 'derby'
+    WHEN 'birmingham city' THEN 'birmingham'
+    WHEN 'coventry city' THEN 'coventry'
+    WHEN 'schalke 04' THEN 'fc schalke 04'
+    WHEN 'karlsruher' THEN 'karlsruher sc'
     ELSE lower(${column})
   END`;
 }
@@ -59,6 +77,7 @@ export function statsClubSeasonCte(): SQL {
         AND s.team_name <> ''
         AND COALESCE(s.appearances, 0) > 0
         AND s.season IS NOT NULL
+        AND s.league_id NOT IN (${internationalLeagueSql()})
       GROUP BY s.player_id, s.team_name, s.season
     ),
     stats_club_season AS (

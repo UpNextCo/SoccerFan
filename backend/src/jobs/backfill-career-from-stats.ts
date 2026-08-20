@@ -1,9 +1,10 @@
 /**
  * Backfill missing `player_career` club spells from `player_stats`.
  *
- * API-Football `/players/teams` often omits whole senior spells for legends (Anelka missing
- * Arsenal/RM/PSG/Liverpool; Verón with zero career rows). Stats usually still have those clubs
- * by name — resolve each name to a `teams.id` and insert any (player, club) not already present.
+ * API-Football `/players/teams` often omits whole senior spells — short loans (Kane→Millwall /
+ * Leicester) and legend gaps (Anelka missing Arsenal/RM/PSG/Liverpool). Stats usually still have
+ * those clubs by name — resolve each name to a `teams.id` and insert any (player, club) not
+ * already present. Contiguous seasons only, so a later return does not invent the years between.
  *
  *   DATABASE_URL=... npm run job:backfill-career-from-stats
  *   DATABASE_URL=... npm run job:backfill-career-from-stats -- --dry-run
@@ -12,8 +13,8 @@ import 'dotenv/config';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { playerCareer } from '../db/schema.js';
-import { clubCareerOnlySql } from '../utils/nationalTeam.js';
-import { statsTeamNameKeySql } from '../utils/statsClubEvidence.js';
+import { clubCareerOnlySql, youthOrReserveSideSql } from '../utils/nationalTeam.js';
+import { statsClubSeasonCte } from '../utils/statsClubEvidence.js';
 
 const dryRun = process.argv.includes('--dry-run');
 
@@ -28,66 +29,39 @@ type MissingSpell = {
 };
 
 async function loadMissingSpells(): Promise<MissingSpell[]> {
-  // Fast path: resolve team names via a one-row-per-name teams map, then anti-join career.
-  // Avoids per-row correlated EXISTS against players.nationality until the candidate set is small.
+  // Per-season evidence (same resolution as every other stats-club job), then collapse
+  // contiguous years so a 2011 loan and a 2018 return stay two spells — a min/max range
+  // would invent Club Chain teammates for every year in between.
   const rows = (await db.execute(sql`
-    WITH nations AS (
-      SELECT DISTINCT nationality AS name FROM players
-      WHERE nationality IS NOT NULL AND nationality <> ''
-    ),
-    team_map AS (
-      SELECT DISTINCT ON (lower(name))
-        lower(name) AS name_key,
-        id AS team_id,
-        name AS team_name
-      FROM teams
-      WHERE id > 0
-      ORDER BY lower(name), (league_id IS NOT NULL) DESC, id ASC
-    ),
-    stats_clubs AS (
+    WITH ${statsClubSeasonCte()},
+    contiguous AS (
       SELECT
-        s.player_id,
-        s.team_name,
-        ${statsTeamNameKeySql(sql`s.team_name`)} AS name_key,
-        MIN(s.season)::int AS season_from,
-        MAX(s.season)::int AS season_to,
-        SUM(COALESCE(s.appearances, 0))::int AS apps
-      FROM player_stats s
-      WHERE s.team_name IS NOT NULL
-        AND s.team_name <> ''
-        AND COALESCE(s.appearances, 0) > 0
-      GROUP BY s.player_id, s.team_name
-    ),
-    resolved AS (
-      SELECT
-        sc.player_id,
-        tm.team_id,
-        tm.team_name,
-        sc.season_from,
-        GREATEST(sc.season_to, sc.season_from) AS season_to,
-        sc.apps
-      FROM stats_clubs sc
-      JOIN team_map tm ON tm.name_key = sc.name_key
-      WHERE NOT EXISTS (SELECT 1 FROM nations n WHERE n.name = sc.team_name)
-        AND sc.team_name !~* '\\s+U\\d{1,2}(\\s+W)?$'
-        AND sc.team_name !~* '\\s+(Olympics?|Olympic)$'
+        player_id,
+        team_id,
+        team_name,
+        season,
+        apps,
+        season - ROW_NUMBER() OVER (PARTITION BY player_id, team_id ORDER BY season) AS grp
+      FROM stats_club_season
+      WHERE NOT ${youthOrReserveSideSql(sql`team_name`)}
     )
     SELECT
-      r.player_id,
-      r.team_id,
-      r.team_name,
-      r.season_from,
-      r.season_to,
-      r.apps,
+      c.player_id,
+      c.team_id,
+      c.team_name,
+      MIN(c.season)::int AS season_from,
+      MAX(c.season)::int AS season_to,
+      SUM(c.apps)::int AS apps,
       p.name AS player_name
-    FROM resolved r
-    JOIN players p ON p.id = r.player_id
+    FROM contiguous c
+    JOIN players p ON p.id = c.player_id
     WHERE NOT EXISTS (
       SELECT 1 FROM player_career pc
-      WHERE pc.player_id = r.player_id
-        AND (pc.team_id = r.team_id OR lower(pc.team_name) = lower(r.team_name))
+      WHERE pc.player_id = c.player_id
+        AND (pc.team_id = c.team_id OR lower(pc.team_name) = lower(c.team_name))
     )
-    ORDER BY p.market_value_tier DESC NULLS LAST, r.apps DESC
+    GROUP BY c.player_id, c.team_id, c.team_name, c.grp, p.name, p.market_value_tier
+    ORDER BY p.market_value_tier DESC NULLS LAST, SUM(c.apps) DESC
   `)) as unknown as MissingSpell[];
 
   return rows;
@@ -102,7 +76,7 @@ async function main() {
   const topPlayers = [...byPlayer.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20);
   for (const [name, n] of topPlayers) console.log(`  ${name}: +${n} clubs`);
 
-  for (const name of ['Nicolas Anelka', 'Juan Verón']) {
+  for (const name of ['Harry Kane', 'Nicolas Anelka', 'Juan Verón', 'Andy Robertson', 'Morgan Rogers']) {
     const rows = missing.filter((m) => m.player_name === name);
     console.log(
       `  check ${name}: ${rows.length ? rows.map((r) => `${r.team_name}`).join(', ') : 'nothing missing (or unresolved)'}`
@@ -147,7 +121,7 @@ async function main() {
            string_agg(DISTINCT pc.team_name, ', ' ORDER BY pc.team_name) AS names
     FROM players p
     JOIN player_career pc ON pc.player_id = p.id
-    WHERE p.name IN ('Nicolas Anelka', 'Juan Verón')
+    WHERE p.name IN ('Harry Kane', 'Nicolas Anelka', 'Juan Verón', 'Morgan Rogers')
       AND pc.team_id > 0
       AND ${clubCareerOnlySql('pc')}
     GROUP BY p.name
@@ -179,7 +153,7 @@ async function main() {
       ) clubs
       GROUP BY player_id
     ) m ON m.player_id = p.id
-    WHERE p.name IN ('Nicolas Anelka', 'Juan Verón')
+    WHERE p.name IN ('Harry Kane', 'Nicolas Anelka', 'Juan Verón', 'Morgan Rogers')
   `)) as unknown as Array<{ name: string; clubs: number }>;
   console.log('Draft most_clubs metric:');
   for (const c of metric) console.log(`  ${c.name}: ${c.clubs}`);
