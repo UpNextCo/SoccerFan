@@ -46,7 +46,7 @@ function backYourselfPoolSize(puzzle: unknown, answer: unknown): number {
   return Array.isArray(ids) ? ids.length : 0;
 }
 
-/** Instant VS create: pick a recent already-built daily instead of generating live. */
+/** Fallback only: last-resort reuse of a stored daily if live generation fails. */
 async function storedDailyPuzzle(
   modeId: VsModeId,
   seedKey: string,
@@ -78,9 +78,31 @@ async function storedDailyPuzzle(
   return { puzzle: chosen.puzzleJson, answer: chosen.answerJson };
 }
 
-async function generateFreshVsPuzzle(modeId: VsModeId, seedKey: string): Promise<VsGeneratedPuzzle> {
+async function generateFreshVsPuzzle(
+  modeId: VsModeId,
+  seedKey: string,
+  excludeTitle?: string
+): Promise<VsGeneratedPuzzle> {
   const today = new Date().toISOString().slice(0, 10);
+  let last: VsGeneratedPuzzle | null = null;
 
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const key = attempt === 0 ? seedKey : `${seedKey}:${attempt}`;
+    const generated = await generateFreshVsPuzzleOnce(modeId, today, key);
+    last = generated;
+    if (!excludeTitle || vsPuzzleMeta(modeId, generated.puzzle).title !== excludeTitle) {
+      return generated;
+    }
+  }
+  if (last) return last;
+  throw new Error('Could not generate a VS challenge right now. Try again.');
+}
+
+async function generateFreshVsPuzzleOnce(
+  modeId: VsModeId,
+  today: string,
+  seedKey: string
+): Promise<VsGeneratedPuzzle> {
   switch (modeId) {
     case 'draft_master': {
       const puzzle = await generateBattlePuzzleFromSeed(seedKey);
@@ -115,9 +137,13 @@ export async function generateVsPuzzle(
   seedKey: string,
   opts?: { excludeTitle?: string }
 ): Promise<VsGeneratedPuzzle> {
-  const stored = await storedDailyPuzzle(modeId, seedKey, opts?.excludeTitle);
-  if (stored) return stored;
-  return generateFreshVsPuzzle(modeId, seedKey);
+  try {
+    return await generateFreshVsPuzzle(modeId, seedKey, opts?.excludeTitle);
+  } catch {
+    const stored = await storedDailyPuzzle(modeId, seedKey, opts?.excludeTitle);
+    if (stored) return stored;
+    throw new Error('Could not generate a VS challenge right now. Try again.');
+  }
 }
 
 export function vsPuzzleMeta(modeId: string, puzzle: unknown): { modeTitle: string; title: string; scoreNoun: string } {

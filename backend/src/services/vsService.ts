@@ -1469,9 +1469,10 @@ export async function nameVsHotseat(userId: string, challengeId: string, playerI
   const stored = row.answerJson as { validPlayerIds?: string[] } | undefined;
   const validSet = new Set(stored?.validPlayerIds ?? []);
   const puzzle = row.puzzleJson as { category?: BackYourselfCategory };
-  const inPool = validSet.size > 0
-    ? validSet.has(playerId)
-    : await playerMatchesBackYourselfCategory(playerId, puzzle.category as BackYourselfCategory);
+  const liveMatch = puzzle.category
+    ? await playerMatchesBackYourselfCategory(playerId, puzzle.category)
+    : false;
+  const inPool = liveMatch || validSet.has(playerId);
   if (!inPool) {
     const next = eliminatePlayer(hotseat, userId);
     if (next.finished) return viewFor(await finishHotseat(row, next), userId);
