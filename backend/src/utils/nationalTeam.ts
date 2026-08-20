@@ -1,6 +1,6 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { CUP_OR_TOURNAMENT_LEAGUE_IDS } from '../constants/footballMedia.js';
+import { CUP_OR_TOURNAMENT_LEAGUE_IDS, INTERNATIONAL_COMPETITION_LEAGUE_IDS } from '../constants/footballMedia.js';
 import { canonicalNationality } from './nationality.js';
 
 /** True for a domestic club league — not World Cup / Euro / AFCON / UEFA club competitions. */
@@ -105,6 +105,28 @@ export function isExcludedNationalSpell(
   if (!isNationalTeam(teamName, nations)) return false;
   if (isYouthNationalOrOlympicSide(teamName, nations)) return true;
   return !clubs.has(teamId);
+}
+
+/** World Cup / Euro / AFCON / Copa América — never a club competition. */
+export function isInternationalCompetition(leagueId: number): boolean {
+  return INTERNATIONAL_COMPETITION_LEAGUE_IDS.has(leagueId);
+}
+
+/**
+ * Stats row games must not treat as a club appearance: international tournaments, or a
+ * national / youth-national side (Jamaica in Copa América, England in the World Cup).
+ * Domestic cups and UEFA club comps stay — those are club football.
+ */
+export function isExcludedNationalStat(
+  leagueId: number,
+  teamId: number,
+  teamName: string | null | undefined,
+  nations: Set<string>,
+  clubs: Set<number>
+): boolean {
+  if (isInternationalCompetition(leagueId)) return true;
+  if (!teamName?.trim()) return false;
+  return isExcludedNationalSpell(teamId, teamName, nations, clubs);
 }
 
 let CLUB_TEAM_IDS: Set<number> | null = null;

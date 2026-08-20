@@ -13,8 +13,12 @@
 
 .player-review-card h2,
 .player-review-card h3 {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.35rem;
   font-size: 1.05rem;
+}
+
+.player-review-card > .muted.tiny {
+  margin: 0 0 0.75rem;
 }
 
 .review-counts {

@@ -137,8 +137,8 @@ export function PlayerReviewPage() {
           <p className="eyebrow">Quiz Ops</p>
           <h1>Player data review</h1>
           <p className="muted">
-            Check a random famous player’s full stored dossier — clubs, years, and every stat we have —
-            then approve it or flag what’s wrong.
+            Check a random famous player the same way the games do: clubs only, no national sides
+            mixed in. Approve it or flag what’s wrong.
           </p>
         </div>
         {counts && (
@@ -241,6 +241,25 @@ export function PlayerReviewPage() {
             </div>
           </section>
 
+          <section className="player-review-card">
+            <h3>What the games use</h3>
+            <p className="muted tiny">
+              Same definitions as Draft / Target Man / Club Chain: club count drops youth sides,
+              career apps are big-5 + CL + EL, career goals are Transfermarkt club total + trusted
+              international goals.
+            </p>
+            <StatGrid
+              items={[
+                ['Clubs', dossier.gameUsage.clubCount],
+                ['Career apps', dossier.gameUsage.careerApps],
+                ['Career goals', dossier.gameUsage.careerGoals],
+                ['Intl caps', dossier.gameUsage.intlCaps],
+                ['Intl goals', dossier.gameUsage.intlGoals],
+                ['Counted trophies', dossier.gameUsage.trophies],
+              ]}
+            />
+          </section>
+
           <section className="player-review-card review-actions">
             <label>
               Flag note
@@ -266,24 +285,22 @@ export function PlayerReviewPage() {
           </section>
 
           <Section title={`Club career (${dossier.career.length})`}>
+            <p className="muted tiny">Club Chain / LMS filter — national sides are not clubs.</p>
             {dossier.career.length === 0 ? (
-              <Empty label="No player_career rows." />
+              <Empty label="No club career rows." />
             ) : (
-              <ul className="review-career">
-                {dossier.career.map((spell) => (
-                  <li key={`${spell.teamId}-${spell.seasonFrom}`}>
-                    <img src={spell.badgeUrl} alt="" />
-                    <span>
-                      <strong>{spell.teamName}</strong>
-                      <span className="muted tiny">{seasonRange(spell.seasonFrom, spell.seasonTo)}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <CareerList spells={dossier.career} />
             )}
           </Section>
 
-          <Section title="Tracked stats totals">
+          {dossier.internationalCareer.length > 0 && (
+            <Section title={`International career (${dossier.internationalCareer.length})`}>
+              <p className="muted tiny">Stored on the player, but games never treat these as clubs.</p>
+              <CareerList spells={dossier.internationalCareer} />
+            </Section>
+          )}
+
+          <Section title="Club stats totals">
             <StatGrid
               items={[
                 ['Appearances', dossier.statTotals.appearances],
@@ -296,9 +313,9 @@ export function PlayerReviewPage() {
             />
           </Section>
 
-          <Section title={`By competition (${dossier.leagueTotals.length})`}>
+          <Section title={`By club competition (${dossier.leagueTotals.length})`}>
             {dossier.leagueTotals.length === 0 ? (
-              <Empty label="No player_stats rows." />
+              <Empty label="No club player_stats rows." />
             ) : (
               <div className="review-table-wrap">
                 <table>
@@ -327,9 +344,9 @@ export function PlayerReviewPage() {
             )}
           </Section>
 
-          <Section title={`Season-by-season stats (${dossier.stats.length})`}>
+          <Section title={`Club season stats (${dossier.stats.length})`}>
             {dossier.stats.length === 0 ? (
-              <Empty label="No season rows." />
+              <Empty label="No club season rows." />
             ) : (
               <div className="review-table-wrap">
                 <table>
@@ -374,18 +391,56 @@ export function PlayerReviewPage() {
             )}
           </Section>
 
+          {dossier.internationalStats.length > 0 && (
+            <Section title={`International stats (${dossier.internationalStats.length})`}>
+              <p className="muted tiny">
+                World Cup / Euro / AFCON / Copa América and national-side rows. Games never count
+                these as club appearances.
+              </p>
+              <div className="review-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Season</th>
+                      <th>Team</th>
+                      <th>Competition</th>
+                      <th>Apps</th>
+                      <th>G</th>
+                      <th>A</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dossier.internationalStats.map((row, index) => (
+                      <tr key={`${row.season}-${row.leagueId}-${row.teamId}-${index}`}>
+                        <td>{row.season}</td>
+                        <td>{row.teamName || '—'}</td>
+                        <td>{row.leagueName}</td>
+                        <td>{row.appearances}</td>
+                        <td>{row.goals}</td>
+                        <td>{row.assists}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          )}
+
           <Section title="Extra / Transfermarkt totals">
             {!dossier.extra ? (
               <Empty label="No player_extra_stats row." />
             ) : (
               <StatGrid
                 items={[
+                  ['Used intl caps', dossier.gameUsage.intlCaps],
+                  ['Used intl goals', dossier.gameUsage.intlGoals],
+                  ['Used career goals', dossier.gameUsage.careerGoals],
                   ['TM career goals', dossier.extra.tmCareerGoals],
                   ['TM career apps', dossier.extra.tmCareerApps],
                   ['TM intl caps', dossier.extra.tmIntlCaps],
                   ['TM intl goals', dossier.extra.tmIntlGoals],
-                  ['Wiki/intl caps', dossier.extra.intlCaps],
-                  ['Wiki/intl goals', dossier.extra.intlGoals],
+                  ['Raw wiki caps', dossier.extra.intlCaps],
+                  ['Raw wiki goals', dossier.extra.intlGoals],
                   ['Hat-tricks', dossier.extra.careerHattricks],
                   ['Penalty goals', dossier.extra.penaltyGoals],
                   ['FBref penalties', dossier.extra.fbrefPenalties],
@@ -455,23 +510,27 @@ export function PlayerReviewPage() {
             )}
           </Section>
 
-          <Section title={`Honours (${dossier.honours.length})`}>
-            {dossier.honours.length === 0 ? (
-              <Empty label="No honours." />
+          <Section
+            title={`Club trophies counted in games (${dossier.honours.filter((row) => row.usedInTrophyRankings).length})`}
+          >
+            {dossier.honours.filter((row) => row.usedInTrophyRankings).length === 0 ? (
+              <Empty label="No Premier League / UCL / FA Cup-style winners." />
             ) : (
-              <ul className="review-simple-list">
-                {dossier.honours.map((row, index) => (
-                  <li key={`${row.competition}-${row.season}-${row.placement}-${index}`}>
-                    <strong>{row.competition}</strong>
-                    <span className="muted">
-                      {row.season} · {row.placement}
-                      {row.country ? ` · ${row.country}` : ''}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <HonourList honours={dossier.honours.filter((row) => row.usedInTrophyRankings)} />
             )}
           </Section>
+
+          {dossier.honours.some((row) => !row.usedInTrophyRankings) && (
+            <Section
+              title={`Other honours (${dossier.honours.filter((row) => !row.usedInTrophyRankings).length})`}
+            >
+              <p className="muted tiny">
+                Super Cups, Community Shield, international trophies, runners-up — stored, but not
+                in the career-trophies ranking.
+              </p>
+              <HonourList honours={dossier.honours.filter((row) => !row.usedInTrophyRankings)} />
+            </Section>
+          )}
 
           <Section title={`Awards (${dossier.awards.length})`}>
             {dossier.awards.length === 0 ? (
@@ -606,6 +665,38 @@ export function PlayerReviewPage() {
         </>
       )}
     </div>
+  )
+}
+
+function CareerList({ spells }: { spells: PlayerDossier['career'] }) {
+  return (
+    <ul className="review-career">
+      {spells.map((spell) => (
+        <li key={`${spell.teamId}-${spell.seasonFrom}`}>
+          <img src={spell.badgeUrl} alt="" />
+          <span>
+            <strong>{spell.teamName}</strong>
+            <span className="muted tiny">{seasonRange(spell.seasonFrom, spell.seasonTo)}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function HonourList({ honours }: { honours: PlayerDossier['honours'] }) {
+  return (
+    <ul className="review-simple-list">
+      {honours.map((row, index) => (
+        <li key={`${row.competition}-${row.season}-${row.placement}-${index}`}>
+          <strong>{row.competition}</strong>
+          <span className="muted">
+            {row.season} · {row.placement}
+            {row.country ? ` · ${row.country}` : ''}
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

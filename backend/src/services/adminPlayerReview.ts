@@ -18,7 +18,22 @@ import {
   wcSquads,
 } from '../db/schema.js';
 import { resolveHeadshot, teamLogoUrl } from '../constants/footballMedia.js';
+import {
+  clubCareerOnlySql,
+  clubTeamIds,
+  isExcludedNationalSpell,
+  isExcludedNationalStat,
+  isYouthOrReserveSide,
+  nationSet,
+} from '../utils/nationalTeam.js';
 import { getPhotoOverrides } from './photoOverrides.js';
+import {
+  CAREER_LEAGUE_IDS,
+  TROPHY_COMPETITIONS,
+  gameCareerGoalsValue,
+  trustedIntlCapsValue,
+  trustedIntlGoalsValue,
+} from './statMetrics.js';
 
 export type PlayerReviewStatus = 'pending' | 'approved' | 'flagged';
 export type PlayerReviewPool = 'unreviewed' | 'flagged' | 'approved' | 'any';
@@ -29,6 +44,50 @@ export interface PlayerReviewCounts {
   flagged: number;
   poolSize: number;
 }
+
+export type CareerSpell = {
+  teamId: number;
+  teamName: string;
+  seasonFrom: number;
+  seasonTo: number | null;
+  badgeUrl: string;
+};
+
+export type SeasonStat = {
+  season: number;
+  leagueId: number;
+  leagueName: string;
+  teamId: number;
+  teamName: string | null;
+  appearances: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+  cleanSheets: number | null;
+  saves: number | null;
+  foulsCommitted: number | null;
+  tackles: number | null;
+};
+
+export type StatTotals = {
+  appearances: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  yellowCards: number;
+  redCards: number;
+};
+
+export type LeagueTotal = {
+  leagueId: number;
+  leagueName: string;
+  appearances: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+};
 
 export interface PlayerDossier {
   id: string;
@@ -59,46 +118,23 @@ export interface PlayerDossier {
     reviewedBy: string | null;
     reviewedAt: string | null;
   };
-  career: Array<{
-    teamId: number;
-    teamName: string;
-    seasonFrom: number;
-    seasonTo: number | null;
-    badgeUrl: string;
-  }>;
-  stats: Array<{
-    season: number;
-    leagueId: number;
-    leagueName: string;
-    teamId: number;
-    teamName: string | null;
-    appearances: number;
-    minutes: number;
-    goals: number;
-    assists: number;
-    yellowCards: number;
-    redCards: number;
-    cleanSheets: number | null;
-    saves: number | null;
-    foulsCommitted: number | null;
-    tackles: number | null;
-  }>;
-  statTotals: {
-    appearances: number;
-    minutes: number;
-    goals: number;
-    assists: number;
-    yellowCards: number;
-    redCards: number;
+  /** Same club-only filter as Club Chain / LMS career path. */
+  career: CareerSpell[];
+  /** Stored national / youth-national sides — games never treat these as clubs. */
+  internationalCareer: CareerSpell[];
+  /** Club competitions only (drops WC / Euro / AFCON / Copa América / national sides). */
+  stats: SeasonStat[];
+  internationalStats: SeasonStat[];
+  statTotals: StatTotals;
+  leagueTotals: LeagueTotal[];
+  gameUsage: {
+    clubCount: number;
+    careerApps: number;
+    careerGoals: number | null;
+    intlCaps: number;
+    intlGoals: number;
+    trophies: number;
   };
-  leagueTotals: Array<{
-    leagueId: number;
-    leagueName: string;
-    appearances: number;
-    minutes: number;
-    goals: number;
-    assists: number;
-  }>;
   extra: {
     penaltyGoals: number;
     weakFootGoals: number;
@@ -138,6 +174,7 @@ export interface PlayerDossier {
     country: string | null;
     season: string;
     placement: string;
+    usedInTrophyRankings: boolean;
   }>;
   awards: Array<{
     award: string;
@@ -323,6 +360,7 @@ export async function loadPlayerDossier(playerId: string): Promise<PlayerDossier
       SELECT DISTINCT mt.manager, mt.club, mt.season_from, mt.season_to
       FROM manager_tenures mt
       JOIN player_career pc ON pc.player_id = ${playerId}::uuid
+        AND ${clubCareerOnlySql('pc')}
         AND (
           lower(pc.team_name) = mt.club_norm
           OR lower(pc.team_name) = lower(mt.club)
@@ -343,24 +381,70 @@ export async function loadPlayerDossier(playerId: string): Promise<PlayerDossier
     season_to: number | null;
   }>;
 
-  const statTotals = statRows.reduce(
-    (acc, row) => {
-      acc.appearances += row.appearances;
-      acc.minutes += row.minutes;
-      acc.goals += row.goals;
-      acc.assists += row.assists;
-      acc.yellowCards += row.yellowCards;
-      acc.redCards += row.redCards;
-      return acc;
-    },
-    { appearances: 0, minutes: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0 }
-  );
+  const [nations, clubs] = await Promise.all([nationSet(), clubTeamIds()]);
 
-  const leagueMap = new Map<
-    string,
-    { leagueId: number; leagueName: string; appearances: number; minutes: number; goals: number; assists: number }
-  >();
+  const mapCareer = (row: (typeof careerRows)[number]): CareerSpell => ({
+    teamId: row.teamId,
+    teamName: row.teamName,
+    seasonFrom: row.seasonFrom,
+    seasonTo: row.seasonTo,
+    badgeUrl: teamLogoUrl(row.teamId),
+  });
+  const career: CareerSpell[] = [];
+  const internationalCareer: CareerSpell[] = [];
+  for (const row of careerRows) {
+    const spell = mapCareer(row);
+    if (isExcludedNationalSpell(row.teamId, row.teamName, nations, clubs)) {
+      internationalCareer.push(spell);
+    } else {
+      career.push(spell);
+    }
+  }
+
+  const mapStat = (row: (typeof statRows)[number]): SeasonStat => ({
+    season: row.season,
+    leagueId: row.leagueId,
+    leagueName: row.leagueName,
+    teamId: row.teamId,
+    teamName: row.teamName,
+    appearances: row.appearances,
+    minutes: row.minutes,
+    goals: row.goals,
+    assists: row.assists,
+    yellowCards: row.yellowCards,
+    redCards: row.redCards,
+    cleanSheets: row.cleanSheets,
+    saves: row.saves,
+    foulsCommitted: row.foulsCommitted,
+    tackles: row.tackles,
+  });
+  const stats: SeasonStat[] = [];
+  const internationalStats: SeasonStat[] = [];
   for (const row of statRows) {
+    const mapped = mapStat(row);
+    if (isExcludedNationalStat(row.leagueId, row.teamId, row.teamName, nations, clubs)) {
+      internationalStats.push(mapped);
+    } else {
+      stats.push(mapped);
+    }
+  }
+
+  const sumStats = (rows: SeasonStat[]): StatTotals =>
+    rows.reduce(
+      (acc, row) => {
+        acc.appearances += row.appearances;
+        acc.minutes += row.minutes;
+        acc.goals += row.goals;
+        acc.assists += row.assists;
+        acc.yellowCards += row.yellowCards;
+        acc.redCards += row.redCards;
+        return acc;
+      },
+      { appearances: 0, minutes: 0, goals: 0, assists: 0, yellowCards: 0, redCards: 0 }
+    );
+
+  const leagueMap = new Map<string, LeagueTotal>();
+  for (const row of stats) {
     const key = `${row.leagueId}|${row.leagueName}`;
     const current = leagueMap.get(key) ?? {
       leagueId: row.leagueId,
@@ -376,6 +460,35 @@ export async function loadPlayerDossier(playerId: string): Promise<PlayerDossier
     current.assists += row.assists;
     leagueMap.set(key, current);
   }
+
+  const careerLeagueIds = new Set(CAREER_LEAGUE_IDS);
+  const careerApps = stats
+    .filter((row) => careerLeagueIds.has(row.leagueId))
+    .reduce((sum, row) => sum + row.appearances, 0);
+
+  const clubKeys = new Set<string>();
+  for (const row of career) {
+    if (row.teamId > 0 && !isYouthOrReserveSide(row.teamName)) {
+      clubKeys.add(row.teamName.toLowerCase());
+    }
+  }
+  for (const row of stats) {
+    if (row.appearances > 0 && row.teamName && !isYouthOrReserveSide(row.teamName)) {
+      clubKeys.add(row.teamName.toLowerCase());
+    }
+  }
+
+  const trophySet = new Set(TROPHY_COMPETITIONS);
+  const honours = honourRows.map((row) => ({
+    competition: row.competition,
+    country: row.country,
+    season: row.season,
+    placement: row.placement,
+    usedInTrophyRankings: row.placement.toLowerCase() === 'winner' && trophySet.has(row.competition),
+  }));
+
+  const intlCaps = extra ? trustedIntlCapsValue(extra.tmIntlCaps, extra.intlCaps) : 0;
+  const intlGoals = extra ? trustedIntlGoalsValue(extra.tmIntlGoals, extra.intlGoals, extra.intlCaps) : 0;
 
   return {
     id: player.id,
@@ -406,32 +519,20 @@ export async function loadPlayerDossier(playerId: string): Promise<PlayerDossier
       reviewedBy: review?.reviewedBy ?? null,
       reviewedAt: isoStamp(review?.reviewedAt),
     },
-    career: careerRows.map((row) => ({
-      teamId: row.teamId,
-      teamName: row.teamName,
-      seasonFrom: row.seasonFrom,
-      seasonTo: row.seasonTo,
-      badgeUrl: teamLogoUrl(row.teamId),
-    })),
-    stats: statRows.map((row) => ({
-      season: row.season,
-      leagueId: row.leagueId,
-      leagueName: row.leagueName,
-      teamId: row.teamId,
-      teamName: row.teamName,
-      appearances: row.appearances,
-      minutes: row.minutes,
-      goals: row.goals,
-      assists: row.assists,
-      yellowCards: row.yellowCards,
-      redCards: row.redCards,
-      cleanSheets: row.cleanSheets,
-      saves: row.saves,
-      foulsCommitted: row.foulsCommitted,
-      tackles: row.tackles,
-    })),
-    statTotals,
+    career,
+    internationalCareer,
+    stats,
+    internationalStats,
+    statTotals: sumStats(stats),
     leagueTotals: [...leagueMap.values()].sort((a, b) => b.appearances - a.appearances),
+    gameUsage: {
+      clubCount: extra?.verifiedClubCount ?? clubKeys.size,
+      careerApps,
+      careerGoals: extra ? gameCareerGoalsValue(extra.tmCareerGoals, intlGoals) : null,
+      intlCaps,
+      intlGoals,
+      trophies: honours.filter((row) => row.usedInTrophyRankings).length,
+    },
     extra: extra
       ? {
           penaltyGoals: extra.penaltyGoals,
@@ -458,22 +559,27 @@ export async function loadPlayerDossier(playerId: string): Promise<PlayerDossier
           ligue1Penalties: extra.ligue1Penalties,
         }
       : null,
-    transfers: transferRows.map((row) => ({
-      transferDate: isoDate(row.transferDate),
-      fromTeamId: row.fromTeamId,
-      fromTeamName: row.fromTeamName,
-      toTeamId: row.toTeamId,
-      toTeamName: row.toTeamName,
-      feeRaw: row.feeRaw,
-      feeEurM: row.feeEurM == null ? null : String(row.feeEurM),
-      transferType: row.transferType,
-    })),
-    honours: honourRows.map((row) => ({
-      competition: row.competition,
-      country: row.country,
-      season: row.season,
-      placement: row.placement,
-    })),
+    transfers: transferRows
+      .filter((row) => {
+        const fromNational = Boolean(
+          row.fromTeamName && isExcludedNationalSpell(row.fromTeamId, row.fromTeamName, nations, clubs)
+        );
+        const toNational = Boolean(
+          row.toTeamName && isExcludedNationalSpell(row.toTeamId, row.toTeamName, nations, clubs)
+        );
+        return !fromNational && !toNational;
+      })
+      .map((row) => ({
+        transferDate: isoDate(row.transferDate),
+        fromTeamId: row.fromTeamId,
+        fromTeamName: row.fromTeamName,
+        toTeamId: row.toTeamId,
+        toTeamName: row.toTeamName,
+        feeRaw: row.feeRaw,
+        feeEurM: row.feeEurM == null ? null : String(row.feeEurM),
+        transferType: row.transferType,
+      })),
+    honours,
     awards: awardRows.map((row) => ({
       award: row.award,
       year: row.year,

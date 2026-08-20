@@ -71,6 +71,33 @@ export const trustedIntlGoalsSql = (alias = 'e'): SQL => sql`COALESCE(
       THEN ${sql.raw(alias)}.intl_goals END,
     0)`;
 
+/** Same rules as `trustedIntlCapsSql`, for in-memory review / scoring. */
+export function trustedIntlCapsValue(tmIntlCaps: number | null | undefined, intlCaps: number): number {
+  if (tmIntlCaps != null) return tmIntlCaps;
+  if (intlCaps >= INTL_CAPS_DISPLAY_MIN && intlCaps <= INTL_CAPS_FALLBACK_MAX) return intlCaps;
+  return 0;
+}
+
+/** Same rules as `trustedIntlGoalsSql`. */
+export function trustedIntlGoalsValue(
+  tmIntlGoals: number | null | undefined,
+  intlGoals: number,
+  intlCaps: number
+): number {
+  if (tmIntlGoals != null) return tmIntlGoals;
+  if (intlGoals <= intlCaps) return intlGoals;
+  return 0;
+}
+
+/** Draft / Target Man "career goals": TM club total + trusted intl. Null if TM never scraped. */
+export function gameCareerGoalsValue(
+  tmCareerGoals: number | null | undefined,
+  trustedIntlGoals: number
+): number | null {
+  if (tmCareerGoals == null) return null;
+  return tmCareerGoals + trustedIntlGoals;
+}
+
 export const intlCapsSub: SQL = sql`(SELECT player_id, ${trustedIntlCapsSql('e')}::int AS value
   FROM player_extra_stats e)`;
 

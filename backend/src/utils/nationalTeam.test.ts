@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   isDomesticClubLeague,
   isExcludedNationalSpell,
+  isExcludedNationalStat,
+  isInternationalCompetition,
   isNationalTeam,
   isYouthNationalOrOlympicSide,
   isYouthOrReserveSide,
@@ -67,6 +69,18 @@ test('World Cup / Euro ids are not domestic club leagues', () => {
   assert.equal(isDomesticClubLeague(39), true);
   assert.equal(isDomesticClubLeague(61), true);
   assert.equal(isDomesticClubLeague(null), false);
+});
+
+test('international tournaments and national sides are not club stats', () => {
+  const clubs = new Set([55, 91]);
+  assert.equal(isInternationalCompetition(9), true);
+  assert.equal(isInternationalCompetition(2), false);
+  assert.equal(isExcludedNationalStat(9, 2385, 'Jamaica', new Set(['Jamaica']), clubs), true);
+  assert.equal(isExcludedNationalStat(1, 10, 'England', NATIONS, clubs), true);
+  assert.equal(isExcludedNationalStat(39, 55, 'Brentford', NATIONS, clubs), false);
+  assert.equal(isExcludedNationalStat(45, 55, 'Brentford', NATIONS, clubs), false);
+  assert.equal(isExcludedNationalStat(2, 55, 'Brentford', NATIONS, clubs), false);
+  assert.equal(isExcludedNationalStat(61, 91, 'Monaco', NATIONS, clubs), false);
 });
 
 test('club reserve and youth sides are still recognised as youth setups', () => {

@@ -783,7 +783,31 @@ export type PlayerDossier = {
     seasonTo: number | null
     badgeUrl: string
   }>
+  internationalCareer: Array<{
+    teamId: number
+    teamName: string
+    seasonFrom: number
+    seasonTo: number | null
+    badgeUrl: string
+  }>
   stats: Array<{
+    season: number
+    leagueId: number
+    leagueName: string
+    teamId: number
+    teamName: string | null
+    appearances: number
+    minutes: number
+    goals: number
+    assists: number
+    yellowCards: number
+    redCards: number
+    cleanSheets: number | null
+    saves: number | null
+    foulsCommitted: number | null
+    tackles: number | null
+  }>
+  internationalStats: Array<{
     season: number
     leagueId: number
     leagueName: string
@@ -816,6 +840,14 @@ export type PlayerDossier = {
     goals: number
     assists: number
   }>
+  gameUsage: {
+    clubCount: number
+    careerApps: number
+    careerGoals: number | null
+    intlCaps: number
+    intlGoals: number
+    trophies: number
+  }
   extra: {
     penaltyGoals: number
     weakFootGoals: number
@@ -855,6 +887,7 @@ export type PlayerDossier = {
     country: string | null
     season: string
     placement: string
+    usedInTrophyRankings: boolean
   }>
   awards: Array<{ award: string; year: number; placement: string }>
   finals: Array<{
