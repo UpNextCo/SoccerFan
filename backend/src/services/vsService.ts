@@ -18,8 +18,8 @@ import {
   afterSuccessfulPick,
   allNamedPicks,
   answerFromLive,
-  currentSlot,
   hasLocked,
+  hasOpenSlots,
   initLiveState,
   parseLiveState,
   picksFor,
@@ -237,6 +237,8 @@ export type VsLivePickView = {
   playerName: string;
   statValue: number;
   headshotUrl: string | null;
+  correct: boolean;
+  wrongReason: string | null;
 };
 
 export type VsTargetManBoardRow = {
@@ -454,11 +456,10 @@ function liveViewFor(
   const live = liveStateOf(row);
   const puzzle = row.puzzleJson as BattlePuzzleJson;
   if (!live || !Array.isArray(puzzle.slots)) return null;
-  const slot = currentSlot(puzzle, live);
   const people = participantsOf(row);
   const userIds = people.map((p) => p.userId);
-  const slotId = slot?.id ?? '';
-  const currentTurn = slotId ? turnUserId(live, userIds, slotId) : null;
+  const slotCount = puzzle.slots.length;
+  const currentTurn = turnUserId(live, userIds, slotCount);
   const pickViews = allNamedPicks(live).map((pick) => {
     const slotMeta = puzzle.slots.find((s) => s.id === pick.slotId);
     return {
@@ -473,33 +474,35 @@ function liveViewFor(
       playerName: pick.playerName,
       statValue: pick.statValue,
       headshotUrl: pick.headshotUrl,
+      correct: pick.correct !== false,
+      wrongReason: pick.wrongReason ?? null,
     };
   });
   return {
     slotIndex: live.slotIndex,
-    slotCount: puzzle.slots.length,
-    slotId,
-    slotLabel: slot ? shortSlotLabel(slot.position) : '—',
-    slotPosition: slot?.position ?? '',
+    slotCount,
+    slotId: '',
+    slotLabel: 'ANY',
+    slotPosition: 'Any position',
     deadlineAt: live.deadlineAt,
     turnUserId: currentTurn,
     yourTurn: currentTurn === userId && !live.finished,
-    youLocked: slotId ? hasLocked(live, userId, slotId) : true,
+    youLocked: currentTurn !== userId || !hasOpenSlots(live, userId, slotCount),
     finished: live.finished,
     usedConstraintIds: [...usedConstraintIds(live, userId)],
     usedPlayerIds: [...usedPlayerIds(live)],
     board: people.map((p) => {
-      const pick = slotId ? picksFor(live, p.userId).find((x) => x.slotId === slotId) : undefined;
+      const last = [...picksFor(live, p.userId)].reverse().find((x) => x.playerId);
       return {
         userId: p.userId,
         displayName: displayNameOf(names, p.userId) ?? 'Player',
         isYou: p.userId === userId,
         total: totalFor(live, p.userId),
-        locked: pick != null,
-        playerName: pick?.playerName || null,
-        constraintLabel: pick?.constraintLabel || null,
-        statValue: pick?.playerId ? pick.statValue : null,
-        headshotUrl: pick?.headshotUrl ?? null,
+        locked: !hasOpenSlots(live, p.userId, slotCount),
+        playerName: last?.playerName || null,
+        constraintLabel: last?.constraintLabel || null,
+        statValue: last?.playerId ? last.statValue : null,
+        headshotUrl: last?.headshotUrl ?? null,
       };
     }),
     picks: pickViews,
@@ -1476,6 +1479,24 @@ export async function startVsChallenge(userId: string, challengeId: string): Pro
   return viewFor(updated ?? row, userId);
 }
 
+function draftWrongReason(
+  constraint: { type: string; label: string; club: string | null; leagueName: string | null; nationality: string | null },
+  playerName: string,
+  reason: 'missing' | 'position' | 'constraint'
+): string {
+  if (reason === 'position') return `${playerName} doesn't play this position`;
+  switch (constraint.type) {
+    case 'club':
+      return `${playerName} never played for ${constraint.club ?? constraint.label}`;
+    case 'league':
+      return `${playerName} never played in ${constraint.leagueName ?? constraint.label}`;
+    case 'nationality':
+      return `${playerName} isn't ${constraint.nationality ?? constraint.label}`;
+    default:
+      return `${playerName} doesn't fit ${constraint.label}`;
+  }
+}
+
 export async function lockVsPick(
   userId: string,
   challengeId: string,
@@ -1496,18 +1517,18 @@ export async function lockVsPick(
   }
 
   const userIds = participantsOf(row).map((p) => p.userId);
-  const slot = currentSlot(puzzle, live);
-  if (!slot || slot.id !== input.slotId) {
-    throw new VsError('That position is not open right now', 400, 'WRONG_SLOT');
+  const slot = puzzle.slots.find((s) => s.id === input.slotId);
+  if (!slot) {
+    throw new VsError('Unknown position', 400, 'WRONG_SLOT');
   }
-  if (turnUserId(live, userIds, slot.id) !== userId) {
+  if (turnUserId(live, userIds, puzzle.slots.length) !== userId) {
     throw new VsError('Wait for your turn', 400, 'NOT_YOUR_TURN');
   }
   if (Date.now() >= Date.parse(live.deadlineAt)) {
     return viewFor(row, userId);
   }
   if (hasLocked(live, userId, slot.id)) {
-    return viewFor(row, userId);
+    throw new VsError('You already filled that position', 400, 'SLOT_USED');
   }
   if (usedConstraintIds(live, userId).has(input.constraintId)) {
     throw new VsError('You already used that constraint', 400, 'CONSTRAINT_USED');
@@ -1520,25 +1541,22 @@ export async function lockVsPick(
   if (!constraint) throw new VsError('Unknown constraint', 400, 'INVALID_ANSWER');
 
   const scored = await scoreBattlePick(puzzle, input);
-  if (!scored.valid) {
-    if (scored.reason === 'position') {
-      throw new VsError('That player does not play this position', 400, 'INVALID_ANSWER');
-    }
-    if (scored.reason === 'constraint') {
-      throw new VsError('That player does not fit this constraint', 400, 'INVALID_ANSWER');
-    }
+  if (!scored.valid && (scored.reason === 'missing' || !scored.playerName)) {
     throw new VsError('Invalid Draft XI pick', 400, 'INVALID_ANSWER');
   }
 
+  const playerName = scored.playerName ?? 'Player';
   const pick = {
     slotId: slot.id,
     constraintId: constraint.id,
     playerId: input.playerId,
-    playerName: scored.playerName,
-    headshotUrl: scored.headshotUrl,
+    playerName,
+    headshotUrl: scored.headshotUrl ?? null,
     constraintLabel: constraint.label,
-    statValue: scored.stat,
+    statValue: scored.valid ? scored.stat : 0,
     lockedAt: new Date().toISOString(),
+    correct: scored.valid,
+    wrongReason: scored.valid ? null : draftWrongReason(constraint, playerName, scored.reason),
   };
   const nextLive: VsLiveState = {
     ...live,

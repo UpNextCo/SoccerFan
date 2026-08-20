@@ -736,6 +736,8 @@ struct VsLivePickFeedDTO: Codable, Equatable, Identifiable {
     let playerName: String
     let statValue: Int
     let headshotUrl: String?
+    let correct: Bool
+    let wrongReason: String?
 
     var id: String { "\(userId)-\(slotId)-\(playerId)" }
 
@@ -752,6 +754,8 @@ struct VsLivePickFeedDTO: Codable, Equatable, Identifiable {
         playerName = try c.decode(String.self, forKey: .playerName)
         statValue = try c.decodeIfPresent(Int.self, forKey: .statValue) ?? 0
         headshotUrl = try c.decodeIfPresent(String.self, forKey: .headshotUrl)
+        correct = try c.decodeIfPresent(Bool.self, forKey: .correct) ?? true
+        wrongReason = try c.decodeIfPresent(String.self, forKey: .wrongReason)
     }
 }
 

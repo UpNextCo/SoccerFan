@@ -11,9 +11,12 @@ export type VsLivePickRecord = {
   constraintLabel: string;
   statValue: number;
   lockedAt: string;
+  correct?: boolean;
+  wrongReason?: string | null;
 };
 
 export type VsLiveState = {
+  /** Snake-draft step (not a formation slot). */
   slotIndex: number;
   deadlineAt: string;
   finished: boolean;
@@ -95,36 +98,52 @@ export function totalFor(live: VsLiveState, userId: string): number {
   return picksFor(live, userId).reduce((sum, p) => sum + p.statValue, 0);
 }
 
-export function allUsersLocked(live: VsLiveState, userIds: string[], slotId: string): boolean {
-  return userIds.length > 0 && userIds.every((id) => hasLocked(live, id, slotId));
+export function lockedSlotCount(live: VsLiveState, userId: string): number {
+  return new Set(picksFor(live, userId).map((p) => p.slotId)).size;
 }
 
-/** Snake order so first pick swaps each position: A-B then B-A, or A-B-C then C-B-A. */
-export function draftTurnOrder(userIds: string[], slotIndex: number): string[] {
-  if (userIds.length < 2 || slotIndex % 2 === 0) return userIds;
+export function hasOpenSlots(live: VsLiveState, userId: string, slotCount: number): boolean {
+  return lockedSlotCount(live, userId) < slotCount;
+}
+
+export function allSquadsFilled(live: VsLiveState, userIds: string[], slotCount: number): boolean {
+  return userIds.length > 0 && userIds.every((id) => !hasOpenSlots(live, id, slotCount));
+}
+
+/** Snake order so first pick swaps each round: A-B then B-A, or A-B-C then C-B-A. */
+export function draftTurnOrder(userIds: string[], round: number): string[] {
+  if (userIds.length < 2 || round % 2 === 0) return userIds;
   return [...userIds].reverse();
 }
 
-/** Next person in snake order who has not locked the current slot. */
-export function turnUserId(live: VsLiveState, userIds: string[], slotId: string): string | null {
-  return draftTurnOrder(userIds, live.slotIndex).find((id) => !hasLocked(live, id, slotId)) ?? null;
+export function snakePicker(userIds: string[], turnIndex: number): string | null {
+  if (userIds.length === 0) return null;
+  const order = draftTurnOrder(userIds, Math.floor(turnIndex / userIds.length));
+  return order[turnIndex % userIds.length] ?? null;
 }
 
-export function skipPick(slotId: string, now = Date.now()): VsLivePickRecord {
-  return {
-    slotId,
-    constraintId: '',
-    playerId: '',
-    playerName: '',
-    headshotUrl: null,
-    constraintLabel: '',
-    statValue: 0,
-    lockedAt: new Date(now).toISOString(),
-  };
+/** Next person in snake order who still has an empty slot. */
+export function turnUserId(live: VsLiveState, userIds: string[], slotCount: number): string | null {
+  if (live.finished || userIds.length === 0) return null;
+  for (let step = 0; step < userIds.length * 4; step += 1) {
+    const id = snakePicker(userIds, live.slotIndex + step);
+    if (id && hasOpenSlots(live, id, slotCount)) return id;
+  }
+  return null;
 }
 
 function withDeadline(live: VsLiveState, now: number): VsLiveState {
   return { ...live, deadlineAt: new Date(now + VS_SLOT_TIMEOUT_MS).toISOString() };
+}
+
+function nextOpenTurnIndex(live: VsLiveState, userIds: string[], slotCount: number, fromIndex: number): number {
+  let index = fromIndex;
+  for (let step = 0; step < userIds.length * 4; step += 1) {
+    const id = snakePicker(userIds, index);
+    if (id && hasOpenSlots(live, id, slotCount)) return index;
+    index += 1;
+  }
+  return fromIndex;
 }
 
 export function allNamedPicks(live: VsLiveState): Array<VsLivePickRecord & { userId: string }> {
@@ -150,39 +169,22 @@ export function advanceIfNeeded(
   };
   if (next.finished) return next;
 
+  const slotCount = puzzle.slots.length;
   let guard = 0;
   while (!next.finished && guard < 48) {
     guard += 1;
-    const slot = puzzle.slots[next.slotIndex];
-    if (!slot) {
+    if (allSquadsFilled(next, userIds, slotCount) || slotCount === 0) {
       next = { ...next, finished: true };
       break;
     }
 
-    if (allUsersLocked(next, userIds, slot.id)) {
-      if (next.slotIndex + 1 >= puzzle.slots.length) {
-        next = { ...next, finished: true };
-        break;
-      }
-      next = withDeadline(
-        {
-          ...next,
-          slotIndex: next.slotIndex + 1,
-        },
-        now
-      );
-      continue;
-    }
-
-    const currentTurn = turnUserId(next, userIds, slot.id);
+    next = { ...next, slotIndex: nextOpenTurnIndex(next, userIds, slotCount, next.slotIndex) };
+    const currentTurn = turnUserId(next, userIds, slotCount);
     if (currentTurn && now >= Date.parse(next.deadlineAt)) {
       next = withDeadline(
         {
           ...next,
-          picksByUser: {
-            ...next.picksByUser,
-            [currentTurn]: [...picksFor(next, currentTurn), skipPick(slot.id, now)],
-          },
+          slotIndex: next.slotIndex + 1,
         },
         now
       );
@@ -200,12 +202,12 @@ export function afterSuccessfulPick(
   userIds: string[],
   now = Date.now()
 ): VsLiveState {
-  const advanced = advanceIfNeeded(puzzle, live, userIds, now);
-  if (advanced.finished) return advanced;
-  if (advanced.slotIndex === live.slotIndex && advanced.deadlineAt === live.deadlineAt) {
-    return withDeadline(advanced, now);
+  const slotCount = puzzle.slots.length;
+  if (allSquadsFilled(live, userIds, slotCount)) {
+    return { ...live, finished: true };
   }
-  return advanced;
+  const slotIndex = nextOpenTurnIndex(live, userIds, slotCount, live.slotIndex + 1);
+  return withDeadline({ ...live, slotIndex }, now);
 }
 
 export function answerFromLive(live: VsLiveState, userId: string): { picks: Array<{ slotId: string; constraintId: string; playerId: string }> } {

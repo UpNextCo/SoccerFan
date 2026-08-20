@@ -45,23 +45,40 @@ struct VsDraftLiveView: View {
                                 usedIds: Set(live?.usedConstraintIds ?? []).union(draft.state.usedConstraintIds)
                             )
                             .padding(.top, 6)
-                            BattlePitchView(
-                                slots: battle.slots,
-                                state: draft.state,
-                                highlightedSlotId: live?.slotId,
-                                interactiveSlotId: live?.yourTurn == true ? live?.slotId : "",
-                                compact: true,
-                                slotScale: 0.88,
-                                onTapSlot: { open($0) },
-                                onDropConstraint: { id, slot in
-                                    guard live?.yourTurn == true, slot.id == live?.slotId else { return }
-                                    draft.assignConstraint(id: id, toSlot: slot.id)
-                                    draft.openSlot(slot)
+                            ZStack(alignment: .bottom) {
+                                BattlePitchView(
+                                    slots: battle.slots,
+                                    state: draft.state,
+                                    highlightedSlotId: nil,
+                                    interactiveSlotId: live?.yourTurn == true ? nil : "",
+                                    compact: true,
+                                    slotScale: 0.88,
+                                    onTapSlot: { open($0) },
+                                    onDropConstraint: { id, slot in
+                                        guard live?.yourTurn == true, !isFilled(slot.id) else { return }
+                                        draft.assignConstraint(id: id, toSlot: slot.id)
+                                        draft.openSlot(slot)
+                                    }
+                                )
+                                if let msg = draft.wrongMessage {
+                                    Text(msg.uppercased())
+                                        .font(BKFont.caption(11)).tracking(0.5)
+                                        .foregroundStyle(BKTheme.wrong)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(BKTheme.card.opacity(0.92))
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .padding(.bottom, 8)
+                                        .transition(.opacity)
                                 }
-                            )
+                            }
                             .frame(maxHeight: .infinity)
                             .padding(.horizontal, 34)
                             .padding(.bottom, collapsedH)
+                            .modifier(VsDraftShakeEffect(animatableData: CGFloat(draft.shakeToken)))
+                            .animation(.linear(duration: 0.4), value: draft.shakeToken)
+                            .animation(.easeInOut(duration: 0.2), value: draft.wrongMessage)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -130,9 +147,6 @@ struct VsDraftLiveView: View {
         .onChange(of: live?.yourTurn) { _, yourTurn in
             if yourTurn != true { draft.closeSlot() }
         }
-        .onChange(of: live?.slotId) { _, _ in
-            draft.closeSlot()
-        }
         .onChange(of: viewModel.challenge?.result.allDone) { _, done in
             if done == true { dismiss() }
         }
@@ -192,16 +206,19 @@ struct VsDraftLiveView: View {
         let model = draft
         model.confirmPick = { [weak model] dto in
             guard let model,
-                  let live = viewModel.challenge?.live,
                   let slot = model.activeSlot,
                   let constraint = model.state.constraint(forSlot: slot.id) else { return false }
-            if dto.satisfiesConstraint == false {
-                model.selectionError = constraint.rejectReason(player: dto.name)
-                return false
-            }
-            let ok = await viewModel.lockPick(slotId: live.slotId, constraintId: constraint.id, playerId: dto.id)
+            let ok = await viewModel.lockPick(slotId: slot.id, constraintId: constraint.id, playerId: dto.id)
             if ok {
-                model.lockConfirmedPick(slotId: slot.id, constraint: constraint, player: dto)
+                let locked = viewModel.challenge?.live?.yourPicks.last(where: { $0.slotId == slot.id })
+                let correct = locked?.correct ?? (dto.satisfiesConstraint ?? true)
+                model.lockConfirmedPick(slotId: slot.id, constraint: constraint, player: dto, correct: correct)
+                if correct {
+                    HapticManager.success()
+                } else {
+                    let msg = locked?.wrongReason ?? constraint.rejectReason(player: dto.name)
+                    model.flashWrong(msg)
+                }
             } else {
                 model.selectionError = viewModel.errorMessage ?? "Couldn't lock that pick"
             }
@@ -211,11 +228,16 @@ struct VsDraftLiveView: View {
     }
 
     private func syncPitch() {
-        draft.applyLockedPicks(live?.yourPicks ?? [], preservingSlot: live?.yourTurn == true ? live?.slotId : nil)
+        draft.applyLockedPicks(live?.yourPicks ?? [], preservingSlot: live?.yourTurn == true ? draft.activeSlot?.id : nil)
+    }
+
+    private func isFilled(_ slotId: String) -> Bool {
+        live?.yourPicks.contains(where: { $0.slotId == slotId }) == true
+            || draft.state.isLocked(slotId)
     }
 
     private func open(_ slot: BattleSlot) {
-        guard live?.yourTurn == true, slot.id == live?.slotId else { return }
+        guard live?.yourTurn == true, !isFilled(slot.id) else { return }
         draft.openSlot(slot)
     }
 
@@ -248,21 +270,21 @@ private struct VsDraftMateToast: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Text("\(pick.displayName.uppercased()) PLAYED")
+            Text(pick.correct ? "\(pick.displayName.uppercased()) PLAYED" : "\(pick.displayName.uppercased()) BURNED")
                 .font(BKFont.caption(12)).tracking(0.8)
-                .foregroundStyle(BKTheme.accent)
+                .foregroundStyle(pick.correct ? BKTheme.accent : BKTheme.wrong)
 
             HStack(alignment: .center, spacing: 12) {
                 PlayerAvatar(urlString: pick.headshotUrl, size: 52)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(pick.playerName)
                         .font(BKFont.headline(17))
-                        .foregroundStyle(BKTheme.textPrimary)
+                        .foregroundStyle(pick.correct ? BKTheme.textPrimary : BKTheme.wrong)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                     Text("\(pick.statValue)")
                         .font(BKFont.title(22))
-                        .foregroundStyle(BKTheme.textPrimary)
+                        .foregroundStyle(pick.correct ? BKTheme.textPrimary : BKTheme.wrong)
                         .monospacedDigit()
                 }
                 Spacer(minLength: 0)
@@ -325,7 +347,7 @@ private struct VsDraftPicksSheet: View {
                     VStack(alignment: .leading, spacing: 14) {
                         if picksBySlot.isEmpty {
                             Text(live?.yourTurn == true
-                                 ? "Drag a chip onto the highlighted slot, then name a player."
+                                 ? "Drag a chip onto any empty slot, then name a player."
                                  : "Waiting for \(turnName) to pick.")
                                 .font(BKFont.body(13))
                                 .foregroundStyle(BKTheme.textSecondary)
@@ -374,7 +396,7 @@ private struct VsDraftPicksSheet: View {
                     Text(live?.yourTurn == true ? "YOUR TURN" : "\(turnName.uppercased())'S TURN")
                         .font(BKFont.headline(13)).tracking(0.8)
                         .foregroundStyle(live?.yourTurn == true ? BKTheme.accent : BKTheme.textMuted)
-                    Text((live?.slotPosition ?? "—").uppercased())
+                    Text(live?.yourTurn == true ? "ANY POSITION" : "WAITING")
                         .font(BKFont.title(18))
                         .foregroundStyle(BKTheme.textPrimary)
                         .lineLimit(1)
@@ -419,8 +441,14 @@ private struct VsDraftPicksSheet: View {
                     .foregroundStyle(BKTheme.textMuted)
                 Text("\(row.playerName)  (\(row.statValue))")
                     .font(BKFont.headline(14))
-                    .foregroundStyle(BKTheme.textPrimary)
+                    .foregroundStyle(row.correct ? BKTheme.textPrimary : BKTheme.wrong)
                     .lineLimit(1)
+                if !row.correct, let reason = row.wrongReason, !reason.isEmpty {
+                    Text(reason)
+                        .font(BKFont.caption(10))
+                        .foregroundStyle(BKTheme.wrong)
+                        .lineLimit(2)
+                }
             }
             Spacer()
         }
@@ -469,5 +497,12 @@ private struct VsDraftPicksSheet: View {
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]
         return plain.date(from: raw)
+    }
+}
+
+private struct VsDraftShakeEffect: GeometryEffect {
+    var animatableData: CGFloat
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        ProjectionTransform(CGAffineTransform(translationX: 7 * sin(animatableData * .pi * 4), y: 0))
     }
 }

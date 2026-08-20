@@ -658,7 +658,7 @@ struct VsTabView: View {
                 if viewModel.challenge?.isLiveDraft == true {
                     waitingCard(
                         title: "Live draft",
-                        message: "Same pitch, one at a time. Drag a chip onto the highlighted slot — players can’t be reused."
+                        message: "Same pitch, one at a time. On your turn pick any empty position — players can’t be reused."
                     )
                 } else if viewModel.challenge?.isLiveHotseat == true {
                     waitingCard(

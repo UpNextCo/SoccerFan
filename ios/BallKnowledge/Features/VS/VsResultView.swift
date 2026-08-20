@@ -177,7 +177,7 @@ struct VsResultView: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(pick.playerName)
                                 .font(BKFont.body(13))
-                                .foregroundStyle(BKTheme.textPrimary)
+                                .foregroundStyle(pick.correct ? BKTheme.textPrimary : BKTheme.wrong)
                                 .lineLimit(1)
                             if !pick.constraintLabel.isEmpty {
                                 Text(pick.constraintLabel)
@@ -189,7 +189,7 @@ struct VsResultView: View {
                         Spacer()
                         Text("\(pick.statValue)")
                             .font(BKFont.headline(13))
-                            .foregroundStyle(BKTheme.accent)
+                            .foregroundStyle(pick.correct ? BKTheme.accent : BKTheme.wrong)
                     }
                 }
             }

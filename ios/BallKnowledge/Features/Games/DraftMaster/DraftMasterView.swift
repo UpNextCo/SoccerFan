@@ -79,7 +79,7 @@ final class DraftMasterViewModel {
                         statValue: row.statValue,
                         headshotUrl: row.headshotUrl
                     ),
-                    correct: true
+                    correct: row.correct
                 )
             }
             if let slotId, let keepChip, keepUnlocked, next.picks[slotId] == nil {
@@ -112,7 +112,7 @@ final class DraftMasterViewModel {
             || state.assignments.contains(where: { $0.value.id == id && state.isLocked($0.key) })
     }
 
-    func lockConfirmedPick(slotId: String, constraint: BattleConstraint, player: BattlePlayerDTO) {
+    func lockConfirmedPick(slotId: String, constraint: BattleConstraint, player: BattlePlayerDTO, correct: Bool) {
         extraUsedConstraintIds.insert(constraint.id)
         mutate {
             $0.assignments[slotId] = constraint
@@ -121,11 +121,21 @@ final class DraftMasterViewModel {
                 player: BattlePlayer(
                     id: player.id,
                     name: player.name,
-                    statValue: player.statValue,
+                    statValue: correct ? player.statValue : 0,
                     headshotUrl: player.headshotUrl
                 ),
-                correct: true
+                correct: correct
             )
+        }
+    }
+
+    func flashWrong(_ message: String) {
+        HapticManager.error()
+        shakeToken += 1
+        wrongMessage = message
+        Task {
+            try? await Task.sleep(for: .seconds(2.6))
+            if wrongMessage == message { wrongMessage = nil }
         }
     }
 
@@ -235,7 +245,6 @@ final class DraftMasterViewModel {
             Task {
                 let ok = await confirmPick(dto)
                 if ok {
-                    HapticManager.success()
                     closeSlot()
                 } else {
                     HapticManager.error()

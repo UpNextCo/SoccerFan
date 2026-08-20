@@ -914,9 +914,15 @@ export async function recomputeBattleScore(
 
 export type BattlePickScore =
   | { valid: true; stat: number; playerName: string; headshotUrl: string | null }
-  | { valid: false; reason: 'missing' | 'position' | 'constraint' };
+  | {
+      valid: false;
+      reason: 'missing' | 'position' | 'constraint';
+      playerName?: string;
+      headshotUrl?: string | null;
+      stat?: number;
+    };
 
-/** Score a single Draft XI lock (VS live draft). Invalid picks are rejected, not scored as 0. */
+/** Score a single Draft XI lock (VS live draft). Wrong position/chip still returns the player. */
 export async function scoreBattlePick(
   puzzle: BattlePuzzleJson,
   pick: { slotId: string; constraintId: string; playerId: string }
@@ -949,14 +955,19 @@ export async function scoreBattlePick(
   }>;
   const r = rows[0];
   if (!r) return { valid: false, reason: 'missing' };
-  if (!r.pos_ok) return { valid: false, reason: 'position' };
-  if (!r.satisfies) return { valid: false, reason: 'constraint' };
   const overrides = await getPhotoOverrides();
+  const headshotUrl = resolveHeadshot(overrides.get(pick.playerId), r.api_football_id) ?? null;
+  if (!r.pos_ok) {
+    return { valid: false, reason: 'position', playerName: r.name, headshotUrl, stat: 0 };
+  }
+  if (!r.satisfies) {
+    return { valid: false, reason: 'constraint', playerName: r.name, headshotUrl, stat: 0 };
+  }
   return {
     valid: true,
     stat: r.stat,
     playerName: r.name,
-    headshotUrl: resolveHeadshot(overrides.get(pick.playerId), r.api_football_id) ?? null,
+    headshotUrl,
   };
 }
 
