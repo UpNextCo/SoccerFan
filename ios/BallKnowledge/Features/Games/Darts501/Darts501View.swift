@@ -23,6 +23,7 @@ final class Darts501ViewModel {
     var scorePunch = false
     var boardShake = false
     var finishLabel: String?
+    var checkoutOptionCount: Int?
     var heartLossToken = 0
     var selectedThrow: Darts501Throw?
     private var searchTask: Task<Void, Never>?
@@ -51,6 +52,7 @@ final class Darts501ViewModel {
         scorePunch = false
         boardShake = false
         finishLabel = nil
+        refreshCheckoutOptions()
     }
 
     func updateSearch(_ query: String) {
@@ -191,6 +193,7 @@ final class Darts501ViewModel {
             try? await Task.sleep(for: .milliseconds(wrongCategory ? 900 : 420))
             clearReveal()
             isAnimating = false
+            refreshCheckoutOptions()
             if resolution.kind == .gameOver {
                 try? await Task.sleep(for: .milliseconds(220))
                 GameIntroPreferences.hide(.darts501)
@@ -223,6 +226,29 @@ final class Darts501ViewModel {
         try? await Task.sleep(for: .milliseconds(120))
         clearReveal()
         isAnimating = false
+        refreshCheckoutOptions()
+    }
+
+    func refreshCheckoutOptions() {
+        guard inCheckout, !state.isFinished, !state.puzzle.date.isEmpty else {
+            checkoutOptionCount = nil
+            return
+        }
+        let date = state.puzzle.date
+        let remaining = state.remaining
+        let used = Array(state.usedPlayerIds)
+        Task {
+            do {
+                let result = try await APIClient.shared.darts501Checkouts(
+                    date: date,
+                    remaining: remaining,
+                    alreadyUsedIds: used
+                )
+                checkoutOptionCount = result.count
+            } catch {
+                // Keep the last count if the request fails.
+            }
+        }
     }
 
     private func commit(_ row: Darts501Throw, resolution: Darts501Scoring.Resolution) {
@@ -317,7 +343,8 @@ struct Darts501View: View {
                                 revealIsBust: viewModel.revealIsBust,
                                 scorePunch: viewModel.scorePunch,
                                 shake: viewModel.boardShake,
-                                finishLabel: viewModel.finishLabel
+                                finishLabel: viewModel.finishLabel,
+                                checkoutOptionCount: viewModel.checkoutOptionCount
                             )
                             .padding(.horizontal, 16)
                             .padding(.top, 8)
@@ -444,15 +471,24 @@ private struct Darts501Scoreboard: View {
     let scorePunch: Bool
     let shake: Bool
     let finishLabel: String?
+    var checkoutOptionCount: Int? = nil
 
     var body: some View {
         VStack(spacing: 6) {
             if inCheckout || finishLabel != nil {
-                Text(finishLabel ?? "CHECKOUT")
-                    .font(BKFont.caption(12))
-                    .tracking(2)
-                    .foregroundStyle(finishLabel == "PERFECT CHECKOUT" ? BKTheme.accent : BKTheme.partial)
-                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                VStack(spacing: 3) {
+                    Text(finishLabel ?? "CHECKOUT")
+                        .font(BKFont.caption(12))
+                        .tracking(2)
+                        .foregroundStyle(finishLabel == "PERFECT CHECKOUT" ? BKTheme.accent : BKTheme.partial)
+                    if finishLabel == nil, let checkoutOptionCount {
+                        Text(checkoutOptionCount == 1 ? "1 OPTION" : "\(checkoutOptionCount) OPTIONS")
+                            .font(BKFont.caption(11))
+                            .tracking(1.2)
+                            .foregroundStyle(BKTheme.partial)
+                    }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.94)))
             }
 
             Text("\(remaining)")

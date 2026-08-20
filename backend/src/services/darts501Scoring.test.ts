@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   bustReasonForScore,
+  countCheckoutOptions,
   darts501Xp,
   isSuccessfulCheckout,
   isValidDartsScore,
@@ -26,6 +27,19 @@ test('checkout window is 0 through -10', () => {
   assert.equal(isSuccessfulCheckout(-10), true);
   assert.equal(isSuccessfulCheckout(1), false);
   assert.equal(isSuccessfulCheckout(-11), false);
+});
+
+test('countCheckoutOptions counts unused valid scores in the window', () => {
+  const players = [
+    { id: 'a', score: 45 },
+    { id: 'b', score: 50 },
+    { id: 'c', score: 55 },
+    { id: 'd', score: 60 },
+    { id: 'e', score: 163 },
+  ];
+  assert.equal(countCheckoutOptions(players, 50), 3);
+  assert.equal(countCheckoutOptions(players, 50, ['b']), 2);
+  assert.equal(countCheckoutOptions(players, 180), 0);
 });
 
 test('normal throw deducts a valid score', () => {

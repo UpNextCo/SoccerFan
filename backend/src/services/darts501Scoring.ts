@@ -53,6 +53,24 @@ export function isSuccessfulCheckout(nextRemaining: number): boolean {
   return nextRemaining <= 0 && nextRemaining >= -DARTS501_CHECKOUT_WINDOW;
 }
 
+/** How many unused valid scores would finish from this remaining. */
+export function countCheckoutOptions(
+  players: Array<{ id: string; score: number }>,
+  remaining: number,
+  usedIds: Iterable<string> = [],
+  window = DARTS501_CHECKOUT_WINDOW
+): number {
+  const used = usedIds instanceof Set ? usedIds : new Set(usedIds);
+  let count = 0;
+  for (const player of players) {
+    if (used.has(player.id)) continue;
+    if (!isValidDartsScore(player.score) || player.score === 0) continue;
+    const next = remaining - player.score;
+    if (next <= 0 && next >= -window) count += 1;
+  }
+  return count;
+}
+
 export function isPerfectCheckout(nextRemaining: number): boolean {
   return nextRemaining === 0;
 }

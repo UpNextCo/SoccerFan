@@ -187,6 +187,25 @@ dailyRouter.post('/darts501/throw', requireAuth, async (req, res) => {
   }
 });
 
+const darts501CheckoutsSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  remaining: z.number().int(),
+  alreadyUsedIds: z.array(z.string().uuid()).optional(),
+});
+dailyRouter.post('/darts501/checkouts', requireAuth, async (req, res) => {
+  const parsed = darts501CheckoutsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    const { countDarts501Checkouts } = await import('../services/darts501Generator.js');
+    sendSuccess(res, await countDarts501Checkouts(parsed.data));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Football 501 checkouts failed', 400);
+  }
+});
+
 const backYourselfGuessSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   playerId: z.string().uuid(),

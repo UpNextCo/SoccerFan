@@ -493,9 +493,9 @@ struct VsTabView: View {
     private func challengeContent(_ challenge: VsChallengeDTO) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
-                VStack(spacing: 8) {
+                VStack(spacing: 12) {
                     Text(challenge.title)
-                        .font(BKFont.title(22))
+                        .font(BKFont.title(26))
                         .foregroundStyle(BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
                         .lineLimit(4)
@@ -505,17 +505,25 @@ struct VsTabView: View {
                         Button {
                             Task { await viewModel.reshuffleCategory() }
                         } label: {
-                            if viewModel.isBusy {
-                                ProgressView().tint(BKTheme.accent)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(BKTheme.accent)
+                            HStack(spacing: 5) {
+                                if viewModel.isBusy {
+                                    ProgressView().tint(BKTheme.textSecondary)
+                                } else {
+                                    Text("New category")
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 10, weight: .semibold))
+                                }
                             }
+                            .font(BKFont.caption(11))
+                            .foregroundStyle(BKTheme.textSecondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(BKTheme.cardElevated)
+                            .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
                         .disabled(viewModel.isBusy)
-                        .accessibilityLabel("Change category")
+                        .accessibilityLabel("New category")
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -633,13 +641,13 @@ struct VsTabView: View {
                 }
             }
             Text(code)
-                .font(BKFont.title(40))
+                .font(BKFont.title(34))
                 .tracking(6)
                 .foregroundStyle(BKTheme.textPrimary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 22)
-        .background(Color(hex: "161616"))
+        .background(Color(hex: "121212"))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
@@ -647,14 +655,17 @@ struct VsTabView: View {
         let openSlots = max(0, challenge.maxPlayers - challenge.players.count)
         return VStack(alignment: .leading, spacing: 12) {
             if challenge.status == "waiting" {
-                Text(challenge.youAreHost ? "Waiting for friends" : "Waiting to start")
-                    .font(BKFont.headline(16))
-                    .foregroundStyle(BKTheme.textPrimary)
+                WaitingDotsTitle(text: challenge.youAreHost ? "Waiting for friends" : "Waiting to start")
                     .padding(.bottom, 6)
             }
             ForEach(Array(challenge.players.enumerated()), id: \.element.userId) { index, player in
                 if index > 0 { Divider().overlay(BKTheme.textMuted.opacity(0.25)) }
-                playerRow(player, noun: challenge.categoryNoun, modeId: challenge.modeId)
+                playerRow(
+                    player,
+                    noun: challenge.categoryNoun,
+                    modeId: challenge.modeId,
+                    showReady: challenge.status == "waiting"
+                )
             }
             if challenge.status == "waiting" {
                 ForEach(0..<openSlots, id: \.self) { _ in
@@ -675,11 +686,11 @@ struct VsTabView: View {
             }
         }
         .padding(16)
-        .background(Color(hex: "121212"))
+        .background(Color(hex: "161616"))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private func playerRow(_ player: VsPlayerDTO, noun: String, modeId: String) -> some View {
+    private func playerRow(_ player: VsPlayerDTO, noun: String, modeId: String, showReady: Bool = false) -> some View {
         HStack(alignment: .center, spacing: 10) {
             lobbyAvatar(player)
             Text(playerLabel(player))
@@ -698,6 +709,20 @@ struct VsTabView: View {
                 Text("Done")
                     .font(BKFont.caption(12))
                     .foregroundStyle(BKTheme.textMuted)
+            } else if showReady {
+                HStack(spacing: 6) {
+                    Text("Ready")
+                        .font(BKFont.caption(12))
+                        .foregroundStyle(BKTheme.accent)
+                    ZStack {
+                        Circle()
+                            .fill(BKTheme.accent)
+                            .frame(width: 16, height: 16)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Color.black)
+                    }
+                }
             } else {
                 Text("Waiting")
                     .font(BKFont.caption(12))
@@ -840,6 +865,25 @@ struct VsTabView: View {
         .padding(22)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct WaitingDotsTitle: View {
+    let text: String
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.4)) { context in
+            let step = Int(context.date.timeIntervalSinceReferenceDate / 0.4) % 4
+            HStack(spacing: 0) {
+                Text(text)
+                ForEach(0..<3, id: \.self) { index in
+                    Text(".")
+                        .opacity(index < step ? 1 : 0)
+                }
+            }
+            .font(BKFont.headline(16))
+            .foregroundStyle(BKTheme.textPrimary)
+        }
     }
 }
 

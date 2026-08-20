@@ -14,6 +14,7 @@ import { targetCategoryById } from './targetManCategories.js';
 import { recentDarts501Formulas } from './puzzleHistory.js';
 import {
   clampPlayerValue,
+  countCheckoutOptions,
   DARTS501_CHECKOUT_LIVES,
   DARTS501_CHECKOUT_WINDOW,
   DARTS501_START,
@@ -671,4 +672,47 @@ export async function playerValuesForDarts501(
     });
   }
   return result;
+}
+
+type CheckoutScoreRow = { id: string; score: number };
+let checkoutScoreCache: { key: string; rows: CheckoutScoreRow[] } | null = null;
+
+async function checkoutScoresForDate(date: string): Promise<{
+  rows: CheckoutScoreRow[];
+  window: number;
+}> {
+  const found = await db
+    .select({ puzzleJson: dailyPuzzles.puzzleJson })
+    .from(dailyPuzzles)
+    .where(and(eq(dailyPuzzles.date, date), eq(dailyPuzzles.modeId, DARTS501_MODE_ID)))
+    .limit(1);
+  const puzzle = parseDarts501Puzzle(found[0]?.puzzleJson);
+  const formula = puzzle ? darts501FormulaById(puzzle.formulaId) : undefined;
+  if (!puzzle || !formula) {
+    throw new Error('No Football 501 puzzle for date');
+  }
+  const key = `${date}:${formula.id}`;
+  if (checkoutScoreCache?.key === key) {
+    return { rows: checkoutScoreCache.rows, window: puzzle.checkoutWindow };
+  }
+  const loaded = await loadFormulaRows(formula);
+  const rows: CheckoutScoreRow[] = [];
+  for (const row of loaded) {
+    const score = computeFormulaScore(Number(row.left_val), Number(row.right_val), formula.op);
+    if (!isValidDartsScore(score) || score === 0) continue;
+    rows.push({ id: row.id, score });
+  }
+  checkoutScoreCache = { key, rows };
+  return { rows, window: puzzle.checkoutWindow };
+}
+
+export async function countDarts501Checkouts(input: {
+  date: string;
+  remaining: number;
+  alreadyUsedIds?: string[];
+}): Promise<{ count: number }> {
+  const { rows, window } = await checkoutScoresForDate(input.date);
+  return {
+    count: countCheckoutOptions(rows, input.remaining, input.alreadyUsedIds ?? [], window),
+  };
 }

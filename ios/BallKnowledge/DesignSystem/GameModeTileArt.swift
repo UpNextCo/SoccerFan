@@ -23,20 +23,34 @@ enum GameModeTileArt {
 
     static func imageURL(named name: String) -> URL? {
         let extensions = ["png", "PNG", "jpg", "jpeg"]
+        let parts = name.split(separator: "/").map(String.init)
+        let fileName = parts.last ?? name
+        let nestedGameTilesDir: String? = parts.count > 1
+            ? "GameTiles/" + parts.dropLast().joined(separator: "/")
+            : nil
 
         for ext in extensions {
-            if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "GameTiles") {
+            if let nestedGameTilesDir,
+               let url = Bundle.main.url(forResource: fileName, withExtension: ext, subdirectory: nestedGameTilesDir) {
                 return url
             }
-            if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+            if let url = Bundle.main.url(forResource: fileName, withExtension: ext, subdirectory: "GameTiles") {
                 return url
             }
-            if let path = Bundle.main.path(forResource: name, ofType: ext, inDirectory: "GameTiles") {
+            if let url = Bundle.main.url(forResource: fileName, withExtension: ext) {
+                return url
+            }
+            if let nestedGameTilesDir,
+               let path = Bundle.main.path(forResource: fileName, ofType: ext, inDirectory: nestedGameTilesDir) {
+                return URL(fileURLWithPath: path)
+            }
+            if let path = Bundle.main.path(forResource: fileName, ofType: ext, inDirectory: "GameTiles") {
                 return URL(fileURLWithPath: path)
             }
         }
 
         // Folder-reference copy (blue folder in Xcode) — most reliable for drop-in tiles.
+        // `name` may be nested, e.g. `onemorelevels/onemorebronze`.
         if let resourcePath = Bundle.main.resourcePath {
             for ext in extensions {
                 let path = (resourcePath as NSString).appendingPathComponent("GameTiles/\(name).\(ext)")

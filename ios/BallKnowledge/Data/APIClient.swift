@@ -288,6 +288,23 @@ actor APIClient {
     }
 
     /// Validate a Back Yourself pick against today's category. Wrong fits cost a life on the client.
+    func darts501Checkouts(
+        date: String,
+        remaining: Int,
+        alreadyUsedIds: [String]
+    ) async throws -> Darts501CheckoutsDTO {
+        struct Body: Encodable {
+            let date: String
+            let remaining: Int
+            let alreadyUsedIds: [String]
+        }
+        return try await request(
+            "daily/darts501/checkouts",
+            method: "POST",
+            body: Body(date: date, remaining: remaining, alreadyUsedIds: alreadyUsedIds)
+        )
+    }
+
     func darts501Throw(
         date: String,
         playerId: String,

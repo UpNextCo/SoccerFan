@@ -84,6 +84,10 @@ struct Darts501CategoryDisplay: Equatable {
     ]
 }
 
+struct Darts501CheckoutsDTO: Codable {
+    let count: Int
+}
+
 struct Darts501ThrowResultDTO: Codable {
     let valid: Bool
     let duplicate: Bool

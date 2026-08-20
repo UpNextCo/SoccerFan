@@ -69,7 +69,7 @@ struct GameIntroContent {
             )
         case .oneMore:
             return GameIntroContent(
-                tagline: "Risk it for the streak.",
+                tagline: "Risk it for the XP.",
                 steps: [
                     "Two players are shown. Pick the one who meets today's target.",
                     "Each correct answer banks XP, but one wrong answer ends your run.",
@@ -109,7 +109,7 @@ struct GameIntroContent {
                 steps: [
                     "Connect the two players through a chain of real teammates.",
                     "Each step must be two players who shared a club at the same time.",
-                    "You get three lives — wrong guesses cost a heart and XP. Fewer steps earn a better medal.",
+                    "You get three lives - wrong guesses cost a heart and XP. Fewer steps earn more XP.",
                 ]
             )
         case .footballTower:
@@ -125,26 +125,26 @@ struct GameIntroContent {
                 tagline: "Outlast the field.",
                 steps: [
                     "100 anonymous entrants. One of them is you.",
-                    "Answer 10 football questions — one wrong answer and you're out.",
+                    "Answer 10 football questions - one wrong answer and you're out.",
                     "Survive every round to be the Last Man Standing.",
                 ]
             )
         case .backYourself:
             return GameIntroContent(
-                tagline: "Pledge how many you can name.",
+                tagline: "How many you can name?",
                 steps: [
-                    "See today's category — managed by, WC squads, club combos, awards, and more.",
-                    "Set your pledge — XP scales up to the Max XP threshold (extra names still count for the win).",
-                    "Search and name that many players with three lives. Miss the pledge and you get 0 XP.",
+                    "See today’s category - clubs, squads, awards and more.",
+                    "Choose your target - the more players you back yourself to name, the more XP you can win.",
+                    "Name them with 3 lives - hit your target to win the XP. Miss it and you get nothing.",
                 ]
             )
         case .darts501:
             return GameIntroContent(
-                tagline: "Start on 501.",
+                tagline: "Can you check out?",
                 steps: [
                     "Name players to score points based on today's stat.",
                     "Work your way down and finish between 0 and -10.",
-                    "You have three hearts. A bust — or a player outside today's category — costs a heart. Lose all three and it's game over.",
+                    "You have three hearts. A bust or wrong guess costs a heart - lose all three and it's game over.",
                 ]
             )
         }
