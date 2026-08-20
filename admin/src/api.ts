@@ -680,6 +680,19 @@ export const api = {
     ),
   resolveTeam: (id: number) =>
     request<AdminTeamResolved>(`/resolve/team/${id}`),
+  getPlayerReviewCounts: () => request<PlayerReviewCounts>('/player-review/counts'),
+  getRandomPlayerReview: (pool: PlayerReviewPool = 'unreviewed', excludeIds: string[] = []) => {
+    const params = new URLSearchParams({ pool })
+    if (excludeIds.length > 0) params.set('exclude', excludeIds.join(','))
+    return request<PlayerReviewPayload>(`/player-review/random?${params.toString()}`)
+  },
+  getPlayerReview: (playerId: string) =>
+    request<PlayerReviewPayload>(`/player-review/${encodeURIComponent(playerId)}`),
+  setPlayerReview: (playerId: string, body: { status: PlayerReviewStatus; note?: string | null }) =>
+    request<PlayerReviewPayload>(`/player-review/${encodeURIComponent(playerId)}/review`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 }
 
 export type AdminBackYourselfPoolPlayer = {
@@ -723,6 +736,171 @@ export type AdminTeamHit = {
 
 export type AdminLeagueHit = { id: number; name: string; logoUrl: string }
 export type AdminNationalityHit = { name: string }
+
+export type PlayerReviewStatus = 'pending' | 'approved' | 'flagged'
+export type PlayerReviewPool = 'unreviewed' | 'flagged' | 'approved' | 'any'
+
+export type PlayerReviewCounts = {
+  unreviewed: number
+  approved: number
+  flagged: number
+  poolSize: number
+}
+
+export type PlayerDossier = {
+  id: string
+  name: string
+  aliases: string[]
+  nationality: string
+  position: string
+  subPosition: string | null
+  subPositions: string[]
+  age: number
+  birthDate: string | null
+  currentClub: string
+  currentLeague: string
+  shirtNumber: number | null
+  foot: string | null
+  marketValueTier: number
+  marketValueEur: number | null
+  peakMarketValueEur: number | null
+  recordFeeEur: number | null
+  externalId: string | null
+  tmPlayerId: string | null
+  apiFootballId: number | null
+  photoUrl: string | null
+  headshotUrl: string | null
+  review: {
+    status: PlayerReviewStatus
+    note: string | null
+    reviewedBy: string | null
+    reviewedAt: string | null
+  }
+  career: Array<{
+    teamId: number
+    teamName: string
+    seasonFrom: number
+    seasonTo: number | null
+    badgeUrl: string
+  }>
+  stats: Array<{
+    season: number
+    leagueId: number
+    leagueName: string
+    teamId: number
+    teamName: string | null
+    appearances: number
+    minutes: number
+    goals: number
+    assists: number
+    yellowCards: number
+    redCards: number
+    cleanSheets: number | null
+    saves: number | null
+    foulsCommitted: number | null
+    tackles: number | null
+  }>
+  statTotals: {
+    appearances: number
+    minutes: number
+    goals: number
+    assists: number
+    yellowCards: number
+    redCards: number
+  }
+  leagueTotals: Array<{
+    leagueId: number
+    leagueName: string
+    appearances: number
+    minutes: number
+    goals: number
+    assists: number
+  }>
+  extra: {
+    penaltyGoals: number
+    weakFootGoals: number
+    careerHattricks: number
+    uclKnockoutGoals: number
+    uclGoalsVsEnglish: number
+    uclRedCards: number
+    goalsBefore21: number
+    firstGoalAgeDays: number | null
+    debutAgeDays: number | null
+    intlCaps: number
+    intlGoals: number
+    fbrefPenalties: number
+    tmCareerGoals: number | null
+    tmCareerApps: number | null
+    tmIntlCaps: number | null
+    tmIntlGoals: number | null
+    verifiedClubCount: number | null
+    plPenalties: number
+    laligaPenalties: number
+    serieaPenalties: number
+    bundesligaPenalties: number
+    ligue1Penalties: number
+  } | null
+  transfers: Array<{
+    transferDate: string | null
+    fromTeamId: number
+    fromTeamName: string | null
+    toTeamId: number
+    toTeamName: string | null
+    feeRaw: string | null
+    feeEurM: string | null
+    transferType: string
+  }>
+  honours: Array<{
+    competition: string
+    country: string | null
+    season: string
+    placement: string
+  }>
+  awards: Array<{ award: string; year: number; placement: string }>
+  finals: Array<{
+    competition: string
+    season: number
+    team: string
+    started: boolean
+    minutes: number
+    goals: number
+    won: boolean
+  }>
+  managers: Array<{
+    manager: string
+    club: string
+    seasonFrom: number
+    seasonTo: number | null
+  }>
+  wcSquads: Array<{
+    year: number
+    country: string
+    position: string
+    shirtNumber: number | null
+    club: string | null
+    caps: number | null
+    isCaptain: boolean
+    coach: string | null
+  }>
+  wcEvents: Array<{
+    year: number
+    matchDate: string | null
+    stage: string
+    team: string
+    opponent: string
+    type: string
+    minute: number | null
+    detail: string | null
+    assistPlayerName: string | null
+    role: 'player' | 'assist'
+  }>
+  wcMemorable: Array<{ year: number; clue: string; status: string }>
+}
+
+export type PlayerReviewPayload = {
+  dossier: PlayerDossier | null
+  counts: PlayerReviewCounts
+}
 
 export type AdminTeamResolved = {
   id: number

@@ -44,6 +44,7 @@ import { adminPuzzleValidationRouter } from './adminPuzzleValidation.js';
 import { adminMonthGenerationRouter } from './adminMonthGeneration.js';
 import { adminMediaRouter } from './adminMedia.js';
 import { adminPlayerPhotosRouter } from './adminPlayerPhotos.js';
+import { adminPlayerReviewRouter } from './adminPlayerReview.js';
 
 export const adminRouter = Router();
 adminRouter.use('/question-engine', adminQuestionEngineRouter);
@@ -51,6 +52,7 @@ adminRouter.use('/validation', adminPuzzleValidationRouter);
 adminRouter.use('/month-generation', adminMonthGenerationRouter);
 adminRouter.use('/media', adminMediaRouter);
 adminRouter.use('/player-photos', adminPlayerPhotosRouter);
+adminRouter.use('/player-review', adminPlayerReviewRouter);
 
 adminRouter.post('/login', (req, res) => {
   const body = z

@@ -123,6 +123,14 @@ export function OpsShell({
               <span className="nav-icon" aria-hidden="true">◎</span>
               Player photos
             </NavLink>
+            <NavLink
+              to="/player-review"
+              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              onClick={() => setMenuOpen(false)}
+            >
+              <span className="nav-icon" aria-hidden="true">▣</span>
+              Player data
+            </NavLink>
           </nav>
         </div>
         <div className="account-block">

@@ -665,6 +665,25 @@ export const wcMemorable = pgTable(
   ]
 );
 
+/**
+ * Ops review of a player's stored dossier (career, stats, transfers…).
+ * pending = not yet reviewed (no row, or status pending).
+ */
+export const playerDataReviews = pgTable(
+  'player_data_reviews',
+  {
+    playerId: uuid('player_id')
+      .primaryKey()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'), // pending | approved | flagged
+    note: text('note'),
+    reviewedBy: text('reviewed_by'),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('player_data_reviews_status_idx').on(table.status)]
+);
+
 export const dailyCompletions = pgTable(
   'daily_completions',
   {
@@ -862,3 +881,4 @@ export type WcSquad = typeof wcSquads.$inferSelect;
 export type WcMatchEvent = typeof wcMatchEvents.$inferSelect;
 export type WcMemorable = typeof wcMemorable.$inferSelect;
 export type LmsBankRow = typeof lmsBank.$inferSelect;
+export type PlayerDataReview = typeof playerDataReviews.$inferSelect;
