@@ -53,7 +53,6 @@ struct HomeView: View {
     /// True while a game cover is up — celebration waits until we're back on home.
     @State private var isPlayingGame = false
     @State private var celebrationPayload: DailyCompleteCelebrationPayload?
-    @State private var rankUpPayload: RankUpCelebrationPayload?
     #if DEBUG
     @State private var showAwardPreview = false
     #endif
@@ -151,11 +150,7 @@ struct HomeView: View {
             guard today != trackedDailyDate || viewModel.dailyBundle?.date != today else { return }
             Task { await reloadIfNeeded(force: false, context: modelContext) }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .dailyCompletionRecorded)) { notification in
-            if let completion = notification.object as? DailyCompleteResponseDTO,
-               let rankUp = RankUpCelebrationPayload.make(from: completion) {
-                rankUpPayload = rankUp
-            }
+        .onReceive(NotificationCenter.default.publisher(for: .dailyCompletionRecorded)) { _ in
             // The completion POST has landed on the server — refresh XP (top bar + card) and the
             // games-completed count now that the write is durable, avoiding the dismiss-time race.
             Task {
@@ -175,9 +170,7 @@ struct HomeView: View {
                 refreshInProgress()
                 // Let the game cover finish dismissing before stacking the celebration cover.
                 try? await Task.sleep(for: .milliseconds(350))
-                if rankUpPayload == nil {
-                    presentCelebrationIfNeeded()
-                }
+                presentCelebrationIfNeeded()
             }
         }) { mode in
             DailyGameHost(
@@ -186,15 +179,6 @@ struct HomeView: View {
                 allowReplay: allowsUnlimitedDailyPlay,
                 onFinished: { handleModeFinished(mode) }
             )
-        }
-        .fullScreenCover(item: $rankUpPayload) { payload in
-            RankUpCelebrationView(payload: payload) {
-                rankUpPayload = nil
-                Task {
-                    try? await Task.sleep(for: .milliseconds(300))
-                    presentCelebrationIfNeeded()
-                }
-            }
         }
         #if DEBUG
         .fullScreenCover(isPresented: $showAwardPreview) {
@@ -268,7 +252,6 @@ struct HomeView: View {
     /// Show the streak toast once per day after the first finished daily.
     private func presentCelebrationIfNeeded() {
         guard celebrationPayload == nil,
-              rankUpPayload == nil,
               !isPlayingGame,
               presentedMode == nil else { return }
         guard let bundle = viewModel.dailyBundle else { return }
@@ -536,19 +519,15 @@ struct NotificationsView: View {
                 league: snapshot
             )
 
-            let rank = PlayerRank.progress(for: user?.xp ?? 0)
             ActivityFeedStore.markOpened(
-                rankTitle: rank.title,
                 overallRank: snapshot.overallRank,
                 todayRank: snapshot.todayRank,
                 todayDate: DailyDate.localToday()
             )
         } catch {
             loadFailed = true
-            let rank = PlayerRank.progress(for: user?.xp ?? 0)
             // Keep prior league snapshots if the refresh failed.
             ActivityFeedStore.markOpened(
-                rankTitle: rank.title,
                 overallRank: ActivityFeedStore.lastOverallRank,
                 todayRank: ActivityFeedStore.lastTodayRank,
                 todayDate: ActivityFeedStore.lastTodayRankDate ?? DailyDate.localToday()

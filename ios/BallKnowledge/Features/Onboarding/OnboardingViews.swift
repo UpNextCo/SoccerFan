@@ -1076,7 +1076,9 @@ struct ReminderSetupStep: View {
         isWorking = true
         Task {
             let granted = await DailyReminder.enable()
-            LocalProfile.remindersOn = granted
+            if granted {
+                LocalProfile.remindersOn = true
+            }
             isWorking = false
             onFinish()
         }

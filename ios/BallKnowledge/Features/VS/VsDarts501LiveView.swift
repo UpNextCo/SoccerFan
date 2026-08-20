@@ -37,11 +37,6 @@ struct VsDarts501LiveView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(action: leaveToLobby) {
-                        Ph.x.bold.color(BKTheme.textPrimary).frame(width: 15, height: 15)
-                    }
-                }
                 ToolbarItem(placement: .principal) {
                     Text("VS · FOOTBALL 501")
                         .font(BKFont.caption(13)).tracking(1)
@@ -350,11 +345,6 @@ struct VsDarts501LiveView: View {
     private var timerLabel: String {
         let total = secondsLeft
         return String(format: "%d:%02d", total / 60, total % 60)
-    }
-
-    private func leaveToLobby() {
-        viewModel.playing = false
-        dismiss()
     }
 
     private func throwPlayer(_ hit: PlayerSearchResultDTO) async {

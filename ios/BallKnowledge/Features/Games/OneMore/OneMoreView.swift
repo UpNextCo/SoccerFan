@@ -14,6 +14,8 @@ final class OneMoreViewModel {
     var isChecking = false
     var checkError: String?
     var runToken: String?
+    /// Bumped whenever a new pair appears so the 15s round clock restarts.
+    var roundToken = UUID()
     private let dailyDate: String?
 
     init(prompt: OneMorePrompt, dailyDate: String? = nil) {
@@ -41,6 +43,7 @@ final class OneMoreViewModel {
         state = s
         runToken = nil
         resetTransient()
+        roundToken = UUID()
     }
 
     func ensureRunToken() async {
@@ -128,6 +131,7 @@ final class OneMoreViewModel {
                 cashOut(cleared: true)
             } else {
                 state.phase = .playing
+                roundToken = UUID()
             }
         } else {
             let correct = round.options.first { state.prompt.qualifies($0, in: round) }
@@ -153,6 +157,22 @@ final class OneMoreViewModel {
         }
     }
 
+    func roundExpired() {
+        guard state.phase == .playing, !isChecking else { return }
+        state.streak = 0
+        state.bankedScore = 0
+        state.phase = .busted
+        runToken = nil
+        lastFeedback = "Time's up"
+        HapticManager.error()
+        showBustOverlay = true
+        Task {
+            try? await Task.sleep(for: .seconds(OneMoreTiming.bustHold))
+            showBustOverlay = false
+            showResult = true
+        }
+    }
+
     func cashOut(cleared: Bool = false) {
         guard cleared || canCashOut else { return }
         HapticManager.success()
@@ -171,6 +191,7 @@ final class OneMoreViewModel {
         state = OneMoreGameState(prompt: state.prompt)
         runToken = nil
         resetTransient()
+        roundToken = UUID()
     }
 
     private func resetTransient() {
@@ -210,6 +231,12 @@ struct OneMoreView: View {
         ZStack {
             NavigationStack {
                 VStack(spacing: 0) {
+                    OneMoreRoundTimerBar(
+                        roundToken: viewModel.roundToken,
+                        isActive: viewModel.state.phase == .playing && !viewModel.isChecking,
+                        onExpired: { viewModel.roundExpired() }
+                    )
+
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 16) {
                             OneMorePromptCard(prompt: viewModel.state.prompt)
@@ -397,6 +424,74 @@ private struct OneMorePromptCard: View {
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+    }
+}
+
+// MARK: - Round Timer
+
+private struct OneMoreRoundTimerBar: View {
+    let roundToken: UUID
+    let isActive: Bool
+    var onExpired: () -> Void
+
+    @State private var accumulated: TimeInterval = 0
+    @State private var runningSince: Date?
+    @State private var didExpire = false
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+            let elapsed = accumulated + (runningSince.map { timeline.date.timeIntervalSince($0) } ?? 0)
+            let remainingSeconds = max(0, OneMoreTiming.roundDuration - elapsed)
+            let fraction = remainingSeconds / OneMoreTiming.roundDuration
+            let urgent = remainingSeconds <= 5
+            let fill = urgent ? BKTheme.wrong : BKTheme.accent
+
+            HStack(spacing: 10) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(BKTheme.cardElevated)
+                        Capsule()
+                            .fill(fill)
+                            .frame(width: max(0, geo.size.width * fraction))
+                    }
+                }
+                .frame(height: 4)
+
+                Text("\(Int(ceil(remainingSeconds)))")
+                    .font(BKFont.caption(12))
+                    .monospacedDigit()
+                    .foregroundStyle(urgent ? BKTheme.wrong : BKTheme.textMuted)
+                    .frame(width: 22, alignment: .trailing)
+            }
+            .onChange(of: remainingSeconds) { _, value in
+                guard isActive, value <= 0, !didExpire else { return }
+                didExpire = true
+                onExpired()
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .onChange(of: roundToken) { _, _ in
+            restartClock()
+        }
+        .onChange(of: isActive) { _, active in
+            if active {
+                if runningSince == nil { runningSince = Date() }
+            } else if let start = runningSince {
+                accumulated += Date().timeIntervalSince(start)
+                runningSince = nil
+            }
+        }
+        .onAppear {
+            if isActive { runningSince = Date() }
+        }
+    }
+
+    private func restartClock() {
+        accumulated = 0
+        runningSince = isActive ? Date() : nil
+        didExpire = false
     }
 }
 
@@ -798,7 +893,9 @@ private struct OneMoreResultView: View {
 
                     XPResultSummary(earned: xpEarned, max: DailyXP.maxXP(.oneMore))
 
-                    Text(isBusted ? "Run ended on a wrong pick" : "\(streak) correct in a row")
+                    Text(isBusted
+                         ? (bustPick == nil ? "Run ended - time's up" : "Run ended on a wrong pick")
+                         : "\(streak) correct in a row")
                         .font(BKFont.caption(11))
                         .foregroundStyle(BKTheme.textMuted)
 

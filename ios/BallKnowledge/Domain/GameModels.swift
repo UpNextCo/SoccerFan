@@ -104,62 +104,6 @@ enum DailyPlayOrder {
     }
 }
 
-struct PlayerRankProgress {
-    let title: String
-    let emoji: String
-    let startXp: Int
-    let nextTitle: String?
-    let nextEmoji: String?
-    let nextXp: Int?
-
-    func fraction(at xp: Int) -> Double {
-        guard let nextXp else { return 1 }
-        let range = max(1, nextXp - startXp)
-        return min(1, max(0, Double(xp - startXp) / Double(range)))
-    }
-
-    func remaining(at xp: Int) -> Int? {
-        nextXp.map { max(0, $0 - xp) }
-    }
-}
-
-enum PlayerRank {
-    static func progress(for xp: Int) -> PlayerRankProgress {
-        switch max(0, xp) {
-        case ..<13_500:
-            return PlayerRankProgress(
-                title: "Rookie", emoji: "⚽️", startXp: 0,
-                nextTitle: "Semi-Pro", nextEmoji: "🥉", nextXp: 13_500
-            )
-        case ..<37_500:
-            return PlayerRankProgress(
-                title: "Semi-Pro", emoji: "🥉", startXp: 13_500,
-                nextTitle: "Pro", nextEmoji: "🥈", nextXp: 37_500
-            )
-        case ..<96_000:
-            return PlayerRankProgress(
-                title: "Pro", emoji: "🥈", startXp: 37_500,
-                nextTitle: "Veteran", nextEmoji: "🥇", nextXp: 96_000
-            )
-        case ..<216_000:
-            return PlayerRankProgress(
-                title: "Veteran", emoji: "🥇", startXp: 96_000,
-                nextTitle: "World Class", nextEmoji: "🏆", nextXp: 216_000
-            )
-        case ..<486_000:
-            return PlayerRankProgress(
-                title: "World Class", emoji: "🏆", startXp: 216_000,
-                nextTitle: "Legend", nextEmoji: "👑", nextXp: 486_000
-            )
-        default:
-            return PlayerRankProgress(
-                title: "Legend", emoji: "👑", startXp: 486_000,
-                nextTitle: nil, nextEmoji: nil, nextXp: nil
-            )
-        }
-    }
-}
-
 extension DailyBundleDTO {
     func isCompleted(_ mode: GameModeID) -> Bool {
         let normalized = mode.rawValue

@@ -9,19 +9,13 @@ struct ActivityEvent: Identifiable, Equatable {
     let unread: Bool
 }
 
-/// Persists last-seen rank / league positions so we can surface real "you moved up" style alerts.
+/// Persists last-seen league positions so we can surface real "you moved up" style alerts.
 enum ActivityFeedStore {
-    private static let rankTitleKey = "activityLastRankTitle"
     private static let overallRankKey = "activityLastOverallRank"
     private static let todayRankKey = "activityLastTodayRank"
     private static let todayRankDateKey = "activityLastTodayRankDate"
     private static let openedKey = "activityLastOpenedAt"
     private static let vsAlertsKey = "activityVsAlerts"
-
-    static var lastSeenRankTitle: String? {
-        get { UserDefaults.standard.string(forKey: rankTitleKey) }
-        set { UserDefaults.standard.set(newValue, forKey: rankTitleKey) }
-    }
 
     static var lastOverallRank: Int? {
         get {
@@ -57,12 +51,10 @@ enum ActivityFeedStore {
     }
 
     static func markOpened(
-        rankTitle: String,
         overallRank: Int?,
         todayRank: Int?,
         todayDate: String
     ) {
-        lastSeenRankTitle = rankTitle
         lastOverallRank = overallRank
         lastTodayRank = todayRank
         lastTodayRankDate = todayDate
@@ -112,7 +104,6 @@ enum ActivityFeedStore {
 
     static func clear() {
         [
-            rankTitleKey,
             overallRankKey,
             todayRankKey,
             todayRankDateKey,
@@ -150,8 +141,6 @@ enum HomeActivity {
     ) -> [ActivityEvent] {
         var events: [ActivityEvent] = []
         let todayXp = user?.todayXp ?? 0
-        let xp = user?.xp ?? 0
-        let rank = PlayerRank.progress(for: xp)
         let today = DailyDate.localToday()
 
         // 0) VS challenge alerts (opponent finished / results)
@@ -198,44 +187,7 @@ enum HomeActivity {
             ))
         }
 
-        // 2) Rank-up (new level) when title advanced since last open
-        if let previous = ActivityFeedStore.lastSeenRankTitle,
-           previous != rank.title,
-           rankOrder(rank.title) > rankOrder(previous) {
-            events.append(ActivityEvent(
-                id: "rank-up-\(rank.title)",
-                icon: "arrow.up.circle.fill",
-                tint: BKTheme.accent,
-                title: "New level — \(rank.emoji) \(rank.title)",
-                message: "You've climbed from \(previous) to \(rank.title). Nice work.",
-                unread: true
-            ))
-        }
-
-        // 3) Current level / progress to next
-        if let remaining = rank.remaining(at: xp),
-           let nextTitle = rank.nextTitle,
-           let nextEmoji = rank.nextEmoji {
-            events.append(ActivityEvent(
-                id: "rank-status-\(rank.title)",
-                icon: "star.fill",
-                tint: BKTheme.accent,
-                title: "\(rank.emoji) \(rank.title)",
-                message: "\(remaining.formatted()) XP to \(nextEmoji) \(nextTitle).",
-                unread: false
-            ))
-        } else {
-            events.append(ActivityEvent(
-                id: "rank-status-\(rank.title)",
-                icon: "crown.fill",
-                tint: .yellow,
-                title: "\(rank.emoji) \(rank.title)",
-                message: "Top rank reached — \(xp.formatted()) total XP.",
-                unread: false
-            ))
-        }
-
-        // 4) Overall league standing
+        // 2) Overall league standing
         if let league, let overallRank = league.overallRank {
             let totalNote = league.overallTotal.map { " of \($0)" } ?? ""
             let xpNote = league.overallXp.map { " · \($0.formatted()) XP" } ?? ""
@@ -257,7 +209,7 @@ enum HomeActivity {
             ))
         }
 
-        // 5) Today's league standing (only if they've earned XP today)
+        // 3) Today's league standing (only if they've earned XP today)
         if let league, let todayRank = league.todayRank, todayXp > 0 {
             let totalNote = league.todayTotal.map { " of \($0)" } ?? ""
             let previousDate = ActivityFeedStore.lastTodayRankDate
@@ -288,7 +240,7 @@ enum HomeActivity {
             ))
         }
 
-        // 6) Streak milestone (when already complete or mid-streak, avoid doubling the CTA)
+        // 4) Streak milestone (when already complete or mid-streak, avoid doubling the CTA)
         if streak >= 7, dailyComplete || todayXp > 0 {
             events.append(ActivityEvent(
                 id: "streak-milestone-\(streak)",
@@ -303,17 +255,5 @@ enum HomeActivity {
         }
 
         return events
-    }
-
-    private static func rankOrder(_ title: String) -> Int {
-        switch title {
-        case "Rookie": return 0
-        case "Semi-Pro": return 1
-        case "Pro": return 2
-        case "Veteran": return 3
-        case "World Class": return 4
-        case "Legend": return 5
-        default: return -1
-        }
     }
 }

@@ -96,11 +96,6 @@ struct VsHotseatView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
-                        Ph.x.bold.color(BKTheme.textPrimary).frame(width: 15, height: 15)
-                    }
-                }
                 ToolbarItem(placement: .principal) {
                     Text("VS · BACK YOURSELF")
                         .font(BKFont.caption(13)).tracking(1)

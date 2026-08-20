@@ -21,6 +21,7 @@ export const POSITION_OVERRIDES: Array<[string, string, string[]]> = [
   ['Kylian Mbappé', 'France', ['Left Winger', 'Centre-Forward']],
   ['Neymar', 'Brazil', ['Left Winger', 'Attacking Midfield']],
   ['Lionel Messi', 'Argentina', ['Right Winger', 'Attacking Midfield', 'Centre-Forward']],
+  ['Paulo Dybala', 'Argentina', ['Second Striker', 'Attacking Midfield', 'Centre-Forward', 'Right Winger']],
 
   // Tier-5 legends missing sub_position from TM ingest.
   ['Paolo Maldini', 'Italy', ['Centre-Back']],

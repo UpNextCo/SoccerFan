@@ -88,7 +88,7 @@ struct OneMorePrompt: Equatable, Codable {
     }
 
     var ruleLine: String {
-        "One wrong pick loses everything"
+        "15 seconds a pick · one miss loses everything"
     }
 
     /// Whether an option is the correct pick. Requires a revealed value from the server.
@@ -205,4 +205,5 @@ enum OneMoreTiming {
     static let bustHold: Double = 1.4
     static let cashOutDelay: Double = 0.25
     static let confettiThreshold = 5
+    static let roundDuration: TimeInterval = 15
 }

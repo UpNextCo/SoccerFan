@@ -92,11 +92,6 @@ struct VsDraftLiveView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
-                        Ph.x.bold.color(BKTheme.textPrimary).frame(width: 15, height: 15)
-                    }
-                }
                 ToolbarItem(placement: .principal) {
                     Text(battle.category.title.uppercased())
                         .font(BKFont.caption(12)).tracking(0.6)

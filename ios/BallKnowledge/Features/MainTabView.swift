@@ -1065,6 +1065,7 @@ private struct TeamFanRow: View {
 enum LocalProfile {
     private static let nameKey = "profile.displayNameOverride"
     private static let remindersKey = "profile.dailyRemindersOn"
+    private static let remindersOptedOutKey = "profile.dailyRemindersOptedOut"
 
     private static var avatarURL: URL {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -1102,6 +1103,13 @@ enum LocalProfile {
     static var remindersOn: Bool {
         get { UserDefaults.standard.bool(forKey: remindersKey) }
         set { UserDefaults.standard.set(newValue, forKey: remindersKey) }
+    }
+
+    /// Only written when the user turns the profile toggle off. The older
+    /// `remindersOn` flag was reset on every sign-out, so it cannot mean opt-out.
+    static var remindersOptedOut: Bool {
+        get { UserDefaults.standard.bool(forKey: remindersOptedOutKey) }
+        set { UserDefaults.standard.set(newValue, forKey: remindersOptedOutKey) }
     }
 
     /// Clear on-device profile (avatar + name override) so it doesn't carry over to the next account.
@@ -1198,20 +1206,52 @@ enum DailyReminder {
     private static let identifierPrefix = "daily-games-reminder-"
     private static let reminderHour = 19
 
+    static func isSystemAuthorized() async -> Bool {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        return isAuthorized(status)
+    }
+
+    static func isAuthorized(_ status: UNAuthorizationStatus) -> Bool {
+        status == .authorized || status == .provisional || status == .ephemeral
+    }
+
+    /// Toggle + scheduling source of truth: follow the iOS permission unless the
+    /// user has turned the profile toggle off. Allow therefore survives reinstall,
+    /// sign-out, and the old UserDefaults default-false wipe.
+    @discardableResult
+    static func resolvedEnabledState() async -> Bool {
+        if LocalProfile.remindersOptedOut { return false }
+        let authorized = await isSystemAuthorized()
+        if authorized {
+            LocalProfile.remindersOn = true
+        }
+        return authorized
+    }
+
     static func enable() async -> Bool {
         let center = UNUserNotificationCenter.current()
-        let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
-        guard granted else { return false }
+        let status = await center.notificationSettings().authorizationStatus
+        switch status {
+        case .notDetermined:
+            do {
+                let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+                guard granted else { return false }
+            } catch {
+                return false
+            }
+        case .authorized, .provisional, .ephemeral:
+            break
+        default:
+            return false
+        }
+        LocalProfile.remindersOptedOut = false
+        LocalProfile.remindersOn = true
         await scheduleRolling(completedCount: 0, totalCount: DailyPlayOrder.playableModes.count)
         return true
     }
 
     static func refresh(for bundle: DailyBundleDTO, modes: [GameModeMetaDTO]) async {
-        guard LocalProfile.remindersOn else { return }
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        guard settings.authorizationStatus == .authorized ||
-                settings.authorizationStatus == .provisional ||
-                settings.authorizationStatus == .ephemeral else { return }
+        guard await resolvedEnabledState() else { return }
 
         let enabledIds = Set(
             modes
@@ -1228,8 +1268,20 @@ enum DailyReminder {
         )
     }
 
-    static func disable() {
-        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+    static func optOut() {
+        LocalProfile.remindersOptedOut = true
+        LocalProfile.remindersOn = false
+        cancelScheduled()
+    }
+
+    private static func cancelScheduled() {
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { pending in
+            let identifiers = pending
+                .map(\.identifier)
+                .filter { $0 == legacyIdentifier || $0.hasPrefix(identifierPrefix) }
+            center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        }
     }
 
     private static func scheduleRolling(completedCount: Int, totalCount: Int) async {
@@ -1303,7 +1355,8 @@ struct ProfileTabView: View {
     @State private var showAvatarOptions = false
     @State private var showEditName = false
     @State private var draftName = ""
-    @State private var remindersOn = LocalProfile.remindersOn
+    @State private var remindersOn = !LocalProfile.remindersOptedOut && LocalProfile.remindersOn
+    @State private var showNotificationsDeniedAlert = false
     @State private var showSignOutConfirm = false
     @State private var showDeleteConfirm = false
     @State private var showIntrosResetAlert = false
@@ -1313,9 +1366,6 @@ struct ProfileTabView: View {
     private var displayName: String {
         LocalProfile.nameOverride ?? auth.user?.displayName ?? "Player"
     }
-
-    private var currentXp: Int { auth.user?.xp ?? 0 }
-    private var rankProgress: PlayerRankProgress { PlayerRank.progress(for: currentXp) }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -1335,7 +1385,13 @@ struct ProfileTabView: View {
             .padding(.bottom, BKTabBar.scrollClearance)
         }
         .background(BKTheme.background)
-        .onAppear { avatarImage = LocalProfile.loadAvatar() }
+        .onAppear {
+            avatarImage = LocalProfile.loadAvatar()
+            Task { await syncReminderToggle() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            Task { await syncReminderToggle() }
+        }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, newItem in
             guard let newItem else { return }
@@ -1372,6 +1428,16 @@ struct ProfileTabView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("The intro will show again the next time you open each game.")
+        }
+        .alert("Notifications are off", isPresented: $showNotificationsDeniedAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    openURL(url)
+                }
+            }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("Daily reminders are turned off for Ball Knowledge in iPhone Settings. Turn them on there to get your nudge.")
         }
         .alert(
             "Something went wrong",
@@ -1431,55 +1497,20 @@ struct ProfileTabView: View {
             }
             .buttonStyle(.plain)
 
-            VStack(spacing: 10) {
-                Button {
-                    draftName = displayName
-                    showEditName = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(displayName)
-                            .font(BKFont.title(24))
-                            .foregroundStyle(BKTheme.textPrimary)
-                        Image(systemName: "pencil")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(BKTheme.textMuted)
-                    }
+            Button {
+                draftName = displayName
+                showEditName = true
+            } label: {
+                HStack(spacing: 6) {
+                    Text(displayName)
+                        .font(BKFont.title(24))
+                        .foregroundStyle(BKTheme.textPrimary)
+                    Image(systemName: "pencil")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(BKTheme.textMuted)
                 }
-                .buttonStyle(.plain)
-
-                Text("\(rankProgress.emoji)  \(rankProgress.title)")
-                    .font(BKFont.headline(15))
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .padding(.bottom, 4)
-
-                VStack(spacing: 7) {
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(BKTheme.cardElevated)
-                            Capsule()
-                                .fill(BKTheme.accent)
-                                .frame(width: geometry.size.width * rankProgress.fraction(at: currentXp))
-                        }
-                    }
-                    .frame(height: 6)
-
-                    HStack {
-                        Text("\(currentXp.formatted()) XP")
-                        Spacer()
-                        if let remaining = rankProgress.remaining(at: currentXp),
-                           let nextEmoji = rankProgress.nextEmoji,
-                           let nextTitle = rankProgress.nextTitle {
-                            Text("\(remaining.formatted()) XP to \(nextEmoji) \(nextTitle)")
-                        } else {
-                            Text("Top rank reached")
-                        }
-                    }
-                    .font(BKFont.caption(10))
-                    .foregroundStyle(BKTheme.textMuted)
-                }
-                .frame(maxWidth: 250)
             }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -1572,20 +1603,14 @@ struct ProfileTabView: View {
             SettingsToggleRow(
                 icon: "bell.badge.fill",
                 title: "Daily reminder",
-                isOn: $remindersOn
-            )
-            .onChange(of: remindersOn) { _, isOn in
-                Task {
-                    if isOn {
-                        let granted = await DailyReminder.enable()
-                        remindersOn = granted
-                        LocalProfile.remindersOn = granted
-                    } else {
-                        DailyReminder.disable()
-                        LocalProfile.remindersOn = false
+                isOn: Binding(
+                    get: { remindersOn },
+                    set: { newValue in
+                        remindersOn = newValue
+                        Task { await handleReminderToggle(newValue) }
                     }
-                }
-            }
+                )
+            )
             rowDivider
             SettingsRow(icon: "questionmark.circle.fill", title: "Show game intros again") {
                 GameIntroPreferences.reset()
@@ -1606,6 +1631,30 @@ struct ProfileTabView: View {
             SettingsLinkRow(icon: "lock.shield.fill", title: "Privacy Policy", url: AppConfig.privacyPolicyURL)
             rowDivider
             SettingsLinkRow(icon: "doc.text.fill", title: "Terms of Service", url: AppConfig.termsOfServiceURL)
+        }
+    }
+
+    private func syncReminderToggle() async {
+        let wasOn = remindersOn
+        let isOn = await DailyReminder.resolvedEnabledState()
+        if remindersOn != isOn {
+            remindersOn = isOn
+        }
+        // They may have just granted permission in iOS Settings.
+        if isOn, !wasOn {
+            _ = await DailyReminder.enable()
+        }
+    }
+
+    private func handleReminderToggle(_ isOn: Bool) async {
+        if isOn {
+            let granted = await DailyReminder.enable()
+            if !granted {
+                remindersOn = false
+                showNotificationsDeniedAlert = true
+            }
+        } else {
+            DailyReminder.optOut()
         }
     }
 

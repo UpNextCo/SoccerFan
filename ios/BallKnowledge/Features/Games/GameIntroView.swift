@@ -71,8 +71,8 @@ struct GameIntroContent {
             return GameIntroContent(
                 tagline: "Risk it for the XP.",
                 steps: [
-                    "Two players are shown. Pick the one who meets today's target.",
-                    "Each correct answer banks XP, but one wrong answer ends your run.",
+                    "Two players are shown. You have 15 seconds to pick the one who meets today's target.",
+                    "Each correct answer banks XP and resets the clock. One wrong pick or a timeout ends your run.",
                     "Cash out whenever you like, or push your luck for more XP.",
                 ]
             )

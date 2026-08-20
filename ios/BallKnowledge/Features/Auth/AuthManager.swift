@@ -121,8 +121,6 @@ final class AuthManager {
         ActivityFeedStore.clear()
         DailyCompletionService.clearAllLocalCompletions()
         OfflineCache.clearAllAccountData(context: context)
-        DailyReminder.disable()
-        LocalProfile.remindersOn = false
         LocalProfile.reset()
     }
 
