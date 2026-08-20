@@ -29,6 +29,8 @@ export type VsDarts501State = {
   order: string[];
   players: Record<string, VsDarts501PlayerState>;
   throws: VsDarts501ThrowRecord[];
+  drawOfferedBy: string | null;
+  drawAcceptedBy: string[];
 };
 
 export function parseDarts501(raw: unknown): VsDarts501State | null {
@@ -46,6 +48,10 @@ export function parseDarts501(raw: unknown): VsDarts501State | null {
     order: Array.isArray(o.order) ? o.order.filter((id): id is string => typeof id === 'string') : [],
     players: o.players && typeof o.players === 'object' ? o.players : {},
     throws: Array.isArray(o.throws) ? (o.throws as VsDarts501ThrowRecord[]) : [],
+    drawOfferedBy: typeof o.drawOfferedBy === 'string' ? o.drawOfferedBy : null,
+    drawAcceptedBy: Array.isArray(o.drawAcceptedBy)
+      ? o.drawAcceptedBy.filter((id): id is string => typeof id === 'string')
+      : [],
   };
 }
 
@@ -64,6 +70,8 @@ export function initDarts501(userIds: string[], now = Date.now()): VsDarts501Sta
     order,
     players,
     throws: [],
+    drawOfferedBy: null,
+    drawAcceptedBy: [],
   };
 }
 
@@ -79,8 +87,43 @@ export function playerState(state: VsDarts501State, userId: string): VsDarts501P
   return state.players[userId] ?? { remaining: DARTS501_START, inCheckout: false, checkoutBusts: 0 };
 }
 
-export function livingOrder(state: VsDarts501State, totalLives = DARTS501_CHECKOUT_LIVES): string[] {
-  return state.order.filter((id) => livesLeft(playerState(state, id).checkoutBusts, totalLives) > 0);
+export function livingOrder(state: VsDarts501State, _totalLives = DARTS501_CHECKOUT_LIVES): string[] {
+  return state.order;
+}
+
+export function clearDrawOffer(state: VsDarts501State): VsDarts501State {
+  if (!state.drawOfferedBy && state.drawAcceptedBy.length === 0) return state;
+  return { ...state, drawOfferedBy: null, drawAcceptedBy: [] };
+}
+
+export function offerDraw(state: VsDarts501State, userId: string): VsDarts501State {
+  if (state.finished || !state.order.includes(userId)) return state;
+  if (state.drawOfferedBy === userId) return state;
+  return { ...state, drawOfferedBy: userId, drawAcceptedBy: [userId] };
+}
+
+export function acceptDraw(state: VsDarts501State, userId: string, now = Date.now()): VsDarts501State {
+  if (state.finished || !state.drawOfferedBy || !state.order.includes(userId)) return state;
+  if (state.drawAcceptedBy.includes(userId)) {
+    return maybeFinishDraw(state, now);
+  }
+  return maybeFinishDraw({ ...state, drawAcceptedBy: [...state.drawAcceptedBy, userId] }, now);
+}
+
+export function declineDraw(state: VsDarts501State, userId: string): VsDarts501State {
+  if (state.finished || !state.drawOfferedBy || !state.order.includes(userId)) return state;
+  return clearDrawOffer(state);
+}
+
+function maybeFinishDraw(state: VsDarts501State, now: number): VsDarts501State {
+  if (state.order.length < 2) return state;
+  if (!state.order.every((id) => state.drawAcceptedBy.includes(id))) return state;
+  return {
+    ...state,
+    finished: true,
+    winnerUserId: null,
+    deadlineAt: new Date(now).toISOString(),
+  };
 }
 
 /** Closest remaining wins. Same remaining is a draw (`winnerUserId` null). */
@@ -137,10 +180,11 @@ export function applyThrow(
       finished: true,
       winnerUserId: throwRow.userId,
       turnUserId: throwRow.userId,
+      drawOfferedBy: null,
+      drawAcceptedBy: [],
       deadlineAt: new Date(now).toISOString(),
     };
   }
-  if (livingOrder(next).length === 0) return finishByClosest(next, now);
   return passTurn(next, throwRow.userId, now);
 }
 
@@ -158,16 +202,28 @@ export function dropUser(state: VsDarts501State, userId: string, now = Date.now(
   const order = state.order.filter((id) => id !== userId);
   const players = { ...state.players };
   delete players[userId];
-  const next: VsDarts501State = { ...state, order, players };
+  const offeredBy = state.drawOfferedBy === userId ? null : state.drawOfferedBy;
+  const acceptedBy = (state.drawAcceptedBy ?? []).filter((id) => id !== userId && order.includes(id));
+  const next: VsDarts501State = {
+    ...state,
+    order,
+    players,
+    drawOfferedBy: offeredBy,
+    drawAcceptedBy: offeredBy ? acceptedBy : [],
+  };
   if (order.length <= 1) {
     return {
       ...next,
       finished: true,
       winnerUserId: order[0] ?? null,
       turnUserId: order[0] ?? '',
+      drawOfferedBy: null,
+      drawAcceptedBy: [],
       deadlineAt: new Date(now).toISOString(),
     };
   }
+  const drawn = maybeFinishDraw(next, now);
+  if (drawn.finished) return drawn;
   if (next.turnUserId === userId || !order.includes(next.turnUserId)) {
     return {
       ...next,

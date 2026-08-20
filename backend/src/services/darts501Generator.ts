@@ -687,6 +687,24 @@ export async function playerValuesForDarts501(
 type CheckoutScoreRow = { id: string; score: number };
 let checkoutScoreCache: { key: string; rows: CheckoutScoreRow[] } | null = null;
 
+async function checkoutScoresForFormula(
+  formula: Darts501Formula,
+  window: number
+): Promise<{ rows: CheckoutScoreRow[]; window: number }> {
+  if (checkoutScoreCache?.key === formula.id) {
+    return { rows: checkoutScoreCache.rows, window };
+  }
+  const loaded = await loadFormulaRows(formula);
+  const rows: CheckoutScoreRow[] = [];
+  for (const row of loaded) {
+    const score = computeFormulaScore(Number(row.left_val), Number(row.right_val), formula.op);
+    if (!isValidDartsScore(score) || score === 0) continue;
+    rows.push({ id: row.id, score });
+  }
+  checkoutScoreCache = { key: formula.id, rows };
+  return { rows, window };
+}
+
 async function checkoutScoresForDate(date: string): Promise<{
   rows: CheckoutScoreRow[];
   window: number;
@@ -701,19 +719,7 @@ async function checkoutScoresForDate(date: string): Promise<{
   if (!puzzle || !formula) {
     throw new Error('No Football 501 puzzle for date');
   }
-  const key = `${date}:${formula.id}`;
-  if (checkoutScoreCache?.key === key) {
-    return { rows: checkoutScoreCache.rows, window: puzzle.checkoutWindow };
-  }
-  const loaded = await loadFormulaRows(formula);
-  const rows: CheckoutScoreRow[] = [];
-  for (const row of loaded) {
-    const score = computeFormulaScore(Number(row.left_val), Number(row.right_val), formula.op);
-    if (!isValidDartsScore(score) || score === 0) continue;
-    rows.push({ id: row.id, score });
-  }
-  checkoutScoreCache = { key, rows };
-  return { rows, window: puzzle.checkoutWindow };
+  return checkoutScoresForFormula(formula, puzzle.checkoutWindow);
 }
 
 export async function countDarts501Checkouts(input: {
@@ -725,4 +731,15 @@ export async function countDarts501Checkouts(input: {
   return {
     count: countCheckoutOptions(rows, input.remaining, input.alreadyUsedIds ?? [], window),
   };
+}
+
+export async function countDarts501CheckoutsForPuzzle(
+  puzzle: Darts501PuzzlePublic,
+  remaining: number,
+  alreadyUsedIds: string[] = []
+): Promise<number> {
+  const formula = darts501FormulaById(puzzle.formulaId);
+  if (!formula) return 0;
+  const { rows, window } = await checkoutScoresForFormula(formula, puzzle.checkoutWindow);
+  return countCheckoutOptions(rows, remaining, alreadyUsedIds, window);
 }

@@ -183,6 +183,15 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         .leagueReached(title: "1M", image: "1mtrophy"),
     ]
 
+    static let megaTrophies: [TrophyUnlockPayload] = [
+        .leagueReached(title: GameModeID.footballBingo.title, image: "megas/bingomega"),
+        .leagueReached(title: GameModeID.oneMore.title, image: "megas/onemoremega"),
+        .leagueReached(title: GameModeID.draftMaster.title, image: "megas/draftmega"),
+        .leagueReached(title: GameModeID.targetMan.title, image: "megas/targetmanmega"),
+        .leagueReached(title: GameModeID.backYourself.title, image: "megas/backyourselfmega"),
+        .leagueReached(title: GameModeID.darts501.title, image: "megas/dartsmega"),
+    ]
+
     static let leagueWinnerTrophies: [TrophyUnlockPayload] = [
         .leagueReached(title: "Sunday League", image: "winnertrophy/sundayleaguewinner"),
         .leagueReached(title: "Non-League", image: "winnertrophy/nonleaguewinner"),
@@ -392,6 +401,14 @@ struct TrophyCabinetView: View {
                         ) { payload in
                             unlock = payload
                         }
+                    }
+
+                    GameLevelsPreviewRow(
+                        title: "MEGA TROPHIES",
+                        levels: TrophyUnlockPayload.megaTrophies,
+                        earnedThroughIndex: 0
+                    ) { payload in
+                        unlock = payload
                     }
 
                     GameLevelsPreviewRow(

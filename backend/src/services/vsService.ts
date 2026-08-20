@@ -37,6 +37,7 @@ import {
   normalizeTargetManPool,
 } from './targetManCategories.js';
 import {
+  countDarts501CheckoutsForPuzzle,
   darts501FormulaById,
   parseDarts501Puzzle,
   playerValuesForDarts501,
@@ -76,11 +77,14 @@ import {
   type VsTargetManState,
 } from './vsLiveTargetMan.js';
 import {
+  acceptDraw as acceptDarts501Draw,
   applyThrow as applyDarts501Throw,
   applyTimeouts as applyDarts501Timeouts,
+  declineDraw as declineDarts501Draw,
   dropUser as dropDarts501User,
   initDarts501,
   livesLeft as darts501LivesLeft,
+  offerDraw as offerDarts501Draw,
   parseDarts501,
   playerState as darts501PlayerState,
   usedPlayerIds as darts501UsedPlayerIds,
@@ -262,6 +266,7 @@ export type VsDarts501BoardRow = {
   inCheckout: boolean;
   checkoutBusts: number;
   livesLeft: number;
+  checkoutOptionCount: number | null;
 };
 
 export type VsDarts501ThrowView = {
@@ -291,6 +296,13 @@ export type VsDarts501View = {
   startScore: number;
   board: VsDarts501BoardRow[];
   throws: VsDarts501ThrowView[];
+  drawOfferedBy: string | null;
+  drawOfferedByName: string | null;
+  youOfferedDraw: boolean;
+  youAcceptedDraw: boolean;
+  pendingDraw: boolean;
+  drawAcceptedCount: number;
+  drawNeededCount: number;
 };
 
 export type VsTargetManView = {
@@ -643,6 +655,7 @@ function darts501ViewFor(
         inCheckout: board.inCheckout,
         checkoutBusts: board.checkoutBusts,
         livesLeft: darts501LivesLeft(board.checkoutBusts, puzzle?.checkoutLives ?? DARTS501_CHECKOUT_LIVES),
+        checkoutOptionCount: null,
       };
     }),
     throws: live.throws.map((t) => ({
@@ -657,6 +670,13 @@ function darts501ViewFor(
       bustReason: t.bustReason ?? null,
       remainingAfter: t.remainingAfter,
     })),
+    drawOfferedBy: live.drawOfferedBy,
+    drawOfferedByName: live.drawOfferedBy ? displayNameOf(names, live.drawOfferedBy) : null,
+    youOfferedDraw: live.drawOfferedBy === userId,
+    youAcceptedDraw: live.drawAcceptedBy.includes(userId),
+    pendingDraw: live.drawOfferedBy != null && !live.finished,
+    drawAcceptedCount: live.drawAcceptedBy.length,
+    drawNeededCount: live.order.length,
   };
 }
 
@@ -1046,6 +1066,9 @@ async function viewFor(row: VsChallenge, userId: string): Promise<VsChallengeVie
   const ids = participantsOf(synced).map((p) => p.userId);
   const names = await loadUsers(ids);
   const view = toView(synced, userId, names);
+  if (view.darts501 && !view.darts501.finished) {
+    await attachDarts501CheckoutOptions(view.darts501, synced.puzzleJson);
+  }
   if (view.result.allDone && view.players.length === 2) {
     const opponent = view.players.find((p) => !p.isYou);
     if (opponent) {
@@ -1053,6 +1076,27 @@ async function viewFor(row: VsChallenge, userId: string): Promise<VsChallengeVie
     }
   }
   return view;
+}
+
+async function attachDarts501CheckoutOptions(
+  live: VsDarts501View,
+  puzzleJson: unknown
+): Promise<void> {
+  const inCheckout = live.board.filter((row) => row.inCheckout);
+  if (inCheckout.length === 0) return;
+  const puzzle = parseDarts501Puzzle(puzzleJson);
+  if (!puzzle) return;
+  const used = live.usedPlayerIds;
+  const byRemaining = new Map<number, number>();
+  for (const row of inCheckout) {
+    if (!byRemaining.has(row.remaining)) {
+      byRemaining.set(
+        row.remaining,
+        await countDarts501CheckoutsForPuzzle(puzzle, row.remaining, used)
+      );
+    }
+    row.checkoutOptionCount = byRemaining.get(row.remaining) ?? 0;
+  }
 }
 
 function winnerUserIdOf(row: VsChallenge): { winnerUserId: string | null; isDraw: boolean } {
@@ -1793,6 +1837,33 @@ export async function throwVsDarts501(userId: string, challengeId: string, playe
       checkoutBusts: result.checkoutBusts,
     }
   );
+
+  if (next.finished) {
+    return viewFor(await finishDarts501(row, next), userId);
+  }
+  const updated = await persistRow(row.id, { liveJson: next });
+  return viewFor(updated ?? { ...row, liveJson: next }, userId);
+}
+
+export async function respondVsDarts501Draw(
+  userId: string,
+  challengeId: string,
+  action: 'offer' | 'accept' | 'decline'
+): Promise<VsChallengeView> {
+  const row = await syncDarts501(await requireParticipant(challengeId, userId));
+  if (row.status === 'expired') throw new VsError('This challenge has expired', 410, 'EXPIRED');
+  if (row.status !== 'active' || row.modeId !== 'darts_501') {
+    throw new VsError('This challenge is not a live Football 501', 400, 'INVALID_STATUS');
+  }
+  const live = parseDarts501(row.liveJson);
+  if (!live || live.finished) return viewFor(row, userId);
+
+  const next =
+    action === 'offer'
+      ? offerDarts501Draw(live, userId)
+      : action === 'accept'
+        ? acceptDarts501Draw(live, userId)
+        : declineDarts501Draw(live, userId);
 
   if (next.finished) {
     return viewFor(await finishDarts501(row, next), userId);

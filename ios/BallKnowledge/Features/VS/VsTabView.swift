@@ -159,6 +159,21 @@ final class VsViewModel {
         }
     }
 
+    func respondDartsDraw(_ action: String) async -> Bool {
+        guard let id = challenge?.id else { return false }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            challenge = try await APIClient.shared.vsDartsDraw(id: id, action: action)
+            VsMonitor.shared.track(challenge)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func throwDarts501(playerId: String) async -> Bool {
         guard let id = challenge?.id else { return false }
         isBusy = true
@@ -658,7 +673,7 @@ struct VsTabView: View {
                 } else if viewModel.challenge?.isLiveDarts501 == true {
                     waitingCard(
                         title: "Live Football 501",
-                        message: "Take turns naming players. Shared names. First to checkout wins. Three busts and you’re out — if everyone’s out, closest remaining wins."
+                        message: "Take turns naming players. Shared names. First to checkout wins. Offer a draw if you both want out — it only ends if everyone accepts."
                     )
                 } else if viewModel.youHavePlayed {
                     waitingCard(

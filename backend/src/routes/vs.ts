@@ -15,6 +15,7 @@ import {
   nameVsHotseat,
   pickVsTargetMan,
   throwVsDarts501,
+  respondVsDarts501Draw,
   startVsChallenge,
   submitVsChallenge,
   VsError,
@@ -157,6 +158,23 @@ vsRouter.post('/:id/darts', requireAuth, async (req, res) => {
     sendSuccess(res, await throwVsDarts501(req.auth!.userId, String(req.params.id), parsed.data.playerId));
   } catch (err) {
     handleVsError(res, err, 'Failed to throw');
+  }
+});
+
+const drawSchema = z.object({
+  action: z.enum(['offer', 'accept', 'decline']),
+});
+
+vsRouter.post('/:id/draw', requireAuth, async (req, res) => {
+  const parsed = drawSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    sendError(res, 'Invalid request body', 400);
+    return;
+  }
+  try {
+    sendSuccess(res, await respondVsDarts501Draw(req.auth!.userId, String(req.params.id), parsed.data.action));
+  } catch (err) {
+    handleVsError(res, err, 'Failed to update draw');
   }
 });
 

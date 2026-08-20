@@ -243,14 +243,10 @@ struct VsResultView: View {
     @ViewBuilder
     private func dartsBreakdown(_ userId: String) -> some View {
         if let board = challenge.darts501?.board.first(where: { $0.userId == userId }) {
-            HStack(spacing: 10) {
-                Text(board.livesLeft == 0 ? "OUT" : "\(board.remaining) LEFT")
-                    .font(BKFont.caption(11))
-                    .tracking(0.6)
-                    .foregroundStyle(board.livesLeft == 0 ? BKTheme.wrong : BKTheme.textMuted)
-                Spacer()
-                hearts(filled: board.livesLeft, total: challenge.darts501?.checkoutLives ?? 3)
-            }
+            Text("\(board.remaining) LEFT")
+                .font(BKFont.caption(11))
+                .tracking(0.6)
+                .foregroundStyle(BKTheme.textMuted)
         }
     }
 
@@ -274,20 +270,6 @@ struct VsResultView: View {
         .frame(width: 40, height: 40)
         .clipShape(Circle())
         .overlay(Circle().stroke(winner ? BKTheme.accent : Color.clear, lineWidth: 2))
-    }
-
-    private func hearts(filled: Int, total: Int) -> some View {
-        HStack(spacing: 3) {
-            ForEach(0..<total, id: \.self) { index in
-                Image(systemName: index < filled ? "heart.fill" : "heart")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(
-                        index < filled
-                            ? Color(red: 0.95, green: 0.28, blue: 0.38)
-                            : BKTheme.textMuted.opacity(0.35)
-                    )
-            }
-        }
     }
 
     private var scoreNoun: String {

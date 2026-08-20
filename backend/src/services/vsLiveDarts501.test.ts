@@ -3,10 +3,13 @@ import test from 'node:test';
 import { DARTS501_START } from './darts501Scoring.js';
 import { resolveDarts501ThrowLive } from './darts501Scoring.js';
 import {
+  acceptDraw,
   applyThrow,
   applyTimeouts,
+  declineDraw,
   dropUser,
   initDarts501,
+  offerDraw,
   parseDarts501,
   usedPlayerIds,
   VS_DARTS501_TURN_MS,
@@ -86,7 +89,7 @@ test('dropUser removes them and continues', () => {
   assert.equal(next.finished, false);
 });
 
-test('live resolver keeps lives but never ends on a third bust', () => {
+test('a bust does not eliminate anyone', () => {
   const third = resolveDarts501ThrowLive({
     remaining: 40,
     score: 200,
@@ -94,41 +97,39 @@ test('live resolver keeps lives but never ends on a third bust', () => {
     checkoutBusts: 2,
   });
   assert.equal(third.kind, 'bust');
-  assert.equal(third.checkoutBusts, 3);
   assert.equal(third.remaining, 40);
-});
 
-test('last player losing their lives finishes by closest remaining', () => {
   let live = initDarts501(['a', 'b']);
   live = applyThrow(
     live,
-    throwRow('a', 'p1', 'bust', 180),
-    { remaining: 180, inCheckout: true, checkoutBusts: 3 }
+    throwRow('a', 'p1', 'bust', 40),
+    { remaining: 40, inCheckout: true, checkoutBusts: 3 }
   );
   assert.equal(live.finished, false);
   assert.equal(live.turnUserId, 'b');
-
-  live = applyThrow(
-    live,
-    throwRow('b', 'p2', 'bust', 90),
-    { remaining: 90, inCheckout: true, checkoutBusts: 3 }
-  );
-  assert.equal(live.finished, true);
-  assert.equal(live.winnerUserId, 'b');
 });
 
-test('all lives gone with the same remaining is a draw', () => {
-  let live = initDarts501(['a', 'b']);
-  live = applyThrow(
-    live,
-    throwRow('a', 'p1', 'bust', 120),
-    { remaining: 120, inCheckout: true, checkoutBusts: 3 }
-  );
-  live = applyThrow(
-    live,
-    throwRow('b', 'p2', 'bust', 120),
-    { remaining: 120, inCheckout: true, checkoutBusts: 3 }
-  );
+test('two players: offer then accept finishes as a draw', () => {
+  let live = offerDraw(initDarts501(['a', 'b']), 'a');
+  assert.equal(live.drawOfferedBy, 'a');
+  assert.equal(live.finished, false);
+  live = acceptDraw(live, 'b');
+  assert.equal(live.finished, true);
+  assert.equal(live.winnerUserId, null);
+});
+
+test('declining a draw clears the offer', () => {
+  let live = offerDraw(initDarts501(['a', 'b']), 'a');
+  live = declineDraw(live, 'b');
+  assert.equal(live.drawOfferedBy, null);
+  assert.equal(live.finished, false);
+});
+
+test('three players need everyone to accept a draw', () => {
+  let live = offerDraw(initDarts501(['a', 'b', 'c']), 'a');
+  live = acceptDraw(live, 'b');
+  assert.equal(live.finished, false);
+  live = acceptDraw(live, 'c');
   assert.equal(live.finished, true);
   assert.equal(live.winnerUserId, null);
 });

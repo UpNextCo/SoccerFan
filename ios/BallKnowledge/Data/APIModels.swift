@@ -528,6 +528,19 @@ struct VsDarts501BoardDTO: Codable, Equatable {
     let inCheckout: Bool
     let checkoutBusts: Int
     let livesLeft: Int
+    let checkoutOptionCount: Int?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try c.decode(String.self, forKey: .userId)
+        displayName = try c.decode(String.self, forKey: .displayName)
+        isYou = try c.decodeIfPresent(Bool.self, forKey: .isYou) ?? false
+        remaining = try c.decode(Int.self, forKey: .remaining)
+        inCheckout = try c.decodeIfPresent(Bool.self, forKey: .inCheckout) ?? false
+        checkoutBusts = try c.decodeIfPresent(Int.self, forKey: .checkoutBusts) ?? 0
+        livesLeft = try c.decodeIfPresent(Int.self, forKey: .livesLeft) ?? 3
+        checkoutOptionCount = try c.decodeIfPresent(Int.self, forKey: .checkoutOptionCount)
+    }
 }
 
 struct VsDarts501ThrowDTO: Codable, Equatable, Identifiable {
@@ -559,11 +572,20 @@ struct VsDarts501DTO: Codable, Equatable {
     let startScore: Int
     let board: [VsDarts501BoardDTO]
     let throwLog: [VsDarts501ThrowDTO]
+    let drawOfferedBy: String?
+    let drawOfferedByName: String?
+    let youOfferedDraw: Bool
+    let youAcceptedDraw: Bool
+    let pendingDraw: Bool
+    let drawAcceptedCount: Int
+    let drawNeededCount: Int
 
     enum CodingKeys: String, CodingKey {
         case turnUserId, yourTurn, deadlineAt, finished, winnerUserId, usedPlayerIds
         case formulaLabel, audience, formulaDetail, checkoutLives, startScore, board
         case throwLog = "throws"
+        case drawOfferedBy, drawOfferedByName, youOfferedDraw, youAcceptedDraw
+        case pendingDraw, drawAcceptedCount, drawNeededCount
     }
 
     init(from decoder: Decoder) throws {
@@ -581,6 +603,13 @@ struct VsDarts501DTO: Codable, Equatable {
         startScore = try c.decodeIfPresent(Int.self, forKey: .startScore) ?? 501
         board = try c.decodeIfPresent([VsDarts501BoardDTO].self, forKey: .board) ?? []
         throwLog = try c.decodeIfPresent([VsDarts501ThrowDTO].self, forKey: .throwLog) ?? []
+        drawOfferedBy = try c.decodeIfPresent(String.self, forKey: .drawOfferedBy)
+        drawOfferedByName = try c.decodeIfPresent(String.self, forKey: .drawOfferedByName)
+        youOfferedDraw = try c.decodeIfPresent(Bool.self, forKey: .youOfferedDraw) ?? false
+        youAcceptedDraw = try c.decodeIfPresent(Bool.self, forKey: .youAcceptedDraw) ?? false
+        pendingDraw = try c.decodeIfPresent(Bool.self, forKey: .pendingDraw) ?? false
+        drawAcceptedCount = try c.decodeIfPresent(Int.self, forKey: .drawAcceptedCount) ?? 0
+        drawNeededCount = try c.decodeIfPresent(Int.self, forKey: .drawNeededCount) ?? 0
     }
 }
 

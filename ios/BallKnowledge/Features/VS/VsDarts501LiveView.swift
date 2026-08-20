@@ -17,7 +17,8 @@ struct VsDarts501LiveView: View {
             GeometryReader { geo in
                 let safeBottom = geo.safeAreaInsets.bottom
                 let showingResults = live?.yourTurn == true && !search.results.isEmpty
-                let sheetH = (showingResults ? 286 : 118) + safeBottom
+                let drawExtra: CGFloat = live?.finished == true ? 0 : 52
+                let sheetH = (showingResults ? 286 : 118) + drawExtra + safeBottom
                 ZStack(alignment: .bottom) {
                     VStack(spacing: 0) {
                         scoreboard
@@ -95,7 +96,14 @@ struct VsDarts501LiveView: View {
                         .contentTransition(.numericText())
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
-                    hearts(filled: row.livesLeft, total: live?.checkoutLives ?? 3)
+                    if row.inCheckout, let options = row.checkoutOptionCount {
+                        Text(options == 1 ? "1 OPTION" : "\(options) OPTIONS")
+                            .font(BKFont.caption(rows.count >= 4 ? 8 : 10))
+                            .tracking(0.8)
+                            .foregroundStyle(BKTheme.partial)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
                 }
                 .foregroundStyle(isTurn ? BKTheme.accent : BKTheme.textPrimary)
                 .opacity(isTurn ? 1 : 0.55)
@@ -274,6 +282,11 @@ struct VsDarts501LiveView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 24)
             }
+            if live?.finished != true {
+                drawControls
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
+            }
             Spacer(minLength: 0)
         }
         .padding(.bottom, safeBottom)
@@ -287,18 +300,81 @@ struct VsDarts501LiveView: View {
 
     private var turnName: String { turnPlayer?.displayName ?? "Someone" }
 
-    private func hearts(filled: Int, total: Int) -> some View {
-        HStack(spacing: 3) {
-            ForEach(0..<total, id: \.self) { index in
-                Image(systemName: index < filled ? "heart.fill" : "heart")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(
-                        index < filled
-                            ? Color(red: 0.95, green: 0.28, blue: 0.38)
-                            : BKTheme.textMuted.opacity(0.35)
-                    )
+    @ViewBuilder
+    private var drawControls: some View {
+        if live?.pendingDraw == true {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(drawStatusLine)
+                    .font(BKFont.caption(11))
+                    .foregroundStyle(BKTheme.textSecondary)
+                if live?.youOfferedDraw == true || live?.youAcceptedDraw == true {
+                    Button {
+                        Task { _ = await viewModel.respondDartsDraw("decline") }
+                    } label: {
+                        Text(live?.youOfferedDraw == true ? "WITHDRAW OFFER" : "DECLINE DRAW")
+                            .font(BKFont.caption(11))
+                            .tracking(0.6)
+                            .foregroundStyle(BKTheme.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.isBusy)
+                } else {
+                    HStack(spacing: 10) {
+                        Button {
+                            Task { _ = await viewModel.respondDartsDraw("accept") }
+                        } label: {
+                            Text("ACCEPT DRAW")
+                                .font(BKFont.caption(11))
+                                .tracking(0.6)
+                                .foregroundStyle(BKTheme.background)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(BKTheme.accent)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        Button {
+                            Task { _ = await viewModel.respondDartsDraw("decline") }
+                        } label: {
+                            Text("DECLINE")
+                                .font(BKFont.caption(11))
+                                .tracking(0.6)
+                                .foregroundStyle(BKTheme.textPrimary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(BKTheme.cardElevated)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .disabled(viewModel.isBusy)
+                }
             }
+        } else {
+            Button {
+                Task { _ = await viewModel.respondDartsDraw("offer") }
+            } label: {
+                Text("OFFER DRAW")
+                    .font(BKFont.caption(11))
+                    .tracking(0.8)
+                    .foregroundStyle(BKTheme.textMuted)
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isBusy)
         }
+    }
+
+    private var drawStatusLine: String {
+        let name = live?.drawOfferedByName ?? "Someone"
+        if live?.youOfferedDraw == true {
+            return live?.drawNeededCount ?? 0 > 2
+                ? "Draw offered — waiting for everyone to accept"
+                : "Draw offered — waiting for them to accept"
+        }
+        if live?.youAcceptedDraw == true {
+            return "You accepted — waiting for the others"
+        }
+        return "\(name) offered a draw"
     }
 
     private func isBust(_ row: VsDarts501ThrowDTO) -> Bool {
