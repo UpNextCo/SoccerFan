@@ -19,6 +19,7 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
     var playsUnlock: Bool = true
     var ladderSteps: Int = 0
     var ladderFilled: Int = 0
+    var ladderLabels: [Int] = []
 
     var bundleImageName: String? {
         if case .bundleImage(let name) = hero { return name }
@@ -159,11 +160,14 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
 
     static func perfectScoreUnlock(mode: GameModeID, count: Int) -> TrophyUnlockPayload? {
         guard let levels = levels(for: mode), !levels.isEmpty else { return nil }
-        let index = min(max(count, 1), levels.count) - 1
+        let thresholds = PerfectScoreStore.thresholds(for: mode)
+        let index = PerfectScoreStore.earnedThroughIndex(count: count, thresholds: thresholds)
+        guard index >= 0, index < levels.count else { return nil }
         var payload = levels[index]
         payload.timesEarned = count
         payload.ladderSteps = levels.count
-        payload.ladderFilled = min(count, levels.count)
+        payload.ladderFilled = index + 1
+        payload.ladderLabels = thresholds
         return payload
     }
 
@@ -318,7 +322,8 @@ struct TrophyUnlockView: View {
                     if payload.ladderSteps > 0 {
                         PerfectScoreLadderBar(
                             steps: payload.ladderSteps,
-                            filled: ladderFill
+                            filled: ladderFill,
+                            labels: payload.ladderLabels
                         )
                         .padding(.horizontal, 8)
                         .opacity(showHero ? 1 : 0)
@@ -477,12 +482,20 @@ struct TrophyCabinetView: View {
                             title: strip.title,
                             levels: strip.levels,
                             earnedThroughIndex: strip.earnedThrough,
-                            ladderFilled: PerfectScoreStore.count(for: strip.mode)
+                            ladderFilled: max(0, strip.earnedThrough + 1),
+                            ladderLabels: PerfectScoreStore.thresholds(for: strip.mode)
                         ) { payload in
-                            unlock = TrophyUnlockPayload.perfectScoreUnlock(
+                            var next = payload
+                            if let live = TrophyUnlockPayload.perfectScoreUnlock(
                                 mode: strip.mode,
-                                count: max(PerfectScoreStore.count(for: strip.mode), strip.earnedThrough + 1)
-                            ) ?? payload
+                                count: PerfectScoreStore.count(for: strip.mode)
+                            ) {
+                                next.timesEarned = live.timesEarned
+                                next.ladderSteps = live.ladderSteps
+                                next.ladderFilled = live.ladderFilled
+                                next.ladderLabels = live.ladderLabels
+                            }
+                            unlock = next
                         }
                     }
 
@@ -577,11 +590,12 @@ private enum GameLevelReveal: Equatable {
 struct PerfectScoreLadderBar: View {
     let steps: Int
     var filled: Int
+    var labels: [Int] = []
     var columnWidth: CGFloat? = nil
     var spacing: CGFloat = 12
 
     private var clampedFilled: Int { min(max(filled, 0), steps) }
-    private let notchSize: CGFloat = 22
+    private let notchSize: CGFloat = 24
 
     var body: some View {
         if let columnWidth {
@@ -628,10 +642,12 @@ struct PerfectScoreLadderBar: View {
 
     private func notch(_ index: Int) -> some View {
         let isFilled = index < clampedFilled
-        return Text("\(index + 1)")
-            .font(BKFont.caption(11))
+        let label = labels.indices.contains(index) ? "\(labels[index])" : "\(index + 1)"
+        return Text(label)
+            .font(BKFont.caption(label.count >= 3 ? 8 : 11))
             .fontWeight(.bold)
             .foregroundStyle(isFilled ? BKTheme.background : BKTheme.textMuted)
+            .minimumScaleFactor(0.7)
             .frame(width: notchSize, height: notchSize)
             .background(isFilled ? BKTheme.accent : BKTheme.cardElevated, in: Circle())
             .overlay {
@@ -647,6 +663,7 @@ private struct GameLevelsPreviewRow: View {
     /// Last earned index. `-1` means none unlocked.
     var earnedThroughIndex: Int = 1
     var ladderFilled: Int? = nil
+    var ladderLabels: [Int] = []
     var onSelect: (TrophyUnlockPayload) -> Void
 
     private let badgeSpacing: CGFloat = 12
@@ -715,6 +732,7 @@ private struct GameLevelsPreviewRow: View {
                         PerfectScoreLadderBar(
                             steps: levels.count,
                             filled: ladderFilled,
+                            labels: ladderLabels,
                             columnWidth: badgeSize,
                             spacing: badgeSpacing
                         )

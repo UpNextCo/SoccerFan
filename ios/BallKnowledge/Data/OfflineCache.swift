@@ -307,6 +307,7 @@ enum DailyCompletionService {
             if DailyPlayOrder.playableModes.contains(mode),
                xp >= DailyXP.maxXP(mode),
                let count = PerfectScoreStore.record(mode: mode, date: date),
+               PerfectScoreStore.isTierUnlock(mode: mode, count: count),
                let unlock = TrophyUnlockPayload.perfectScoreUnlock(mode: mode, count: count) {
                 await MainActor.run {
                     NotificationCenter.default.post(name: .perfectScoreUnlocked, object: unlock)
@@ -344,6 +345,23 @@ enum PerfectScoreStore {
     private static let countsKey = "perfectScoreCounts"
     private static let datesKey = "perfectScoreLastDates"
 
+    /// Lifetime perfects needed for Bronze → Ultimate. Tuned so a good daily player
+    /// reaches Ultimate in about six months. Revisit once live counts settle in.
+    static let thresholdsByMode: [String: [Int]] = [
+        GameModeID.clubChain.rawValue: [1, 20, 45, 70, 90, 120],
+        GameModeID.lastManStanding.rawValue: [1, 10, 20, 30, 45, 60],
+        GameModeID.oneMore.rawValue: [1, 4, 8, 12, 18, 25],
+        GameModeID.footballBingo.rawValue: [1, 3, 6, 10, 14, 18],
+        GameModeID.draftMaster.rawValue: [1, 2, 4, 6, 8, 12],
+        GameModeID.targetMan.rawValue: [1, 2, 3, 5, 7, 10],
+        GameModeID.backYourself.rawValue: [1, 2, 4, 6, 8, 12],
+        GameModeID.darts501.rawValue: [1, 2, 3, 5, 7, 10],
+    ]
+
+    static func thresholds(for mode: GameModeID) -> [Int] {
+        thresholdsByMode[mode.rawValue] ?? Array(1...tierCount)
+    }
+
     static func count(for mode: GameModeID) -> Int {
         let store = UserDefaults.standard.dictionary(forKey: countsKey) as? [String: Int] ?? [:]
         return max(0, store[mode.rawValue] ?? 0)
@@ -351,7 +369,19 @@ enum PerfectScoreStore {
 
     /// `-1` when none earned, `5` when Ultimate is unlocked.
     static func earnedThroughIndex(for mode: GameModeID) -> Int {
-        min(count(for: mode), tierCount) - 1
+        earnedThroughIndex(count: count(for: mode), thresholds: thresholds(for: mode))
+    }
+
+    static func earnedThroughIndex(count: Int, thresholds: [Int]) -> Int {
+        var earned = -1
+        for (index, need) in thresholds.enumerated() {
+            if count >= need { earned = index } else { break }
+        }
+        return earned
+    }
+
+    static func isTierUnlock(mode: GameModeID, count: Int) -> Bool {
+        thresholds(for: mode).contains(count)
     }
 
     /// Increments once per `date` + mode. Returns the new count, or nil if already counted today.
