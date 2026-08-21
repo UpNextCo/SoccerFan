@@ -1378,6 +1378,40 @@ export async function createVsChallenge(hostUserId: string, modeIdRaw: string): 
   throw new VsError('Failed to allocate a challenge code', 500, 'CODE_FAILED');
 }
 
+function rematchOrderIndex(original: string[], userId: string): number {
+  const idx = original.indexOf(userId);
+  return idx >= 0 ? idx : original.length;
+}
+
+async function addToRematchLobby(
+  rematch: VsChallenge,
+  userId: string,
+  originalOrder: string[]
+): Promise<VsChallengeView> {
+  const seated = participantsOf(rematch);
+  if (seated.some((p) => p.userId === userId)) {
+    return viewFor(rematch, userId);
+  }
+  if (rematch.status !== 'waiting') {
+    return viewFor(rematch, userId);
+  }
+  if (seated.length >= VS_MAX_PLAYERS) {
+    throw new VsError('This rematch is already full', 409, 'FULL');
+  }
+
+  const nextIds = [...seated.map((p) => p.userId), userId].sort(
+    (a, b) => rematchOrderIndex(originalOrder, a) - rematchOrderIndex(originalOrder, b)
+  );
+  const next = nextIds.map((id) => seated.find((p) => p.userId === id) ?? emptyParticipant(id));
+  const guestUserId = next.map((p) => p.userId).find((id) => id !== rematch.hostUserId) ?? rematch.guestUserId;
+
+  const updated = await persistRow(rematch.id, {
+    participantsJson: next,
+    guestUserId,
+  });
+  return viewFor(updated ?? { ...rematch, participantsJson: next, guestUserId }, userId);
+}
+
 export async function rematchVsChallenge(userId: string, challengeId: string): Promise<VsChallengeView> {
   const row = await requireParticipant(challengeId, userId);
   if (row.status !== 'complete') {
@@ -1385,6 +1419,12 @@ export async function rematchVsChallenge(userId: string, challengeId: string): P
   }
   if (!isVsModeId(row.modeId)) {
     throw new VsError('Unsupported VS mode', 400, 'INVALID_MODE');
+  }
+
+  const originalOrder = participantsOf(row).map((p) => p.userId).filter(Boolean);
+  const hostUserId = originalOrder.includes(row.hostUserId) ? row.hostUserId : originalOrder[0];
+  if (!hostUserId || originalOrder.length < 2) {
+    throw new VsError('Need the same group to play again', 400, 'WAITING');
   }
 
   const [existing] = await db
@@ -1398,18 +1438,11 @@ export async function rematchVsChallenge(userId: string, challengeId: string): P
         await markExpired(existing);
         await persistRow(existing.id, { rematchOfId: null });
       } else {
-        return viewFor(existing, userId);
+        return addToRematchLobby(existing, userId, originalOrder);
       }
     } else {
       await persistRow(existing.id, { rematchOfId: null });
     }
-  }
-
-  const people = participantsOf(row);
-  const order = people.map((p) => p.userId).filter(Boolean);
-  const hostUserId = order.includes(row.hostUserId) ? row.hostUserId : order[0];
-  if (!hostUserId || order.length < 2) {
-    throw new VsError('Need the same group to play again', 400, 'WAITING');
   }
 
   const currentTitle = vsPuzzleMeta(row.modeId, row.puzzleJson).title;
@@ -1422,8 +1455,6 @@ export async function rematchVsChallenge(userId: string, challengeId: string): P
     throw new VsError(message, 503, 'PUZZLE_FAILED');
   }
 
-  const guests = order.filter((id) => id !== hostUserId);
-  const participants = order.map((id) => emptyParticipant(id));
   let code = generateCode();
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
@@ -1433,11 +1464,11 @@ export async function rematchVsChallenge(userId: string, challengeId: string): P
           code,
           modeId: row.modeId,
           hostUserId,
-          guestUserId: guests[0] ?? null,
+          guestUserId: userId === hostUserId ? null : userId,
           status: 'waiting',
           puzzleJson: generated.puzzle,
           answerJson: generated.answer,
-          participantsJson: participants,
+          participantsJson: [emptyParticipant(userId)],
           rematchOfId: row.id,
           expiresAt: new Date(Date.now() + TTL_MS),
         })
@@ -1452,7 +1483,7 @@ export async function rematchVsChallenge(userId: string, challengeId: string): P
           .from(vsChallenges)
           .where(eq(vsChallenges.rematchOfId, row.id))
           .limit(1);
-        if (again) return viewFor(again, userId);
+        if (again) return addToRematchLobby(again, userId, originalOrder);
       }
       if (msg.includes('vs_challenges_code_unique') || msg.includes('duplicate')) {
         code = generateCode();
@@ -1680,10 +1711,7 @@ export async function getActiveVsChallenge(userId: string): Promise<VsChallengeV
     .from(vsChallenges)
     .where(and(gt(vsChallenges.expiresAt, now), inArray(vsChallenges.status, ['waiting', 'active'])));
 
-  const mine = rows.filter((row) => {
-    if (row.hostUserId === userId) return true;
-    return participantsOf(row).some((p) => p.userId === userId);
-  });
+  const mine = rows.filter((row) => participantsOf(row).some((p) => p.userId === userId));
   if (mine.length === 0) return null;
   mine.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return viewFor(mine[0]!, userId);
