@@ -70,7 +70,6 @@ final class FootballBingoViewModel {
     func useWildcard() {
         guard game.isActive, !wildcardUsed, let player = game.currentPlayer else { return }
         wildcardUsed = true
-        HapticManager.success()
         let toComplete = game.categories.filter {
             !game.completedCategoryIds.contains($0.id) && FootballBingoMatcher.matches(player: player, category: $0)
         }
@@ -78,7 +77,12 @@ final class FootballBingoViewModel {
             game.markCompleted(categoryId: category.id, playerId: player.id)
         }
         advanceTurn(by: 1)
-        if game.status == .won { confettiBurstToken += 1 }
+        if game.status == .won {
+            Feedback.play(.success)
+            confettiBurstToken += 1
+        } else {
+            Feedback.play(.lock)
+        }
         presentResultIfNeeded()
     }
 
@@ -106,16 +110,18 @@ final class FootballBingoViewModel {
         }
 
         if FootballBingoMatcher.matches(player: player, category: category) {
-            HapticManager.success()
             game.markCompleted(categoryId: category.id, playerId: player.id)
             popCategoryId = category.id
             advanceTurn(by: 1)
 
             if game.status == .won {
+                Feedback.play(.success)
                 confettiBurstToken += 1
+            } else {
+                Feedback.play(.place)
             }
         } else {
-            HapticManager.error()
+            Feedback.play(.deny)
             shakeCategoryId = category.id
             wrongFlashToken += 1
             advanceTurn(by: 2)
@@ -248,6 +254,7 @@ struct FootballBingoView: View {
             enabled: !allowReplay
         )
         .onAppear {
+            SoundManager.shared.prepare()
             guard !allowReplay, let dailyDate,
                   let saved = GameProgressStore.load(
                     FootballBingoProgress.self, modeId: GameModeID.footballBingo.rawValue,

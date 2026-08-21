@@ -66,6 +66,11 @@ const CLUB_ALIASES: Record<string, string> = {
   'borussia dortmund': 'borussia dortmund',
   'atletico madrid': 'atletico madrid',
   'atletico de madrid': 'atletico madrid',
+  'la galaxy': 'los angeles galaxy',
+  'los angeles galaxy': 'los angeles galaxy',
+  'san jose earthquakes': 'san jose earthquakes',
+  'club leon': 'leon',
+  leon: 'leon',
 };
 
 interface Stub {

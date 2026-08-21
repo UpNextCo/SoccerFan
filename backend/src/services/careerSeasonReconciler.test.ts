@@ -55,6 +55,16 @@ test('does NOT split a gap that only reflects missing data', () => {
   assert.equal(formatSpells(out!), '1998-2014');
 });
 
+test('splits a one-season hole when the player was at another club (Donovan at Everton)', () => {
+  const out = reconcileStints(
+    [{ from: 2009, to: 2012 }],
+    [2010, 2012],
+    context({ elsewhere: [2011] }),
+    ONGOING_FROM
+  );
+  assert.equal(formatSpells(out!), '2009-2010 + 2012-2012');
+});
+
 test('splits a merged spell when the player was demonstrably elsewhere (Cristiano at United)', () => {
   // One stored row spans both spells, which would invent teammates for every year between.
   const out = reconcileStints(

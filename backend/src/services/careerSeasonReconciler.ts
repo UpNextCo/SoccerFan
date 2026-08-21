@@ -25,7 +25,7 @@ export interface SeasonContext {
 }
 
 /** A gap at least this wide can split one stored spell into separate stints. */
-export const SPLIT_GAP_SEASONS = 3;
+export const SPLIT_GAP_SEASONS = 2;
 
 /**
  * Split a sorted season list into runs, breaking only at a wide gap the player provably spent at

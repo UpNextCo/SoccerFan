@@ -160,21 +160,24 @@ struct VsResultView: View {
         let isWinner = challenge.result.winner != "draw" && row.userId == challenge.result.winnerUserId
         let player = challenge.players.first { $0.userId == row.userId }
         let isYou = player?.isYou == true || row.userId == you?.userId
-        return VStack(alignment: .leading, spacing: 10) {
+        let isOut = challenge.modeId == GameModeID.backYourself.rawValue
+            && challenge.hotseat?.players.first(where: { $0.userId == row.userId })?.alive == false
+        return VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
                 resultAvatar(player: player, ranking: row, winner: isWinner)
-                Text(isYou ? "YOU" : row.displayName.uppercased())
-                    .font(BKFont.headline(15))
-                    .foregroundStyle(isWinner ? BKTheme.accent : BKTheme.textPrimary)
-                    .lineLimit(1)
-                Spacer()
-                if challenge.modeId == GameModeID.backYourself.rawValue,
-                   let hotseat = challenge.hotseat?.players.first(where: { $0.userId == row.userId }),
-                   !hotseat.alive {
-                    Text("OUT")
-                        .font(BKFont.headline(14))
-                        .foregroundStyle(BKTheme.wrong)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(isYou ? "YOU" : row.displayName.uppercased())
+                        .font(BKFont.headline(15))
+                        .foregroundStyle(isWinner ? BKTheme.accent : BKTheme.textPrimary)
+                        .lineLimit(1)
+                    if isOut {
+                        Text("OUT")
+                            .font(BKFont.caption(9))
+                            .tracking(0.8)
+                            .foregroundStyle(BKTheme.wrong)
+                    }
                 }
+                Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
                     Text("\(row.displayScore)")
                         .font(BKFont.title(24))
@@ -187,6 +190,7 @@ struct VsResultView: View {
                 }
             }
             breakdown(for: row.userId)
+                .padding(.leading, 10)
         }
         .padding(16)
         .background(BKTheme.card)

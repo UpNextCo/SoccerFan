@@ -215,7 +215,7 @@ async function main(): Promise<void> {
   console.log(`  stint split         : ${split.toLocaleString()}`);
   console.log(`  review CSV          : ${REVIEW_PATH}`);
 
-  for (const name of ['Steven Gerrard', 'Michael Owen', 'Cristiano Ronaldo', 'Paul Pogba']) {
+  for (const name of ['Steven Gerrard', 'Michael Owen', 'Cristiano Ronaldo', 'Paul Pogba', 'Landon Donovan']) {
     for (const c of changes.filter((x) => x.playerName === name).slice(0, 4)) {
       console.log(`  ${name} @ ${c.teamName}: ${formatSpells(c.stints)} -> ${formatSpells(c.spells)}`);
     }

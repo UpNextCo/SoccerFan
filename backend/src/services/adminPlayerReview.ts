@@ -391,6 +391,10 @@ export async function loadPlayerDossier(playerId: string): Promise<PlayerDossier
     currentClubKey !== 'without club' &&
     currentClubKey !== 'free agent' &&
     currentClubKey !== 'retired';
+  // Same recency window as reconcile-career-seasons: last completed season still counts
+  // as "there" (Dorgu 2024–2025 in Aug 2026). A stale current_club like Donovan/Everton
+  // must not open a 2009 loan to "present".
+  const ongoingFrom = new Date().getUTCFullYear() - 1;
   const latestCurrentSpell = currentClubIsActive
     ? careerRows.reduce<(typeof careerRows)[number] | null>((best, row) => {
         if (row.teamName.trim().toLowerCase() !== currentClubKey) return best;
@@ -398,14 +402,18 @@ export async function loadPlayerDossier(playerId: string): Promise<PlayerDossier
         return best;
       }, null)
     : null;
+  const currentSpellIsRecent =
+    latestCurrentSpell != null &&
+    (latestCurrentSpell.seasonTo == null || latestCurrentSpell.seasonTo >= ongoingFrom);
 
   const mapCareer = (row: (typeof careerRows)[number]): CareerSpell => ({
     teamId: row.teamId,
     teamName: row.teamName,
     seasonFrom: row.seasonFrom,
     // API-Football writes the last season it has (2025/26) rather than NULL-for-ongoing,
-    // so a player still at the club shows as "2024–2025". Open the current-club spell.
+    // so a player still at the club shows as "2024–2025". Open only a recent current-club spell.
     seasonTo:
+      currentSpellIsRecent &&
       latestCurrentSpell &&
       row.teamId === latestCurrentSpell.teamId &&
       row.seasonFrom === latestCurrentSpell.seasonFrom
