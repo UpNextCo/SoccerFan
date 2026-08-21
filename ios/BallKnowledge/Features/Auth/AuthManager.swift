@@ -137,9 +137,4 @@ final class AuthManager {
         }
     }
 
-    #if DEBUG
-    func devSignIn() async {
-        await signIn(identityToken: "dev:ballknowledge-vs-mate", displayName: "VS Mate")
-    }
-    #endif
 }
