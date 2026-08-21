@@ -51,12 +51,6 @@ struct VsResultView: View {
                         .padding(.bottom, 44)
 
                         rankedPlayers
-
-                        Text(scoreNoun.uppercased())
-                            .font(BKFont.caption(10))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.textMuted)
-                            .padding(.top, 16)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
@@ -181,9 +175,16 @@ struct VsResultView: View {
                         .font(BKFont.headline(14))
                         .foregroundStyle(BKTheme.wrong)
                 }
-                Text("\(row.displayScore)")
-                    .font(BKFont.title(24))
-                    .foregroundStyle(isWinner || challenge.result.winner == "draw" ? BKTheme.accent : BKTheme.textPrimary)
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text("\(row.displayScore)")
+                        .font(BKFont.title(24))
+                        .foregroundStyle(isWinner || challenge.result.winner == "draw" ? BKTheme.accent : BKTheme.textPrimary)
+                    Text(scoreNoun)
+                        .font(BKFont.caption(9))
+                        .tracking(0.7)
+                        .foregroundStyle(BKTheme.textMuted)
+                        .multilineTextAlignment(.trailing)
+                }
             }
             breakdown(for: row.userId)
         }
@@ -288,12 +289,7 @@ struct VsResultView: View {
 
     @ViewBuilder
     private func dartsBreakdown(_ userId: String) -> some View {
-        if let board = challenge.darts501?.board.first(where: { $0.userId == userId }) {
-            Text("\(board.remaining) LEFT")
-                .font(BKFont.caption(11))
-                .tracking(0.6)
-                .foregroundStyle(BKTheme.textMuted)
-        }
+        EmptyView()
     }
 
     private func resultAvatar(player: VsPlayerDTO?, ranking: VsRankingDTO, winner: Bool) -> some View {
@@ -320,11 +316,25 @@ struct VsResultView: View {
 
     private var scoreNoun: String {
         switch challenge.modeId {
-        case GameModeID.targetMan.rawValue: return challenge.categoryNoun
-        case GameModeID.backYourself.rawValue: return "named"
-        case GameModeID.darts501.rawValue: return "left"
-        default: return challenge.categoryNoun
+        case GameModeID.backYourself.rawValue:
+            return "PLAYERS NAMED"
+        case GameModeID.darts501.rawValue:
+            return "LEFT"
+        case GameModeID.targetMan.rawValue:
+            return expandedScoreNoun(challenge.categoryNoun)
+        default:
+            return expandedScoreNoun(challenge.categoryNoun)
         }
+    }
+
+    private func expandedScoreNoun(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "PTS" }
+        let expanded = trimmed
+            .replacingOccurrences(of: "apps", with: "appearances", options: .caseInsensitive)
+            .replacingOccurrences(of: "pens", with: "penalties", options: .caseInsensitive)
+            .replacingOccurrences(of: "pts", with: "points", options: .caseInsensitive)
+        return expanded.uppercased()
     }
 
     private func formatTargetManValue(_ value: Int?, unit: String?) -> String {
