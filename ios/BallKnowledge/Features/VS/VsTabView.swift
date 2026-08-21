@@ -44,11 +44,31 @@ final class VsViewModel {
         }
     }
 
-    func playAgain() async {
-        if let mode = challenge?.gameMode {
-            selectedMode = mode
+    func loadCompletedGame(id: String) async -> VsChallengeDTO? {
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            errorMessage = nil
+            return try await APIClient.shared.vsGet(id: id)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
         }
-        await create()
+    }
+
+    func playAgain() async {
+        guard let id = challenge?.id else { return }
+        isBusy = true
+        defer { isBusy = false }
+        playing = false
+        VsMonitor.shared.hidesTabBar = false
+        do {
+            challenge = try await APIClient.shared.vsRematch(id: id)
+            VsMonitor.shared.track(challenge)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func backToLobby() {
@@ -266,6 +286,7 @@ final class VsViewModel {
         playing = false
         errorMessage = nil
         VsMonitor.shared.track(nil)
+        VsMonitor.shared.hidesTabBar = false
     }
 
     var youHavePlayed: Bool {
@@ -304,8 +325,7 @@ final class VsViewModel {
 
 struct VsTabView: View {
     @State private var viewModel = VsViewModel()
-    @FocusState private var joinCodeFocused: Bool
-    @Environment(\.keyboardHeight) private var keyboardHeight
+    @State private var showingJoinAlert = false
 
     var body: some View {
         NavigationStack {
@@ -372,6 +392,12 @@ struct VsTabView: View {
                 viewModel.playing = true
             }
         }
+        .onAppear {
+            VsMonitor.shared.hidesTabBar = viewModel.challenge?.result.allDone == true
+        }
+        .onChange(of: viewModel.challenge?.result.allDone) { _, done in
+            VsMonitor.shared.hidesTabBar = done == true
+        }
         .fullScreenCover(isPresented: $viewModel.playing) {
             playCover
         }
@@ -423,8 +449,7 @@ struct VsTabView: View {
     }
 
     private var lobbyContent: some View {
-        ScrollViewReader { proxy in
-            ScrollView(showsIndicators: false) {
+        ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 VStack(spacing: 8) {
                     Text("Challenge your mates")
@@ -450,63 +475,41 @@ struct VsTabView: View {
                     }
                 }
 
-                Button {
-                    Task { await viewModel.create() }
-                } label: {
-                    HStack {
-                        if viewModel.isBusy {
-                            ProgressView().tint(BKTheme.background)
+                VStack(spacing: 10) {
+                    Button {
+                        Task { await viewModel.create() }
+                    } label: {
+                        HStack {
+                            if viewModel.isBusy {
+                                ProgressView().tint(BKTheme.background)
+                            }
+                            Text("CREATE CHALLENGE")
+                                .font(BKFont.headline(14))
                         }
-                        Text("CREATE CHALLENGE")
-                            .font(BKFont.headline(14))
+                        .foregroundStyle(BKTheme.background)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(BKTheme.accent)
+                        .clipShape(Capsule())
                     }
-                    .foregroundStyle(BKTheme.background)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(BKTheme.accent)
-                    .clipShape(Capsule())
-                }
-                .disabled(viewModel.isBusy)
-                .buttonStyle(.plain)
-
-                VStack(spacing: 12) {
-                    Text("HAVE A CODE?")
-                        .font(BKFont.caption(11))
-                        .tracking(1)
-                        .foregroundStyle(BKTheme.textMuted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    TextField("Enter code", text: $viewModel.joinCode)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                        .font(BKFont.headline(18))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(BKTheme.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .focused($joinCodeFocused)
-                        .submitLabel(.join)
-                        .onSubmit {
-                            Task { await viewModel.join() }
-                        }
+                    .disabled(viewModel.isBusy)
+                    .buttonStyle(.plain)
 
                     Button {
-                        Task { await viewModel.join() }
+                        viewModel.joinCode = ""
+                        showingJoinAlert = true
                     } label: {
                         Text("JOIN CHALLENGE")
                             .font(BKFont.headline(14))
                             .foregroundStyle(BKTheme.textPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(BKTheme.card)
+                            .background(BKTheme.cardElevated)
                             .clipShape(Capsule())
                     }
                     .disabled(viewModel.isBusy)
                     .buttonStyle(.plain)
                 }
-                .padding(.top, 16)
-                .id("vsJoinCode")
 
                 if let error = viewModel.errorMessage {
                     Text(error)
@@ -518,82 +521,44 @@ struct VsTabView: View {
                 vsHistorySection
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, keyboardHeight > 8 ? 16 : BKTabBar.scrollClearance)
+            .padding(.bottom, BKTabBar.scrollClearance)
         }
-        .scrollDismissesKeyboard(.interactively)
-        .onChange(of: joinCodeFocused) { _, focused in
-            guard focused else { return }
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(80))
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo("vsJoinCode", anchor: .bottom)
-                }
+        .alert("Join Challenge", isPresented: $showingJoinAlert) {
+            TextField("Challenge code", text: $viewModel.joinCode)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+            Button("Join") {
+                Task { await viewModel.join() }
             }
-        }
-        .onChange(of: keyboardHeight) { _, height in
-            guard joinCodeFocused, height > 8 else { return }
-            withAnimation(.easeOut(duration: 0.25)) {
-                proxy.scrollTo("vsJoinCode", anchor: .bottom)
+            Button("Cancel", role: .cancel) {
+                viewModel.joinCode = ""
             }
-        }
+        } message: {
+            Text("Enter the code your mate sent you.")
         }
     }
 
     @ViewBuilder
     private var vsHistorySection: some View {
-        if let history = viewModel.history, !history.records.isEmpty || !history.games.isEmpty {
-            VStack(alignment: .leading, spacing: 18) {
-                if !history.records.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("RECORDS")
-                            .font(BKFont.caption(11))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.textMuted)
-                        ForEach(history.records, id: \.opponentUserId) { record in
-                            HStack(spacing: 10) {
-                                PlayerAvatar(urlString: record.opponentAvatarUrl, size: 36) {
-                                    BKTheme.cardElevated
-                                        .overlay {
-                                            Ph.userCircle.fill
-                                                .color(BKTheme.avatarPlaceholder)
-                                                .frame(width: 22, height: 22)
-                                        }
-                                }
-                                .clipShape(Circle())
-                                Text(record.opponentName)
-                                    .font(BKFont.headline(15))
-                                    .foregroundStyle(BKTheme.textPrimary)
-                                    .lineLimit(1)
-                                Spacer()
-                                Text("YOU \(record.youWins) – \(record.theyWins)")
-                                    .font(BKFont.headline(14))
-                                    .foregroundStyle(BKTheme.textPrimary)
-                                if record.draws > 0 {
-                                    Text(record.draws == 1 ? "1 D" : "\(record.draws) D")
-                                        .font(BKFont.caption(11))
-                                        .foregroundStyle(BKTheme.textMuted)
-                                }
-                            }
-                        }
+        if let history = viewModel.history, !history.records.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("RECORDS")
+                    .font(BKFont.caption(11))
+                    .tracking(1)
+                    .foregroundStyle(BKTheme.textMuted)
+                ForEach(history.records, id: \.opponentUserId) { record in
+                    NavigationLink {
+                        VsRivalryTapeView(
+                            record: record,
+                            games: history.games.filter { game in
+                                game.players.contains { $0.userId == record.opponentUserId }
+                            },
+                            viewModel: viewModel
+                        )
+                    } label: {
+                        VsRecordCard(record: record)
                     }
-                }
-
-                if !history.games.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("RECENTS")
-                            .font(BKFont.caption(11))
-                            .tracking(1)
-                            .foregroundStyle(BKTheme.textMuted)
-                        ForEach(history.games) { game in
-                            Button {
-                                Task { await viewModel.openHistory(id: game.id) }
-                            } label: {
-                                VsHistoryRow(game: game)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(viewModel.isBusy)
-                        }
-                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.top, 12)
@@ -606,6 +571,7 @@ struct VsTabView: View {
             VsResultView(
                 challenge: challenge,
                 isBusy: viewModel.isBusy,
+                showsPlayAgain: true,
                 onPlayAgain: { Task { await viewModel.playAgain() } },
                 onBackToVs: { viewModel.backToLobby() }
             )
@@ -891,10 +857,114 @@ struct VsTabView: View {
 
 }
 
+private struct VsRivalryTapeView: View {
+    let record: VsH2hDTO
+    let games: [VsHistoryGameDTO]
+    var viewModel: VsViewModel
+    @State private var review: VsChallengeDTO?
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                VsRecordCard(record: record)
+                if games.isEmpty {
+                    Text("No games yet.")
+                        .font(BKFont.body(14))
+                        .foregroundStyle(BKTheme.textSecondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("GAMES")
+                            .font(BKFont.caption(11))
+                            .tracking(1)
+                            .foregroundStyle(BKTheme.textMuted)
+                        ForEach(games) { game in
+                            Button {
+                                Task {
+                                    review = await viewModel.loadCompletedGame(id: game.id)
+                                }
+                            } label: {
+                                VsHistoryRow(game: game)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(viewModel.isBusy)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, BKTabBar.scrollClearance)
+        }
+        .background(BKTheme.background.ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(VsHistoryCopy.shortName(record.opponentName))
+                    .font(BKFont.caption(13)).tracking(1.2)
+                    .foregroundStyle(BKTheme.accent)
+            }
+        }
+        .fullScreenCover(item: $review) { challenge in
+            VsResultView(
+                challenge: challenge,
+                showsPlayAgain: false,
+                onPlayAgain: {},
+                onBackToVs: { review = nil }
+            )
+        }
+    }
+}
+
+private struct VsRecordCard: View {
+    let record: VsH2hDTO
+
+    private var seriesTint: Color {
+        if record.youWins > record.theyWins { return BKTheme.accent }
+        if record.youWins < record.theyWins { return BKTheme.wrong }
+        return BKTheme.textPrimary
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            VsMateAvatar(urlString: nil, usesLocalYou: true, size: 40)
+            Text("YOU")
+                .font(BKFont.headline(13))
+                .foregroundStyle(BKTheme.textPrimary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            VStack(spacing: 3) {
+                Text("\(record.youWins) – \(record.theyWins)")
+                    .font(BKFont.title(22))
+                    .foregroundStyle(seriesTint)
+                    .monospacedDigit()
+                if record.draws > 0 {
+                    Text(record.draws == 1 ? "1 DRAW" : "\(record.draws) DRAWS")
+                        .font(BKFont.caption(10))
+                        .tracking(0.6)
+                        .foregroundStyle(BKTheme.textMuted)
+                }
+            }
+            Spacer(minLength: 6)
+            Text(VsHistoryCopy.shortName(record.opponentName))
+                .font(BKFont.headline(13))
+                .foregroundStyle(BKTheme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            VsMateAvatar(urlString: record.opponentAvatarUrl, size: 40)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(BKTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
 private struct VsHistoryRow: View {
     let game: VsHistoryGameDTO
 
+    private var you: VsPlayerDTO? { game.players.first(where: \.isYou) }
     private var others: [VsPlayerDTO] { game.players.filter { !$0.isYou } }
+    private var isHeadToHead: Bool { game.players.count == 2 && others.count == 1 }
 
     private var resultMark: (String, Color) {
         switch game.winner {
@@ -905,59 +975,109 @@ private struct VsHistoryRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             Text(resultMark.0)
                 .font(BKFont.headline(13))
                 .foregroundStyle(resultMark.1)
-                .frame(width: 22)
+                .frame(width: 18)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(game.modeTitle)
-                    .font(BKFont.headline(14))
-                    .foregroundStyle(BKTheme.textPrimary)
-                Text(subtitle)
+            VStack(alignment: .leading, spacing: 4) {
+                if isHeadToHead, let mate = others.first {
+                    Text("YOU  \(score(of: you)) – \(score(of: mate))  \(VsHistoryCopy.shortName(mate.displayName))")
+                        .font(BKFont.headline(16))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                } else {
+                    Text(groupLine)
+                        .font(BKFont.headline(16))
+                        .foregroundStyle(BKTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                Text(metaLine)
                     .font(BKFont.caption(12))
                     .foregroundStyle(BKTheme.textMuted)
                     .lineLimit(1)
             }
-
-            Spacer()
-
-            HStack(spacing: -8) {
-                ForEach(others.prefix(3), id: \.userId) { player in
-                    PlayerAvatar(urlString: player.avatarUrl, size: 26) {
-                        BKTheme.cardElevated
-                            .overlay {
-                                Ph.userCircle.fill
-                                    .color(BKTheme.avatarPlaceholder)
-                                    .frame(width: 16, height: 16)
-                            }
-                    }
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(BKTheme.background, lineWidth: 1.5))
-                }
-            }
+            Spacer(minLength: 0)
         }
         .padding(14)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private var subtitle: String {
+    private var groupLine: String {
         let names = others.map(\.displayName).joined(separator: ", ")
-        if let date = Self.parseDate(game.completedAt) {
-            return names.isEmpty ? date.formatted(.relative(presentation: .named)) : "\(names)  ·  \(date.formatted(.relative(presentation: .named)))"
-        }
-        return names
+        let vs = names.isEmpty ? "" : "  ·  vs \(names)"
+        return "YOU \(VsHistoryCopy.ordinal(placement))\(vs)"
     }
 
-    private static func parseDate(_ raw: String) -> Date? {
+    private var placement: Int {
+        let ranked = game.players.sorted { ($0.score ?? Int.min) > ($1.score ?? Int.min) }
+        return (ranked.firstIndex(where: \.isYou) ?? 0) + 1
+    }
+
+    private var metaLine: String {
+        if let date = VsHistoryCopy.parseDate(game.completedAt) {
+            return "\(game.modeTitle)  ·  \(date.formatted(.relative(presentation: .named)))"
+        }
+        return game.modeTitle
+    }
+
+    private func score(of player: VsPlayerDTO?) -> Int {
+        player?.displayScore ?? player?.score ?? 0
+    }
+}
+
+private enum VsHistoryCopy {
+    static func shortName(_ name: String) -> String {
+        name.split(separator: " ").first.map { String($0).uppercased() } ?? name.uppercased()
+    }
+
+    static func ordinal(_ place: Int) -> String {
+        switch place {
+        case 1: return "1st"
+        case 2: return "2nd"
+        case 3: return "3rd"
+        default: return "\(place)th"
+        }
+    }
+
+    static func parseDate(_ raw: String) -> Date? {
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = withFraction.date(from: raw) { return date }
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]
         return plain.date(from: raw)
+    }
+}
+
+private struct VsMateAvatar: View {
+    var urlString: String?
+    var usesLocalYou: Bool = false
+    var size: CGFloat
+
+    var body: some View {
+        Group {
+            if usesLocalYou, let image = LocalProfile.loadAvatar() {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                PlayerAvatar(urlString: urlString, size: size) {
+                    BKTheme.cardElevated
+                        .overlay {
+                            Ph.userCircle.fill
+                                .color(BKTheme.avatarPlaceholder)
+                                .frame(width: size * 0.6, height: size * 0.6)
+                        }
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 }
 

@@ -1,8 +1,10 @@
 import SwiftUI
+import UIKit
 
 struct VsResultView: View {
     let challenge: VsChallengeDTO
     var isBusy: Bool = false
+    var showsPlayAgain: Bool = true
     var onPlayAgain: () -> Void
     var onBackToVs: () -> Void
 
@@ -21,78 +23,122 @@ struct VsResultView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 22) {
-                    VStack(spacing: 8) {
-                        Text(challenge.modeTitle.uppercased())
-                            .font(BKFont.caption(11))
+        ZStack(alignment: .bottom) {
+            BKTheme.background.ignoresSafeArea()
+            heroBackground
+
+            VStack(spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        VStack(spacing: 22) {
+                            Text(challenge.modeTitle.uppercased())
+                                .font(BKFont.headline(14))
+                                .tracking(1.2)
+                                .foregroundStyle(BKTheme.textMuted)
+                                .multilineTextAlignment(.center)
+                            Text(headline)
+                                .font(BKFont.title(32))
+                                .foregroundStyle(headlineColor)
+                                .multilineTextAlignment(.center)
+                            Text(challenge.title)
+                                .font(BKFont.headline(19))
+                                .foregroundStyle(BKTheme.textSecondary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: 220)
+                        }
+                        .padding(.top, 28)
+                        .padding(.bottom, 44)
+
+                        rankedPlayers
+
+                        Text(scoreNoun.uppercased())
+                            .font(BKFont.caption(10))
                             .tracking(1)
                             .foregroundStyle(BKTheme.textMuted)
-                        Text(headline)
-                            .font(BKFont.title(32))
-                            .foregroundStyle(headlineColor)
-                            .multilineTextAlignment(.center)
-                        Text(challenge.title)
-                            .font(BKFont.body(14))
-                            .foregroundStyle(BKTheme.textSecondary)
-                            .multilineTextAlignment(.center)
+                            .padding(.top, 16)
                     }
-                    .padding(.top, 24)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
+                }
 
-                    if let series = seriesLine {
-                        Text(series)
-                            .font(BKFont.headline(16))
+                VStack(spacing: 10) {
+                    if showsPlayAgain {
+                        Button(action: onPlayAgain) {
+                            HStack {
+                                if isBusy { ProgressView().tint(BKTheme.textPrimary) }
+                                Text("PLAY AGAIN")
+                                    .font(BKFont.headline(16))
+                            }
                             .foregroundStyle(BKTheme.textPrimary)
-                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(BKTheme.card)
+                            .clipShape(Capsule())
+                        }
+                        .disabled(isBusy)
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
                     }
 
-                    rankedPlayers
-
-                    Text(scoreNoun.uppercased())
-                        .font(BKFont.caption(10))
-                        .tracking(1)
-                        .foregroundStyle(BKTheme.textMuted)
+                    GameResultExitBar(title: "BACK TO VS", showsBackground: false, action: onBackToVs)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                .padding(.bottom, 8)
+                .background(BKTheme.background)
             }
-
-            VStack(spacing: 10) {
-                Button(action: onPlayAgain) {
-                    HStack {
-                        if isBusy { ProgressView().tint(BKTheme.textPrimary) }
-                        Text("PLAY AGAIN")
-                            .font(BKFont.headline(16))
-                    }
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(BKTheme.card)
-                    .clipShape(Capsule())
-                }
-                .disabled(isBusy)
-                .buttonStyle(.plain)
-
-                GameResultExitBar(title: "BACK TO VS", showsBackground: false, action: onBackToVs)
-                    .padding(.horizontal, -16)
-                    .padding(.bottom, -16)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, BKTabBar.scrollClearance)
-            .background(BKTheme.background)
         }
-        .background(BKTheme.background.ignoresSafeArea())
     }
 
-    private var seriesLine: String? {
-        guard challenge.players.count == 2, let h2h = challenge.result.h2h else { return nil }
-        let name = shortName(h2h.opponentName)
-        var line = "YOU \(h2h.youWins) – \(h2h.theyWins) \(name)"
-        if h2h.draws > 0 {
-            line += h2h.draws == 1 ? "  ·  1 DRAW" : "  ·  \(h2h.draws) DRAWS"
+    private var heroImage: UIImage? {
+        guard let url = GameModeTileArt.bundleImageURL(for: challenge.modeId) else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }
+
+    private var heroBackground: some View {
+        GeometryReader { geo in
+            let heroHeight = max(geo.size.width * 1.02, geo.size.height * 0.46)
+            let fadeHeight = min(170, heroHeight * 0.40)
+            ZStack(alignment: .top) {
+                if let heroImage {
+                    Image(uiImage: heroImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: heroHeight)
+                        .clipped()
+                        .opacity(0.16)
+                        .mask(
+                            VStack(spacing: 0) {
+                                Color.white
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .white, location: 0),
+                                        .init(color: .white.opacity(0.3), location: 0.45),
+                                        .init(color: .clear, location: 1),
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .frame(height: fadeHeight)
+                            }
+                        )
+                        .overlay(alignment: .bottom) {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0),
+                                    .init(color: BKTheme.background.opacity(0.5), location: 0.4),
+                                    .init(color: BKTheme.background, location: 1),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .frame(height: fadeHeight)
+                        }
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
-        return line
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
     }
 
     private var rankedPlayers: some View {
@@ -287,7 +333,4 @@ struct VsResultView: View {
         return "\(value)"
     }
 
-    private func shortName(_ name: String) -> String {
-        name.split(separator: " ").first.map { String($0).uppercased() } ?? name.uppercased()
-    }
 }

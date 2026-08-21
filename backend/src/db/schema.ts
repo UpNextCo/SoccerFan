@@ -847,9 +847,11 @@ export const vsChallenges = pgTable(
     guestCompletedAt: timestamp('guest_completed_at', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    rematchOfId: uuid('rematch_of_id'),
   },
   (table) => [
     uniqueIndex('vs_challenges_code_unique').on(table.code),
+    uniqueIndex('vs_challenges_rematch_of_unique').on(table.rematchOfId),
     index('vs_challenges_host_idx').on(table.hostUserId),
     index('vs_challenges_guest_idx').on(table.guestUserId),
   ]

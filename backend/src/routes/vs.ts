@@ -4,6 +4,7 @@ import { requireAuth, sendError, sendSuccess } from '../middleware/auth.js';
 import {
   cancelVsChallenge,
   createVsChallenge,
+  rematchVsChallenge,
   reshuffleVsChallenge,
   getActiveVsChallenge,
   getVsChallenge,
@@ -80,6 +81,14 @@ vsRouter.get('/history', requireAuth, async (req, res) => {
     sendSuccess(res, await listVsHistory(req.auth!.userId));
   } catch (err) {
     handleVsError(res, err, 'Failed to load history');
+  }
+});
+
+vsRouter.post('/:id/rematch', requireAuth, async (req, res) => {
+  try {
+    sendSuccess(res, await rematchVsChallenge(req.auth!.userId, String(req.params.id)), 201);
+  } catch (err) {
+    handleVsError(res, err, 'Failed to start rematch');
   }
 });
 

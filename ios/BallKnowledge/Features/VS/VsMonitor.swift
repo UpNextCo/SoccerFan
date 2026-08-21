@@ -24,6 +24,7 @@ final class VsMonitor {
     static let shared = VsMonitor()
 
     var banner: VsBanner?
+    var hidesTabBar = false
     private(set) var hasTabBadge = false
 
     private var trackedId: String?

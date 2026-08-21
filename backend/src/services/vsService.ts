@@ -1378,6 +1378,92 @@ export async function createVsChallenge(hostUserId: string, modeIdRaw: string): 
   throw new VsError('Failed to allocate a challenge code', 500, 'CODE_FAILED');
 }
 
+export async function rematchVsChallenge(userId: string, challengeId: string): Promise<VsChallengeView> {
+  const row = await requireParticipant(challengeId, userId);
+  if (row.status !== 'complete') {
+    throw new VsError('Finish this challenge before playing again', 400, 'INVALID_STATUS');
+  }
+  if (!isVsModeId(row.modeId)) {
+    throw new VsError('Unsupported VS mode', 400, 'INVALID_MODE');
+  }
+
+  const [existing] = await db
+    .select()
+    .from(vsChallenges)
+    .where(eq(vsChallenges.rematchOfId, row.id))
+    .limit(1);
+  if (existing) {
+    if (existing.status === 'waiting' || existing.status === 'active') {
+      if (isExpired(existing)) {
+        await markExpired(existing);
+        await persistRow(existing.id, { rematchOfId: null });
+      } else {
+        return viewFor(existing, userId);
+      }
+    } else {
+      await persistRow(existing.id, { rematchOfId: null });
+    }
+  }
+
+  const people = participantsOf(row);
+  const order = people.map((p) => p.userId).filter(Boolean);
+  const hostUserId = order.includes(row.hostUserId) ? row.hostUserId : order[0];
+  if (!hostUserId || order.length < 2) {
+    throw new VsError('Need the same group to play again', 400, 'WAITING');
+  }
+
+  const currentTitle = vsPuzzleMeta(row.modeId, row.puzzleJson).title;
+  const seedKey = `vs:${row.modeId}:${randomUUID()}`;
+  let generated: { puzzle: unknown; answer: unknown };
+  try {
+    generated = await generateVsPuzzle(row.modeId, seedKey, { excludeTitle: currentTitle });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Could not start a rematch right now. Try again.';
+    throw new VsError(message, 503, 'PUZZLE_FAILED');
+  }
+
+  const guests = order.filter((id) => id !== hostUserId);
+  const participants = order.map((id) => emptyParticipant(id));
+  let code = generateCode();
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const [created] = await db
+        .insert(vsChallenges)
+        .values({
+          code,
+          modeId: row.modeId,
+          hostUserId,
+          guestUserId: guests[0] ?? null,
+          status: 'waiting',
+          puzzleJson: generated.puzzle,
+          answerJson: generated.answer,
+          participantsJson: participants,
+          rematchOfId: row.id,
+          expiresAt: new Date(Date.now() + TTL_MS),
+        })
+        .returning();
+      if (!created) throw new VsError('Failed to create rematch', 500, 'CREATE_FAILED');
+      return viewFor(created, userId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('vs_challenges_rematch_of_unique') || msg.includes('rematch_of')) {
+        const [again] = await db
+          .select()
+          .from(vsChallenges)
+          .where(eq(vsChallenges.rematchOfId, row.id))
+          .limit(1);
+        if (again) return viewFor(again, userId);
+      }
+      if (msg.includes('vs_challenges_code_unique') || msg.includes('duplicate')) {
+        code = generateCode();
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new VsError('Failed to allocate a rematch code', 500, 'CODE_FAILED');
+}
+
 export async function reshuffleVsChallenge(userId: string, challengeId: string): Promise<VsChallengeView> {
   const row = await requireParticipant(challengeId, userId);
   if (row.hostUserId !== userId) {

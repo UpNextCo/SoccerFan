@@ -29,7 +29,7 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if keyboardHeight < 8 {
+                if keyboardHeight < 8, !vsMonitor.hidesTabBar {
                     bottomFadeLayer
 
                     BKTabBar(selection: $selectedTab, vsBadge: vsMonitor.hasTabBadge)

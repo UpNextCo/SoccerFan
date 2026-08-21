@@ -456,7 +456,7 @@ struct VsResultDTO: Codable, Equatable {
     }
 }
 
-struct VsChallengeDTO: Codable, Equatable {
+struct VsChallengeDTO: Codable, Equatable, Identifiable {
     let id: String
     let code: String
     let modeId: String

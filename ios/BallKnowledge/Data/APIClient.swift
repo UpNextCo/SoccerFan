@@ -618,6 +618,10 @@ actor APIClient {
         try await request("vs/\(id)/start", method: "POST", body: EmptyBody())
     }
 
+    func vsRematch(id: String) async throws -> VsChallengeDTO {
+        try await request("vs/\(id)/rematch", method: "POST", body: EmptyBody())
+    }
+
     func vsActive() async throws -> VsChallengeDTO? {
         try await requestOptional("vs/active")
     }
