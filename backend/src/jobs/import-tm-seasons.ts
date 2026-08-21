@@ -110,13 +110,34 @@ async function main() {
   const text = readFileSync(join(DIR, 'tm_seasons.jsonl'), 'utf8').trim();
   const all = text ? text.split('\n').map((l) => JSON.parse(l) as Line) : [];
 
-  // The scrape targets are built once and the dedupe/merge jobs retire players afterwards, so some
-  // ourIds no longer exist. Their stats now live on whichever row absorbed them.
+  // The scrape targets are built once and later merges retire the UUID the scraper wrote. Prefer the
+  // live row; if that id is gone, attach the line to whoever now holds the same Transfermarkt id
+  // (intl import already does this — seasons used to drop Falcao / Di María-class remaps).
   const alive = new Set(
     ((await db.execute(sql`SELECT id FROM players`)) as unknown as Array<{ id: string }>).map((r) => r.id)
   );
-  const lines = all.filter((l) => alive.has(l.ourId));
-  console.log(`Scraped players: ${lines.length} (skipped ${all.length - lines.length} since merged away)`);
+  const byTm = new Map(
+    (
+      (await db.execute(sql`
+        SELECT id, tm_player_id FROM players WHERE tm_player_id IS NOT NULL
+      `)) as unknown as Array<{ id: string; tm_player_id: string }>
+    ).map((r) => [String(r.tm_player_id), r.id])
+  );
+  let remapped = 0;
+  const lines: Line[] = [];
+  for (const ln of all) {
+    if (alive.has(ln.ourId)) {
+      lines.push(ln);
+      continue;
+    }
+    const live = byTm.get(String(ln.tmId));
+    if (!live) continue;
+    remapped += 1;
+    lines.push({ ...ln, ourId: live });
+  }
+  console.log(
+    `Scraped players: ${lines.length} (remapped ${remapped} by TM id; skipped ${all.length - lines.length} with no live player)`
+  );
 
   if (TOTALS_ONLY) {
     await writeCareerTotals(lines);

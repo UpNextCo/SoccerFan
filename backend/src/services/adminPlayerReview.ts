@@ -384,11 +384,33 @@ export async function loadPlayerDossier(playerId: string): Promise<PlayerDossier
 
   const [nations, clubs] = await Promise.all([nationSet(), clubTeamIds()]);
 
+  const currentClubKey = player.currentClub.trim().toLowerCase();
+  const currentClubIsActive =
+    currentClubKey !== '' &&
+    currentClubKey !== 'unknown' &&
+    currentClubKey !== 'without club' &&
+    currentClubKey !== 'free agent' &&
+    currentClubKey !== 'retired';
+  const latestCurrentSpell = currentClubIsActive
+    ? careerRows.reduce<(typeof careerRows)[number] | null>((best, row) => {
+        if (row.teamName.trim().toLowerCase() !== currentClubKey) return best;
+        if (!best || row.seasonFrom > best.seasonFrom) return row;
+        return best;
+      }, null)
+    : null;
+
   const mapCareer = (row: (typeof careerRows)[number]): CareerSpell => ({
     teamId: row.teamId,
     teamName: row.teamName,
     seasonFrom: row.seasonFrom,
-    seasonTo: row.seasonTo,
+    // API-Football writes the last season it has (2025/26) rather than NULL-for-ongoing,
+    // so a player still at the club shows as "2024–2025". Open the current-club spell.
+    seasonTo:
+      latestCurrentSpell &&
+      row.teamId === latestCurrentSpell.teamId &&
+      row.seasonFrom === latestCurrentSpell.seasonFrom
+        ? null
+        : row.seasonTo,
     badgeUrl: teamLogoUrl(row.teamId),
   });
   const career: CareerSpell[] = [];
