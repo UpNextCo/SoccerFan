@@ -686,10 +686,10 @@ private struct TargetManResultView: View {
 
     private var verdict: String {
         switch score {
-        case 1100: return "BULLSEYE"
-        case 1000...: return "SHARPSHOOTER"
+        case 1000: return "BULLSEYE"
+        case 900...: return "SHARPSHOOTER"
         case TargetManScoring.winThreshold...: return "ON TARGET"
-        case 275...: return "OFF THE MARK"
+        case 250...: return "OFF THE MARK"
         default: return "WIDE"
         }
     }
@@ -697,7 +697,7 @@ private struct TargetManResultView: View {
     private var verdictColor: Color {
         switch score {
         case TargetManScoring.winThreshold...: return BKTheme.accent
-        case 275...: return .orange
+        case 250...: return .orange
         default: return BKTheme.wrong
         }
     }
@@ -822,7 +822,7 @@ private struct TargetManResultView: View {
                         }
 
                         if step >= TargetManResultStep.xp.rawValue {
-                            Text(score >= TargetManScoring.winThreshold ? "Sharp shooting!" : score >= 275 ? "Solid effort" : "Room to improve")
+                            Text(score >= TargetManScoring.winThreshold ? "Sharp shooting!" : score >= 250 ? "Solid effort" : "Room to improve")
                                 .font(BKFont.headline(16))
                                 .foregroundStyle(BKTheme.textSecondary)
                                 .transition(.scale.combined(with: .opacity))

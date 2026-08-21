@@ -871,6 +871,10 @@ function satisfiesSql(c: BattleConstraintQuery): SQL {
   }
 }
 
+/** Mirrors ios DailyXP.draft — 1000 XP at ≥90% of the optimal XI. */
+export const DRAFT_MAX_XP = 1000;
+export const DRAFT_PERFECT_AT = 0.9;
+
 /**
  * Server-authoritative Draft XI score from the user's actual picks. Recomputes each pick's category
  * value + whether the player satisfies the placed constraint AND plays the slot's position, then
@@ -906,9 +910,9 @@ export async function recomputeBattleScore(
     if (r && r.pos_ok && r.satisfies) total += r.stat;
   }
 
-  // Score IS the XP: share of the optimal XI out of the Draft XI max (1100). won at >= 70%.
+  // Score IS the XP: 1000 at ≥90% of the optimal XI (clamped). won at >= 70%.
   const pct = total / puzzle.optimalScore;
-  const score = Math.min(1100, Math.round(1100 * pct));
+  const score = Math.min(DRAFT_MAX_XP, Math.round((DRAFT_MAX_XP * pct) / DRAFT_PERFECT_AT));
   return { score, won: pct >= 0.7, total };
 }
 

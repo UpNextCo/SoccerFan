@@ -294,21 +294,21 @@ enum PlayerSearchLimits {
 /// every game shows on-screen — live and on the result card — IS the XP banked to the player's
 /// profile. No game shows an arbitrary "points" number any more.
 enum DailyXP {
-    /// Per-game maximum XP, effort-tiered (quick 800 -> longest 1500). Live eight-game total 8500. A full loss
-    /// earns 0 (no participation floor). Every game's on-screen score IS this XP. Hidden Football Golf awards 0.
+    /// Live games share a 1000 XP ceiling (eight-game total 8000). Hidden / defunct modes keep
+    /// their own caps. A full loss earns 0. Every game's on-screen score IS this XP.
     static let maxByMode: [String: Int] = [
         "guess_who": 800,
-        "one_more": 900,
-        "target_man": 1100,
+        "one_more": 1000,
+        "target_man": 1000,
         "blind_rank": 1000,
         "football_bingo": 1000,
         "club_chain": 1000,
         "world_cup_xi": 1100,
-        "draft_master": 1100,
+        "draft_master": 1000,
         "football_tower": 900,
         "football_golf": 800,
-        "last_man_standing": 900,
-        "back_yourself": 1500,
+        "last_man_standing": 1000,
+        "back_yourself": 1000,
         "darts_501": 1000,
     ]
     static let defaultMax = 1000
@@ -365,46 +365,52 @@ enum DailyXP {
         return 0
     }
 
-    /// One More: each correct answer is worth a flat, clean share of the 900 max (10 rounds -> 90
-    /// each, 90/180/270...). Clearing every round banks the full 900.
+    /// One More: each correct answer is a flat share of the 1000 max (10 rounds → 100 each).
+    /// Clearing every round banks the full 1000.
     static func oneMorePick(_ k: Int, rounds: Int) -> Int {
         guard rounds > 0, k > 0 else { return 0 }
-        return Int((900.0 / Double(rounds)).rounded())
+        return Int((Double(maxXP(.oneMore)) / Double(rounds)).rounded())
     }
 
     static func oneMoreTotal(streak: Int, rounds: Int) -> Int {
         guard streak > 0, rounds > 0 else { return 0 }
-        return min(900, streak * oneMorePick(1, rounds: rounds))
+        return min(maxXP(.oneMore), streak * oneMorePick(1, rounds: rounds))
     }
 
-    /// Target Man: closeness bands (exact 1100 ... within 25% 275, else 0).
+    /// Target Man: closeness bands (exact 1000 ... within 25% 250, else 0).
     static func targetMan(pctOff: Double) -> Int {
         switch pctOff {
-        case ..<0.0001: return 1100
-        case ..<0.02: return 1000
-        case ..<0.05: return 875
-        case ..<0.10: return 700
-        case ..<0.15: return 500
-        case ..<0.25: return 275
+        case ..<0.0001: return 1000
+        case ..<0.02: return 900
+        case ..<0.05: return 800
+        case ..<0.10: return 650
+        case ..<0.15: return 450
+        case ..<0.25: return 250
         default: return 0
         }
     }
 
-    /// Draft XI: share of the optimal XI (0...1100).
+    /// Draft XI: 1000 XP at ≥90% of the optimal XI (100% still clamps to 1000).
+    static let draftPerfectAtFraction = 0.90
     static func draft(total: Int, optimal: Int) -> Int {
         guard optimal > 0 else { return 0 }
-        return min(1100, Int((1100.0 * Double(total) / Double(optimal)).rounded()))
+        let pct = Double(total) / Double(optimal)
+        return min(maxXP(.draftMaster), Int((Double(maxXP(.draftMaster)) * pct / draftPerfectAtFraction).rounded()))
     }
 
-    /// Football Bingo: clear the grid → efficiency slide (400–1000). Near-miss consolation if you
-    /// run out with only a few tiles left (1→250 / 2→150 / 3→75). Otherwise 0.
+    /// Football Bingo: clear the grid → 400–1000 by leftover players. 1000 at ≤10 skips
+    /// (zero-skip is effectively impossible on the 55-player queue). Near-miss if you run out
+    /// with only a few tiles left (1→250 / 2→150 / 3→75). Otherwise 0.
     static let bingoFloor = 400
+    static let bingoPerfectMaxSkips = 10
     static func bingo(filled: Int, tiles: Int, remaining: Int, queueSize: Int) -> Int {
         let filledClamped = max(0, min(filled, tiles))
         if filledClamped >= tiles {
             guard queueSize > tiles else { return 1000 }
-            let maxRemaining = Double(queueSize - tiles)
-            let efficiency = Swift.min(1, Swift.max(0, Double(remaining) / maxRemaining))
+            let slack = queueSize - tiles
+            let remainingForPerfect = max(0, slack - bingoPerfectMaxSkips)
+            if remainingForPerfect == 0 || remaining >= remainingForPerfect { return 1000 }
+            let efficiency = Swift.min(1, Swift.max(0, Double(remaining) / Double(remainingForPerfect)))
             return bingoFloor + Int((Double(1000 - bingoFloor) * efficiency).rounded())
         }
         switch tiles - filledClamped {
@@ -427,17 +433,18 @@ enum DailyXP {
         return max(0, base - max(0, mistakes) * clubChainMistakeCost)
     }
 
-    /// Last Man Standing: 90 XP per question survived (partial credit on loss); full clear = 900.
+    /// Last Man Standing: 100 XP per question survived (partial credit on loss); full clear = 1000.
     static func lastManStanding(survived: Int) -> Int {
-        min(900, max(0, survived) * 90)
+        min(maxXP(.lastManStanding), max(0, survived) * 100)
     }
 
-    /// Back Yourself: hit the pledge with lives left → `round(1500 * (min(pledge,xpCap)/xpCap)^1.41)`; else 0.
+    /// Back Yourself: hit the pledge with lives left → `round(1000 * (min(pledge,xpCap)/xpCap)^1.41)`; else 0.
     static func backYourself(pledge: Int, xpCap: Int, won: Bool) -> Int {
         guard won, xpCap > 0, pledge > 0 else { return 0 }
         let effective = min(pledge, xpCap)
         let ratio = min(1, max(0, Double(effective) / Double(xpCap)))
-        return max(0, min(1500, Int((1500.0 * pow(ratio, 1.41)).rounded())))
+        let ceiling = maxXP(.backYourself)
+        return max(0, min(ceiling, Int((Double(ceiling) * pow(ratio, 1.41)).rounded())))
     }
 
     /// Darts 501: checkout 820 / perfect 1000, then −40 XP per throw over 4 and −30 XP per bust.

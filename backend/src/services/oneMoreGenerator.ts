@@ -18,7 +18,7 @@ import { oneMorePairKey, recentOneMorePairs } from './puzzleHistory.js';
 import { oneMoreEligibilityErrors } from './oneMoreEligibility.js';
 import { trustedIntlCapsSql } from './statMetrics.js';
 
-// Always exactly 10 rounds, so each correct answer is a clean +90 XP toward the 900 max.
+// Always exactly 10 rounds, so each correct answer is a clean +100 XP toward the 1000 max.
 const ROUND_TARGET = 10;
 const MIN_ROUNDS = 10;
 /** An exact (metric, pair) round can't recur inside this window. */

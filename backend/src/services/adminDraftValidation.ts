@@ -21,6 +21,7 @@ import {
   resolveAdminPlayer,
 } from './adminEntitySearch.js';
 import {
+  DRAFT_MAX_XP,
   recomputeBattleScore,
   type BattlePuzzleJson,
 } from './battleGenerator.js';
@@ -323,7 +324,7 @@ async function validateReferencedPlayers(
           playerId: playerIds[index]!,
         }))
       );
-      if (score.score !== 1100) {
+      if (score.score !== DRAFT_MAX_XP) {
         issue(issues, 'puzzleJson.optimalLineup', 'Stored optimal lineup does not reproduce a perfect score against current database facts.');
       }
     }

@@ -108,23 +108,23 @@ async function applyStreakIfPlayedToday(userId: string, playDate: string): Promi
 
 // ---- XP model ------------------------------------------------------------------------------------
 // One XP system across every game: a game's `score` IS its XP, earned incrementally per step and
-// clamped to the mode's effort-tiered maximum. A full loss earns 0 (no participation floor). The
+// clamped to the mode maximum. Live games share a 1000 ceiling. A full loss earns 0. The
 // client computes the same XP as it plays (each step shows the XP gained) and ships it as `score`;
 // server-authoritative recompute (dailyScoring.ts) reproduces it from the answer. MIRRORED in
 // ios/BallKnowledge/Domain/GameModels.swift (DailyXP) — keep the two in lockstep.
 const DEFAULT_MAX_XP = 1000;
 export const MAX_XP: Record<string, number> = {
   guess_who: 800,
-  one_more: 900,
-  target_man: 1100,
+  one_more: 1000,
+  target_man: 1000,
   blind_rank: 1000,
   football_bingo: 1000,
   club_chain: 1000,
   world_cup_xi: 1100,
-  draft_master: 1100,
+  draft_master: 1000,
   football_tower: 900,
   football_golf: FOOTBALL_GOLF_MAX_XP,
-  last_man_standing: 900,
+  last_man_standing: 1000,
   back_yourself: BACK_YOURSELF_MAX_XP,
   darts_501: DARTS501_MAX_XP,
 };

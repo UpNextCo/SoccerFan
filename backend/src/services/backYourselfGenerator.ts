@@ -15,7 +15,7 @@ import { lookupTeamLogo } from './teamService.js';
 import { playersUnderManager } from './managerRules.js';
 import { wonTournamentExistsSql } from './tournamentWinners.js';
 
-export const BACK_YOURSELF_MAX_XP = 1500;
+export const BACK_YOURSELF_MAX_XP = 1000;
 export const BACK_YOURSELF_MISTAKES_ALLOWED = 3;
 export const BACK_YOURSELF_MIN_POOL = 10;
 export const BACK_YOURSELF_MAX_POOL = 120;
@@ -213,7 +213,7 @@ export interface BackYourselfPuzzlePublic {
   category: BackYourselfCategory;
   /** Full famous pool size (slider max). */
   maxPool: number;
-  /** Pledge at which XP hits 1500. Always ≤ maxPool. */
+  /** Pledge at which XP hits 1000. Always ≤ maxPool. */
   xpCap: number;
   mistakesAllowed: number;
 }
@@ -488,7 +488,7 @@ export async function playerMatchesBackYourselfCategory(
   return rows.length > 0;
 }
 
-/** XP for a successful pledge. Uses xpCap (not full maxPool) as the 1500 denominator. */
+/** XP for a successful pledge. Uses xpCap (not full maxPool) as the 1000 denominator. */
 export function backYourselfXp(pledge: number, xpCap: number): number {
   if (xpCap <= 0 || pledge <= 0) return 0;
   const effective = Math.min(pledge, xpCap);

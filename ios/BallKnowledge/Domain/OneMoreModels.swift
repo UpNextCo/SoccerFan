@@ -175,8 +175,8 @@ struct OneMoreGameState: Equatable, Codable {
 }
 
 enum OneMoreScoring {
-    /// XP the k-th correct pick adds — an escalating share summing to the 900 max when all N rounds
-    /// are cleared (later picks worth more). This IS the XP.
+    /// XP the k-th correct pick adds — a flat share summing to the 1000 max when all N rounds
+    /// are cleared. This IS the XP.
     static func points(forPick pickNumber: Int, rounds: Int) -> Int {
         DailyXP.oneMorePick(pickNumber, rounds: rounds)
     }

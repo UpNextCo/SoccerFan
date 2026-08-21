@@ -62,22 +62,25 @@ function golfRarityPoints(rarity: string | undefined): number {
 }
 
 function targetManXp(pctOff: number): number {
-  if (pctOff < 0.0001) return 1100;
-  if (pctOff < 0.02) return 1000;
-  if (pctOff < 0.05) return 875;
-  if (pctOff < 0.10) return 700;
-  if (pctOff < 0.15) return 500;
-  if (pctOff < 0.25) return 275;
+  if (pctOff < 0.0001) return 1000;
+  if (pctOff < 0.02) return 900;
+  if (pctOff < 0.05) return 800;
+  if (pctOff < 0.10) return 650;
+  if (pctOff < 0.15) return 450;
+  if (pctOff < 0.25) return 250;
   return 0;
 }
 
-/** Clear the grid → 400–1000 by efficiency. Near-miss: 1/2/3 tiles left → 250/150/75. Else 0. */
+/** Clear the grid → 400–1000 by leftover players. 1000 at ≤10 skips. Near-miss: 1/2/3 tiles left. */
+const BINGO_PERFECT_MAX_SKIPS = 10;
 function bingoXp(filled: number, tiles: number, remaining: number, queueSize: number): number {
   const filledClamped = Math.max(0, Math.min(filled, tiles));
   if (filledClamped >= tiles) {
     if (queueSize <= tiles) return 1000;
-    const maxRemaining = queueSize - tiles;
-    const efficiency = Math.min(1, Math.max(0, remaining / maxRemaining));
+    const slack = queueSize - tiles;
+    const remainingForPerfect = Math.max(0, slack - BINGO_PERFECT_MAX_SKIPS);
+    if (remainingForPerfect === 0 || remaining >= remainingForPerfect) return 1000;
+    const efficiency = Math.min(1, Math.max(0, remaining / remainingForPerfect));
     return 400 + Math.round(600 * efficiency);
   }
   switch (tiles - filledClamped) {
@@ -204,8 +207,9 @@ function scoreOneMore(row: PuzzleRow, answer: unknown): ServerScore | null {
     streak += 1;
   }
   if (busted) return { score: 0, won: false };
-  const perPick = rounds > 0 ? Math.round(900 / rounds) : 0;
-  const score = Math.min(900, streak * perPick);
+  const maxXp = maxXpForMode('one_more');
+  const perPick = rounds > 0 ? Math.round(maxXp / rounds) : 0;
+  const score = Math.min(maxXp, streak * perPick);
   return { score, won: cashedOut || streak >= rounds };
 }
 
@@ -232,8 +236,9 @@ function scoreLastManStanding(row: PuzzleRow, answer: unknown): ServerScore | nu
     if (picks[i] !== expected[i]) break;
     streak += 1;
   }
-  const perQuestion = expected.length > 0 ? Math.round(900 / expected.length) : 0;
-  const score = Math.min(900, streak * perQuestion);
+  const maxXp = maxXpForMode('last_man_standing');
+  const perQuestion = expected.length > 0 ? Math.round(maxXp / expected.length) : 0;
+  const score = Math.min(maxXp, streak * perQuestion);
   return { score, won: streak >= expected.length };
 }
 
@@ -381,7 +386,7 @@ async function scoreTargetMan(row: PuzzleRow, answer: unknown): Promise<ServerSc
   const difference = combined - target;
   const pctOff = Math.abs(difference) / Math.max(target, 1);
   const score = targetManXp(pctOff);
-  return { score, won: score >= 500 };
+  return { score, won: score >= 450 };
 }
 
 // ---- Club Chain ------------------------------------------------------------------------------

@@ -199,10 +199,10 @@ struct TargetManGameState: Equatable, Codable {
 
 enum TargetManScoring {
     /// Win threshold (XP): landing within 15% of the target.
-    static let winThreshold = 500
+    static let winThreshold = 450
 
     /// XP by percentage-of-target accuracy, so categories of any magnitude score on the same fair
-    /// curve. This value IS the XP (exact 1100 ... within 25% 275, further off = 0).
+    /// curve. This value IS the XP (exact 1000 ... within 25% 250, further off = 0).
     static func points(forDifference difference: Int, target: Int) -> Int {
         DailyXP.targetMan(pctOff: Double(abs(difference)) / Double(max(target, 1)))
     }
