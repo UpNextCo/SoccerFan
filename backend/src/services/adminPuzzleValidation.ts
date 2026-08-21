@@ -211,6 +211,7 @@ const backYourselfCategory = z.object({
   finalCompetition: text.nullable().optional(),
   finalMode: z.enum(['scored', 'won', 'played']).nullable().optional(),
   logoUrl: text.nullable().optional(),
+  logo2Url: text.nullable().optional(),
 }).passthrough();
 const backYourselfPuzzle = z.object({
   category: backYourselfCategory,

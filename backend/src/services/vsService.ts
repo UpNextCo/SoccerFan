@@ -94,9 +94,11 @@ import {
 } from './vsLiveDarts501.js';
 import {
   countNamedMatchingCategory,
+  hydrateBackYourselfPuzzleMedia,
   playerMatchesBackYourselfCategory,
   resolveBackYourselfPlayerCard,
   type BackYourselfCategory,
+  type BackYourselfPuzzlePublic,
 } from './backYourselfGenerator.js';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1073,7 +1075,7 @@ function toView(row: VsChallenge, userId: string, names: Map<string, VsUserInfo>
 }
 
 async function viewFor(row: VsChallenge, userId: string): Promise<VsChallengeView> {
-  const synced =
+  let synced =
     row.modeId === 'back_yourself'
       ? await syncHotseat(row)
       : row.modeId === 'target_man'
@@ -1081,6 +1083,10 @@ async function viewFor(row: VsChallenge, userId: string): Promise<VsChallengeVie
         : row.modeId === 'darts_501'
           ? await syncDarts501(row)
           : await syncLiveDraft(row);
+  if (synced.modeId === 'back_yourself') {
+    const puzzle = await hydrateBackYourselfPuzzleMedia(synced.puzzleJson as BackYourselfPuzzlePublic);
+    synced = { ...synced, puzzleJson: puzzle };
+  }
   const ids = participantsOf(synced).map((p) => p.userId);
   const names = await loadUsers(ids);
   const view = toView(synced, userId, names);

@@ -1026,7 +1026,10 @@ private struct TrophyCabinetRow: View {
     private let iconCornerRadius: CGFloat = 14
 
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            guard !isLocked else { return }
+            onTap()
+        } label: {
             VStack(spacing: 0) {
                 HStack(spacing: 14) {
                     thumbnail
@@ -1034,11 +1037,11 @@ private struct TrophyCabinetRow: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(rowTitle)
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(isLocked ? BKTheme.textMuted : BKTheme.textPrimary)
+                            .foregroundStyle(isLocked ? BKTheme.textSecondary : BKTheme.textPrimary)
                             .lineLimit(1)
                         Text(rowSubtitle)
                             .font(BKFont.caption(12))
-                            .foregroundStyle(isLocked ? BKTheme.textMuted : BKTheme.textSecondary)
+                            .foregroundStyle(BKTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
@@ -1067,7 +1070,6 @@ private struct TrophyCabinetRow: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(isLocked)
     }
 
     private var rowTitle: String {
@@ -1099,7 +1101,7 @@ private struct TrophyCabinetRow: View {
                     fills: false,
                     showsBackdrop: false
                 )
-                .opacity(isLocked ? GameLevelReveal.locked.opacity : 1)
+                .opacity(isLocked ? GameLevelReveal.next.opacity : 1)
             case .bundleImage(let name):
                 TrophyArtTile(
                     imageName: name,
@@ -1107,7 +1109,7 @@ private struct TrophyCabinetRow: View {
                     fills: false,
                     showsBackdrop: false
                 )
-                .opacity(isLocked ? GameLevelReveal.locked.opacity : 1)
+                .opacity(isLocked ? GameLevelReveal.next.opacity : 1)
             case .symbol:
                 ZStack {
                     RoundedRectangle(cornerRadius: iconCornerRadius, style: .continuous)
@@ -1117,7 +1119,7 @@ private struct TrophyCabinetRow: View {
                         .frame(width: 22, height: 22)
                 }
                 .frame(width: iconSize, height: iconSize)
-                .opacity(isLocked ? GameLevelReveal.locked.opacity : 1)
+                .opacity(isLocked ? GameLevelReveal.next.opacity : 1)
             }
 
             if isLocked {

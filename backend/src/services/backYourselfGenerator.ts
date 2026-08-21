@@ -206,6 +206,8 @@ export type BackYourselfCategorySpec = {
 export interface BackYourselfCategory extends BackYourselfCategorySpec {
   label: string;
   logoUrl?: string | null;
+  /** Second crest / headshot (club combo, played-with-both). */
+  logo2Url?: string | null;
 }
 
 export interface BackYourselfPuzzlePublic {
@@ -853,19 +855,81 @@ export function clearBackYourselfCandidateCache(): void {
   candidateCache = null;
 }
 
-async function decorateCategory(cat: BackYourselfCategory): Promise<BackYourselfCategory> {
+const FINAL_LEAGUE_ID: Record<string, number> = {
+  'Champions League': 2,
+  'Europa League': 3,
+  'World Cup': 1,
+  Euro: 4,
+};
+
+export function backYourselfCategoryNeedsMedia(cat: BackYourselfCategory): boolean {
+  switch (cat.type) {
+    case 'played_with_both':
+    case 'club_combo':
+      return !cat.logoUrl || !cat.logo2Url;
+    case 'club':
+    case 'nat_club':
+    case 'nat_league':
+    case 'final':
+    case 'wc_squad':
+      return !cat.logoUrl;
+    default:
+      return false;
+  }
+}
+
+/** Fill missing club/league/player art on a stored puzzle without changing the category. */
+export async function hydrateBackYourselfPuzzleMedia<T extends { category?: BackYourselfCategory | null }>(
+  puzzle: T
+): Promise<T> {
+  if (!puzzle.category || !backYourselfCategoryNeedsMedia(puzzle.category)) return puzzle;
+  return { ...puzzle, category: await decorateBackYourselfCategory(puzzle.category) };
+}
+
+export async function decorateBackYourselfCategory(
+  cat: BackYourselfCategory
+): Promise<BackYourselfCategory> {
   if ((cat.type === 'club' || cat.type === 'nat_club') && cat.club) {
     const logo = await lookupTeamLogo(cat.club, cat.leagueName ?? '');
-    return { ...cat, logoUrl: logo?.logoUrl ?? null };
+    return { ...cat, logoUrl: logo?.logoUrl ?? cat.logoUrl ?? null, logo2Url: cat.logo2Url ?? null };
   }
-  if (cat.type === 'club_combo' && cat.clubA) {
-    const logo = await lookupTeamLogo(cat.clubA, '');
-    return { ...cat, logoUrl: logo?.logoUrl ?? null };
+  if (cat.type === 'club_combo') {
+    const [a, b] = await Promise.all([
+      cat.clubA ? lookupTeamLogo(cat.clubA, '') : Promise.resolve(null),
+      cat.clubB ? lookupTeamLogo(cat.clubB, '') : Promise.resolve(null),
+    ]);
+    return {
+      ...cat,
+      logoUrl: a?.logoUrl ?? cat.logoUrl ?? null,
+      logo2Url: b?.logoUrl ?? cat.logo2Url ?? null,
+    };
   }
   if (cat.type === 'nat_league' && cat.leagueId != null) {
-    return { ...cat, logoUrl: leagueLogoUrl(cat.leagueId) };
+    return { ...cat, logoUrl: leagueLogoUrl(cat.leagueId), logo2Url: cat.logo2Url ?? null };
   }
-  return { ...cat, logoUrl: cat.logoUrl ?? null };
+  if (cat.type === 'played_with_both') {
+    const cards = await resolveBackYourselfPlayerCards(
+      [cat.anchorAId, cat.anchorBId].filter((id): id is string => Boolean(id))
+    );
+    const byId = new Map(cards.map((card) => [card.id, card.headshotUrl]));
+    return {
+      ...cat,
+      logoUrl: byId.get(cat.anchorAId ?? '') ?? cat.logoUrl ?? null,
+      logo2Url: byId.get(cat.anchorBId ?? '') ?? cat.logo2Url ?? null,
+    };
+  }
+  if (cat.type === 'final') {
+    const leagueId = FINAL_LEAGUE_ID[cat.finalCompetition ?? ''];
+    return {
+      ...cat,
+      logoUrl: leagueId != null ? leagueLogoUrl(leagueId) : cat.logoUrl ?? null,
+      logo2Url: cat.logo2Url ?? null,
+    };
+  }
+  if (cat.type === 'wc_squad') {
+    return { ...cat, logoUrl: leagueLogoUrl(1), logo2Url: cat.logo2Url ?? null };
+  }
+  return { ...cat, logoUrl: cat.logoUrl ?? null, logo2Url: cat.logo2Url ?? null };
 }
 
 function pickWeightedPool(candidates: Candidate[], seed: number): Candidate[] {
@@ -948,7 +1012,7 @@ async function materializeBackYourselfCandidate(
   seedKey?: string
 ): Promise<{ puzzle: BackYourselfPuzzlePublic; answer: BackYourselfPuzzleAnswer }> {
   const seed = hashString(seedKey ?? `${date}:back_yourself`);
-  const category = await decorateCategory({
+  const category = await decorateBackYourselfCategory({
     type: chosen.type,
     label: chosen.label,
     club: chosen.club ?? null,
@@ -1059,7 +1123,7 @@ export async function refreshBackYourselfAnswer(
   allMatchCount: number;
   category: BackYourselfCategory;
 }> {
-  const decorated = await decorateCategory({
+  const decorated = await decorateBackYourselfCategory({
     ...category,
     label: category.label || categoryLabel(category),
   });

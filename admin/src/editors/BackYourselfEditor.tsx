@@ -47,6 +47,7 @@ type Category = {
   finalCompetition?: string | null
   finalMode?: string | null
   logoUrl?: string | null
+  logo2Url?: string | null
 }
 
 type Puzzle = {
@@ -206,6 +207,7 @@ function emptyCategoryPatch(nextType: CategoryType): Partial<Category> {
     type: nextType,
     club: null,
     logoUrl: null,
+    logo2Url: null,
     leagueId: null,
     leagueName: null,
     nationality: null,
@@ -286,7 +288,7 @@ export function BackYourselfEditor({
       if ((slot ?? 'A') === 'A') {
         applyCategory({ clubA: team.name, logoUrl: team.logoUrl }, true)
       } else {
-        applyCategory({ clubB: team.name }, true)
+        applyCategory({ clubB: team.name, logo2Url: team.logoUrl }, true)
       }
       return
     }
@@ -309,10 +311,10 @@ export function BackYourselfEditor({
 
   function pickAnchor(slot: 'A' | 'B', hit: AdminPlayerHit) {
     if (slot === 'A') {
-      applyCategory({ anchorAId: hit.id, anchorAName: hit.name }, true)
+      applyCategory({ anchorAId: hit.id, anchorAName: hit.name, logoUrl: hit.headshotUrl ?? null }, true)
       return
     }
-    applyCategory({ anchorBId: hit.id, anchorBName: hit.name }, true)
+    applyCategory({ anchorBId: hit.id, anchorBName: hit.name, logo2Url: hit.headshotUrl ?? null }, true)
   }
 
   function applyPool(players: AdminBackYourselfPoolPlayer[], ids?: string[]) {
@@ -385,7 +387,15 @@ export function BackYourselfEditor({
       <div className="editor-clean-summary">
         <div>
           <span className="muted tiny">Category</span>
-          <strong>{category.label || 'Untitled'}</strong>
+          <strong className="by-category-summary">
+            {(category.logoUrl || category.logo2Url) && (
+              <span className="by-category-thumbs">
+                {category.logoUrl ? <img src={category.logoUrl} alt="" /> : null}
+                {category.logo2Url ? <img src={category.logo2Url} alt="" /> : null}
+              </span>
+            )}
+            {category.label || 'Untitled'}
+          </strong>
         </div>
         <div>
           <span className="muted tiny">Perfect</span>
@@ -605,6 +615,7 @@ export function BackYourselfEditor({
               kind="team"
               label="Club B"
               valueLabel={category.clubB ?? undefined}
+              imageUrl={category.logo2Url ?? undefined}
               disabled={locked}
               onPickTeam={(hit) => void pickClub(hit, 'B')}
             />
@@ -618,6 +629,7 @@ export function BackYourselfEditor({
                 kind="player"
                 label="Player A"
                 valueLabel={category.anchorAName ?? undefined}
+                imageUrl={category.logoUrl ?? undefined}
                 disabled={locked}
                 onPickPlayer={(hit) => pickAnchor('A', hit)}
               />
@@ -626,6 +638,7 @@ export function BackYourselfEditor({
                 kind="player"
                 label="Player B"
                 valueLabel={category.anchorBName ?? undefined}
+                imageUrl={category.logo2Url ?? undefined}
                 disabled={locked}
                 onPickPlayer={(hit) => pickAnchor('B', hit)}
               />

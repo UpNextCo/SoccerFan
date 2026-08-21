@@ -24,6 +24,7 @@ struct BackYourselfCategory: Codable, Equatable {
     let finalCompetition: String?
     let finalMode: String?
     let logoUrl: String?
+    let logo2Url: String?
 
     init(
         type: String,
@@ -46,7 +47,8 @@ struct BackYourselfCategory: Codable, Equatable {
         anchorBName: String? = nil,
         finalCompetition: String? = nil,
         finalMode: String? = nil,
-        logoUrl: String? = nil
+        logoUrl: String? = nil,
+        logo2Url: String? = nil
     ) {
         self.type = type
         self.label = label
@@ -69,6 +71,7 @@ struct BackYourselfCategory: Codable, Equatable {
         self.finalCompetition = finalCompetition
         self.finalMode = finalMode
         self.logoUrl = logoUrl
+        self.logo2Url = logo2Url
     }
 
     init(from decoder: Decoder) throws {
@@ -94,6 +97,7 @@ struct BackYourselfCategory: Codable, Equatable {
         finalCompetition = try c.decodeIfPresent(String.self, forKey: .finalCompetition)
         finalMode = try c.decodeIfPresent(String.self, forKey: .finalMode)
         logoUrl = try c.decodeIfPresent(String.self, forKey: .logoUrl)
+        logo2Url = try c.decodeIfPresent(String.self, forKey: .logo2Url)
     }
 }
 

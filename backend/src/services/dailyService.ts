@@ -16,6 +16,7 @@ import { generateClubChainPuzzle, clubChainLink } from './clubChainGenerator.js'
 import {
   BACK_YOURSELF_MAX_XP,
   generateBackYourselfPuzzle,
+  hydrateBackYourselfPuzzleMedia,
   playerMatchesBackYourselfCategory,
   resolveBackYourselfPlayerCard,
   type BackYourselfCategory,
@@ -699,10 +700,14 @@ export async function getDailyPuzzle(date: string, modeId: string) {
   }
 
   const meta = DAILY_PUZZLE_MODES.find((mode) => mode.modeId === modeId);
+  const puzzleJson =
+    modeId === 'back_yourself'
+      ? await hydrateBackYourselfPuzzleMedia(puzzle.puzzleJson as BackYourselfPuzzlePublic)
+      : puzzle.puzzleJson;
   return {
     modeId,
     title: meta?.title ?? modeId.toUpperCase(),
-    puzzle: puzzle.puzzleJson,
+    puzzle: puzzleJson,
   };
 }
 
@@ -712,17 +717,25 @@ export async function getDailyBundle(userId: string, clientDate?: string): Promi
 
   const puzzles = await db.select().from(dailyPuzzles).where(eq(dailyPuzzles.date, date));
 
-  const games = BUNDLE_PUZZLE_MODES.flatMap((mode) => {
-    const row = puzzles.find((puzzle) => puzzle.modeId === mode.modeId);
-    if (!row) return [];
-    return [
-      {
-        modeId: mode.modeId,
-        title: mode.title,
-        puzzle: sanitizePublicPuzzle(mode.modeId, row.puzzleJson) as DailyBundle['games'][0]['puzzle'],
-      },
-    ];
-  });
+  const games = (
+    await Promise.all(
+      BUNDLE_PUZZLE_MODES.map(async (mode) => {
+        const row = puzzles.find((puzzle) => puzzle.modeId === mode.modeId);
+        if (!row) return [];
+        const puzzleJson =
+          mode.modeId === 'back_yourself'
+            ? await hydrateBackYourselfPuzzleMedia(row.puzzleJson as BackYourselfPuzzlePublic)
+            : row.puzzleJson;
+        return [
+          {
+            modeId: mode.modeId,
+            title: mode.title,
+            puzzle: sanitizePublicPuzzle(mode.modeId, puzzleJson) as DailyBundle['games'][0]['puzzle'],
+          },
+        ];
+      })
+    )
+  ).flat();
 
   const completions = await db
     .select({

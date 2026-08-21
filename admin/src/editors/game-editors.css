@@ -229,6 +229,30 @@
   min-width: 0;
 }
 
+.editor-clean-summary strong.by-category-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.by-category-thumbs {
+  display: inline-flex;
+  align-items: center;
+}
+
+.by-category-thumbs img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 999px;
+  background: #111;
+  border: 2px solid var(--panel, #161616);
+}
+
+.by-category-thumbs img + img {
+  margin-left: -8px;
+}
+
 .by-stat-row {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(90px, 0.6fr);

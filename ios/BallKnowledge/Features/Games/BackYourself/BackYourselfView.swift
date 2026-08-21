@@ -292,28 +292,8 @@ struct BackYourselfView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    @ViewBuilder
     private var categoryIcon: some View {
-        let cat = state.puzzle.category
-        if let url = cat.logoUrl, let imageURL = URL(string: url) {
-            AsyncImage(url: imageURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFit()
-                default:
-                    Circle().fill(BKTheme.cardElevated)
-                }
-            }
-            .frame(width: 44, height: 44)
-        } else if let nationality = cat.nationality, !nationality.isEmpty {
-            Text(GuessWhoDisplay.nationalityFlag(nationality))
-                .font(.system(size: 34))
-        } else {
-            Image(systemName: categorySymbol(for: cat.type))
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(BKTheme.accent)
-                .frame(width: 44, height: 44)
-        }
+        BackYourselfCategoryArt(category: state.puzzle.category, size: 44)
     }
 
     private var poolCaption: String {
@@ -323,18 +303,6 @@ struct BackYourselfView: View {
             return "\(maxPool) for a perfect · Max XP at \(xpCap)+"
         }
         return "\(maxPool) for a perfect score"
-    }
-
-    private func categorySymbol(for type: String) -> String {
-        switch type {
-        case "award", "final": return "trophy.fill"
-        case "stat": return "chart.bar.fill"
-        case "managed_by": return "person.badge.key.fill"
-        case "wc_squad": return "globe.europe.africa.fill"
-        case "club_combo": return "arrow.left.arrow.right"
-        case "played_with_both": return "person.2.fill"
-        default: return "person.3.fill"
-        }
     }
 
     private var pledgeCard: some View {
@@ -635,6 +603,82 @@ private struct BackYourselfResultView: View {
                 }
             }
             .padding(.horizontal, 20)
+        }
+    }
+}
+
+struct BackYourselfCategoryArt: View {
+    let category: BackYourselfCategory
+    var size: CGFloat = 44
+
+    private var urls: [String] {
+        [category.logoUrl, category.logo2Url].compactMap { url in
+            guard let url, !url.isEmpty else { return nil }
+            return url
+        }
+    }
+
+    private var circular: Bool {
+        category.type == "played_with_both"
+    }
+
+    private var flagText: String? {
+        let name = category.nationality ?? category.wcCountry
+        guard let name, !name.isEmpty else { return nil }
+        switch category.type {
+        case "nationality", "nat_club", "nat_league", "wc_squad":
+            return GuessWhoDisplay.nationalityFlag(name)
+        default:
+            return nil
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: urls.count >= 2 ? -size * 0.3 : 6) {
+            if let flagText, urls.count < 2 {
+                Text(flagText)
+                    .font(.system(size: size * 0.72))
+            }
+            ForEach(Array(urls.enumerated()), id: \.offset) { _, url in
+                media(url)
+            }
+            if urls.isEmpty, flagText == nil {
+                Image(systemName: symbol)
+                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .foregroundStyle(BKTheme.accent)
+                    .frame(width: size, height: size)
+            }
+        }
+        .frame(minWidth: size, minHeight: size)
+    }
+
+    @ViewBuilder
+    private func media(_ url: String) -> some View {
+        if circular {
+            PlayerAvatar(urlString: url, size: size * (urls.count >= 2 ? 0.88 : 1))
+        } else if let imageURL = URL(string: url) {
+            AsyncImage(url: imageURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFit()
+                default:
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(BKTheme.cardElevated)
+                }
+            }
+            .frame(width: size * (urls.count >= 2 ? 0.88 : 1), height: size * (urls.count >= 2 ? 0.88 : 1))
+        }
+    }
+
+    private var symbol: String {
+        switch category.type {
+        case "award", "final": return "trophy.fill"
+        case "stat": return "chart.bar.fill"
+        case "managed_by": return "person.badge.key.fill"
+        case "wc_squad": return "globe.europe.africa.fill"
+        case "club_combo": return "arrow.left.arrow.right"
+        case "played_with_both": return "person.2.fill"
+        default: return "person.3.fill"
         }
     }
 }

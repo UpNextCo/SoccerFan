@@ -177,15 +177,18 @@ struct VsHotseatView: View {
     }
 
     private var categoryHero: some View {
-        Text(puzzle.category.label)
-            .font(BKFont.title(28))
-            .foregroundStyle(BKTheme.textPrimary)
-            .multilineTextAlignment(.center)
-            .lineLimit(nil)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: 220)
-            .padding(.bottom, 18)
-            .frame(maxWidth: .infinity)
+        VStack(spacing: 10) {
+            BackYourselfCategoryArt(category: puzzle.category, size: 52)
+            Text(puzzle.category.label)
+                .font(BKFont.title(28))
+                .foregroundStyle(BKTheme.textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 220)
+        }
+        .padding(.bottom, 18)
+        .frame(maxWidth: .infinity)
     }
 
     private var namedList: some View {
