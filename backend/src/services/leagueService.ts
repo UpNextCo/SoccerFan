@@ -15,6 +15,7 @@ import {
   divisionLabel,
   formatStatusLine,
   isWeeklyDivision,
+  WEEKLY_DIVISIONS,
   londonDateString,
   londonWeekEnd,
   londonWeekStart,
