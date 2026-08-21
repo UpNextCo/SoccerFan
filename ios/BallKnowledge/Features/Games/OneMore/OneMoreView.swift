@@ -70,7 +70,7 @@ final class OneMoreViewModel {
         state.chosenOptionId = option.id
         isChecking = true
         checkError = nil
-        HapticManager.light()
+        Feedback.play(.lock)
         Task {
             defer { isChecking = false }
             if runToken == nil { await ensureRunToken() }
@@ -86,6 +86,7 @@ final class OneMoreViewModel {
                     optionId: option.id
                 )
                 applyRevealedValues(result.values)
+                Feedback.play(.reveal)
                 runToken = result.nextToken
                 state.phase = .revealing
                 try? await Task.sleep(for: .seconds(OneMoreTiming.reveal))
@@ -123,13 +124,13 @@ final class OneMoreViewModel {
                 pointsAfter: state.currentScore
             ))
             lastFeedback = "+\(OneMoreScoring.points(forPick: state.streak, rounds: state.totalRounds)) XP"
-            HapticManager.success()
             scorePulseToken += 1
             state.chosenOptionId = nil
             state.roundIndex += 1
             if state.currentRound == nil {
                 cashOut(cleared: true)
             } else {
+                Feedback.play(.success)
                 state.phase = .playing
                 roundToken = UUID()
             }
@@ -147,7 +148,7 @@ final class OneMoreViewModel {
             state.phase = .busted
             runToken = nil
             lastFeedback = correct.map { "\($0.name) had \($0.value)" } ?? "Wrong pick"
-            HapticManager.error()
+            Feedback.play(.lose)
             showBustOverlay = true
             Task {
                 try? await Task.sleep(for: .seconds(OneMoreTiming.bustHold))
@@ -164,7 +165,7 @@ final class OneMoreViewModel {
         state.phase = .busted
         runToken = nil
         lastFeedback = "Time's up"
-        HapticManager.error()
+        Feedback.play(.lose)
         showBustOverlay = true
         Task {
             try? await Task.sleep(for: .seconds(OneMoreTiming.bustHold))
@@ -175,7 +176,7 @@ final class OneMoreViewModel {
 
     func cashOut(cleared: Bool = false) {
         guard cleared || canCashOut else { return }
-        HapticManager.success()
+        Feedback.play(.win)
         state.bankedScore = state.currentScore
         state.phase = .cashedOut
         if state.streak >= OneMoreTiming.confettiThreshold {
@@ -351,6 +352,7 @@ struct OneMoreView: View {
             enabled: !allowReplay
         )
         .onAppear {
+            SoundManager.shared.prepare()
             if !allowReplay, let dailyDate,
                let saved = GameProgressStore.load(
                 OneMoreGameState.self, modeId: GameModeID.oneMore.rawValue,
@@ -473,6 +475,7 @@ private struct OneMoreRoundTimerBar: View {
             .onChange(of: remainingSeconds) { _, value in
                 guard clockRunning, value <= 0, !didExpire else { return }
                 didExpire = true
+                SoundManager.shared.stopTick()
                 onExpired()
             }
         }
@@ -484,20 +487,35 @@ private struct OneMoreRoundTimerBar: View {
         .onChange(of: clockRunning) { _, running in
             if running {
                 if runningSince == nil { runningSince = Date() }
+                syncTick()
             } else if let start = runningSince {
                 accumulated += Date().timeIntervalSince(start)
                 runningSince = nil
+                SoundManager.shared.stopTick()
             }
         }
         .onAppear {
             if clockRunning { runningSince = Date() }
+            syncTick()
         }
+        .onDisappear { SoundManager.shared.stopTick() }
     }
 
     private func restartClock() {
         accumulated = 0
         runningSince = clockRunning ? Date() : nil
         didExpire = false
+        syncTick()
+    }
+
+    private func syncTick() {
+        guard clockRunning else {
+            SoundManager.shared.stopTick()
+            return
+        }
+        let elapsed = accumulated + (runningSince.map { Date().timeIntervalSince($0) } ?? 0)
+        let remaining = max(0, OneMoreTiming.roundDuration - elapsed)
+        SoundManager.shared.startTick(lasting: remaining)
     }
 }
 

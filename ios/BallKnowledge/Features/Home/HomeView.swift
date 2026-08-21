@@ -53,6 +53,8 @@ struct HomeView: View {
     /// True while a game cover is up — celebration waits until we're back on home.
     @State private var isPlayingGame = false
     @State private var celebrationPayload: DailyCompleteCelebrationPayload?
+    @State private var pendingTrophyUnlock: TrophyUnlockPayload?
+    @State private var trophyUnlock: TrophyUnlockPayload?
     #if DEBUG
     @State private var showAwardPreview = false
     #endif
@@ -159,6 +161,9 @@ struct HomeView: View {
                 refreshInProgress()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .perfectScoreUnlocked)) { notification in
+            pendingTrophyUnlock = notification.object as? TrophyUnlockPayload
+        }
         .fullScreenCover(item: $presentedMode, onDismiss: {
             // Fires however the game closes — including tapping X mid-game — so an "In Progress"
             // tile shows up immediately (not only after a force-close + relaunch).
@@ -168,9 +173,14 @@ struct HomeView: View {
                 await auth.refreshProfile()
                 await viewModel.load(context: modelContext)
                 refreshInProgress()
-                // Let the game cover finish dismissing before stacking the celebration cover.
+                // Let the game cover finish dismissing before stacking the next cover.
                 try? await Task.sleep(for: .milliseconds(350))
-                presentCelebrationIfNeeded()
+                if let pending = pendingTrophyUnlock {
+                    pendingTrophyUnlock = nil
+                    trophyUnlock = pending
+                } else {
+                    presentCelebrationIfNeeded()
+                }
             }
         }) { mode in
             DailyGameHost(
@@ -179,6 +189,15 @@ struct HomeView: View {
                 allowReplay: allowsUnlimitedDailyPlay,
                 onFinished: { handleModeFinished(mode) }
             )
+        }
+        .fullScreenCover(item: $trophyUnlock) { payload in
+            TrophyUnlockView(payload: payload) {
+                trophyUnlock = nil
+                Task {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    presentCelebrationIfNeeded()
+                }
+            }
         }
         #if DEBUG
         .fullScreenCover(isPresented: $showAwardPreview) {
@@ -252,6 +271,8 @@ struct HomeView: View {
     /// Show the streak toast once per day after the first finished daily.
     private func presentCelebrationIfNeeded() {
         guard celebrationPayload == nil,
+              trophyUnlock == nil,
+              pendingTrophyUnlock == nil,
               !isPlayingGame,
               presentedMode == nil else { return }
         guard let bundle = viewModel.dailyBundle else { return }
@@ -287,7 +308,6 @@ struct HomeHeaderView: View {
     let user: UserProfileDTO?
     let streak: Int
     var dailyComplete: Bool = false
-    @State private var avatarImage: UIImage?
     @State private var showNotifications = false
     @AppStorage("profile.featuredTrophyId") private var featuredTrophyId = ""
 
@@ -356,7 +376,6 @@ struct HomeHeaderView: View {
         }
         .padding(.top, 8)
         .zIndex(2)
-        .onAppear { avatarImage = LocalProfile.loadAvatar() }
         .sheet(isPresented: $showNotifications) {
             NotificationsView(
                 user: user,
@@ -371,24 +390,7 @@ struct HomeHeaderView: View {
     }
 
     private var avatarCircle: some View {
-        Group {
-            if let avatarImage {
-                Image(uiImage: avatarImage)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                PlayerAvatar(urlString: user?.avatarUrl, size: 44) {
-                    BKTheme.cardElevated
-                        .overlay {
-                            Ph.userCircle.fill
-                                .color(BKTheme.avatarPlaceholder)
-                                .frame(width: 26, height: 26)
-                        }
-                }
-            }
-        }
-        .frame(width: 44, height: 44)
-        .clipShape(Circle())
+        UserAvatar(urlString: user?.avatarUrl, usesLocalYou: true, size: 40)
         .overlay(alignment: .bottomTrailing) {
             if let featured = TrophyUnlockPayload.earnedTrophy(id: featuredTrophyId),
                let imageName = featured.bundleImageName {

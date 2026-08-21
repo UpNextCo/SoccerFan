@@ -960,17 +960,7 @@ struct ProfileSetupStep: View {
 
             Button { showPhotoPicker = true } label: {
                 ZStack(alignment: .bottomTrailing) {
-                    Group {
-                        if let avatarImage {
-                            Image(uiImage: avatarImage).resizable().scaledToFill()
-                        } else {
-                            BKTheme.cardElevated.overlay {
-                                Ph.userCircle.fill.color(BKTheme.avatarPlaceholder).frame(width: 52, height: 52)
-                            }
-                        }
-                    }
-                    .frame(width: 124, height: 124)
-                    .clipShape(Circle())
+                    UserAvatar(urlString: auth.user?.avatarUrl, localImage: avatarImage, size: 124)
                     .overlay(Circle().stroke(BKTheme.accent.opacity(0.35), lineWidth: 2))
                     .shadow(color: BKTheme.accent.opacity(0.18), radius: 20, y: 8)
 

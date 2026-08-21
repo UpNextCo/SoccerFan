@@ -14,9 +14,11 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
     let gameTitle: String
     let detail: String
     let xp: Int
-    let timesEarned: Int
+    var timesEarned: Int
     let hero: Hero
     var playsUnlock: Bool = true
+    var ladderSteps: Int = 0
+    var ladderFilled: Int = 0
 
     var bundleImageName: String? {
         if case .bundleImage(let name) = hero { return name }
@@ -140,17 +142,42 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         .gameLevel(modeTitle: GameModeID.darts501.title, tier: "Ultimate", image: "501levels/501emerald"),
     ]
 
-    /// Preview earn depth: `-1` all locked, `5` fully unlocked (Bronze → Ultimate).
-    static let previewLevelStrips: [(title: String, levels: [TrophyUnlockPayload], earnedThrough: Int)] = [
-        ("\(GameModeID.targetMan.title) PERFECT SCORE", targetManLevels, 5),
-        ("\(GameModeID.oneMore.title) PERFECT SCORE", oneMoreLevels, 0),
-        ("\(GameModeID.footballBingo.title) PERFECT SCORE", bingoLevels, 2),
-        ("\(GameModeID.clubChain.title) PERFECT SCORE", clubChainLevels, 1),
-        ("\(GameModeID.lastManStanding.title) PERFECT SCORE", lmsLevels, 5),
-        ("\(GameModeID.backYourself.title) PERFECT SCORE", backYourselfLevels, 0),
-        ("\(GameModeID.draftMaster.title) PERFECT SCORE", draftLevels, 3),
-        ("\(GameModeID.darts501.title) PERFECT SCORE", football501Levels, 1),
+    static let perfectScoreModes: [(mode: GameModeID, levels: [TrophyUnlockPayload])] = [
+        (.targetMan, targetManLevels),
+        (.oneMore, oneMoreLevels),
+        (.footballBingo, bingoLevels),
+        (.clubChain, clubChainLevels),
+        (.lastManStanding, lmsLevels),
+        (.backYourself, backYourselfLevels),
+        (.draftMaster, draftLevels),
+        (.darts501, football501Levels),
     ]
+
+    static func levels(for mode: GameModeID) -> [TrophyUnlockPayload]? {
+        perfectScoreModes.first { $0.mode == mode }?.levels
+    }
+
+    static func perfectScoreUnlock(mode: GameModeID, count: Int) -> TrophyUnlockPayload? {
+        guard let levels = levels(for: mode), !levels.isEmpty else { return nil }
+        let index = min(max(count, 1), levels.count) - 1
+        var payload = levels[index]
+        payload.timesEarned = count
+        payload.ladderSteps = levels.count
+        payload.ladderFilled = min(count, levels.count)
+        return payload
+    }
+
+    /// Live earn depth: `-1` all locked, `5` fully unlocked (Bronze → Ultimate).
+    static var previewLevelStrips: [(title: String, mode: GameModeID, levels: [TrophyUnlockPayload], earnedThrough: Int)] {
+        perfectScoreModes.map { item in
+            (
+                "\(item.mode.title) PERFECT SCORE",
+                item.mode,
+                item.levels,
+                PerfectScoreStore.earnedThroughIndex(for: item.mode)
+            )
+        }
+    }
 
     static func leagueReached(title: String, image: String) -> TrophyUnlockPayload {
         TrophyUnlockPayload(
@@ -252,6 +279,7 @@ struct TrophyUnlockView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var progress: Double = 0
+    @State private var ladderFill: Int = 0
     @State private var displayedXP: Double = 0
     @State private var showTitle = false
     @State private var showHero = false
@@ -287,7 +315,14 @@ struct TrophyUnlockView: View {
                         .opacity(showHero ? 1 : 0)
                         .scaleEffect(showHero ? 1 : 0.86)
 
-                    if payload.xp > 0 {
+                    if payload.ladderSteps > 0 {
+                        PerfectScoreLadderBar(
+                            steps: payload.ladderSteps,
+                            filled: ladderFill
+                        )
+                        .padding(.horizontal, 8)
+                        .opacity(showHero ? 1 : 0)
+                    } else if payload.xp > 0 {
                         VStack(spacing: 9) {
                             GeometryReader { geometry in
                                 ZStack(alignment: .leading) {
@@ -350,7 +385,12 @@ struct TrophyUnlockView: View {
             FootballConfettiView(burstToken: confettiToken)
                 .allowsHitTesting(false)
         }
-        .task { await runSequence() }
+        .task {
+            if payload.ladderSteps > 0 {
+                ladderFill = max(0, payload.ladderFilled - 1)
+            }
+            await runSequence()
+        }
     }
 
     @ViewBuilder
@@ -398,6 +438,9 @@ struct TrophyUnlockView: View {
         withAnimation(.easeInOut(duration: reduceMotion ? 0.01 : 1.05)) {
             progress = 1
             displayedXP = Double(payload.xp)
+            if payload.ladderSteps > 0 {
+                ladderFill = payload.ladderFilled
+            }
         }
         if !reduceMotion {
             for _ in 0..<5 {
@@ -433,9 +476,13 @@ struct TrophyCabinetView: View {
                         GameLevelsPreviewRow(
                             title: strip.title,
                             levels: strip.levels,
-                            earnedThroughIndex: strip.earnedThrough
+                            earnedThroughIndex: strip.earnedThrough,
+                            ladderFilled: PerfectScoreStore.count(for: strip.mode)
                         ) { payload in
-                            unlock = payload
+                            unlock = TrophyUnlockPayload.perfectScoreUnlock(
+                                mode: strip.mode,
+                                count: max(PerfectScoreStore.count(for: strip.mode), strip.earnedThrough + 1)
+                            ) ?? payload
                         }
                     }
 
@@ -527,11 +574,79 @@ private enum GameLevelReveal: Equatable {
     }
 }
 
+struct PerfectScoreLadderBar: View {
+    let steps: Int
+    var filled: Int
+    var columnWidth: CGFloat? = nil
+    var spacing: CGFloat = 12
+
+    private var clampedFilled: Int { min(max(filled, 0), steps) }
+    private let notchSize: CGFloat = 22
+
+    var body: some View {
+        if let columnWidth {
+            track {
+                HStack(spacing: spacing) {
+                    ForEach(0..<steps, id: \.self) { index in
+                        notch(index)
+                            .frame(width: columnWidth)
+                    }
+                }
+            }
+        } else {
+            track {
+                HStack(spacing: 0) {
+                    ForEach(0..<steps, id: \.self) { index in
+                        notch(index)
+                        if index < steps - 1 { Spacer(minLength: 0) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func track<Content: View>(@ViewBuilder notches: () -> Content) -> some View {
+        ZStack {
+            GeometryReader { geometry in
+                let inset = columnWidth.map { $0 / 2 } ?? (notchSize / 2)
+                let trackWidth = max(0, geometry.size.width - inset * 2)
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(BKTheme.cardElevated)
+                    Capsule()
+                        .fill(BKTheme.accent)
+                        .frame(width: steps > 0 ? trackWidth * CGFloat(clampedFilled) / CGFloat(steps) : 0)
+                }
+                .frame(height: 6)
+                .padding(.horizontal, inset)
+                .frame(maxHeight: .infinity, alignment: .center)
+            }
+            notches()
+        }
+        .frame(height: notchSize)
+    }
+
+    private func notch(_ index: Int) -> some View {
+        let isFilled = index < clampedFilled
+        return Text("\(index + 1)")
+            .font(BKFont.caption(11))
+            .fontWeight(.bold)
+            .foregroundStyle(isFilled ? BKTheme.background : BKTheme.textMuted)
+            .frame(width: notchSize, height: notchSize)
+            .background(isFilled ? BKTheme.accent : BKTheme.cardElevated, in: Circle())
+            .overlay {
+                Circle()
+                    .stroke(BKTheme.card, lineWidth: 3)
+            }
+    }
+}
+
 private struct GameLevelsPreviewRow: View {
     let title: String
     let levels: [TrophyUnlockPayload]
-    /// Preview-only: last earned index so next-peek vs locked can be compared.
+    /// Last earned index. `-1` means none unlocked.
     var earnedThroughIndex: Int = 1
+    var ladderFilled: Int? = nil
     var onSelect: (TrophyUnlockPayload) -> Void
 
     private let badgeSpacing: CGFloat = 12
@@ -558,40 +673,51 @@ private struct GameLevelsPreviewRow: View {
                 .padding(.horizontal, 14)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: badgeSpacing) {
-                    ForEach(Array(levels.enumerated()), id: \.element.id) { index, payload in
-                        let reveal = revealState(at: index)
-                        Button {
-                            guard reveal == .earned else { return }
-                            onSelect(payload)
-                        } label: {
-                            VStack(spacing: 8) {
-                                ZStack(alignment: .bottomTrailing) {
-                                    TrophyArtTile(
-                                        imageName: payload.bundleImageName,
-                                        size: badgeSize,
-                                        fills: false,
-                                        showsBackdrop: false
-                                    )
-                                    .opacity(reveal.opacity)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: badgeSpacing) {
+                        ForEach(Array(levels.enumerated()), id: \.element.id) { index, payload in
+                            let reveal = revealState(at: index)
+                            Button {
+                                guard reveal == .earned else { return }
+                                onSelect(payload)
+                            } label: {
+                                VStack(spacing: 8) {
+                                    ZStack(alignment: .bottomTrailing) {
+                                        TrophyArtTile(
+                                            imageName: payload.bundleImageName,
+                                            size: badgeSize,
+                                            fills: false,
+                                            showsBackdrop: false
+                                        )
+                                        .opacity(reveal.opacity)
 
-                                    if reveal != .earned {
-                                        Image(systemName: "lock.fill")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundStyle(BKTheme.textPrimary)
-                                            .frame(width: 20, height: 20)
-                                            .background(BKTheme.cardElevated)
-                                            .clipShape(Circle())
-                                            .offset(x: 2, y: 2)
+                                        if reveal != .earned {
+                                            Image(systemName: "lock.fill")
+                                                .font(.system(size: 10, weight: .bold))
+                                                .foregroundStyle(BKTheme.textPrimary)
+                                                .frame(width: 20, height: 20)
+                                                .background(BKTheme.cardElevated)
+                                                .clipShape(Circle())
+                                                .offset(x: 2, y: 2)
+                                        }
                                     }
+                                    Text(payload.kicker)
+                                        .font(BKFont.caption(11))
+                                        .foregroundStyle(reveal == .earned ? BKTheme.textSecondary : BKTheme.textMuted)
+                                        .lineLimit(1)
                                 }
-                                Text(payload.kicker)
-                                    .font(BKFont.caption(11))
-                                    .foregroundStyle(reveal == .earned ? BKTheme.textSecondary : BKTheme.textMuted)
-                                    .lineLimit(1)
                             }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                    }
+
+                    if let ladderFilled {
+                        PerfectScoreLadderBar(
+                            steps: levels.count,
+                            filled: ladderFilled,
+                            columnWidth: badgeSize,
+                            spacing: badgeSpacing
+                        )
                     }
                 }
                 .padding(.leading, leadingInset)

@@ -175,7 +175,7 @@ final class LastManStandingViewModel {
         state.status = .correctReveal
         showCorrectFlash = true
         eliminationSummary = nil
-        HapticManager.success()
+        Feedback.play(.success)
 
         try? await Task.sleep(for: .milliseconds(235))
         showCorrectFlash = false
@@ -186,7 +186,7 @@ final class LastManStandingViewModel {
         clearCustomSearch()
         state.eliminateUser()
         state.status = .lost
-        HapticManager.error()
+        Feedback.play(.lose)
         Task {
             try? await Task.sleep(for: .milliseconds(1200))
             showResult = true
@@ -200,7 +200,7 @@ final class LastManStandingViewModel {
             state.displayedRemaining = 1
             state.status = .won
             confettiBurstToken += 1
-            HapticManager.success()
+            Feedback.play(.win)
             try? await Task.sleep(for: .milliseconds(800))
             showResult = true
             return
@@ -234,7 +234,7 @@ final class LastManStandingViewModel {
                 eliminatedSoFar += 1
                 try? await Task.sleep(for: .milliseconds(20))
             }
-            HapticManager.light()
+            Feedback.play(.pop)
             let interim = max(targetRemaining, startRemaining - eliminatedSoFar)
             withAnimation(.easeOut(duration: 0.12)) {
                 state.displayedRemaining = interim
@@ -401,6 +401,7 @@ struct LastManStandingView: View {
             enabled: !allowReplay
         )
         .onAppear {
+            SoundManager.shared.prepare()
             if !allowReplay, let dailyDate,
                let saved = GameProgressStore.load(
                 LMSGameState.self,

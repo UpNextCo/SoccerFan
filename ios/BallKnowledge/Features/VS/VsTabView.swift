@@ -803,24 +803,7 @@ struct VsTabView: View {
     }
 
     private func lobbyAvatar(_ player: VsPlayerDTO) -> some View {
-        Group {
-            if player.isYou, let image = LocalProfile.loadAvatar() {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                PlayerAvatar(urlString: player.avatarUrl, size: 36) {
-                    BKTheme.cardElevated
-                        .overlay {
-                            Ph.userCircle.fill
-                                .color(BKTheme.avatarPlaceholder)
-                                .frame(width: 22, height: 22)
-                        }
-                }
-            }
-        }
-        .frame(width: 36, height: 36)
-        .clipShape(Circle())
+        UserAvatar(urlString: player.avatarUrl, usesLocalYou: player.isYou, size: 36)
     }
 
     private func playerLabel(_ player: VsPlayerDTO) -> String {
@@ -926,7 +909,7 @@ private struct VsRecordCard: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            VsMateAvatar(urlString: nil, usesLocalYou: true, size: 40)
+            UserAvatar(usesLocalYou: true, size: 36)
             Text("YOU")
                 .font(BKFont.headline(13))
                 .foregroundStyle(BKTheme.textPrimary)
@@ -950,7 +933,7 @@ private struct VsRecordCard: View {
                 .foregroundStyle(BKTheme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-            VsMateAvatar(urlString: record.opponentAvatarUrl, size: 40)
+            UserAvatar(urlString: record.opponentAvatarUrl, size: 36)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -1051,33 +1034,6 @@ private enum VsHistoryCopy {
         let plain = ISO8601DateFormatter()
         plain.formatOptions = [.withInternetDateTime]
         return plain.date(from: raw)
-    }
-}
-
-private struct VsMateAvatar: View {
-    var urlString: String?
-    var usesLocalYou: Bool = false
-    var size: CGFloat
-
-    var body: some View {
-        Group {
-            if usesLocalYou, let image = LocalProfile.loadAvatar() {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                PlayerAvatar(urlString: urlString, size: size) {
-                    BKTheme.cardElevated
-                        .overlay {
-                            Ph.userCircle.fill
-                                .color(BKTheme.avatarPlaceholder)
-                                .frame(width: size * 0.6, height: size * 0.6)
-                        }
-                }
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
     }
 }
 

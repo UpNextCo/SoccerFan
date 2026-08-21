@@ -302,11 +302,16 @@ enum DailyCompletionService {
     ) async -> DailyCompleteResponseDTO? {
         let normalized = GameModeCatalog.normalizedModeId(modeId)
         if let mode = GameModeID(rawValue: normalized) {
-            markLocallyCompleted(
-                mode,
-                date: date,
-                xp: DailyXP.xp(mode: normalized, score: score)
-            )
+            let xp = DailyXP.xp(mode: normalized, score: score)
+            markLocallyCompleted(mode, date: date, xp: xp)
+            if DailyPlayOrder.playableModes.contains(mode),
+               xp >= DailyXP.maxXP(mode),
+               let count = PerfectScoreStore.record(mode: mode, date: date),
+               let unlock = TrophyUnlockPayload.perfectScoreUnlock(mode: mode, count: count) {
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .perfectScoreUnlocked, object: unlock)
+                }
+            }
         }
 
         let request = DailyCompleteRequestDTO(
@@ -330,5 +335,41 @@ enum DailyCompletionService {
     private static func localCompleted(for date: String) -> Set<String> {
         let store = UserDefaults.standard.dictionary(forKey: storageKey) as? [String: [String]] ?? [:]
         return Set((store[date] ?? []).map { GameModeCatalog.normalizedModeId($0) })
+    }
+}
+
+/// Lifetime perfect-score counts per daily game. One perfect per calendar date per mode.
+enum PerfectScoreStore {
+    static let tierCount = 6
+    private static let countsKey = "perfectScoreCounts"
+    private static let datesKey = "perfectScoreLastDates"
+
+    static func count(for mode: GameModeID) -> Int {
+        let store = UserDefaults.standard.dictionary(forKey: countsKey) as? [String: Int] ?? [:]
+        return max(0, store[mode.rawValue] ?? 0)
+    }
+
+    /// `-1` when none earned, `5` when Ultimate is unlocked.
+    static func earnedThroughIndex(for mode: GameModeID) -> Int {
+        min(count(for: mode), tierCount) - 1
+    }
+
+    /// Increments once per `date` + mode. Returns the new count, or nil if already counted today.
+    static func record(mode: GameModeID, date: String) -> Int? {
+        var dates = UserDefaults.standard.dictionary(forKey: datesKey) as? [String: String] ?? [:]
+        if dates[mode.rawValue] == date { return nil }
+
+        var counts = UserDefaults.standard.dictionary(forKey: countsKey) as? [String: Int] ?? [:]
+        let next = (counts[mode.rawValue] ?? 0) + 1
+        counts[mode.rawValue] = next
+        dates[mode.rawValue] = date
+        UserDefaults.standard.set(counts, forKey: countsKey)
+        UserDefaults.standard.set(dates, forKey: datesKey)
+        return next
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: countsKey)
+        UserDefaults.standard.removeObject(forKey: datesKey)
     }
 }

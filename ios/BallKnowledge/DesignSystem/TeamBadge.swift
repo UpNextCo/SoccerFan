@@ -282,6 +282,61 @@ struct PlayerSilhouette: View {
     }
 }
 
+/// Classic default profile pic — dark disc, lighter bust sitting on the bottom edge.
+struct UserAvatarPlaceholder: View {
+    var size: CGFloat = 32
+
+    private let disc = Color(hex: "333333")
+    private let bust = Color(hex: "6E6E6E")
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(disc)
+
+            Circle()
+                .fill(bust)
+                .frame(width: size * 0.40, height: size * 0.40)
+                .offset(y: -size * 0.12)
+
+            Ellipse()
+                .fill(bust)
+                .frame(width: size * 0.73, height: size * 0.56)
+                .offset(y: size * 0.42)
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+}
+
+/// Real photo when we have one; otherwise the default bust placeholder.
+struct UserAvatar: View {
+    var urlString: String? = nil
+    var usesLocalYou: Bool = false
+    var localImage: UIImage? = nil
+    var size: CGFloat = 32
+
+    var body: some View {
+        Group {
+            if let localImage {
+                Image(uiImage: localImage)
+                    .resizable()
+                    .scaledToFill()
+            } else if usesLocalYou, let image = LocalProfile.loadAvatar() {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                PlayerAvatar(urlString: urlString, size: size) {
+                    UserAvatarPlaceholder(size: size)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+}
+
 struct PlayerAvatar<Fallback: View>: View {
     let headshotURL: URL?
     var size: CGFloat = 32

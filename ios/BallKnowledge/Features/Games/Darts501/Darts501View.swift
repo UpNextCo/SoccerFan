@@ -83,7 +83,7 @@ final class Darts501ViewModel {
     func select(_ player: PlayerSearchResultDTO) async {
         guard !inputLocked else { return }
         if state.usedPlayerIds.contains(player.id) {
-            flashFeedback("Already used")
+            flashFeedback("Already used", sfx: .deny)
             return
         }
 
@@ -99,7 +99,7 @@ final class Darts501ViewModel {
                 alreadyUsedIds: Array(state.usedPlayerIds)
             )
             if result.duplicate {
-                flashFeedback("Already used")
+                flashFeedback("Already used", sfx: .deny)
                 isAnimating = false
                 return
             }
@@ -174,7 +174,11 @@ final class Darts501ViewModel {
         withAnimation(.spring(response: 0.28, dampingFraction: 0.62)) {
             scorePunch = true
         }
-        hapticForScore(score, bust: resolution.kind == .bust || resolution.kind == .gameOver)
+        hapticForScore(
+            score,
+            bust: resolution.kind == .bust || resolution.kind == .gameOver,
+            finishing: resolution.kind == .perfect || resolution.kind == .checkout
+        )
 
         try? await Task.sleep(for: .milliseconds(revealIs180 ? 280 : 160))
 
@@ -183,7 +187,7 @@ final class Darts501ViewModel {
             withAnimation(.default.repeatCount(4, autoreverses: true).speed(6)) {
                 boardShake = true
             }
-            HapticManager.error()
+            Feedback.play(.lifeLost)
             heartLossToken += 1
             commit(row, resolution: resolution)
             if wrongCategory {
@@ -195,6 +199,7 @@ final class Darts501ViewModel {
             refreshCheckoutOptions()
             if resolution.kind == .gameOver {
                 try? await Task.sleep(for: .milliseconds(220))
+                Feedback.play(.lose)
                 GameIntroPreferences.hide(.darts501)
                 showResult = true
             }
@@ -212,7 +217,7 @@ final class Darts501ViewModel {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) {
                 finishLabel = resolution.kind == .perfect ? "PERFECT CHECKOUT" : "CHECKOUT"
             }
-            HapticManager.success()
+            Feedback.play(.win)
             confettiBurstToken += 1
             try? await Task.sleep(for: .milliseconds(resolution.kind == .perfect ? 700 : 480))
             GameIntroPreferences.hide(.darts501)
@@ -275,20 +280,22 @@ final class Darts501ViewModel {
         finishLabel = nil
     }
 
-    private func hapticForScore(_ score: Int, bust: Bool) {
-        if bust { return }
-        if score == 180 {
-            HapticManager.success()
-        } else if score >= 100 {
-            HapticManager.success()
+    private func hapticForScore(_ score: Int, bust: Bool, finishing: Bool) {
+        if bust || finishing { return }
+        if score >= 100 {
+            Feedback.play(.success)
         } else {
-            HapticManager.light()
+            Feedback.play(.place)
         }
     }
 
-    private func flashFeedback(_ message: String) {
+    private func flashFeedback(_ message: String, sfx: SFX? = nil) {
         feedback = message
-        HapticManager.light()
+        if let sfx {
+            Feedback.play(sfx)
+        } else {
+            HapticManager.light()
+        }
         feedbackTask?.cancel()
         feedbackTask = Task {
             try? await Task.sleep(for: .milliseconds(1600))
@@ -407,6 +414,7 @@ struct Darts501View: View {
             enabled: !allowReplay
         )
         .onAppear {
+            SoundManager.shared.prepare()
             guard !allowReplay, let dailyDate,
                   let saved = GameProgressStore.load(
                     Darts501GameState.self,

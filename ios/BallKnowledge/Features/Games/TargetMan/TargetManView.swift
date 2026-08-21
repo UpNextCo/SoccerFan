@@ -76,7 +76,7 @@ final class TargetManViewModel {
             flashWrong(reason)
             return
         }
-        HapticManager.light()
+        Feedback.play(.place)
         if let pool = state.challenge.pool, pool.isClub {
             Task { await verifyClubPool(playerId: player.id, playerName: player.name, pool: pool) }
         }
@@ -96,7 +96,7 @@ final class TargetManViewModel {
     }
 
     private func flashWrong(_ reason: String) {
-        HapticManager.error()
+        Feedback.play(.deny)
         shakeToken += 1
         wrongMessage = reason
         Task {
@@ -114,7 +114,7 @@ final class TargetManViewModel {
 
     func lockAnswers() async {
         guard state.canLock, !isResolvingStats else { return }
-        HapticManager.success()
+        Feedback.play(.lock)
         isResolvingStats = true
         errorMessage = nil
         defer { isResolvingStats = false }
@@ -152,9 +152,9 @@ final class TargetManViewModel {
                 try? await Task.sleep(for: .seconds(TargetManTiming.revealStagger))
                 state.revealedCount = index + 1
                 if state.selections.indices.contains(index), state.selections[index].isPoolMiss {
-                    HapticManager.error()
+                    Feedback.play(.deny)
                 } else {
-                    HapticManager.light()
+                    Feedback.play(.reveal)
                 }
             }
 
@@ -168,10 +168,10 @@ final class TargetManViewModel {
             state.phase = .complete
 
             if score >= 1000 {
-                HapticManager.success()
+                Feedback.play(.win)
                 confettiBurstToken += 1
             } else if score >= TargetManScoring.winThreshold {
-                HapticManager.light()
+                Feedback.play(.win)
             }
 
             showResult = true
@@ -315,6 +315,7 @@ struct TargetManView: View {
             enabled: !allowReplay
         )
         .onAppear {
+            SoundManager.shared.prepare()
             guard !allowReplay, let dailyDate,
                   let saved = GameProgressStore.load(
                     TargetManGameState.self, modeId: GameModeID.targetMan.rawValue,

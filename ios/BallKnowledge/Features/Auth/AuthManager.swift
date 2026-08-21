@@ -120,6 +120,7 @@ final class AuthManager {
         defaults.removeObject(forKey: UserDefaultsKeys.weeklyLeagueIntroShown)
         ActivityFeedStore.clear()
         DailyCompletionService.clearAllLocalCompletions()
+        PerfectScoreStore.clear()
         OfflineCache.clearAllAccountData(context: context)
         LocalProfile.reset()
     }

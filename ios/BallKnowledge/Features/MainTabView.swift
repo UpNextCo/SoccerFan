@@ -529,9 +529,7 @@ private struct WeeklyLeagueStandingRow: View {
                 .minimumScaleFactor(0.8)
                 .frame(width: rankWidth, alignment: .center)
 
-            avatarView
-                .frame(width: 36, height: 36)
-                .clipShape(Circle())
+            UserAvatar(urlString: player.avatarUrl, usesLocalYou: isCurrentUser, size: 32)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(nameText)
@@ -608,24 +606,6 @@ private struct WeeklyLeagueStandingRow: View {
     private var borderWidth: CGFloat {
         if isCurrentUser { return zone == .relegation ? 2 : 1.5 }
         return 1
-    }
-
-    @ViewBuilder
-    private var avatarView: some View {
-        if isCurrentUser, let image = LocalProfile.loadAvatar() {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        } else {
-            PlayerAvatar(urlString: player.avatarUrl, size: 36) {
-                BKTheme.cardElevated
-                    .overlay {
-                        Ph.userCircle.fill
-                            .color(BKTheme.avatarPlaceholder)
-                            .frame(width: 22, height: 22)
-                    }
-            }
-        }
     }
 
     private var nameText: String {
@@ -754,9 +734,7 @@ struct PlayerStandingRow: View {
                 .minimumScaleFactor(0.8)
                 .frame(width: rankWidth, alignment: .center)
 
-            avatarView
-                .frame(width: 36, height: 36)
-                .clipShape(Circle())
+            UserAvatar(urlString: player.avatarUrl, usesLocalYou: isCurrentUser, size: 32)
 
             Text(nameText)
                 .font(BKFont.headline(15))
@@ -784,24 +762,6 @@ struct PlayerStandingRow: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .contentShape(Rectangle())
-    }
-
-    @ViewBuilder
-    private var avatarView: some View {
-        if isCurrentUser, let image = LocalProfile.loadAvatar() {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        } else {
-            PlayerAvatar(urlString: player.avatarUrl, size: 36) {
-                BKTheme.cardElevated
-                    .overlay {
-                        Ph.userCircle.fill
-                            .color(BKTheme.avatarPlaceholder)
-                            .frame(width: 22, height: 22)
-                    }
-            }
-        }
     }
 
     private var nameText: String {
@@ -1016,24 +976,7 @@ private struct TeamFanRow: View {
                 .lineLimit(1)
                 .frame(width: rankWidth, alignment: .center)
 
-            Group {
-                if isCurrentUser, let image = LocalProfile.loadAvatar() {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    PlayerAvatar(urlString: player.avatarUrl, size: 28) {
-                        BKTheme.cardElevated
-                            .overlay {
-                                Ph.userCircle.fill
-                                    .color(BKTheme.avatarPlaceholder)
-                                    .frame(width: 16, height: 16)
-                            }
-                    }
-                }
-            }
-            .frame(width: 28, height: 28)
-            .clipShape(Circle())
+            UserAvatar(urlString: player.avatarUrl, usesLocalYou: isCurrentUser, size: 26)
 
             Text(displayName)
                 .font(BKFont.headline(13))
@@ -1504,13 +1447,13 @@ struct ProfileTabView: View {
                 Button { showFeaturedTrophyPicker = true } label: {
                     if let featured = TrophyUnlockPayload.earnedTrophy(id: featuredTrophyId),
                        let imageName = featured.bundleImageName {
-                        FeaturedTrophyBadge(imageName: imageName, size: 52)
+                        FeaturedTrophyBadge(imageName: imageName, size: 62)
                     } else {
                         avatarChromeButton(systemName: "plus")
                     }
                 }
                 .buttonStyle(.plain)
-                .offset(x: 40, y: 40)
+                .offset(x: 30, y: 28)
             }
             .frame(width: 96, height: 96)
             .padding(.horizontal, 22)
@@ -1537,25 +1480,8 @@ struct ProfileTabView: View {
     }
 
     private var avatarView: some View {
-        Group {
-            if let avatarImage {
-                Image(uiImage: avatarImage)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                PlayerAvatar(urlString: auth.user?.avatarUrl, size: 96) {
-                    BKTheme.cardElevated
-                        .overlay {
-                            Ph.userCircle.fill
-                                .color(BKTheme.avatarPlaceholder)
-                                .frame(width: 52, height: 52)
-                        }
-                }
-            }
-        }
-        .frame(width: 96, height: 96)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(BKTheme.accent.opacity(0.4), lineWidth: 2))
+        UserAvatar(urlString: auth.user?.avatarUrl, localImage: avatarImage, size: 96)
+            .overlay(Circle().stroke(BKTheme.accent.opacity(0.4), lineWidth: 2))
     }
 
     private func avatarChromeButton(systemName: String) -> some View {

@@ -297,24 +297,11 @@ struct VsResultView: View {
     }
 
     private func resultAvatar(player: VsPlayerDTO?, ranking: VsRankingDTO, winner: Bool) -> some View {
-        Group {
-            if player?.isYou == true, let image = LocalProfile.loadAvatar() {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                PlayerAvatar(urlString: player?.avatarUrl ?? ranking.avatarUrl, size: 40) {
-                    BKTheme.cardElevated
-                        .overlay {
-                            Ph.userCircle.fill
-                                .color(BKTheme.avatarPlaceholder)
-                                .frame(width: 24, height: 24)
-                        }
-                }
-            }
-        }
-        .frame(width: 40, height: 40)
-        .clipShape(Circle())
+        UserAvatar(
+            urlString: player?.avatarUrl ?? ranking.avatarUrl,
+            usesLocalYou: player?.isYou == true,
+            size: 40
+        )
         .overlay(Circle().stroke(winner ? BKTheme.accent : Color.clear, lineWidth: 2))
     }
 

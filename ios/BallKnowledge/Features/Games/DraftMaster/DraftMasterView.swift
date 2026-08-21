@@ -3,6 +3,7 @@ import SwiftData
 
 // MARK: - ViewModel
 
+@MainActor
 @Observable
 final class DraftMasterViewModel {
     var state: BattleGameState
@@ -165,7 +166,7 @@ final class DraftMasterViewModel {
             next.assignments[slotId] = constraint
         }
         premove = DraftPremove(slotId: slotId, constraint: constraint, player: player)
-        HapticManager.light()
+        Feedback.play(.place)
     }
 
     func clearPremove() {
@@ -189,7 +190,7 @@ final class DraftMasterViewModel {
     }
 
     func flashWrong(_ message: String) {
-        HapticManager.error()
+        Feedback.play(.deny)
         shakeToken += 1
         wrongMessage = message
         Task {
@@ -235,7 +236,7 @@ final class DraftMasterViewModel {
             if next.assignments[slotId]?.id != constraint.id { next.picks[slotId] = nil }
             next.assignments[slotId] = constraint
         }
-        HapticManager.light()
+        Feedback.play(.place)
     }
 
     // MARK: Slot / search
@@ -300,12 +301,12 @@ final class DraftMasterViewModel {
         guard let slot = activeSlot, let constraint = state.constraint(forSlot: slot.id) else { return }
         if extraUsedPlayerIds.contains(dto.id), state.pick(forSlot: slot.id)?.player.id != dto.id {
             selectionError = "Someone already named that player"
-            HapticManager.error()
+            Feedback.play(.deny)
             return
         }
         if state.usedPlayerIds.contains(dto.id), state.pick(forSlot: slot.id)?.player.id != dto.id {
             selectionError = "Already in your XI"
-            HapticManager.error()
+            Feedback.play(.deny)
             return
         }
         if let confirmPick {
@@ -314,7 +315,7 @@ final class DraftMasterViewModel {
                 if ok {
                     closeSlot()
                 } else {
-                    HapticManager.error()
+                    Feedback.play(.deny)
                 }
             }
             return
@@ -328,13 +329,13 @@ final class DraftMasterViewModel {
         selectionError = nil
         closeSlot()
         if correct {
-            HapticManager.success()
+            Feedback.play(.lock)
             let newXP = DailyXP.draft(total: state.yourTotal, optimal: challenge.optimalScore)
             lastDraftXpPop = max(0, newXP - priorXP)
             if lastDraftXpPop > 0 { draftXpPopTrigger += 1 }
         } else {
             // Doesn't fit the chip: place it red/0, shake the pitch, and surface the reason.
-            HapticManager.error()
+            Feedback.play(.deny)
             shakeToken += 1
             let msg = constraint.rejectReason(player: dto.name)
             wrongMessage = msg
@@ -356,6 +357,7 @@ final class DraftMasterViewModel {
             next.phase = .complete
         }
         if result.percentage >= BattleTiming.confettiThreshold { confettiBurstToken += 1 }
+        Feedback.play(.win)
         Task {
             try? await Task.sleep(for: .seconds(BattleTiming.resultReveal))
             showResult = true
@@ -460,6 +462,7 @@ struct DraftMasterView: View {
             enabled: !allowReplay
         )
         .onAppear {
+            SoundManager.shared.prepare()
             guard !allowReplay, let dailyDate,
                   let saved = GameProgressStore.load(
                     BattleGameState.self, modeId: GameModeID.draftMaster.rawValue,

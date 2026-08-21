@@ -6,6 +6,7 @@ public enum Ph: String {
     case soccerBall = "soccer-ball"
     case calendar
     case chartBar = "chart-bar"
+    case user
     case userCircle = "user-circle"
     case lightning
     case trophy

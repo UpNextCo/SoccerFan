@@ -21,7 +21,7 @@ final class BackYourselfViewModel {
         guard state.phase == .pledge else { return }
         state.pledge = max(1, min(state.puzzle.maxPool, state.pledge))
         state.phase = .naming
-        HapticManager.light()
+        Feedback.play(.lock)
     }
 
     func setPledge(_ value: Int) {
@@ -60,6 +60,7 @@ final class BackYourselfViewModel {
         guard state.phase == .naming, !isSubmitting else { return }
         if state.usedIds.contains(hit.id) {
             feedback = "Already named"
+            Feedback.play(.deny)
             return
         }
         isSubmitting = true
@@ -74,6 +75,7 @@ final class BackYourselfViewModel {
             )
             if result.duplicate {
                 feedback = "Already named"
+                Feedback.play(.deny)
                 return
             }
             if result.correct {
@@ -81,11 +83,13 @@ final class BackYourselfViewModel {
                 state.named.append(player)
                 searchText = ""
                 searchResults = []
-                HapticManager.success()
                 if state.namedCount >= state.pledge {
                     state.phase = .won
                     confettiBurstToken += 1
+                    Feedback.play(.win)
                     showResult = true
+                } else {
+                    Feedback.play(.success)
                 }
             } else {
                 state.livesRemaining = max(0, state.livesRemaining - 1)
@@ -93,10 +97,12 @@ final class BackYourselfViewModel {
                 searchText = ""
                 searchResults = []
                 feedback = "Doesn't fit the category"
-                HapticManager.error()
                 if state.livesRemaining <= 0 {
                     state.phase = .lost
+                    Feedback.play(.lose)
                     showResult = true
+                } else {
+                    Feedback.play(.lifeLost)
                 }
             }
         } catch {
@@ -206,6 +212,7 @@ struct BackYourselfView: View {
             enabled: !allowReplay
         )
         .onAppear {
+            SoundManager.shared.prepare()
             guard !allowReplay, let dailyDate,
                   let saved = GameProgressStore.load(
                     BackYourselfGameState.self,

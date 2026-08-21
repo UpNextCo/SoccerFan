@@ -78,7 +78,7 @@ final class FootballBingoViewModel {
         }
         advanceTurn(by: 1)
         if game.status == .won {
-            Feedback.play(.success)
+            Feedback.play(.win)
             confettiBurstToken += 1
         } else {
             Feedback.play(.lock)
@@ -88,6 +88,7 @@ final class FootballBingoViewModel {
 
     func skip() {
         guard game.isActive else { return }
+        SoundManager.shared.stopTick()
         HapticManager.light()
         advanceTurn(by: 1)
         presentResultIfNeeded()
@@ -95,6 +96,7 @@ final class FootballBingoViewModel {
 
     func turnExpired() {
         guard game.isActive else { return }
+        SoundManager.shared.stopTick()
         HapticManager.light()
         advanceTurn(by: 1)
         presentResultIfNeeded()
@@ -115,7 +117,7 @@ final class FootballBingoViewModel {
             advanceTurn(by: 1)
 
             if game.status == .won {
-                Feedback.play(.success)
+                Feedback.play(.win)
                 confettiBurstToken += 1
             } else {
                 Feedback.play(.place)
@@ -144,6 +146,7 @@ final class FootballBingoViewModel {
 
     private func presentResultIfNeeded() {
         guard game.status != .active else { return }
+        if game.status == .lost { Feedback.play(.lose) }
         Task {
             try? await Task.sleep(for: .seconds(FootballBingoTiming.resultDelay))
             showResult = true
@@ -404,6 +407,7 @@ private struct FootballBingoTurnTimerBar: View {
             .onChange(of: remaining) { _, value in
                 guard isActive, !isHelpPresented, value <= 0, !didExpire else { return }
                 didExpire = true
+                SoundManager.shared.stopTick()
                 onExpired()
             }
         }
@@ -413,26 +417,44 @@ private struct FootballBingoTurnTimerBar: View {
             turnStart = Date()
             didExpire = false
             pauseStartedAt = isHelpPresented ? Date() : nil
+            syncTick()
         }
         .onChange(of: isActive) { _, active in
             if active {
                 turnStart = Date()
                 didExpire = false
                 pauseStartedAt = isHelpPresented ? Date() : nil
+                syncTick()
+            } else {
+                SoundManager.shared.stopTick()
             }
         }
         .onChange(of: isHelpPresented) { _, paused in
             if paused {
                 pauseStartedAt = Date()
+                SoundManager.shared.stopTick()
             } else if let pauseStartedAt {
                 turnStart = turnStart.addingTimeInterval(Date().timeIntervalSince(pauseStartedAt))
                 self.pauseStartedAt = nil
+                syncTick()
             }
         }
         .onAppear {
             turnStart = Date()
             pauseStartedAt = isHelpPresented ? Date() : nil
+            syncTick()
         }
+        .onDisappear { SoundManager.shared.stopTick() }
+    }
+
+    private func syncTick() {
+        guard isActive, !isHelpPresented else {
+            SoundManager.shared.stopTick()
+            return
+        }
+        let elapsed = Date().timeIntervalSince(turnStart)
+        let remaining = max(0, FootballBingoTiming.turnDuration - elapsed)
+        SoundManager.shared.startTick(lasting: remaining)
     }
 }
 

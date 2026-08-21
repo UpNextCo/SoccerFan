@@ -48,6 +48,7 @@ final class ClubChainViewModel {
 
         if isPlaced(player.id) {
             invalidMessage = "\(shortName(player.name)) is already in the chain"
+            Feedback.play(.deny)
             return
         }
 
@@ -71,7 +72,7 @@ final class ClubChainViewModel {
                 state.livesRemaining -= 1
                 heartLossToken += 1
             }
-            HapticManager.error()
+            Feedback.play(.lifeLost)
             invalidMessage = "Not teammates at club level"
             searchQuery = ""
             searchResults = []
@@ -82,7 +83,6 @@ final class ClubChainViewModel {
         // Valid move.
         searchQuery = ""
         searchResults = []
-        HapticManager.success()
 
         // Linked straight to the target → that link closes the chain.
         if player.id == state.puzzle.target.id {
@@ -90,6 +90,8 @@ final class ClubChainViewModel {
             finish(won: true)
             return
         }
+
+        Feedback.play(.place)
 
         withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
             state.steps.append(ClubChainStep(player: ClubChainPlayer(search: player), link: link))
@@ -111,9 +113,9 @@ final class ClubChainViewModel {
         state.phase = won ? .won : .lost
         if won {
             confettiBurstToken += 1
-            HapticManager.success()
+            Feedback.play(.win)
         } else {
-            HapticManager.error()
+            Feedback.play(.lose)
         }
         showResult = true
     }
@@ -223,6 +225,7 @@ struct ClubChainView: View {
             enabled: !allowReplay
         )
         .onAppear {
+            SoundManager.shared.prepare()
             guard !allowReplay, let dailyDate,
                   let saved = GameProgressStore.load(
                     ClubChainGameState.self, modeId: GameModeID.clubChain.rawValue,
