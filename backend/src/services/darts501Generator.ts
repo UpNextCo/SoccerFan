@@ -666,7 +666,7 @@ export async function previewDarts501Pool(formula: Darts501Formula): Promise<{
       if (a.bust !== b.bust) return a.bust ? -1 : 1;
       return b.score - a.score || a.name.localeCompare(b.name);
     })
-    .slice(0, 100)
+    .slice(0, 500)
     .map((row) => ({
       id: row.id,
       name: row.name,
