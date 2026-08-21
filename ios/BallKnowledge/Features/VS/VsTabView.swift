@@ -305,9 +305,7 @@ final class VsViewModel {
     }
 
     var backYourselfPuzzle: BackYourselfPuzzle? {
-        guard challenge?.modeId == GameModeID.backYourself.rawValue,
-              let dto = challenge?.puzzle.decode(BackYourselfPuzzleDTO.self) else { return nil }
-        return DailyChallengeResolver.backYourselfPuzzle(from: dto)
+        challenge?.backYourselfPuzzle
     }
 
     var targetManChallenge: TargetManChallenge? {
@@ -579,13 +577,29 @@ struct VsTabView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
                 VStack(spacing: 12) {
-                    Text(challenge.title)
-                        .font(BKFont.title(26))
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(4)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 300)
+                    if let category = viewModel.darts501Puzzle?.category {
+                        Darts501CategoryCard(category: category)
+                            .padding(.horizontal, 4)
+                    } else if let category = viewModel.backYourselfPuzzle?.category {
+                        VStack(spacing: 12) {
+                            BackYourselfCategoryArt(category: category, size: 56)
+                            Text(challenge.title)
+                                .font(BKFont.title(26))
+                                .foregroundStyle(BKTheme.textPrimary)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: 300)
+                        }
+                    } else {
+                        Text(challenge.title)
+                            .font(BKFont.title(26))
+                            .foregroundStyle(BKTheme.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: 300)
+                    }
                     if challenge.youAreHost && challenge.status == "waiting" {
                         Button {
                             Task { await viewModel.reshuffleCategory() }

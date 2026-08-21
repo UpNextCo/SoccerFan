@@ -2,7 +2,11 @@ import { desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { dailyPuzzles } from '../db/schema.js';
 import { generateBattlePuzzleFromSeed, type BattlePuzzleJson } from './battleGenerator.js';
-import { generateBackYourselfPuzzle } from './backYourselfGenerator.js';
+import {
+  generateBackYourselfPuzzle,
+  hydrateBackYourselfPuzzleMedia,
+  type BackYourselfPuzzlePublic,
+} from './backYourselfGenerator.js';
 import { generateDarts501Puzzle } from './darts501Generator.js';
 import { generateTargetManPuzzle } from './dailyPuzzleGenerator.js';
 import type { DailyFactPack } from './dailyPuzzleTypes.js';
@@ -35,6 +39,17 @@ function hashSeed(input: string): number {
     h |= 0;
   }
   return Math.abs(h);
+}
+
+async function withBackYourselfMedia(
+  modeId: VsModeId,
+  generated: VsGeneratedPuzzle
+): Promise<VsGeneratedPuzzle> {
+  if (modeId !== 'back_yourself') return generated;
+  return {
+    ...generated,
+    puzzle: await hydrateBackYourselfPuzzleMedia(generated.puzzle as BackYourselfPuzzlePublic),
+  };
 }
 
 function backYourselfPoolSize(puzzle: unknown, answer: unknown): number {
@@ -91,10 +106,10 @@ export async function generateFreshVsPuzzle(
     const generated = await generateFreshVsPuzzleOnce(modeId, today, key);
     last = generated;
     if (!excludeTitle || vsPuzzleMeta(modeId, generated.puzzle).title !== excludeTitle) {
-      return generated;
+      return withBackYourselfMedia(modeId, generated);
     }
   }
-  if (last) return last;
+  if (last) return withBackYourselfMedia(modeId, last);
   throw new Error('Could not generate a VS challenge right now. Try again.');
 }
 
@@ -141,10 +156,10 @@ export async function generateVsPuzzle(
   scheduleVsBankFill(modeId);
 
   const banked = await takeVsBankPuzzle(modeId, seedKey, opts?.excludeTitle);
-  if (banked) return banked;
+  if (banked) return withBackYourselfMedia(modeId, banked);
 
   const stored = await storedDailyPuzzle(modeId, seedKey, opts?.excludeTitle);
-  if (stored) return stored;
+  if (stored) return withBackYourselfMedia(modeId, stored);
 
   throw new Error('Could not generate a VS challenge right now. Try again.');
 }

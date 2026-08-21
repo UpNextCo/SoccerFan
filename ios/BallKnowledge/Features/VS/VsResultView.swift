@@ -26,6 +26,25 @@ struct VsResultView: View {
         headline == "YOU LOSE" ? BKTheme.wrong : BKTheme.accent
     }
 
+    private var darts501Category: Darts501CategoryDisplay? {
+        guard challenge.modeId == GameModeID.darts501.rawValue else { return nil }
+        if let dto = challenge.puzzle.decode(Darts501PuzzleDTO.self),
+           let puzzle = DailyChallengeResolver.darts501Puzzle(from: dto) {
+            return puzzle.category
+        }
+        guard let live = challenge.darts501 else { return nil }
+        return Darts501CategoryDisplay(
+            nationality: live.nationality,
+            leagueName: live.leagueName,
+            leagueId: live.leagueId,
+            club: live.club,
+            clubLeague: live.clubLeague,
+            teamId: live.teamId,
+            audience: live.audience,
+            formula: live.formulaDetail.isEmpty ? live.formulaLabel : live.formulaDetail
+        )
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             BKTheme.background.ignoresSafeArea()
@@ -48,12 +67,20 @@ struct VsResultView: View {
                                 .font(BKFont.title(32))
                                 .foregroundStyle(headlineColor)
                                 .multilineTextAlignment(.center)
-                            Text(challenge.title)
-                                .font(BKFont.headline(19))
-                                .foregroundStyle(BKTheme.textSecondary)
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: 220)
+                            if let category = darts501Category {
+                                Darts501CategoryCard(category: category)
+                                    .frame(maxWidth: 280)
+                            } else {
+                                if let category = challenge.backYourselfPuzzle?.category {
+                                    BackYourselfCategoryArt(category: category, size: 48)
+                                }
+                                Text(challenge.title)
+                                    .font(BKFont.headline(19))
+                                    .foregroundStyle(BKTheme.textSecondary)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: 220)
+                            }
                         }
                         .padding(.top, 28)
                         .padding(.bottom, 44)

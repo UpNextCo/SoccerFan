@@ -494,6 +494,12 @@ struct VsChallengeDTO: Codable, Equatable, Identifiable {
     var isLiveDarts501: Bool { modeId == GameModeID.darts501.rawValue && darts501 != nil && status == "active" && !result.allDone }
     var isLivePlay: Bool { isLiveDraft || isLiveHotseat || isLiveTargetMan || isLiveDarts501 }
 
+    var backYourselfPuzzle: BackYourselfPuzzle? {
+        guard modeId == GameModeID.backYourself.rawValue,
+              let dto = puzzle.decode(BackYourselfPuzzleDTO.self) else { return nil }
+        return DailyChallengeResolver.backYourselfPuzzle(from: dto)
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
