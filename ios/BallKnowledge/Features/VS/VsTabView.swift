@@ -578,7 +578,7 @@ struct VsTabView: View {
             VStack(spacing: 16) {
                 VStack(spacing: 12) {
                     if let category = viewModel.darts501Puzzle?.category {
-                        Darts501CategoryCard(category: category)
+                        Darts501CategoryCard(category: category, boxed: false)
                             .padding(.horizontal, 4)
                     } else if let category = viewModel.backYourselfPuzzle?.category {
                         VStack(spacing: 12) {

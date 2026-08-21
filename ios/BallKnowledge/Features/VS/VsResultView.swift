@@ -68,7 +68,7 @@ struct VsResultView: View {
                                 .foregroundStyle(headlineColor)
                                 .multilineTextAlignment(.center)
                             if let category = darts501Category {
-                                Darts501CategoryCard(category: category)
+                                Darts501CategoryCard(category: category, boxed: false)
                                     .frame(maxWidth: 280)
                             } else {
                                 if let category = challenge.backYourselfPuzzle?.category {

@@ -138,7 +138,7 @@ struct VsDarts501LiveView: View {
     }
 
     private var formulaCard: some View {
-        Darts501CategoryCard(category: category)
+        Darts501CategoryCard(category: category, boxed: false)
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
     }
@@ -150,7 +150,7 @@ struct VsDarts501LiveView: View {
                     .font(BKFont.caption(10)).tracking(0.8)
                     .foregroundStyle(BKTheme.textMuted)
                 if live?.throwLog.isEmpty != false {
-                    Text("Name a player. Shared names. If someone checks out, later players still on a finish get a redemption dart.")
+                    Text("Take turns naming players. No repeats. If someone checks out, anyone still on a finish gets one last throw.")
                         .font(BKFont.body(13))
                         .foregroundStyle(BKTheme.textSecondary)
                 } else {

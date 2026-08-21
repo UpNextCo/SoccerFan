@@ -596,24 +596,25 @@ private struct Darts501HeartsRow: View {
 
 struct Darts501CategoryCard: View {
     let category: Darts501CategoryDisplay
+    var boxed = true
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: boxed ? 8 : 10) {
             constraintMark
             Text(category.audience)
-                .font(BKFont.headline(16))
+                .font(BKFont.headline(boxed ? 16 : 20))
                 .foregroundStyle(BKTheme.textPrimary)
                 .multilineTextAlignment(.center)
             Text(category.formula)
-                .font(BKFont.body(13))
+                .font(BKFont.body(boxed ? 13 : 16))
                 .foregroundStyle(BKTheme.textSecondary)
                 .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, boxed ? 16 : 8)
+        .padding(.vertical, boxed ? 14 : 4)
         .frame(maxWidth: .infinity)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background(boxed ? BKTheme.card : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: boxed ? 16 : 0))
     }
 
     @ViewBuilder
