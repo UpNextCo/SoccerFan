@@ -640,17 +640,14 @@ export async function validateBackYourselfGuess(input: {
   if (already.has(input.playerId)) {
     return { ok: true, correct: false, duplicate: true };
   }
+  if (already.size >= puzzle.maxPool) {
+    return { ok: true, correct: false, duplicate: true };
+  }
 
-  // Prefer the stored pool (clipped top-N) so maxPool and validation stay in lockstep.
-  const answer = rows[0]?.answerJson as { validPlayerIds?: string[] } | undefined;
-  const validIds = Array.isArray(answer?.validPlayerIds) ? answer.validPlayerIds : [];
-  const correct =
-    validIds.length > 0
-      ? validIds.includes(input.playerId)
-      : await playerMatchesBackYourselfCategory(
-          input.playerId,
-          puzzle.category as BackYourselfCategory
-        );
+  const correct = await playerMatchesBackYourselfCategory(
+    input.playerId,
+    puzzle.category as BackYourselfCategory
+  );
   if (!correct) {
     return { ok: true, correct: false, duplicate: false };
   }

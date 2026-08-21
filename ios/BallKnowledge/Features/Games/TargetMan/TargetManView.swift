@@ -166,6 +166,7 @@ final class TargetManViewModel {
             state.difference = difference
             state.score = score
             state.phase = .complete
+            SignatureTrophyStore.evaluateTargetMan(difference: difference)
 
             if score >= 1000 {
                 Feedback.play(.win)

@@ -101,7 +101,7 @@ struct BackYourselfPuzzle: Codable, Equatable {
     let id: String
     let date: String
     let category: BackYourselfCategory
-    /// Full famous pool (slider max).
+    /// Perfect score: slider max and naming cap.
     let maxPool: Int
     /// Pledge at which XP hits 1000.
     let xpCap: Int

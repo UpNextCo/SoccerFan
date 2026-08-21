@@ -38,8 +38,8 @@ import {
 } from './targetManCategories.js';
 import {
   countDarts501CheckoutsForPuzzle,
-  darts501FormulaById,
   parseDarts501Puzzle,
+  resolveDarts501Formula,
   playerValuesForDarts501,
 } from './darts501Generator.js';
 import { DARTS501_CHECKOUT_LIVES, DARTS501_START, resolveDarts501Throw, resolveDarts501ThrowLive } from './darts501Scoring.js';
@@ -93,6 +93,7 @@ import {
   type VsDarts501State,
 } from './vsLiveDarts501.js';
 import {
+  countNamedMatchingCategory,
   playerMatchesBackYourselfCategory,
   resolveBackYourselfPlayerCard,
   type BackYourselfCategory,
@@ -296,6 +297,10 @@ export type VsDarts501View = {
   formulaLabel: string;
   audience: string;
   formulaDetail: string;
+  nationality: string | null;
+  leagueName: string | null;
+  club: string | null;
+  clubLeague: string | null;
   checkoutLives: number;
   startScore: number;
   board: VsDarts501BoardRow[];
@@ -648,8 +653,12 @@ function darts501ViewFor(
     winnerUserId: live.winnerUserId,
     usedPlayerIds: [...darts501UsedPlayerIds(live)],
     formulaLabel: puzzle?.formulaLabel ?? 'Football 501',
-    audience: puzzle?.audience ?? 'Any player',
+    audience: puzzle?.audience ?? 'Players',
     formulaDetail: puzzle?.formulaDetail ?? '',
+    nationality: puzzle?.nationality ?? null,
+    leagueName: puzzle?.leagueName ?? null,
+    club: puzzle?.club ?? null,
+    clubLeague: puzzle?.clubLeague ?? null,
     checkoutLives: puzzle?.checkoutLives ?? DARTS501_CHECKOUT_LIVES,
     startScore: puzzle?.startScore ?? DARTS501_START,
     board: people.map((p) => {
@@ -1278,9 +1287,11 @@ async function scoreVsAnswer(
       throw new VsError('Invalid Back Yourself answer', 400, 'INVALID_ANSWER');
     }
     const namedIds = [...new Set((body.namedPlayerIds as unknown[]).filter((id): id is string => typeof id === 'string'))];
-    const stored = answerJson as { validPlayerIds?: string[] } | undefined;
-    const validSet = new Set(stored?.validPlayerIds ?? []);
-    const validNamedCount = validSet.size > 0 ? namedIds.filter((id) => validSet.has(id)).length : namedIds.length;
+    const puzzle = puzzleJson as { category?: BackYourselfCategory; maxPool?: number };
+    const matched = puzzle.category
+      ? await countNamedMatchingCategory(namedIds, puzzle.category)
+      : 0;
+    const validNamedCount = typeof puzzle.maxPool === 'number' ? Math.min(puzzle.maxPool, matched) : matched;
     const pledge = Math.floor(body.pledge);
     const won = validNamedCount >= pledge && pledge > 0;
     return {
@@ -1295,7 +1306,7 @@ async function scoreVsAnswer(
       throw new VsError('Invalid Football 501 answer', 400, 'INVALID_ANSWER');
     }
     const puzzle = parseDarts501Puzzle(puzzleJson);
-    const formula = puzzle ? darts501FormulaById(puzzle.formulaId) : undefined;
+    const formula = puzzle ? resolveDarts501Formula(puzzle) : undefined;
     if (!puzzle || !formula) throw new VsError('Football 501 puzzle is missing a formula', 500, 'PUZZLE_FAILED');
 
     const playerIds = [...new Set(body.playerIds as string[])];
@@ -1794,13 +1805,10 @@ export async function nameVsHotseat(userId: string, challengeId: string, playerI
     throw new VsError('Already named', 400, 'DUPLICATE');
   }
 
-  const stored = row.answerJson as { validPlayerIds?: string[] } | undefined;
-  const validSet = new Set(stored?.validPlayerIds ?? []);
   const puzzle = row.puzzleJson as { category?: BackYourselfCategory };
-  const liveMatch = puzzle.category
+  const inPool = puzzle.category
     ? await playerMatchesBackYourselfCategory(playerId, puzzle.category)
     : false;
-  const inPool = liveMatch || validSet.has(playerId);
   if (!inPool) {
     const next = eliminatePlayer(hotseat, userId);
     if (next.finished) return viewFor(await finishHotseat(row, next), userId);
@@ -1809,22 +1817,23 @@ export async function nameVsHotseat(userId: string, challengeId: string, playerI
   }
 
   const card = await resolveBackYourselfPlayerCard(playerId);
-  const next: VsHotseatState = passTurn(
+  const named = [
+    ...hotseat.named,
     {
-      ...hotseat,
-      named: [
-        ...hotseat.named,
-        {
-          userId,
-          playerId,
-          playerName: card?.name ?? 'Player',
-          headshotUrl: card?.headshotUrl ?? null,
-          namedAt: new Date().toISOString(),
-        },
-      ],
+      userId,
+      playerId,
+      playerName: card?.name ?? 'Player',
+      headshotUrl: card?.headshotUrl ?? null,
+      namedAt: new Date().toISOString(),
     },
-    userId
-  );
+  ];
+  const maxPool = typeof (row.puzzleJson as { maxPool?: number })?.maxPool === 'number'
+    ? (row.puzzleJson as { maxPool: number }).maxPool
+    : Number.POSITIVE_INFINITY;
+  const filledPerfect = named.length >= maxPool;
+  const next: VsHotseatState = filledPerfect
+    ? { ...hotseat, named, finished: true }
+    : passTurn({ ...hotseat, named }, userId);
 
   if (next.finished) return viewFor(await finishHotseat(row, next), userId);
   const updated = await persistRow(row.id, { liveJson: next });
@@ -1931,7 +1940,7 @@ export async function throwVsDarts501(userId: string, challengeId: string, playe
   }
 
   const puzzle = parseDarts501Puzzle(row.puzzleJson);
-  const formula = puzzle ? darts501FormulaById(puzzle.formulaId) : undefined;
+  const formula = puzzle ? resolveDarts501Formula(puzzle) : undefined;
   if (!puzzle || !formula) {
     throw new VsError('Football 501 puzzle is missing a formula', 500, 'PUZZLE_FAILED');
   }

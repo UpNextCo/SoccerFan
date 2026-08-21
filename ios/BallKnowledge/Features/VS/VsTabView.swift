@@ -891,6 +891,7 @@ private struct VsRivalryTapeView: View {
             VsResultView(
                 challenge: challenge,
                 showsPlayAgain: false,
+                playsOutcomeEffects: false,
                 onPlayAgain: {},
                 onBackToVs: { review = nil }
             )

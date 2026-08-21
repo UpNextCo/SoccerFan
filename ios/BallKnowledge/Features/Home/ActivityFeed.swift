@@ -181,8 +181,8 @@ enum HomeActivity {
                 id: "streak-finish-\(today)",
                 icon: "flame.fill",
                 tint: BKTheme.streak,
-                title: streak > 0 ? "Streak saved — keep stacking XP" : "Keep stacking XP",
-                message: "\(todayXp.formatted()) XP so far today — more games still to play.",
+                title: streak > 0 ? "Streak saved - keep stacking XP" : "Keep stacking XP",
+                message: "\(todayXp.formatted()) XP so far today - more games still to play.",
                 unread: false
             ))
         }

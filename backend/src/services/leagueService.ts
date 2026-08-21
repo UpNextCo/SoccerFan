@@ -658,6 +658,51 @@ export async function getAppMeta(key: string): Promise<string | null> {
   return rows[0]?.value ?? null;
 }
 
+/** Lifetime weekly-league trophy progress for the cabinet. */
+export async function leagueTrophyProgress(userId: string): Promise<{
+  currentDivision: string | null;
+  highestDivision: string | null;
+  divisionsReached: string[];
+  divisionsWon: string[];
+}> {
+  const rows = await db
+    .select({
+      division: leagueCohorts.division,
+      finalRank: leagueMemberships.finalRank,
+      outcome: leagueMemberships.outcome,
+    })
+    .from(leagueMemberships)
+    .innerJoin(leagueCohorts, eq(leagueMemberships.cohortId, leagueCohorts.id))
+    .where(eq(leagueMemberships.userId, userId));
+
+  const reached = new Set<string>();
+  const won = new Set<string>();
+  for (const row of rows) {
+    if (!isWeeklyDivision(row.division)) continue;
+    reached.add(row.division);
+    if (row.finalRank === 1 || row.outcome === 'champion') won.add(row.division);
+  }
+
+  const divisionsWon = WEEKLY_DIVISIONS.filter((division) => won.has(division));
+  let currentDivision: string | null = null;
+  try {
+    currentDivision = await userDivision(userId);
+    if (isWeeklyDivision(currentDivision) && rows.length > 0) {
+      reached.add(currentDivision);
+    }
+  } catch {
+    currentDivision = null;
+  }
+
+  const divisionsReached = WEEKLY_DIVISIONS.filter((division) => reached.has(division));
+  return {
+    currentDivision,
+    highestDivision: divisionsReached[divisionsReached.length - 1] ?? null,
+    divisionsReached,
+    divisionsWon,
+  };
+}
+
 export async function setAppMeta(key: string, value: string): Promise<void> {
   await db
     .insert(appMeta)

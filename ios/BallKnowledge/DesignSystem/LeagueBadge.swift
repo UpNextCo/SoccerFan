@@ -37,6 +37,8 @@ enum LeagueBadgeResolver {
         "efl championship": 40,
         "efl league one": 41,
         "efl league two": 42,
+        "world cup": 1,
+        "fifa world cup": 1,
         "champions league": 2,
         "uefa champions league": 2,
         "europa league": 3,

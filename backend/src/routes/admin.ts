@@ -351,7 +351,8 @@ adminRouter.post('/puzzle/recompute-back-yourself', requireAdmin, async (req, re
   try {
     const enriched = await enrichAdminBackYourselfPuzzle(
       body.data.puzzleJson,
-      body.data.answerJson ?? null
+      body.data.answerJson ?? null,
+      { resetMaxPool: true }
     );
     sendSuccess(res, enriched);
   } catch (err) {

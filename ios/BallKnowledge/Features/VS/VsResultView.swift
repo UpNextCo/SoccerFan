@@ -5,8 +5,12 @@ struct VsResultView: View {
     let challenge: VsChallengeDTO
     var isBusy: Bool = false
     var showsPlayAgain: Bool = true
+    var playsOutcomeEffects: Bool = true
     var onPlayAgain: () -> Void
     var onBackToVs: () -> Void
+
+    @State private var confettiToken = 0
+    @State private var loseWash = 0.0
 
     private var you: VsPlayerDTO? { challenge.players.first(where: \.isYou) }
 
@@ -26,6 +30,10 @@ struct VsResultView: View {
         ZStack(alignment: .bottom) {
             BKTheme.background.ignoresSafeArea()
             heroBackground
+            BKTheme.wrong
+                .opacity(loseWash)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
 
             VStack(spacing: 0) {
                 ScrollView(showsIndicators: false) {
@@ -56,7 +64,7 @@ struct VsResultView: View {
                     .padding(.bottom, 24)
                 }
 
-                VStack(spacing: 10) {
+                VStack(spacing: 11) {
                     if showsPlayAgain {
                         Button(action: onPlayAgain) {
                             HStack {
@@ -72,15 +80,50 @@ struct VsResultView: View {
                         }
                         .disabled(isBusy)
                         .buttonStyle(.plain)
-                        .padding(.horizontal, 16)
                     }
 
-                    GameResultExitBar(title: "BACK TO VS", showsBackground: false, action: onBackToVs)
+                    Button(action: onBackToVs) {
+                        Text("BACK TO VS")
+                            .font(BKFont.headline(16))
+                            .foregroundStyle(BKTheme.background)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(BKTheme.accent)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .padding(.bottom, 8)
-                .background(BKTheme.background)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 2)
             }
+
+            FootballConfettiView(burstToken: confettiToken)
         }
+        .task { await playOutcomeEffects() }
+    }
+
+    @MainActor
+    private func playOutcomeEffects() async {
+        guard playsOutcomeEffects else { return }
+        switch challenge.result.winner {
+        case "you":
+            confettiToken += 1
+        case "draw":
+            break
+        default:
+            await runLoseFlash()
+        }
+    }
+
+    @MainActor
+    private func runLoseFlash() async {
+        withAnimation(.easeInOut(duration: 0.7)) { loseWash = 0.20 }
+        try? await Task.sleep(for: .seconds(0.7))
+        withAnimation(.easeInOut(duration: 0.85)) { loseWash = 0.05 }
+        try? await Task.sleep(for: .seconds(0.55))
+        withAnimation(.easeInOut(duration: 0.7)) { loseWash = 0.14 }
+        try? await Task.sleep(for: .seconds(0.65))
+        withAnimation(.easeInOut(duration: 1.1)) { loseWash = 0 }
     }
 
     private var heroImage: UIImage? {

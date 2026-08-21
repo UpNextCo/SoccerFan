@@ -20,6 +20,13 @@ import {
   previewTargetManCategory,
 } from '../services/targetManCategories.js';
 import { listDraftCategories } from '../services/battleGenerator.js';
+import {
+  composeDarts501Formula,
+  darts501AuthoringOptions,
+  darts501FormulaById,
+  parseDarts501Pool,
+  previewDarts501Pool,
+} from '../services/darts501Generator.js';
 
 export const adminPuzzleValidationRouter = Router();
 adminPuzzleValidationRouter.use(requireAdmin);
@@ -97,6 +104,55 @@ adminPuzzleValidationRouter.post('/target-man/preview', async (req, res) => {
       return;
     }
     sendSuccess(res, preview);
+  } catch (error) {
+    sendError(res, error instanceof Error ? error.message : String(error), 500);
+  }
+});
+
+const darts501PoolSchema = z.object({
+  kind: z.enum(['nationality', 'league', 'club', 'international']),
+  nationality: z.string().trim().min(1).optional(),
+  aliases: z.array(z.string().trim().min(1)).optional(),
+  leagueId: z.number().int().positive().optional(),
+  leagueName: z.string().trim().min(1).optional(),
+  club: z.string().trim().min(1).optional(),
+  teamId: z.number().int().positive().optional(),
+});
+
+adminPuzzleValidationRouter.get('/darts-501/options', async (_req, res) => {
+  sendSuccess(res, darts501AuthoringOptions());
+});
+
+adminPuzzleValidationRouter.post('/darts-501/preview', async (req, res) => {
+  const body = z.object({
+    formulaId: z.string().trim().min(1).optional(),
+    left: z.string().trim().min(1).optional(),
+    op: z.enum(['+', '-']).optional(),
+    right: z.string().trim().min(1).optional(),
+    pool: darts501PoolSchema.optional(),
+  }).safeParse(req.body);
+  if (!body.success) {
+    sendError(res, 'Invalid Football 501 preview', 400, 'VALIDATION');
+    return;
+  }
+  try {
+    const catalog = body.data.formulaId ? darts501FormulaById(body.data.formulaId) : undefined;
+    const pool = parseDarts501Pool(body.data.pool);
+    const composed =
+      body.data.left && body.data.op && body.data.right && pool
+        ? composeDarts501Formula({
+            left: body.data.left,
+            op: body.data.op,
+            right: body.data.right,
+            pool,
+          })
+        : null;
+    const formula = composed ?? catalog;
+    if (!formula) {
+      sendError(res, 'Set a main constraint and both formula stats', 400, 'VALIDATION');
+      return;
+    }
+    sendSuccess(res, await previewDarts501Pool(formula));
   } catch (error) {
     sendError(res, error instanceof Error ? error.message : String(error), 500);
   }

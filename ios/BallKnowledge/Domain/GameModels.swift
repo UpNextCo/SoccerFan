@@ -392,6 +392,8 @@ enum DailyXP {
 
     /// Draft XI: 1000 XP at ≥90% of the optimal XI (100% still clamps to 1000).
     static let draftPerfectAtFraction = 0.90
+    /// Signature trophy: 98% or more of the optimal XI.
+    static let draftSignatureAtFraction = 0.98
     static func draft(total: Int, optimal: Int) -> Int {
         guard optimal > 0 else { return 0 }
         let pct = Double(total) / Double(optimal)

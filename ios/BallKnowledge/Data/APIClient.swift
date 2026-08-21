@@ -560,6 +560,10 @@ actor APIClient {
         try await request("leagues/me")
     }
 
+    func leagueTrophies() async throws -> LeagueTrophyProgressDTO {
+        try await request("leagues/trophies")
+    }
+
     func leaguesWeekly() async throws -> PlayerStandingsDTO {
         try await request("leagues/weekly")
     }

@@ -313,6 +313,9 @@ enum DailyCompletionService {
                     NotificationCenter.default.post(name: .perfectScoreUnlocked, object: unlock)
                 }
             }
+            if mode == .oneMore {
+                SignatureTrophyStore.addOneMoreCorrect(count: guesses, date: date)
+            }
         }
 
         let request = DailyCompleteRequestDTO(
@@ -401,5 +404,119 @@ enum PerfectScoreStore {
     static func clear() {
         UserDefaults.standard.removeObject(forKey: countsKey)
         UserDefaults.standard.removeObject(forKey: datesKey)
+    }
+}
+
+enum LeagueTrophyStore {
+    static var latest: LeagueTrophyProgressDTO?
+}
+
+/// One-shot feats for the signature cabinet rows (Bingo 5-tile wildcard, 50 One More, …).
+enum SignatureFeat: String, CaseIterable {
+    case bingoWildcard5
+    case oneMore50
+    case draft98
+    case targetManExact
+    case backYourselfSweep
+    case dartsCheckout3
+    case dailyLeaderboardFirst
+    case dailyXp6000
+
+    var payloadId: String {
+        switch self {
+        case .bingoWildcard5: return "badge-megas/bingomega"
+        case .oneMore50: return "badge-megas/onemoremega"
+        case .draft98: return "badge-megas/draftmega"
+        case .targetManExact: return "badge-megas/targetmanmega"
+        case .backYourselfSweep: return "badge-megas/backyourselfmega"
+        case .dartsCheckout3: return "badge-megas/dartsmega"
+        case .dailyLeaderboardFirst: return "badge-dailytrophy"
+        case .dailyXp6000: return "badge-6ktrophy"
+        }
+    }
+}
+
+enum SignatureTrophyStore {
+    static let oneMoreCorrectNeeded = 50
+    static let bingoWildcardTiles = 5
+    static let dartsCheckoutThrows = 3
+    static let dailyXpNeeded = 6000
+    static let draftMinFraction = DailyXP.draftSignatureAtFraction
+
+    private static let unlockedKey = "signatureTrophyUnlockedIds"
+    private static let oneMoreTotalKey = "signatureOneMoreCorrect"
+    private static let oneMoreDateKey = "signatureOneMoreLastDate"
+
+    static func isUnlocked(_ feat: SignatureFeat) -> Bool {
+        unlockedIds().contains(feat.payloadId)
+    }
+
+    static func isUnlocked(payloadId: String) -> Bool {
+        unlockedIds().contains(payloadId)
+    }
+
+    static func unlockedPayloads() -> [TrophyUnlockPayload] {
+        TrophyUnlockPayload.megaSectionTrophies.filter { unlockedIds().contains($0.id) }
+    }
+
+    @discardableResult
+    static func record(_ feat: SignatureFeat) -> Bool {
+        var ids = unlockedIds()
+        guard !ids.contains(feat.payloadId) else { return false }
+        ids.insert(feat.payloadId)
+        UserDefaults.standard.set(Array(ids), forKey: unlockedKey)
+        if let payload = TrophyUnlockPayload.earnedTrophy(id: feat.payloadId) {
+            Task { @MainActor in
+                NotificationCenter.default.post(name: .perfectScoreUnlocked, object: payload)
+            }
+        }
+        return true
+    }
+
+    static func evaluateBingoWildcard(tilesFilled: Int) {
+        if tilesFilled >= bingoWildcardTiles { record(.bingoWildcard5) }
+    }
+
+    /// Lifetime correct One More picks, once per calendar day. Unlocks at 50 (five full clears).
+    static func addOneMoreCorrect(count: Int, date: String) {
+        guard count > 0 else { return }
+        if UserDefaults.standard.string(forKey: oneMoreDateKey) == date { return }
+        let next = max(0, UserDefaults.standard.integer(forKey: oneMoreTotalKey)) + count
+        UserDefaults.standard.set(next, forKey: oneMoreTotalKey)
+        UserDefaults.standard.set(date, forKey: oneMoreDateKey)
+        if next >= oneMoreCorrectNeeded { record(.oneMore50) }
+    }
+
+    static func evaluateDraft(yourTotal: Int, optimal: Int) {
+        guard optimal > 0 else { return }
+        if Double(yourTotal) / Double(optimal) >= draftMinFraction { record(.draft98) }
+    }
+
+    static func evaluateTargetMan(difference: Int) {
+        if difference == 0 { record(.targetManExact) }
+    }
+
+    static func evaluateBackYourself(named: Int, maxPool: Int, livesLeft: Int, won: Bool) {
+        if won, maxPool > 0, named >= maxPool, livesLeft > 0 { record(.backYourselfSweep) }
+    }
+
+    static func evaluateDarts(won: Bool, throwCount: Int) {
+        if won, throwCount == dartsCheckoutThrows { record(.dartsCheckout3) }
+    }
+
+    static func evaluateDaily(todayXp: Int, todayRank: Int?, yesterdayRank: Int? = nil) {
+        if todayXp >= dailyXpNeeded { record(.dailyXp6000) }
+        if todayXp > 0, todayRank == 1 { record(.dailyLeaderboardFirst) }
+        if yesterdayRank == 1 { record(.dailyLeaderboardFirst) }
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: unlockedKey)
+        UserDefaults.standard.removeObject(forKey: oneMoreTotalKey)
+        UserDefaults.standard.removeObject(forKey: oneMoreDateKey)
+    }
+
+    private static func unlockedIds() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: unlockedKey) ?? [])
     }
 }

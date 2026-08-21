@@ -7,6 +7,9 @@ struct Darts501PuzzleDTO: Codable, Equatable {
     let formulaId: String
     let formulaLabel: String
     let nationality: String?
+    let leagueName: String?
+    let club: String?
+    let clubLeague: String?
     let audience: String?
     let formulaDetail: String?
     let startScore: Int
@@ -14,7 +17,7 @@ struct Darts501PuzzleDTO: Codable, Equatable {
     let checkoutLives: Int
 
     enum CodingKeys: String, CodingKey {
-        case modeId, puzzleId, date, formulaId, formulaLabel, nationality, audience, formulaDetail
+        case modeId, puzzleId, date, formulaId, formulaLabel, nationality, leagueName, club, clubLeague, audience, formulaDetail
         case startScore, checkoutWindow, checkoutLives
     }
 
@@ -26,6 +29,9 @@ struct Darts501PuzzleDTO: Codable, Equatable {
         formulaId = try c.decodeIfPresent(String.self, forKey: .formulaId) ?? ""
         formulaLabel = try c.decodeIfPresent(String.self, forKey: .formulaLabel) ?? ""
         nationality = try c.decodeIfPresent(String.self, forKey: .nationality)
+        leagueName = try c.decodeIfPresent(String.self, forKey: .leagueName)
+        club = try c.decodeIfPresent(String.self, forKey: .club)
+        clubLeague = try c.decodeIfPresent(String.self, forKey: .clubLeague)
         audience = try c.decodeIfPresent(String.self, forKey: .audience)
         formulaDetail = try c.decodeIfPresent(String.self, forKey: .formulaDetail)
         startScore = try c.decodeIfPresent(Int.self, forKey: .startScore) ?? 501

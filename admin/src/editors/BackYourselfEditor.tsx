@@ -256,6 +256,7 @@ export function BackYourselfEditor({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [poolPlayers, setPoolPlayers] = useState<AdminBackYourselfPoolPlayer[]>([])
+  const [allMatchCount, setAllMatchCount] = useState<number | null>(null)
   const latestRef = useRef({ p, a })
   const poolReqRef = useRef(0)
   const lastResolvedKey = useRef('')
@@ -332,6 +333,7 @@ export function BackYourselfEditor({
       const nextAnswer = result.answerJson as Answer
       commit(result.puzzleJson as Puzzle, nextAnswer)
       applyPool(result.poolPlayers ?? [], nextAnswer.validPlayerIds)
+      setAllMatchCount(typeof result.allMatchCount === 'number' ? result.allMatchCount : null)
     } catch (err) {
       if (req !== poolReqRef.current) return
       setError(err instanceof Error ? err.message : 'Failed to recalculate pool')
@@ -386,7 +388,7 @@ export function BackYourselfEditor({
           <strong>{category.label || 'Untitled'}</strong>
         </div>
         <div>
-          <span className="muted tiny">Possible</span>
+          <span className="muted tiny">Perfect</span>
           <strong>{p.maxPool ?? '—'}</strong>
         </div>
         <div>
@@ -394,7 +396,7 @@ export function BackYourselfEditor({
           <strong>{p.xpCap != null ? `${p.xpCap}+` : '—'}</strong>
         </div>
         <div>
-          <span className="muted tiny">Pool</span>
+          <span className="muted tiny">Famous names</span>
           <strong>{poolPlayers.length || a.validPlayerIds?.length || 0}</strong>
         </div>
         <div>
@@ -663,14 +665,32 @@ export function BackYourselfEditor({
             onChange={(e) => applyCategory({ label: e.target.value })}
           />
         </label>
+        <label className="field compact">
+          Perfect score (max pledge)
+          <input
+            type="number"
+            min={1}
+            max={120}
+            disabled={locked}
+            value={p.maxPool ?? ''}
+            onChange={(e) => {
+              const next = Math.max(1, Math.min(120, Math.floor(Number(e.target.value)) || 1))
+              commit(
+                { ...latestRef.current.p, maxPool: next, xpCap: Math.max(1, Math.min(40, next)) },
+                latestRef.current.a
+              )
+            }}
+          />
+        </label>
         <div className="button-row">
           <button type="button" className="ghost" disabled={locked || busy} onClick={() => void recalculatePool()}>
-            {busy ? 'Recalculating…' : 'Recalculate player pool'}
+            {busy ? 'Recalculating…' : 'Reset perfect from famous names'}
           </button>
         </div>
         {error && <p className="muted tiny" style={{ color: '#b42318' }}>{error}</p>}
         <p className="muted tiny">
-          Pool size must stay between 10 and 120. XP maxes at pledge {p.xpCap ?? 40}+ even when the pool is larger. The pool refreshes when you change the category; recalculate again before approving if the count looks stale.
+          Anyone who matches the category can be named, but play stops at this perfect score - that is also the slider max. It starts as the famous-name count (usually 10–120). Change it if that feels too harsh or too easy. Recalculate after a category change to reset it.
+          {allMatchCount != null ? ` ${allMatchCount} players currently match.` : ''}
         </p>
       </div>
 
@@ -680,10 +700,10 @@ export function BackYourselfEditor({
             <strong>Player pool</strong>
             <p className="muted tiny">
               {busy
-                ? 'Updating who matches this category…'
+                ? 'Updating the famous-name preview…'
                 : poolPlayers.length === 0
-                  ? 'No matching players yet — finish the category or recalculate'
-                  : `${poolPlayers.length} player${poolPlayers.length === 1 ? '' : 's'} match this chip`}
+                  ? 'No famous names yet — finish the category or recalculate'
+                  : `${poolPlayers.length} famous name${poolPlayers.length === 1 ? '' : 's'} used for the suggested perfect. Any matching player can be named, up to that cap.`}
             </p>
           </div>
         </header>

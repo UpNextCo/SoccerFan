@@ -118,9 +118,12 @@ final class AuthManager {
         defaults.removeObject(forKey: UserDefaultsKeys.isDevAccount)
         defaults.removeObject(forKey: UserDefaultsKeys.dailyCompleteCelebratedDate)
         defaults.removeObject(forKey: UserDefaultsKeys.weeklyLeagueIntroShown)
+        defaults.removeObject(forKey: UserDefaultsKeys.weeklyLeagueIntroEligibleWeek)
         ActivityFeedStore.clear()
         DailyCompletionService.clearAllLocalCompletions()
         PerfectScoreStore.clear()
+        SignatureTrophyStore.clear()
+        LeagueTrophyStore.latest = nil
         OfflineCache.clearAllAccountData(context: context)
         LocalProfile.reset()
     }

@@ -73,6 +73,7 @@ final class FootballBingoViewModel {
         let toComplete = game.categories.filter {
             !game.completedCategoryIds.contains($0.id) && FootballBingoMatcher.matches(player: player, category: $0)
         }
+        SignatureTrophyStore.evaluateBingoWildcard(tilesFilled: toComplete.count)
         for category in toComplete {
             game.markCompleted(categoryId: category.id, playerId: player.id)
         }

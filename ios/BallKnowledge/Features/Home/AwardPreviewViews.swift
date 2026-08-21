@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Preview-only trophy payloads — not wired to XP / league events yet.
 struct TrophyUnlockPayload: Identifiable, Equatable {
     enum Hero: Equatable {
         case gameTile(modeId: String)
@@ -19,7 +18,8 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
     var playsUnlock: Bool = true
     var ladderSteps: Int = 0
     var ladderFilled: Int = 0
-    var ladderLabels: [Int] = []
+    var ladderLabels: [String] = []
+    var ladderFilledIndices: [Int] = []
 
     var bundleImageName: String? {
         if case .bundleImage(let name) = hero { return name }
@@ -167,7 +167,7 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         payload.timesEarned = count
         payload.ladderSteps = levels.count
         payload.ladderFilled = index + 1
-        payload.ladderLabels = thresholds
+        payload.ladderLabels = thresholds.map { "\($0)" }
         return payload
     }
 
@@ -175,7 +175,7 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
     static var previewLevelStrips: [(title: String, mode: GameModeID, levels: [TrophyUnlockPayload], earnedThrough: Int)] {
         perfectScoreModes.map { item in
             (
-                "\(item.mode.title) PERFECT SCORE",
+                item.mode.title,
                 item.mode,
                 item.levels,
                 PerfectScoreStore.earnedThroughIndex(for: item.mode)
@@ -215,12 +215,12 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
     ]
 
     static let megaTrophies: [TrophyUnlockPayload] = [
-        .leagueReached(title: GameModeID.footballBingo.title, image: "megas/bingomega"),
-        .leagueReached(title: GameModeID.oneMore.title, image: "megas/onemoremega"),
-        .leagueReached(title: GameModeID.draftMaster.title, image: "megas/draftmega"),
-        .leagueReached(title: GameModeID.targetMan.title, image: "megas/targetmanmega"),
-        .leagueReached(title: GameModeID.backYourself.title, image: "megas/backyourselfmega"),
-        .leagueReached(title: GameModeID.darts501.title, image: "megas/dartsmega"),
+        .imageOnly(title: GameModeID.footballBingo.title, subtitle: "Wildcard 5 players at once", image: "megas/bingomega"),
+        .imageOnly(title: GameModeID.oneMore.title, subtitle: "Get 50 correct across 5 games", image: "megas/onemoremega"),
+        .imageOnly(title: GameModeID.draftMaster.title, subtitle: "Score 98% or more on a draft", image: "megas/draftmega"),
+        .imageOnly(title: GameModeID.targetMan.title, subtitle: "Hit the exact number", image: "megas/targetmanmega"),
+        .imageOnly(title: GameModeID.backYourself.title, subtitle: "Name every player with lives left", image: "megas/backyourselfmega"),
+        .imageOnly(title: GameModeID.darts501.title, subtitle: "Check out in 3 darts", image: "megas/dartsmega"),
     ]
 
     static let leagueWinnerTrophies: [TrophyUnlockPayload] = [
@@ -228,19 +228,46 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         .leagueReached(title: "Non-League", image: "winnertrophy/nonleaguewinner"),
         .leagueReached(title: "League Two", image: "winnertrophy/league2winner"),
         .leagueReached(title: "League One", image: "winnertrophy/league1winner"),
+        .leagueReached(title: "Championship", image: "winnertrophy/championshipwinner"),
         .leagueReached(title: "Premier League", image: "winnertrophy/plwinner"),
         .leagueReached(title: "Champions League", image: "winnertrophy/championsleaguewinner"),
     ]
 
     static let previewGameTrophies: [TrophyUnlockPayload] = [
-        .imageOnly(title: "Daily Leaderboard", subtitle: "MOST XP", image: "dailytrophy"),
-        .imageOnly(title: "6k Overall XP", subtitle: "IN A DAY", image: "6ktrophy"),
+        .imageOnly(title: "Daily Leaderboard", subtitle: "Finish the day #1 for XP", image: "dailytrophy"),
+        .imageOnly(title: "Daily XP", subtitle: "Bank 6,000 XP in one day", image: "6ktrophy"),
     ]
 
-    static let megaEarnedThrough = 0
-    static let leagueEarnedThrough = 2
-    static let winnerEarnedThrough = 1
-    static let totalXpEarnedThrough = 0
+    static var megaSectionTrophies: [TrophyUnlockPayload] {
+        megaTrophies + previewGameTrophies
+    }
+
+    static let leagueReachedIds = [
+        "sunday_league", "non_league", "league_two", "league_one",
+        "championship", "premier_league", "champions_league",
+    ]
+    static let leagueReachedLabels = ["SL", "NL", "L2", "L1", "CH", "PL", "CL"]
+    static let leagueWonIds = [
+        "sunday_league", "non_league", "league_two", "league_one",
+        "championship", "premier_league", "champions_league",
+    ]
+    static let leagueWonLabels = ["SL", "NL", "L2", "L1", "CH", "PL", "CL"]
+    static let totalXpThresholds = [50_000, 100_000, 250_000, 500_000, 1_000_000]
+    static let totalXpLabels = ["50k", "100k", "250k", "500k", "1M"]
+
+    static func earnedThrough(value: Int, thresholds: [Int]) -> Int {
+        PerfectScoreStore.earnedThroughIndex(count: value, thresholds: thresholds)
+    }
+
+    static func reachedThroughIndex(_ progress: LeagueTrophyProgressDTO?) -> Int {
+        let highest = progress?.highestDivision ?? progress?.divisionsReached.last
+        guard let highest, let index = leagueReachedIds.firstIndex(of: highest) else { return -1 }
+        return index
+    }
+
+    static func wonIndices(_ progress: LeagueTrophyProgressDTO?) -> Set<Int> {
+        Set((progress?.divisionsWon ?? []).compactMap { leagueWonIds.firstIndex(of: $0) })
+    }
 
     static let dartsPerfect = TrophyUnlockPayload.perfect(mode: .darts501, image: "trophydarts", timesEarned: 2)
     static let lmsPerfect = TrophyUnlockPayload.perfect(mode: .lastManStanding, image: "trophylms")
@@ -250,30 +277,46 @@ struct TrophyUnlockPayload: Identifiable, Equatable {
         return Array(levels.prefix(index + 1))
     }
 
-    static var earnedPreviewGroups: [(title: String, trophies: [TrophyUnlockPayload])] {
+    static func earnedPreviewGroups(xp: Int, league: LeagueTrophyProgressDTO?) -> [(title: String, trophies: [TrophyUnlockPayload])] {
         var groups: [(String, [TrophyUnlockPayload])] = []
         for strip in previewLevelStrips {
             let earned = earned(from: strip.levels, through: strip.earnedThrough)
             if !earned.isEmpty { groups.append((strip.title, earned)) }
         }
-        let mega = earned(from: megaTrophies, through: megaEarnedThrough)
-        if !mega.isEmpty { groups.append(("MEGA TROPHIES", mega)) }
-        let leagues = earned(from: leagueTrophies, through: leagueEarnedThrough)
+        let mega = SignatureTrophyStore.unlockedPayloads()
+        if !mega.isEmpty { groups.append(("SIGNATURE TROPHIES", mega)) }
+        let leagues = earned(from: leagueTrophies, through: reachedThroughIndex(league))
         if !leagues.isEmpty { groups.append(("LEAGUES REACHED", leagues)) }
-        let winners = earned(from: leagueWinnerTrophies, through: winnerEarnedThrough)
-        if !winners.isEmpty { groups.append(("LEAGUE WINNER", winners)) }
-        let xp = earned(from: totalXpTrophies, through: totalXpEarnedThrough)
-        if !xp.isEmpty { groups.append(("TOTAL XP", xp)) }
-        if !previewGameTrophies.isEmpty { groups.append(("MILESTONES", previewGameTrophies)) }
+        let wonSet = wonIndices(league)
+        let winners = leagueWinnerTrophies.enumerated().compactMap { wonSet.contains($0.offset) ? $0.element : nil }
+        if !winners.isEmpty { groups.append(("LEAGUES WON", winners)) }
+        let xpTrophies = earned(from: totalXpTrophies, through: earnedThrough(value: xp, thresholds: totalXpThresholds))
+        if !xpTrophies.isEmpty { groups.append(("OVERALL XP", xpTrophies)) }
         return groups
+    }
+
+    static var earnedPreviewGroups: [(title: String, trophies: [TrophyUnlockPayload])] {
+        earnedPreviewGroups(xp: 0, league: LeagueTrophyStore.latest)
     }
 
     static var earnedPreviewTrophies: [TrophyUnlockPayload] {
         earnedPreviewGroups.flatMap(\.trophies)
     }
 
+    static func isEarned(_ payload: TrophyUnlockPayload, xp: Int, league: LeagueTrophyProgressDTO?) -> Bool {
+        earnedPreviewGroups(xp: xp, league: league).contains { group in
+            group.trophies.contains { $0.id == payload.id }
+        }
+    }
+
     static func earnedTrophy(id: String) -> TrophyUnlockPayload? {
-        earnedPreviewTrophies.first { $0.id == id }
+        let catalog =
+            previewLevelStrips.flatMap(\.levels)
+            + megaSectionTrophies
+            + leagueTrophies
+            + leagueWinnerTrophies
+            + totalXpTrophies
+        return catalog.first { $0.id == id }
     }
 }
 
@@ -323,7 +366,8 @@ struct TrophyUnlockView: View {
                         PerfectScoreLadderBar(
                             steps: payload.ladderSteps,
                             filled: ladderFill,
-                            labels: payload.ladderLabels
+                            labels: payload.ladderLabels,
+                            filledIndices: Set(payload.ladderFilledIndices)
                         )
                         .padding(.horizontal, 8)
                         .opacity(showHero ? 1 : 0)
@@ -471,82 +515,150 @@ struct TrophyUnlockView: View {
 struct TrophyCabinetView: View {
     var onDismiss: () -> Void
 
+    @Environment(AuthManager.self) private var auth
     @State private var unlock: TrophyUnlockPayload?
+    @State private var leagueProgress: LeagueTrophyProgressDTO?
 
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
-                    ForEach(TrophyUnlockPayload.previewLevelStrips, id: \.title) { strip in
+                VStack(alignment: .leading, spacing: 30) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("PERFECT SCORES")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(BKTheme.textPrimary)
+                            Text("How many times have you got 1000XP?")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(BKTheme.textSecondary)
+                        }
+                        .padding(.horizontal, 2)
+
+                        ForEach(TrophyUnlockPayload.previewLevelStrips, id: \.title) { strip in
+                            GameLevelsPreviewRow(
+                                title: strip.title,
+                                titleSize: 13,
+                                levels: strip.levels,
+                                earnedThroughIndex: strip.earnedThrough,
+                                ladderFilled: max(0, strip.earnedThrough + 1),
+                                ladderLabels: PerfectScoreStore.thresholds(for: strip.mode).map { "\($0)" }
+                            ) { payload in
+                                var next = payload
+                                if let live = TrophyUnlockPayload.perfectScoreUnlock(
+                                    mode: strip.mode,
+                                    count: PerfectScoreStore.count(for: strip.mode)
+                                ) {
+                                    next.timesEarned = live.timesEarned
+                                    next.ladderSteps = live.ladderSteps
+                                    next.ladderFilled = live.ladderFilled
+                                    next.ladderLabels = live.ladderLabels
+                                }
+                                unlock = next
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("LEAGUES")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(BKTheme.textPrimary)
+                            Text("How high you've climbed, and every #1 finish.")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(BKTheme.textSecondary)
+                        }
+                        .padding(.horizontal, 2)
+
                         GameLevelsPreviewRow(
-                            title: strip.title,
-                            levels: strip.levels,
-                            earnedThroughIndex: strip.earnedThrough,
-                            ladderFilled: max(0, strip.earnedThrough + 1),
-                            ladderLabels: PerfectScoreStore.thresholds(for: strip.mode)
+                            title: "LEAGUES REACHED",
+                            titleSize: 13,
+                            levels: TrophyUnlockPayload.leagueTrophies,
+                            earnedThroughIndex: reachedThrough,
+                            ladderFilled: max(0, reachedThrough + 1),
+                            ladderLabels: TrophyUnlockPayload.leagueReachedLabels
                         ) { payload in
-                            var next = payload
-                            if let live = TrophyUnlockPayload.perfectScoreUnlock(
-                                mode: strip.mode,
-                                count: PerfectScoreStore.count(for: strip.mode)
-                            ) {
-                                next.timesEarned = live.timesEarned
-                                next.ladderSteps = live.ladderSteps
-                                next.ladderFilled = live.ladderFilled
-                                next.ladderLabels = live.ladderLabels
-                            }
-                            unlock = next
+                            unlock = withLadder(
+                                payload,
+                                steps: TrophyUnlockPayload.leagueTrophies.count,
+                                filled: max(0, reachedThrough + 1),
+                                labels: TrophyUnlockPayload.leagueReachedLabels
+                            )
+                        }
+
+                        GameLevelsPreviewRow(
+                            title: "LEAGUES WON",
+                            titleSize: 13,
+                            levels: TrophyUnlockPayload.leagueWinnerTrophies,
+                            earnedThroughIndex: -1,
+                            earnedIndices: wonSet,
+                            ladderFilled: wonSet.count,
+                            ladderLabels: TrophyUnlockPayload.leagueWonLabels,
+                            ladderFilledIndices: wonSet
+                        ) { payload in
+                            unlock = withLadder(
+                                payload,
+                                steps: TrophyUnlockPayload.leagueWinnerTrophies.count,
+                                filled: wonSet.count,
+                                labels: TrophyUnlockPayload.leagueWonLabels,
+                                filledIndices: wonSet
+                            )
                         }
                     }
 
-                    GameLevelsPreviewRow(
-                        title: "MEGA TROPHIES",
-                        levels: TrophyUnlockPayload.megaTrophies,
-                        earnedThroughIndex: TrophyUnlockPayload.megaEarnedThrough
-                    ) { payload in
-                        unlock = payload
-                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("OVERALL XP")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(BKTheme.textPrimary)
+                            Text("How much XP have you banked?")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(BKTheme.textSecondary)
+                        }
+                        .padding(.horizontal, 2)
 
-                    GameLevelsPreviewRow(
-                        title: "LEAGUES REACHED",
-                        levels: TrophyUnlockPayload.leagueTrophies,
-                        earnedThroughIndex: TrophyUnlockPayload.leagueEarnedThrough
-                    ) { payload in
-                        unlock = payload
-                    }
-
-                    GameLevelsPreviewRow(
-                        title: "LEAGUE WINNER",
-                        levels: TrophyUnlockPayload.leagueWinnerTrophies,
-                        earnedThroughIndex: TrophyUnlockPayload.winnerEarnedThrough
-                    ) { payload in
-                        unlock = payload
-                    }
-
-                    GameLevelsPreviewRow(
-                        title: "TOTAL XP",
-                        levels: TrophyUnlockPayload.totalXpTrophies,
-                        earnedThroughIndex: TrophyUnlockPayload.totalXpEarnedThrough
-                    ) { payload in
-                        unlock = payload
-                    }
-
-                    VStack(spacing: 0) {
-                        ForEach(Array(TrophyUnlockPayload.previewGameTrophies.enumerated()), id: \.element.id) { index, payload in
-                            TrophyCabinetRow(
-                                payload: payload,
-                                isLocked: false,
-                                showsDivider: index < TrophyUnlockPayload.previewGameTrophies.count - 1
-                            ) {
-                                guard payload.playsUnlock else { return }
-                                unlock = payload
-                            }
+                        GameLevelsPreviewRow(
+                            title: "",
+                            levels: TrophyUnlockPayload.totalXpTrophies,
+                            earnedThroughIndex: xpThrough,
+                            ladderFilled: max(0, xpThrough + 1),
+                            ladderLabels: TrophyUnlockPayload.totalXpLabels
+                        ) { payload in
+                            unlock = withLadder(
+                                payload,
+                                steps: TrophyUnlockPayload.totalXpTrophies.count,
+                                filled: max(0, xpThrough + 1),
+                                labels: TrophyUnlockPayload.totalXpLabels
+                            )
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(BKTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("SIGNATURE TROPHIES")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(BKTheme.textPrimary)
+                            Text("Rare trophies for the biggest feats.")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(BKTheme.textSecondary)
+                        }
+                        .padding(.horizontal, 2)
+
+                        VStack(spacing: 0) {
+                            ForEach(Array(TrophyUnlockPayload.megaSectionTrophies.enumerated()), id: \.element.id) { index, payload in
+                                TrophyCabinetRow(
+                                    payload: payload,
+                                    isLocked: !SignatureTrophyStore.isUnlocked(payloadId: payload.id),
+                                    showsDivider: index < TrophyUnlockPayload.megaSectionTrophies.count - 1
+                                ) {
+                                    unlock = payload
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(BKTheme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
@@ -565,11 +677,52 @@ struct TrophyCabinetView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task { await loadLeagueProgress() }
         .fullScreenCover(item: $unlock) { payload in
             TrophyUnlockView(payload: payload) {
                 unlock = nil
             }
         }
+    }
+
+    private var reachedThrough: Int {
+        TrophyUnlockPayload.reachedThroughIndex(leagueProgress)
+    }
+
+    private var wonSet: Set<Int> {
+        TrophyUnlockPayload.wonIndices(leagueProgress)
+    }
+
+    private var xpThrough: Int {
+        TrophyUnlockPayload.earnedThrough(
+            value: auth.user?.xp ?? 0,
+            thresholds: TrophyUnlockPayload.totalXpThresholds
+        )
+    }
+
+    private func loadLeagueProgress() async {
+        do {
+            let progress = try await APIClient.shared.leagueTrophies()
+            LeagueTrophyStore.latest = progress
+            leagueProgress = progress
+        } catch {
+            leagueProgress = LeagueTrophyStore.latest
+        }
+    }
+
+    private func withLadder(
+        _ payload: TrophyUnlockPayload,
+        steps: Int,
+        filled: Int,
+        labels: [String],
+        filledIndices: Set<Int> = []
+    ) -> TrophyUnlockPayload {
+        var next = payload
+        next.ladderSteps = steps
+        next.ladderFilled = filled
+        next.ladderLabels = labels
+        next.ladderFilledIndices = Array(filledIndices).sorted()
+        return next
     }
 }
 
@@ -590,11 +743,17 @@ private enum GameLevelReveal: Equatable {
 struct PerfectScoreLadderBar: View {
     let steps: Int
     var filled: Int
-    var labels: [Int] = []
+    var labels: [String] = []
+    var filledIndices: Set<Int> = []
     var columnWidth: CGFloat? = nil
     var spacing: CGFloat = 12
 
-    private var clampedFilled: Int { min(max(filled, 0), steps) }
+    private var clampedFilled: Int {
+        if !filledIndices.isEmpty {
+            return (filledIndices.max() ?? -1) + 1
+        }
+        return min(max(filled, 0), steps)
+    }
     private let notchSize: CGFloat = 24
 
     var body: some View {
@@ -620,29 +779,29 @@ struct PerfectScoreLadderBar: View {
     }
 
     private func track<Content: View>(@ViewBuilder notches: () -> Content) -> some View {
-        ZStack {
-            GeometryReader { geometry in
-                let inset = columnWidth.map { $0 / 2 } ?? (notchSize / 2)
-                let trackWidth = max(0, geometry.size.width - inset * 2)
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(BKTheme.cardElevated)
-                    Capsule()
-                        .fill(BKTheme.accent)
-                        .frame(width: steps > 0 ? trackWidth * CGFloat(clampedFilled) / CGFloat(steps) : 0)
+        notches()
+            .background {
+                GeometryReader { geometry in
+                    let inset = columnWidth.map { $0 / 2 } ?? (notchSize / 2)
+                    let trackWidth = max(0, geometry.size.width - inset * 2)
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(BKTheme.cardElevated)
+                        Capsule()
+                            .fill(BKTheme.accent)
+                            .frame(width: steps > 0 ? trackWidth * CGFloat(clampedFilled) / CGFloat(steps) : 0)
+                    }
+                    .frame(height: 6)
+                    .padding(.horizontal, inset)
+                    .frame(maxHeight: .infinity, alignment: .center)
                 }
-                .frame(height: 6)
-                .padding(.horizontal, inset)
-                .frame(maxHeight: .infinity, alignment: .center)
             }
-            notches()
-        }
-        .frame(height: notchSize)
+            .frame(height: notchSize)
     }
 
     private func notch(_ index: Int) -> some View {
-        let isFilled = index < clampedFilled
-        let label = labels.indices.contains(index) ? "\(labels[index])" : "\(index + 1)"
+        let isFilled = filledIndices.isEmpty ? index < clampedFilled : filledIndices.contains(index)
+        let label = labels.indices.contains(index) ? labels[index] : "\(index + 1)"
         return Text(label)
             .font(BKFont.caption(label.count >= 3 ? 8 : 11))
             .fontWeight(.bold)
@@ -659,11 +818,14 @@ struct PerfectScoreLadderBar: View {
 
 private struct GameLevelsPreviewRow: View {
     let title: String
+    var titleSize: CGFloat = 16
     let levels: [TrophyUnlockPayload]
     /// Last earned index. `-1` means none unlocked.
     var earnedThroughIndex: Int = 1
+    var earnedIndices: Set<Int>? = nil
     var ladderFilled: Int? = nil
-    var ladderLabels: [Int] = []
+    var ladderLabels: [String] = []
+    var ladderFilledIndices: Set<Int> = []
     var onSelect: (TrophyUnlockPayload) -> Void
 
     private let badgeSpacing: CGFloat = 12
@@ -684,10 +846,12 @@ private struct GameLevelsPreviewRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(BKTheme.textPrimary)
-                .padding(.horizontal, 14)
+            if !title.isEmpty {
+                Text(title)
+                    .font(.system(size: titleSize, weight: .semibold))
+                    .foregroundStyle(titleSize < 16 ? BKTheme.textSecondary : BKTheme.textPrimary)
+                    .padding(.horizontal, 14)
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -722,7 +886,9 @@ private struct GameLevelsPreviewRow: View {
                                         .font(BKFont.caption(11))
                                         .foregroundStyle(reveal == .earned ? BKTheme.textSecondary : BKTheme.textMuted)
                                         .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
                                 }
+                                .frame(width: badgeSize)
                             }
                             .buttonStyle(.plain)
                         }
@@ -733,6 +899,7 @@ private struct GameLevelsPreviewRow: View {
                             steps: levels.count,
                             filled: ladderFilled,
                             labels: ladderLabels,
+                            filledIndices: ladderFilledIndices,
                             columnWidth: badgeSize,
                             spacing: badgeSpacing
                         )
@@ -777,6 +944,13 @@ private struct GameLevelsPreviewRow: View {
     }
 
     private func revealState(at index: Int) -> GameLevelReveal {
+        if let earnedIndices {
+            if earnedIndices.contains(index) { return .earned }
+            if let next = levels.indices.first(where: { !earnedIndices.contains($0) }), index == next {
+                return .next
+            }
+            return .locked
+        }
         if index <= earnedThroughIndex { return .earned }
         if index == earnedThroughIndex + 1 { return .next }
         return .locked
@@ -800,28 +974,37 @@ private struct LevelStripViewportWidthKey: PreferenceKey {
 struct TrophyCabinetEntryCard: View {
     var action: () -> Void
 
+    @Environment(AuthManager.self) private var auth
+
+    private var unlockedCount: Int {
+        TrophyUnlockPayload.earnedPreviewGroups(
+            xp: auth.user?.xp ?? 0,
+            league: LeagueTrophyStore.latest
+        ).reduce(0) { $0 + $1.trophies.count }
+    }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
                 GameModeBundleImage(name: "trophycabinet")
                     .scaledToFill()
-                    .frame(width: 64, height: 64)
+                    .frame(width: 70, height: 70)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Trophy Cabinet")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(BKTheme.textPrimary)
-                    Text("\(TrophyUnlockPayload.previewGameTrophies.count) unlocked")
-                        .font(BKFont.caption(12))
+                    Text(unlockedCount == 1 ? "1 unlocked" : "\(unlockedCount) unlocked")
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(BKTheme.textSecondary)
                 }
 
                 Spacer(minLength: 8)
 
                 Ph.caretRight.bold
-                    .color(BKTheme.textMuted)
-                    .frame(width: 12, height: 12)
+                    .color(BKTheme.textPrimary.opacity(0.7))
+                    .frame(width: 14, height: 14)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
@@ -851,11 +1034,12 @@ private struct TrophyCabinetRow: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(rowTitle)
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(BKTheme.textPrimary)
+                            .foregroundStyle(isLocked ? BKTheme.textMuted : BKTheme.textPrimary)
                             .lineLimit(1)
                         Text(rowSubtitle)
                             .font(BKFont.caption(12))
-                            .foregroundStyle(BKTheme.textSecondary)
+                            .foregroundStyle(isLocked ? BKTheme.textMuted : BKTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer(minLength: 8)
@@ -866,14 +1050,13 @@ private struct TrophyCabinetRow: View {
                             .foregroundStyle(BKTheme.accent)
                     }
 
-                    if payload.playsUnlock {
+                    if !isLocked, payload.playsUnlock {
                         Ph.caretRight.bold
                             .color(BKTheme.textMuted)
                             .frame(width: 12, height: 12)
                     }
                 }
                 .padding(.vertical, 14)
-                .opacity(isLocked ? 0.55 : 1)
 
                 if showsDivider {
                     Rectangle()
@@ -907,32 +1090,45 @@ private struct TrophyCabinetRow: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        switch payload.hero {
-        case .gameTile(let modeId):
-            TrophyArtTile(
-                imageName: GameModeTileArt.bundleImageName(for: modeId),
-                size: iconSize,
-                fills: false,
-                showsBackdrop: false
-            )
-            .saturation(isLocked ? 0.45 : 1)
-        case .bundleImage(let name):
-            TrophyArtTile(
-                imageName: name,
-                size: iconSize,
-                fills: false,
-                showsBackdrop: false
-            )
-            .saturation(isLocked ? 0.45 : 1)
-        case .symbol:
-            ZStack {
-                RoundedRectangle(cornerRadius: iconCornerRadius, style: .continuous)
-                    .fill(BKTheme.cardElevated)
-                Ph.lightning.fill
-                    .color(isLocked ? BKTheme.textMuted : BKTheme.accent)
-                    .frame(width: 22, height: 22)
+        ZStack(alignment: .bottomTrailing) {
+            switch payload.hero {
+            case .gameTile(let modeId):
+                TrophyArtTile(
+                    imageName: GameModeTileArt.bundleImageName(for: modeId),
+                    size: iconSize,
+                    fills: false,
+                    showsBackdrop: false
+                )
+                .opacity(isLocked ? GameLevelReveal.locked.opacity : 1)
+            case .bundleImage(let name):
+                TrophyArtTile(
+                    imageName: name,
+                    size: iconSize,
+                    fills: false,
+                    showsBackdrop: false
+                )
+                .opacity(isLocked ? GameLevelReveal.locked.opacity : 1)
+            case .symbol:
+                ZStack {
+                    RoundedRectangle(cornerRadius: iconCornerRadius, style: .continuous)
+                        .fill(BKTheme.cardElevated)
+                    Ph.lightning.fill
+                        .color(isLocked ? BKTheme.textMuted : BKTheme.accent)
+                        .frame(width: 22, height: 22)
+                }
+                .frame(width: iconSize, height: iconSize)
+                .opacity(isLocked ? GameLevelReveal.locked.opacity : 1)
             }
-            .frame(width: iconSize, height: iconSize)
+
+            if isLocked {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(BKTheme.textPrimary)
+                    .frame(width: 20, height: 20)
+                    .background(BKTheme.cardElevated)
+                    .clipShape(Circle())
+                    .offset(x: 2, y: 2)
+            }
         }
     }
 }
@@ -990,6 +1186,7 @@ struct FeaturedTrophyPicker: View {
     var onSelect: (TrophyUnlockPayload?) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AuthManager.self) private var auth
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
 
@@ -1017,7 +1214,7 @@ struct FeaturedTrophyPicker: View {
                         .buttonStyle(.plain)
                     }
 
-                    ForEach(TrophyUnlockPayload.earnedPreviewGroups, id: \.title) { group in
+                    ForEach(TrophyUnlockPayload.earnedPreviewGroups(xp: auth.user?.xp ?? 0, league: LeagueTrophyStore.latest), id: \.title) { group in
                         VStack(alignment: .leading, spacing: 12) {
                             Text(group.title)
                                 .font(.system(size: 13, weight: .semibold))

@@ -263,6 +263,7 @@ final class Darts501ViewModel {
         switch resolution.kind {
         case .perfect, .checkout:
             state.phase = .won
+            SignatureTrophyStore.evaluateDarts(won: true, throwCount: state.throwHistory.count)
         case .gameOver:
             state.phase = .lost
         case .score, .bust:
@@ -593,38 +594,42 @@ private struct Darts501HeartsRow: View {
     }
 }
 
-private struct Darts501CategoryCard: View {
+struct Darts501CategoryCard: View {
     let category: Darts501CategoryDisplay
 
     var body: some View {
         VStack(spacing: 8) {
-            if category.hasNationFilter {
-                Text(category.flag)
-                    .font(.system(size: 46))
-                Text(category.audience)
-                    .font(BKFont.headline(16))
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .multilineTextAlignment(.center)
-                Text(category.formula)
-                    .font(BKFont.body(13))
-                    .foregroundStyle(BKTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-            } else {
-                Text("TODAY'S STAT")
-                    .font(BKFont.caption(11))
-                    .tracking(1.2)
-                    .foregroundStyle(BKTheme.textMuted)
-                Text(category.formula)
-                    .font(BKFont.headline(15))
-                    .foregroundStyle(BKTheme.textPrimary)
-                    .multilineTextAlignment(.center)
-            }
+            constraintMark
+            Text(category.audience)
+                .font(BKFont.headline(16))
+                .foregroundStyle(BKTheme.textPrimary)
+                .multilineTextAlignment(.center)
+            Text(category.formula)
+                .font(BKFont.body(13))
+                .foregroundStyle(BKTheme.textSecondary)
+                .multilineTextAlignment(.center)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    @ViewBuilder
+    private var constraintMark: some View {
+        if category.hasNationFilter {
+            Text(category.flag)
+                .font(.system(size: 46))
+        } else if category.hasClubFilter, let club = category.club {
+            TeamBadgeImage(club: club, league: category.clubLeague ?? "", size: 54) {
+                Color.clear.frame(width: 54, height: 54)
+            }
+        } else if category.hasLeagueFilter, let league = category.leagueName {
+            LeagueBadgeImage(league: league, size: 54, lightBackdrop: true) {
+                Color.clear.frame(width: 54, height: 54)
+            }
+        }
     }
 }
 

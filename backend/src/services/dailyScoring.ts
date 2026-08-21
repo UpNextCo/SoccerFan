@@ -12,14 +12,14 @@ import { matches as bingoMatches, type BingoCategory, type BingoPlayer } from '.
 import { normalizeTargetManPool, playerValuesForCategory } from './targetManCategories.js';
 import { clubChainLink } from './clubChainGenerator.js';
 import {
-  playerMatchesBackYourselfCategory,
+  countNamedMatchingCategory,
   scoreBackYourself,
   type BackYourselfCategory,
   type BackYourselfPuzzlePublic,
 } from './backYourselfGenerator.js';
 import {
-  darts501FormulaById,
   parseDarts501Puzzle,
+  resolveDarts501Formula,
   playerValuesForDarts501,
 } from './darts501Generator.js';
 import { darts501Xp, resolveDarts501Throw } from './darts501Scoring.js';
@@ -472,20 +472,10 @@ async function scoreBackYourselfMode(row: PuzzleRow, answer: unknown): Promise<S
     namedIds.push(id);
   }
 
-  const stored = row.answerJson as { validPlayerIds?: string[] } | undefined;
-  const validSet =
-    Array.isArray(stored?.validPlayerIds) && stored.validPlayerIds.length > 0
-      ? new Set(stored.validPlayerIds)
-      : null;
-
-  let validNamedCount = 0;
-  for (const id of namedIds) {
-    if (validSet) {
-      if (validSet.has(id)) validNamedCount += 1;
-    } else if (await playerMatchesBackYourselfCategory(id, puzzle.category as BackYourselfCategory)) {
-      validNamedCount += 1;
-    }
-  }
+  const validNamedCount = Math.min(
+    puzzle.maxPool,
+    await countNamedMatchingCategory(namedIds, puzzle.category as BackYourselfCategory)
+  );
 
   return scoreBackYourself({
     pledge: Math.floor(body.pledge),
@@ -505,7 +495,7 @@ async function scoreDarts501(row: PuzzleRow, answer: unknown): Promise<ServerSco
   }
 
   const puzzle = parseDarts501Puzzle(row.puzzleJson);
-  const formula = puzzle ? darts501FormulaById(puzzle.formulaId) : undefined;
+  const formula = puzzle ? resolveDarts501Formula(puzzle) : undefined;
   if (!puzzle || !formula) return null;
 
   const seen = new Set<string>();

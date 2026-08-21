@@ -4,7 +4,9 @@
  * while the slider still runs to the full famous pool (maxPool, up to ~100).
  *
  * Eligibility: Draft-style stats ∪ career for club chips; Bingo-style awards / stats /
- * managers / WC squads / finals / teammate intersections. Countable pool = tier ≥ 3.
+ * managers / WC squads / finals / teammate intersections. Any matching player counts
+ * when named, up to maxPool. That number is the suggested perfect (famous tier ≥ 3
+ * size): slider max and naming cap. Ops can override it.
  */
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/index.js';
@@ -211,7 +213,7 @@ export interface BackYourselfPuzzlePublic {
   puzzleId: string;
   date: string;
   category: BackYourselfCategory;
-  /** Full famous pool size (slider max). */
+  /** Suggested perfect: pledge slider max and hard naming cap. Ops can override. */
   maxPool: number;
   /** Pledge at which XP hits 1000. Always ≤ maxPool. */
   xpCap: number;
@@ -436,7 +438,7 @@ async function filterFamousSorted(ids: string[]): Promise<string[]> {
   return out;
 }
 
-/** Famous players matching the category (past ∪ present). Full list — never clipped. */
+/** Famous players matching the category — used for the suggested perfect / pledge max. */
 export async function listMatchingPlayerIds(category: BackYourselfCategorySpec): Promise<string[]> {
   if (category.type === 'managed_by') {
     const set = await playersUnderManager(category.managerNorm ?? '');
@@ -450,6 +452,19 @@ export async function listMatchingPlayerIds(category: BackYourselfCategorySpec):
     ORDER BY p.name
   `)) as unknown as Array<{ id: string }>;
   return rows.map((r) => r.id);
+}
+
+/** Every stored player who satisfies the category, including low-fame names. */
+export async function countAllMatchingPlayers(category: BackYourselfCategorySpec): Promise<number> {
+  if (category.type === 'managed_by') {
+    return (await playersUnderManager(category.managerNorm ?? '')).size;
+  }
+  const rows = (await db.execute(sql`
+    SELECT COUNT(*)::int AS n
+    FROM players p
+    WHERE ${categorySatisfiesSql(category)}
+  `)) as unknown as Array<{ n: number }>;
+  return rows[0]?.n ?? 0;
 }
 
 function inPoolBand(n: number): boolean {
@@ -474,18 +489,36 @@ export async function playerMatchesBackYourselfCategory(
   category: BackYourselfCategorySpec
 ): Promise<boolean> {
   if (category.type === 'managed_by') {
-    const ids = await listMatchingPlayerIds(category);
-    return ids.includes(playerId);
+    const set = await playersUnderManager(category.managerNorm ?? '');
+    return set.has(playerId);
   }
   const rows = (await db.execute(sql`
     SELECT 1 AS ok
     FROM players p
     WHERE p.id = ${playerId}::uuid
-      AND p.market_value_tier >= ${FAMOUS_TIER}
       AND ${categorySatisfiesSql(category)}
     LIMIT 1
   `)) as unknown as Array<{ ok: number }>;
   return rows.length > 0;
+}
+
+export async function countNamedMatchingCategory(
+  playerIds: string[],
+  category: BackYourselfCategorySpec
+): Promise<number> {
+  const unique = [...new Set(playerIds.filter(Boolean))];
+  if (unique.length === 0) return 0;
+  if (category.type === 'managed_by') {
+    const set = await playersUnderManager(category.managerNorm ?? '');
+    return unique.filter((id) => set.has(id)).length;
+  }
+  const rows = (await db.execute(sql`
+    SELECT COUNT(*)::int AS n
+    FROM players p
+    WHERE p.id IN (${sql.join(unique.map((id) => sql`${id}::uuid`), sql`, `)})
+      AND ${categorySatisfiesSql(category)}
+  `)) as unknown as Array<{ n: number }>;
+  return rows[0]?.n ?? 0;
 }
 
 /** XP for a successful pledge. Uses xpCap (not full maxPool) as the 1000 denominator. */
@@ -1015,7 +1048,7 @@ export async function resolveBackYourselfPlayerCard(
   return card ?? null;
 }
 
-/** Recalculate maxPool + xpCap + valid ids for Ops after category edits (full pool, no clip). */
+/** Recalculate suggested perfect + famous preview ids for Ops after category edits. */
 export async function refreshBackYourselfAnswer(
   category: BackYourselfCategory
 ): Promise<{
@@ -1023,6 +1056,7 @@ export async function refreshBackYourselfAnswer(
   xpCap: number;
   validPlayerIds: string[];
   poolPlayers: BackYourselfPlayerCard[];
+  allMatchCount: number;
   category: BackYourselfCategory;
 }> {
   const decorated = await decorateCategory({
@@ -1030,12 +1064,16 @@ export async function refreshBackYourselfAnswer(
     label: category.label || categoryLabel(category),
   });
   const validPlayerIds = await listMatchingPlayerIds(decorated);
-  const poolPlayers = await resolveBackYourselfPlayerCards(validPlayerIds);
+  const [poolPlayers, allMatchCount] = await Promise.all([
+    resolveBackYourselfPlayerCards(validPlayerIds),
+    countAllMatchingPlayers(decorated),
+  ]);
   return {
     maxPool: validPlayerIds.length,
     xpCap: backYourselfXpCap(validPlayerIds.length),
     validPlayerIds,
     poolPlayers,
+    allMatchCount,
     category: { ...decorated, label: decorated.label || categoryLabel(decorated) },
   };
 }

@@ -1,7 +1,9 @@
 import SwiftUI
 import UIKit
 
-/// One-shot intro for the weekly pyramid league (first visit to Weekly).
+/// One-shot intro for the weekly pyramid league.
+/// If the build is installed mid-week, wait until the next London Monday.
+/// If it is installed on Monday, that week is eligible immediately.
 enum WeeklyLeagueIntro {
     static var hasShown: Bool {
         UserDefaults.standard.bool(forKey: UserDefaultsKeys.weeklyLeagueIntroShown)
@@ -12,7 +14,66 @@ enum WeeklyLeagueIntro {
     }
 
     static func reset() {
-        UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.weeklyLeagueIntroShown)
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: UserDefaultsKeys.weeklyLeagueIntroShown)
+        defaults.set(londonWeekStartString(), forKey: UserDefaultsKeys.weeklyLeagueIntroEligibleWeek)
+    }
+
+    static func shouldPresent(currentWeekStart: String, now: Date = .now) -> Bool {
+        guard !hasShown else { return false }
+        return currentWeekStart >= eligibleWeekStart(now: now)
+    }
+
+    /// First launch of this build: Monday this week if today is Monday, otherwise next Monday.
+    private static func eligibleWeekStart(now: Date = .now) -> String {
+        let defaults = UserDefaults.standard
+        let key = UserDefaultsKeys.weeklyLeagueIntroEligibleWeek
+        if let stored = defaults.string(forKey: key), !stored.isEmpty {
+            return stored
+        }
+        let thisWeek = londonWeekStartString(now: now)
+        let eligible = isLondonMonday(now: now) ? thisWeek : nextWeekStart(after: thisWeek)
+        defaults.set(eligible, forKey: key)
+        return eligible
+    }
+
+    private static var londonCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/London") ?? .gmt
+        calendar.firstWeekday = 2
+        return calendar
+    }
+
+    private static var londonDateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = londonCalendar
+        formatter.timeZone = londonCalendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    static func londonWeekStartString(now: Date = .now) -> String {
+        let calendar = londonCalendar
+        let weekday = calendar.component(.weekday, from: now)
+        let daysFromMonday = (weekday + 5) % 7
+        let monday = calendar.date(
+            byAdding: .day,
+            value: -daysFromMonday,
+            to: calendar.startOfDay(for: now)
+        ) ?? now
+        return londonDateFormatter.string(from: monday)
+    }
+
+    private static func isLondonMonday(now: Date) -> Bool {
+        londonCalendar.component(.weekday, from: now) == 2
+    }
+
+    private static func nextWeekStart(after weekStart: String) -> String {
+        let calendar = londonCalendar
+        guard let monday = londonDateFormatter.date(from: weekStart),
+              let next = calendar.date(byAdding: .day, value: 7, to: monday)
+        else { return weekStart }
+        return londonDateFormatter.string(from: next)
     }
 
     /// Trophy art in `Resources/GameTiles/` — filenames match the files dropped there.

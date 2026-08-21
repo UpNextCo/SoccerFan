@@ -244,6 +244,49 @@ export type TargetManPreview = {
   samplePlayers: Array<{ name: string; value: number }>
 }
 
+export type Darts501Pool = {
+  kind: 'nationality' | 'league' | 'club' | 'international'
+  nationality?: string
+  aliases?: string[]
+  leagueId?: number
+  leagueName?: string
+  club?: string
+  teamId?: number
+}
+
+export type Darts501AuthoringOptions = {
+  metrics: Array<{ id: string; label: string }>
+  leagues: Array<{ leagueId: number; leagueName: string }>
+  nations: Array<{ nationality: string; audience: string }>
+}
+
+export type Darts501PoolPlayer = {
+  id: string
+  name: string
+  club: string
+  nationality: string
+  position: string
+  score: number
+  leftValue: number
+  rightValue: number
+  valid: boolean
+  fame: number
+  headshotUrl?: string
+}
+
+export type Darts501Preview = {
+  formulaId: string
+  label: string
+  audience: string
+  formulaDetail: string
+  left: string
+  op: '+' | '-'
+  right: string
+  pool: Darts501Pool
+  quality: { eligible: number; valid: number; high: number; checkout: number }
+  players: Darts501PoolPlayer[]
+}
+
 export type DraftCategoryOption = {
   id: string
   title: string
@@ -490,6 +533,7 @@ export const api = {
       puzzleJson: unknown
       answerJson: unknown
       poolPlayers: AdminBackYourselfPoolPlayer[]
+      allMatchCount?: number
     }>('/puzzle/recompute-back-yourself', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -604,6 +648,18 @@ export const api = {
     request<TargetManCategoryOption[]>('/validation/target-man/categories'),
   previewTargetMan: (body: { categoryId: string; pool?: TargetManPool | null }) =>
     request<TargetManPreview>('/validation/target-man/preview', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  darts501Options: () => request<Darts501AuthoringOptions>('/validation/darts-501/options'),
+  previewDarts501: (body: {
+    formulaId?: string
+    left?: string
+    op?: '+' | '-'
+    right?: string
+    pool?: Darts501Pool
+  }) =>
+    request<Darts501Preview>('/validation/darts-501/preview', {
       method: 'POST',
       body: JSON.stringify(body),
     }),

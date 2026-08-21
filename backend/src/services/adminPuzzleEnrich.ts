@@ -10,6 +10,7 @@ import {
   type BattlePuzzleJson,
 } from './battleGenerator.js';
 import {
+  backYourselfXpCap,
   refreshBackYourselfAnswer,
   type BackYourselfCategory,
   type BackYourselfPlayerCard,
@@ -536,21 +537,31 @@ export async function enrichAdminDraftPuzzle(
 export async function enrichAdminBackYourselfPuzzle(
   puzzleJson: unknown,
   answerJson: unknown,
-  opts?: { requirePoolBounds?: boolean }
-): Promise<{ puzzleJson: unknown; answerJson: unknown; poolPlayers: BackYourselfPlayerCard[] }> {
+  opts?: { requirePoolBounds?: boolean; resetMaxPool?: boolean }
+): Promise<{
+  puzzleJson: unknown;
+  answerJson: unknown;
+  poolPlayers: BackYourselfPlayerCard[];
+  allMatchCount: number;
+}> {
   const puzzle = structuredClone(puzzleJson) as BackYourselfPuzzlePublic;
   if (!puzzle?.category) {
     throw new Error('Back Yourself puzzle is missing a category');
   }
+  const previousMax = typeof puzzle.maxPool === 'number' && Number.isFinite(puzzle.maxPool)
+    ? Math.floor(puzzle.maxPool)
+    : null;
   const refreshed = await refreshBackYourselfAnswer(puzzle.category as BackYourselfCategory);
   if (opts?.requirePoolBounds && (refreshed.maxPool < 10 || refreshed.maxPool > 120)) {
     throw new Error(
-      `Player pool size ${refreshed.maxPool} is outside 10–120. Pick a different category.`
+      `Suggested perfect ${refreshed.maxPool} is outside 10–120. Pick a different category.`
     );
   }
   puzzle.category = refreshed.category;
-  puzzle.maxPool = refreshed.maxPool;
-  puzzle.xpCap = refreshed.xpCap;
+  puzzle.maxPool = opts?.resetMaxPool || previousMax == null
+    ? refreshed.maxPool
+    : Math.max(1, Math.min(120, previousMax));
+  puzzle.xpCap = backYourselfXpCap(puzzle.maxPool);
   const answer = {
     modeId: 'back_yourself' as const,
     validPlayerIds: refreshed.validPlayerIds,
@@ -560,6 +571,7 @@ export async function enrichAdminBackYourselfPuzzle(
     puzzleJson: puzzle,
     answerJson: { ...answer, validPlayerIds: refreshed.validPlayerIds },
     poolPlayers: refreshed.poolPlayers,
+    allMatchCount: refreshed.allMatchCount,
   };
 }
 

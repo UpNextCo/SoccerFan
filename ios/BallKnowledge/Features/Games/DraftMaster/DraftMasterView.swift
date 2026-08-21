@@ -357,6 +357,7 @@ final class DraftMasterViewModel {
             next.phase = .complete
         }
         if result.percentage >= BattleTiming.confettiThreshold { confettiBurstToken += 1 }
+        SignatureTrophyStore.evaluateDraft(yourTotal: result.yourTotal, optimal: result.optimalScore)
         Feedback.play(.win)
         Task {
             try? await Task.sleep(for: .seconds(BattleTiming.resultReveal))
@@ -381,6 +382,7 @@ final class DraftMasterViewModel {
                 next.challenge.optimalScore = optimalScore
                 if let prior = next.result {
                     next.result = BattleResult(yourTotal: prior.yourTotal, optimalScore: optimalScore)
+                    SignatureTrophyStore.evaluateDraft(yourTotal: prior.yourTotal, optimal: optimalScore)
                 }
             }
         }

@@ -58,6 +58,11 @@ final class BackYourselfViewModel {
 
     func selectPlayer(_ hit: PlayerSearchResultDTO) async {
         guard state.phase == .naming, !isSubmitting else { return }
+        if state.namedCount >= state.puzzle.maxPool {
+            state.phase = .won
+            showResult = true
+            return
+        }
         if state.usedIds.contains(hit.id) {
             feedback = "Already named"
             Feedback.play(.deny)
@@ -83,10 +88,17 @@ final class BackYourselfViewModel {
                 state.named.append(player)
                 searchText = ""
                 searchResults = []
-                if state.namedCount >= state.pledge {
+                if state.namedCount >= state.pledge || state.namedCount >= state.puzzle.maxPool {
                     state.phase = .won
+                    SignatureTrophyStore.evaluateBackYourself(
+                        named: state.namedCount,
+                        maxPool: state.puzzle.maxPool,
+                        livesLeft: state.livesRemaining,
+                        won: true
+                    )
                     confettiBurstToken += 1
                     Feedback.play(.win)
+                    try? await Task.sleep(for: .milliseconds(800))
                     showResult = true
                 } else {
                     Feedback.play(.success)
@@ -308,9 +320,9 @@ struct BackYourselfView: View {
         let maxPool = state.puzzle.maxPool
         let xpCap = state.puzzle.xpCap
         if maxPool > xpCap {
-            return "\(maxPool) possible · Max XP at \(xpCap)+"
+            return "\(maxPool) for a perfect · Max XP at \(xpCap)+"
         }
-        return "\(maxPool) nameable players in the pool"
+        return "\(maxPool) for a perfect score"
     }
 
     private func categorySymbol(for type: String) -> String {
@@ -600,7 +612,9 @@ private struct BackYourselfResultView: View {
 
                 Text(
                     state.won
-                        ? "Named \(state.namedCount) of \(state.pledge)"
+                        ? (state.namedCount >= state.puzzle.maxPool
+                            ? "Perfect score - \(state.namedCount) of \(state.puzzle.maxPool)"
+                            : "Named \(state.namedCount) of \(state.pledge)")
                         : "Needed \(state.pledge) — got \(state.namedCount)"
                 )
                 .font(BKFont.body(14))

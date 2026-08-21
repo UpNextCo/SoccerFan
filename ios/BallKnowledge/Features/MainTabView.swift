@@ -229,7 +229,6 @@ struct LeaguesTabView: View {
     @State private var scope: LeagueScope = .weekly
     @State private var viewModel = LeaguesViewModel()
     @State private var weeklyIntroPayload: WeeklyLeagueIntroPayload?
-    @State private var didPresentWeeklyIntroThisVisit = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -256,12 +255,16 @@ struct LeaguesTabView: View {
     }
 
     private func presentWeeklyIntroIfNeeded() {
-        // Always present once per Leagues visit while iterating on this UI.
-        guard !didPresentWeeklyIntroThisVisit else { return }
-        didPresentWeeklyIntroThisVisit = true
+        guard scope == .weekly, let weekly = viewModel.weekly else { return }
+        guard WeeklyLeagueIntro.shouldPresent(currentWeekStart: weekly.weekStart) else { return }
+        let division = weekly.division ?? "sunday_league"
+        let label = weekly.divisionLabel
+            ?? WeeklyLeagueIntro.pyramid.first(where: { $0.id == division })?.label
+            ?? "Sunday League"
+        WeeklyLeagueIntro.markShown()
         weeklyIntroPayload = WeeklyLeagueIntroPayload(
-            division: "champions_league",
-            divisionLabel: "Champions League"
+            division: division,
+            divisionLabel: label
         )
     }
 
@@ -1271,7 +1274,7 @@ enum DailyReminder {
             let content = UNMutableNotificationContent()
             if dayOffset == 0, completedCount > 0 {
                 content.title = "Finish today's games"
-                content.body = "More games are waiting — keep stacking XP."
+                content.body = "More games are waiting - keep stacking XP."
             } else {
                 let count = totalCount > 0 ? totalCount : DailyPlayOrder.playableModes.count
                 content.title = "Your \(count) daily games are ready"
@@ -1446,6 +1449,7 @@ struct ProfileTabView: View {
 
                 Button { showFeaturedTrophyPicker = true } label: {
                     if let featured = TrophyUnlockPayload.earnedTrophy(id: featuredTrophyId),
+                       TrophyUnlockPayload.isEarned(featured, xp: auth.user?.xp ?? 0, league: LeagueTrophyStore.latest),
                        let imageName = featured.bundleImageName {
                         FeaturedTrophyBadge(imageName: imageName, size: 62)
                     } else {

@@ -9,7 +9,7 @@ import {
   normalizeTargetManPool,
   targetCategoryById,
 } from './targetManCategories.js';
-import { darts501FormulaById } from './darts501Generator.js';
+import { parseDarts501Puzzle, resolveDarts501Formula } from './darts501Generator.js';
 import { categoryById as draftCategoryById } from './battleGenerator.js';
 
 export type ValidationSeverity = 'error' | 'warning';
@@ -491,13 +491,6 @@ function validateBackYourself(puzzleJson: unknown, answerJson: unknown, issues: 
   const puzzle = parse(backYourselfPuzzle, puzzleJson, 'puzzleJson', issues);
   const answer = parse(backYourselfAnswer, answerJson, 'answerJson', issues);
   if (!puzzle || !answer) return;
-  if (answer.validPlayerIds.length !== puzzle.maxPool) {
-    issue(
-      issues,
-      'puzzleJson.maxPool',
-      `maxPool (${puzzle.maxPool}) must equal validPlayerIds length (${answer.validPlayerIds.length}). Recalculate the pool.`
-    );
-  }
   if (puzzle.xpCap != null && puzzle.xpCap > puzzle.maxPool) {
     issue(issues, 'puzzleJson.xpCap', `xpCap (${puzzle.xpCap}) cannot exceed maxPool (${puzzle.maxPool}).`);
   }
@@ -523,18 +516,11 @@ function validateDarts501(puzzleJson: unknown, _answerJson: unknown, issues: Adm
     issue(issues, 'puzzleJson', 'Football 501 puzzle is missing.');
     return;
   }
-  const puzzle = puzzleJson as { formulaId?: unknown; formulaLabel?: unknown };
-  if (typeof puzzle.formulaId !== 'string' || !puzzle.formulaId) {
-    issue(issues, 'puzzleJson.formulaId', 'Formula id is required.');
+  const puzzle = parseDarts501Puzzle(puzzleJson);
+  const formula = puzzle ? resolveDarts501Formula(puzzle) : undefined;
+  if (!puzzle || !formula) {
+    issue(issues, 'puzzleJson', 'Set a main constraint and both formula stats.');
     return;
-  }
-  const formula = darts501FormulaById(puzzle.formulaId);
-  if (!formula) {
-    issue(issues, 'puzzleJson.formulaId', 'Choose a supported Football 501 formula.');
-    return;
-  }
-  if (typeof puzzle.formulaLabel !== 'string' || puzzle.formulaLabel !== formula.label) {
-    issue(issues, 'puzzleJson.formulaLabel', `Formula label must be “${formula.label}”.`);
   }
 }
 

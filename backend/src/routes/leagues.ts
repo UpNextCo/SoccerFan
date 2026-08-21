@@ -11,6 +11,7 @@ import {
   teamFans,
   teamLeaderboard,
   weeklyLeaderboard,
+  leagueTrophyProgress,
   weeklyLeagueForUser,
   weekStartFor,
   xpByModeBreakdownForUser,
@@ -83,6 +84,14 @@ leaguesRouter.get('/players/:userId/xp-by-mode', requireAuth, async (req, res) =
     sendSuccess(res, await xpByModeBreakdownForUser(userId, date));
   } catch (err) {
     sendError(res, err instanceof Error ? err.message : 'Failed to load XP by mode', 500);
+  }
+});
+
+leaguesRouter.get('/trophies', requireAuth, async (req, res) => {
+  try {
+    sendSuccess(res, await leagueTrophyProgress(req.auth!.userId));
+  } catch (err) {
+    sendError(res, err instanceof Error ? err.message : 'Failed to load league trophies', 500);
   }
 });
 

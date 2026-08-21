@@ -397,6 +397,7 @@ struct OneMoreView: View {
                     modeId: GameModeID.oneMore.rawValue,
                     date: dailyDate,
                     score: viewModel.state.phase == .busted ? 0 : viewModel.state.bankedScore,
+                    guesses: viewModel.state.picks.count,
                     won: viewModel.state.phase == .cashedOut,
                     answer: viewModel.state.answerPayload(),
                     context: modelContext

@@ -120,47 +120,25 @@ struct VsDarts501LiveView: View {
 
     private var category: Darts501CategoryDisplay {
         if let cat = viewModel.darts501Puzzle?.category { return cat }
-        let audience = live?.audience ?? "Any player"
+        let audience = live?.audience ?? "Players"
         let formula = {
             if let detail = live?.formulaDetail, !detail.isEmpty { return detail }
             return live?.formulaLabel ?? "Football 501"
         }()
-        return Darts501CategoryDisplay(nationality: nil, audience: audience, formula: formula)
+        return Darts501CategoryDisplay(
+            nationality: live?.nationality,
+            leagueName: live?.leagueName,
+            club: live?.club,
+            clubLeague: live?.clubLeague,
+            audience: audience,
+            formula: formula
+        )
     }
 
     private var formulaCard: some View {
-        let cat = category
-        return VStack(spacing: 8) {
-            if cat.hasNationFilter {
-                VStack(spacing: 3) {
-                    Text(cat.flag)
-                        .font(.system(size: 40))
-                    Text(cat.audience.uppercased())
-                        .font(BKFont.headline(15))
-                        .tracking(0.6)
-                        .foregroundStyle(BKTheme.textPrimary)
-                        .multilineTextAlignment(.center)
-                }
-            } else {
-                Text("TODAY'S STAT")
-                    .font(BKFont.caption(11))
-                    .tracking(1.2)
-                    .foregroundStyle(BKTheme.textMuted)
-            }
-            Text(cat.formula)
-                .font(BKFont.body(13))
-                .foregroundStyle(BKTheme.textSecondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 260)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity)
-        .background(BKTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        Darts501CategoryCard(category: category)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
     }
 
     private var history: some View {

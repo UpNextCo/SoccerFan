@@ -128,6 +128,7 @@ struct HomeView: View {
         .refreshable {
             await viewModel.load(context: modelContext)
             await auth.refreshProfile()
+            await evaluateSignatureDailies()
         }
         .task {
             await reloadIfNeeded(force: true, context: modelContext)
@@ -159,10 +160,16 @@ struct HomeView: View {
                 await auth.refreshProfile()
                 await viewModel.load(context: modelContext)
                 refreshInProgress()
+                await evaluateSignatureDailies()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .perfectScoreUnlocked)) { notification in
-            pendingTrophyUnlock = notification.object as? TrophyUnlockPayload
+            guard let payload = notification.object as? TrophyUnlockPayload else { return }
+            if presentedMode != nil || isPlayingGame {
+                pendingTrophyUnlock = payload
+            } else {
+                trophyUnlock = payload
+            }
         }
         .fullScreenCover(item: $presentedMode, onDismiss: {
             // Fires however the game closes — including tapping X mid-game — so an "In Progress"
@@ -173,6 +180,7 @@ struct HomeView: View {
                 await auth.refreshProfile()
                 await viewModel.load(context: modelContext)
                 refreshInProgress()
+                await evaluateSignatureDailies()
                 // Let the game cover finish dismissing before stacking the next cover.
                 try? await Task.sleep(for: .milliseconds(350))
                 if let pending = pendingTrophyUnlock {
@@ -236,6 +244,29 @@ struct HomeView: View {
         await viewModel.load(context: context)
         refreshInProgress()
         await auth.refreshProfile()
+        await evaluateSignatureDailies()
+    }
+
+    private func evaluateSignatureDailies() async {
+        let todayXp = auth.user?.todayXp ?? 0
+        var todayRank: Int?
+        var yesterdayRank: Int?
+        if let userId = auth.user?.id {
+            async let todayTask = APIClient.shared.leaguesDaily()
+            async let yesterdayTask = APIClient.shared.leaguesDaily(localDate: DailyDate.localYesterday())
+            if let today = try? await todayTask {
+                todayRank = today.standings.first(where: { $0.userId == userId })?.rank
+            }
+            if let yesterday = try? await yesterdayTask {
+                let mine = yesterday.standings.first(where: { $0.userId == userId })
+                if (mine?.xp ?? 0) > 0 { yesterdayRank = mine?.rank }
+            }
+        }
+        SignatureTrophyStore.evaluateDaily(
+            todayXp: todayXp,
+            todayRank: todayRank,
+            yesterdayRank: yesterdayRank
+        )
     }
 
     private func openMode(_ mode: GameModeMetaDTO, bundle: DailyBundleDTO) {
@@ -393,6 +424,7 @@ struct HomeHeaderView: View {
         UserAvatar(urlString: user?.avatarUrl, usesLocalYou: true, size: 40)
         .overlay(alignment: .bottomTrailing) {
             if let featured = TrophyUnlockPayload.earnedTrophy(id: featuredTrophyId),
+               TrophyUnlockPayload.isEarned(featured, xp: user?.xp ?? 0, league: LeagueTrophyStore.latest),
                let imageName = featured.bundleImageName {
                 FeaturedTrophyBadge(imageName: imageName, size: 24)
                     .offset(x: 6, y: 6)

@@ -71,6 +71,13 @@ struct TeamStandingDTO: Codable, Identifiable {
     var id: Int { teamId }
 }
 
+struct LeagueTrophyProgressDTO: Codable, Equatable {
+    let currentDivision: String?
+    let highestDivision: String?
+    let divisionsReached: [String]
+    let divisionsWon: [String]
+}
+
 struct MyLeagueDTO: Codable {
     let weekStart: String
     let weekEnd: String?
@@ -568,6 +575,10 @@ struct VsDarts501DTO: Codable, Equatable {
     let formulaLabel: String
     let audience: String
     let formulaDetail: String
+    let nationality: String?
+    let leagueName: String?
+    let club: String?
+    let clubLeague: String?
     let checkoutLives: Int
     let startScore: Int
     let board: [VsDarts501BoardDTO]
@@ -584,7 +595,8 @@ struct VsDarts501DTO: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case turnUserId, yourTurn, deadlineAt, finished, winnerUserId, usedPlayerIds
-        case formulaLabel, audience, formulaDetail, checkoutLives, startScore, board
+        case formulaLabel, audience, formulaDetail, nationality, leagueName, club, clubLeague
+        case checkoutLives, startScore, board
         case throwLog = "throws"
         case drawOfferedBy, drawOfferedByName, youOfferedDraw, youAcceptedDraw
         case pendingDraw, drawAcceptedCount, drawNeededCount
@@ -600,8 +612,12 @@ struct VsDarts501DTO: Codable, Equatable {
         winnerUserId = try c.decodeIfPresent(String.self, forKey: .winnerUserId)
         usedPlayerIds = try c.decodeIfPresent([String].self, forKey: .usedPlayerIds) ?? []
         formulaLabel = try c.decodeIfPresent(String.self, forKey: .formulaLabel) ?? "Football 501"
-        audience = try c.decodeIfPresent(String.self, forKey: .audience) ?? "Any player"
+        audience = try c.decodeIfPresent(String.self, forKey: .audience) ?? "Players"
         formulaDetail = try c.decodeIfPresent(String.self, forKey: .formulaDetail) ?? ""
+        nationality = try c.decodeIfPresent(String.self, forKey: .nationality)
+        leagueName = try c.decodeIfPresent(String.self, forKey: .leagueName)
+        club = try c.decodeIfPresent(String.self, forKey: .club)
+        clubLeague = try c.decodeIfPresent(String.self, forKey: .clubLeague)
         checkoutLives = try c.decodeIfPresent(Int.self, forKey: .checkoutLives) ?? 3
         startScore = try c.decodeIfPresent(Int.self, forKey: .startScore) ?? 501
         board = try c.decodeIfPresent([VsDarts501BoardDTO].self, forKey: .board) ?? []

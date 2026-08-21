@@ -15,6 +15,7 @@ import { DraftEditor } from './editors/DraftEditor'
 import { ClubChainEditor } from './editors/ClubChainEditor'
 import { BackYourselfEditor } from './editors/BackYourselfEditor'
 import { TargetManEditor } from './editors/TargetManEditor'
+import { Darts501Editor } from './editors/Darts501Editor'
 import { JsonFallbackEditor } from './editors/JsonFallbackEditor'
 import './editors/editor-clean.css'
 
@@ -580,6 +581,18 @@ function EditorBody({
     case 'target_man':
       return (
         <TargetManEditor
+          puzzle={puzzleJson}
+          answer={answerJson}
+          locked={locked}
+          onChange={(p, a) => {
+            onPuzzle(p)
+            onAnswer(a)
+          }}
+        />
+      )
+    case 'darts_501':
+      return (
+        <Darts501Editor
           puzzle={puzzleJson}
           answer={answerJson}
           locked={locked}
