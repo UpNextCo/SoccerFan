@@ -577,8 +577,10 @@ struct VsDarts501DTO: Codable, Equatable {
     let formulaDetail: String
     let nationality: String?
     let leagueName: String?
+    let leagueId: Int?
     let club: String?
     let clubLeague: String?
+    let teamId: Int?
     let checkoutLives: Int
     let startScore: Int
     let board: [VsDarts501BoardDTO]
@@ -595,7 +597,7 @@ struct VsDarts501DTO: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case turnUserId, yourTurn, deadlineAt, finished, winnerUserId, usedPlayerIds
-        case formulaLabel, audience, formulaDetail, nationality, leagueName, club, clubLeague
+        case formulaLabel, audience, formulaDetail, nationality, leagueName, leagueId, club, clubLeague, teamId
         case checkoutLives, startScore, board
         case throwLog = "throws"
         case drawOfferedBy, drawOfferedByName, youOfferedDraw, youAcceptedDraw
@@ -616,8 +618,10 @@ struct VsDarts501DTO: Codable, Equatable {
         formulaDetail = try c.decodeIfPresent(String.self, forKey: .formulaDetail) ?? ""
         nationality = try c.decodeIfPresent(String.self, forKey: .nationality)
         leagueName = try c.decodeIfPresent(String.self, forKey: .leagueName)
+        leagueId = try c.decodeIfPresent(Int.self, forKey: .leagueId)
         club = try c.decodeIfPresent(String.self, forKey: .club)
         clubLeague = try c.decodeIfPresent(String.self, forKey: .clubLeague)
+        teamId = try c.decodeIfPresent(Int.self, forKey: .teamId)
         checkoutLives = try c.decodeIfPresent(Int.self, forKey: .checkoutLives) ?? 3
         startScore = try c.decodeIfPresent(Int.self, forKey: .startScore) ?? 501
         board = try c.decodeIfPresent([VsDarts501BoardDTO].self, forKey: .board) ?? []

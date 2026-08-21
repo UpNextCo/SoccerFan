@@ -128,8 +128,10 @@ struct VsDarts501LiveView: View {
         return Darts501CategoryDisplay(
             nationality: live?.nationality,
             leagueName: live?.leagueName,
+            leagueId: live?.leagueId,
             club: live?.club,
             clubLeague: live?.clubLeague,
+            teamId: live?.teamId,
             audience: audience,
             formula: formula
         )

@@ -9,8 +9,10 @@ struct Darts501Puzzle: Equatable, Codable {
     let formulaLabel: String
     var nationality: String? = nil
     var leagueName: String? = nil
+    var leagueId: Int? = nil
     var club: String? = nil
     var clubLeague: String? = nil
+    var teamId: Int? = nil
     var audience: String? = nil
     var formulaDetail: String? = nil
     let startScore: Int
@@ -25,8 +27,10 @@ struct Darts501Puzzle: Equatable, Codable {
 struct Darts501CategoryDisplay: Equatable {
     let nationality: String?
     var leagueName: String? = nil
+    var leagueId: Int? = nil
     var club: String? = nil
     var clubLeague: String? = nil
+    var teamId: Int? = nil
     let audience: String
     let formula: String
 
@@ -49,6 +53,11 @@ struct Darts501CategoryDisplay: Equatable {
         return true
     }
 
+    var hasInternationalFilter: Bool {
+        !hasNationFilter && !hasLeagueFilter && !hasClubFilter
+            && audience.localizedCaseInsensitiveContains("international")
+    }
+
     static func make(from puzzle: Darts501Puzzle) -> Darts501CategoryDisplay {
         let fallback = catalog[puzzle.formulaId]
         let audience = nonempty(puzzle.audience) ?? fallback?.audience ?? "Players"
@@ -56,8 +65,10 @@ struct Darts501CategoryDisplay: Equatable {
         return Darts501CategoryDisplay(
             nationality: nonempty(puzzle.nationality) ?? fallback?.nationality,
             leagueName: nonempty(puzzle.leagueName) ?? fallback?.leagueName,
+            leagueId: puzzle.leagueId ?? fallback?.leagueId,
             club: nonempty(puzzle.club) ?? fallback?.club,
             clubLeague: nonempty(puzzle.clubLeague) ?? fallback?.clubLeague,
+            teamId: puzzle.teamId ?? fallback?.teamId,
             audience: audience == "Any player" ? (fallback?.audience ?? "Players") : audience,
             formula: formula
         )
@@ -71,7 +82,7 @@ struct Darts501CategoryDisplay: Equatable {
 
     private static let catalog: [String: Darts501CategoryDisplay] = [
         "pl_apps_minus_goals_wales": .init(nationality: "Wales", audience: "Welsh Players", formula: "Premier League appearances − career goals"),
-        "cl_apps_plus_intl_goals": .init(nationality: nil, leagueName: "Champions League", audience: "Champions League Players", formula: "Champions League appearances + international goals"),
+        "cl_apps_plus_intl_goals": .init(nationality: nil, leagueName: "Champions League", leagueId: 2, audience: "Champions League Players", formula: "Champions League appearances + international goals"),
         "pl_goals_plus_england_caps": .init(nationality: "England", audience: "English Players", formula: "Premier League goals + international caps"),
         "pl_apps_minus_goals_scotland": .init(nationality: "Scotland", audience: "Scottish Players", formula: "Premier League appearances − career goals"),
         "pl_apps_minus_goals_ireland": .init(nationality: "Ireland", audience: "Irish Players", formula: "Premier League appearances − career goals"),
@@ -83,22 +94,22 @@ struct Darts501CategoryDisplay: Equatable {
         "pl_goals_plus_france_caps": .init(nationality: "France", audience: "French Players", formula: "Premier League goals + international caps"),
         "pl_goals_plus_brazil_caps": .init(nationality: "Brazil", audience: "Brazilian Players", formula: "Premier League goals + international caps"),
         "pl_assists_plus_england_caps": .init(nationality: "England", audience: "English Players", formula: "Premier League assists + international caps"),
-        "cl_goals_plus_intl_goals": .init(nationality: nil, leagueName: "Champions League", audience: "Champions League Players", formula: "Champions League goals + international goals"),
-        "pl_goals_plus_cl_goals": .init(nationality: nil, leagueName: "Premier League", audience: "Premier League Players", formula: "Premier League goals + Champions League goals"),
-        "cl_apps_minus_cl_goals": .init(nationality: nil, leagueName: "Champions League", audience: "Champions League Players", formula: "Champions League appearances − Champions League goals"),
-        "pl_goals_plus_intl_goals": .init(nationality: nil, leagueName: "Premier League", audience: "Premier League Players", formula: "Premier League goals + international goals"),
-        "laliga_goals_plus_cl_goals": .init(nationality: nil, leagueName: "La Liga", audience: "La Liga Players", formula: "La Liga goals + Champions League goals"),
+        "cl_goals_plus_intl_goals": .init(nationality: nil, leagueName: "Champions League", leagueId: 2, audience: "Champions League Players", formula: "Champions League goals + international goals"),
+        "pl_goals_plus_cl_goals": .init(nationality: nil, leagueName: "Premier League", leagueId: 39, audience: "Premier League Players", formula: "Premier League goals + Champions League goals"),
+        "cl_apps_minus_cl_goals": .init(nationality: nil, leagueName: "Champions League", leagueId: 2, audience: "Champions League Players", formula: "Champions League appearances − Champions League goals"),
+        "pl_goals_plus_intl_goals": .init(nationality: nil, leagueName: "Premier League", leagueId: 39, audience: "Premier League Players", formula: "Premier League goals + international goals"),
+        "laliga_goals_plus_cl_goals": .init(nationality: nil, leagueName: "La Liga", leagueId: 140, audience: "La Liga Players", formula: "La Liga goals + Champions League goals"),
         "career_trophies_plus_intl_goals": .init(nationality: nil, audience: "International Players", formula: "Career trophies + international goals"),
         "cl_apps_plus_portugal_caps": .init(nationality: "Portugal", audience: "Portuguese Players", formula: "Champions League appearances + international caps"),
         "cl_apps_plus_netherlands_caps": .init(nationality: "Netherlands", audience: "Dutch Players", formula: "Champions League appearances + international caps"),
-        "seriea_goals_plus_cl_goals": .init(nationality: nil, leagueName: "Serie A", audience: "Serie A Players", formula: "Serie A goals + Champions League goals"),
-        "pl_assists_plus_cl_assists": .init(nationality: nil, leagueName: "Premier League", audience: "Premier League Players", formula: "Premier League assists + Champions League assists"),
-        "wc_goals_plus_cl_goals": .init(nationality: nil, leagueName: "World Cup", audience: "World Cup Players", formula: "World Cup goals + Champions League goals"),
+        "seriea_goals_plus_cl_goals": .init(nationality: nil, leagueName: "Serie A", leagueId: 135, audience: "Serie A Players", formula: "Serie A goals + Champions League goals"),
+        "pl_assists_plus_cl_assists": .init(nationality: nil, leagueName: "Premier League", leagueId: 39, audience: "Premier League Players", formula: "Premier League assists + Champions League assists"),
+        "wc_goals_plus_cl_goals": .init(nationality: nil, leagueName: "World Cup", leagueId: 1, audience: "World Cup Players", formula: "World Cup goals + Champions League goals"),
         "intl_caps_minus_intl_goals_brazil": .init(nationality: "Brazil", audience: "Brazilian Players", formula: "International caps − international goals"),
         "intl_caps_minus_intl_goals_argentina": .init(nationality: "Argentina", audience: "Argentine Players", formula: "International caps − international goals"),
         "pl_goals_plus_scotland_caps": .init(nationality: "Scotland", audience: "Scottish Players", formula: "Premier League goals + international caps"),
         "pl_apps_minus_pl_goals_wales": .init(nationality: "Wales", audience: "Welsh Players", formula: "Premier League appearances − Premier League goals"),
-        "pl_apps_minus_yellows_chelsea": .init(nationality: nil, club: "Chelsea", clubLeague: "Premier League", audience: "Chelsea Players", formula: "Premier League appearances − Premier League yellow cards"),
+        "pl_apps_minus_yellows_chelsea": .init(nationality: nil, club: "Chelsea", clubLeague: "Premier League", teamId: 49, audience: "Chelsea Players", formula: "Premier League appearances − Premier League yellow cards"),
     ]
 }
 

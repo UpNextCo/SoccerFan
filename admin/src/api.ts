@@ -270,6 +270,7 @@ export type Darts501PoolPlayer = {
   leftValue: number
   rightValue: number
   valid: boolean
+  bust: boolean
   fame: number
   headshotUrl?: string
 }

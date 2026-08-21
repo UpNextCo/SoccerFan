@@ -301,8 +301,10 @@ export type VsDarts501View = {
   formulaDetail: string;
   nationality: string | null;
   leagueName: string | null;
+  leagueId: number | null;
   club: string | null;
   clubLeague: string | null;
+  teamId: number | null;
   checkoutLives: number;
   startScore: number;
   board: VsDarts501BoardRow[];
@@ -659,8 +661,10 @@ function darts501ViewFor(
     formulaDetail: puzzle?.formulaDetail ?? '',
     nationality: puzzle?.nationality ?? null,
     leagueName: puzzle?.leagueName ?? null,
+    leagueId: puzzle?.leagueId ?? null,
     club: puzzle?.club ?? null,
     clubLeague: puzzle?.clubLeague ?? null,
+    teamId: puzzle?.teamId ?? null,
     checkoutLives: puzzle?.checkoutLives ?? DARTS501_CHECKOUT_LIVES,
     startScore: puzzle?.startScore ?? DARTS501_START,
     board: people.map((p) => {

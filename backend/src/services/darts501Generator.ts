@@ -18,6 +18,7 @@ import {
   DARTS501_CHECKOUT_LIVES,
   DARTS501_CHECKOUT_WINDOW,
   DARTS501_START,
+  bustReasonForScore,
   isValidDartsScore,
 } from './darts501Scoring.js';
 
@@ -46,8 +47,10 @@ export interface Darts501Formula {
 export interface Darts501Presentation {
   nationality: string | null;
   leagueName: string | null;
+  leagueId: number | null;
   club: string | null;
   clubLeague: string | null;
+  teamId: number | null;
   audience: string;
   formulaDetail: string;
 }
@@ -60,8 +63,10 @@ export interface Darts501PuzzlePublic {
   formulaLabel: string;
   nationality: string | null;
   leagueName: string | null;
+  leagueId: number | null;
   club: string | null;
   clubLeague: string | null;
+  teamId: number | null;
   audience: string;
   formulaDetail: string;
   left?: string;
@@ -147,8 +152,10 @@ export function presentDarts501Formula(formula: Darts501Formula): Darts501Presen
   return {
     nationality: pool.kind === 'nationality' ? pool.nationality : null,
     leagueName: pool.kind === 'league' ? pool.leagueName : null,
+    leagueId: pool.kind === 'league' ? pool.leagueId : null,
     club: pool.kind === 'club' ? pool.club : null,
     clubLeague: pool.kind === 'club' ? (pool.leagueName ?? null) : null,
+    teamId: pool.kind === 'club' ? (pool.teamId ?? null) : null,
     audience: audienceForPool(pool),
     formulaDetail: `${left} ${op} ${right}`,
   };
@@ -174,8 +181,10 @@ function publicPuzzle(date: string, formula: Darts501Formula): Darts501PuzzlePub
     formulaLabel: formula.label,
     nationality: presentation.nationality,
     leagueName: presentation.leagueName,
+    leagueId: presentation.leagueId,
     club: presentation.club,
     clubLeague: presentation.clubLeague,
+    teamId: presentation.teamId,
     audience: presentation.audience,
     formulaDetail: presentation.formulaDetail,
     left: formula.left,
@@ -520,11 +529,24 @@ function poolsEqual(left: Darts501Pool, right: Darts501Pool): boolean {
 
 function poolFromPresentation(puzzle: Pick<
   Darts501PuzzlePublic,
-  'nationality' | 'leagueName' | 'club' | 'clubLeague' | 'audience'
+  'nationality' | 'leagueName' | 'leagueId' | 'club' | 'clubLeague' | 'teamId' | 'audience'
 >): Darts501Pool | null {
   if (puzzle.nationality) return { kind: 'nationality', nationality: puzzle.nationality };
   if (puzzle.club) {
-    return { kind: 'club', club: puzzle.club, leagueName: puzzle.clubLeague ?? undefined };
+    return {
+      kind: 'club',
+      club: puzzle.club,
+      teamId: puzzle.teamId ?? undefined,
+      leagueName: puzzle.clubLeague ?? undefined,
+    };
+  }
+  if (typeof puzzle.leagueId === 'number') {
+    const league =
+      DARTS501_LEAGUE_OPTIONS.find((row) => row.leagueId === puzzle.leagueId) ??
+      (puzzle.leagueName
+        ? { leagueId: puzzle.leagueId, leagueName: puzzle.leagueName }
+        : null);
+    if (league) return { kind: 'league', leagueId: league.leagueId, leagueName: league.leagueName };
   }
   if (puzzle.leagueName) {
     const league = DARTS501_LEAGUE_OPTIONS.find((row) => row.leagueName === puzzle.leagueName);
@@ -596,6 +618,7 @@ export type Darts501PoolPlayer = {
   leftValue: number;
   rightValue: number;
   valid: boolean;
+  bust: boolean;
   fame: number;
   headshotUrl?: string;
 };
@@ -632,14 +655,19 @@ export async function previewDarts501Pool(formula: Darts501Formula): Promise<{
         score,
         leftValue,
         rightValue,
-        valid: isValidDartsScore(score) && score !== 0,
+        valid: isValidDartsScore(score),
+        bust: bustReasonForScore(score) != null,
         fame: row.mvt ?? 0,
         photo_url: row.photo_url,
         api_football_id: row.api_football_id,
       };
     })
-    .sort((a, b) => b.fame - a.fame || b.score - a.score || a.name.localeCompare(b.name))
-    .map((row, index) => ({
+    .sort((a, b) => {
+      if (a.bust !== b.bust) return a.bust ? -1 : 1;
+      return b.score - a.score || a.name.localeCompare(b.name);
+    })
+    .slice(0, 100)
+    .map((row) => ({
       id: row.id,
       name: row.name,
       club: row.club,
@@ -649,8 +677,9 @@ export async function previewDarts501Pool(formula: Darts501Formula): Promise<{
       leftValue: row.leftValue,
       rightValue: row.rightValue,
       valid: row.valid,
+      bust: row.bust,
       fame: row.fame,
-      headshotUrl: index < 80 ? resolveHeadshot(row.photo_url, row.api_football_id) ?? undefined : undefined,
+      headshotUrl: resolveHeadshot(row.photo_url, row.api_football_id) ?? undefined,
     }));
 
   return {
@@ -874,11 +903,16 @@ export function parseDarts501Puzzle(puzzleJson: unknown): Darts501PuzzlePublic |
       typeof puzzle.leagueName === 'string'
         ? puzzle.leagueName
         : (presentation?.leagueName ?? null),
+    leagueId:
+      typeof puzzle.leagueId === 'number'
+        ? puzzle.leagueId
+        : (presentation?.leagueId ?? null),
     club: typeof puzzle.club === 'string' ? puzzle.club : (presentation?.club ?? null),
     clubLeague:
       typeof puzzle.clubLeague === 'string'
         ? puzzle.clubLeague
         : (presentation?.clubLeague ?? null),
+    teamId: typeof puzzle.teamId === 'number' ? puzzle.teamId : (presentation?.teamId ?? null),
     audience:
       typeof puzzle.audience === 'string' && puzzle.audience && puzzle.audience !== 'Any player'
         ? puzzle.audience

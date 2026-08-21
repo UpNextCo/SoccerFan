@@ -122,8 +122,10 @@ export function Darts501Editor({
             pool: savedPool,
             nationality: savedPool?.kind === 'nationality' ? savedPool.nationality ?? null : null,
             leagueName: savedPool?.kind === 'league' ? savedPool.leagueName ?? null : null,
+            leagueId: savedPool?.kind === 'league' ? savedPool.leagueId ?? null : null,
             club: savedPool?.kind === 'club' ? savedPool.club ?? null : null,
             clubLeague: savedPool?.kind === 'club' ? savedPool.leagueName ?? null : null,
+            teamId: savedPool?.kind === 'club' ? savedPool.teamId ?? null : null,
           },
           preview.formulaId
         )
@@ -329,7 +331,7 @@ export function Darts501Editor({
                 ? 'Recalculating…'
                 : players.length === 0
                   ? 'Press Recalculate player pool to list who matches.'
-                  : `${players.length} players, most famous first.`}
+                  : `Top ${players.length} scores. Busts sit at the top with --.`}
             </p>
           </div>
         </header>
@@ -353,8 +355,8 @@ export function Darts501Editor({
                     <strong>{player.name}</strong>
                     <span className="muted tiny">{meta.join(' · ') || '—'}</span>
                   </div>
-                  <b className={player.valid ? 'd501-score' : 'd501-score invalid'}>
-                    {player.valid ? player.score : '—'}
+                  <b className={player.bust ? 'd501-score invalid' : 'd501-score'}>
+                    {player.bust ? `${player.score} --` : `${player.score}`}
                   </b>
                 </article>
               )

@@ -622,13 +622,36 @@ struct Darts501CategoryCard: View {
             Text(category.flag)
                 .font(.system(size: 46))
         } else if category.hasClubFilter, let club = category.club {
-            TeamBadgeImage(club: club, league: category.clubLeague ?? "", size: 54) {
-                Color.clear.frame(width: 54, height: 54)
+            TeamBadgeImage(
+                club: club,
+                league: category.clubLeague ?? "",
+                teamId: category.teamId,
+                size: 54
+            ) {
+                Circle()
+                    .fill(Color.white.opacity(0.12))
+                    .frame(width: 54, height: 54)
+                    .overlay {
+                        Text(String(club.prefix(1)))
+                            .font(BKFont.headline(18))
+                            .foregroundStyle(BKTheme.textPrimary)
+                    }
             }
         } else if category.hasLeagueFilter, let league = category.leagueName {
-            LeagueBadgeImage(league: league, size: 54, lightBackdrop: true) {
-                Color.clear.frame(width: 54, height: 54)
+            LeagueBadgeImage(league: league, size: 54, leagueId: category.leagueId, lightBackdrop: true) {
+                Circle()
+                    .fill(Color.white.opacity(0.92))
+                    .frame(width: 54, height: 54)
+                    .overlay {
+                        Text(String(league.prefix(1)))
+                            .font(BKFont.headline(16))
+                            .foregroundStyle(Color.black.opacity(0.55))
+                    }
             }
+        } else if category.hasInternationalFilter {
+            Ph.soccerBall.fill
+                .color(BKTheme.textPrimary)
+                .frame(width: 46, height: 46)
         }
     }
 }
@@ -852,11 +875,7 @@ private struct Darts501ThrowDetailSheet: View {
                             .foregroundStyle(BKTheme.wrong)
                     }
                 }
-                if category.hasNationFilter {
-                    Text("\(category.flag)  \(category.audience)")
-                        .font(BKFont.headline(14))
-                        .foregroundStyle(BKTheme.textPrimary)
-                }
+                Darts501CategoryCard(category: category)
                 Text(category.formula)
                     .font(BKFont.body(13))
                     .foregroundStyle(BKTheme.textSecondary)
