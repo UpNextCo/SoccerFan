@@ -319,7 +319,7 @@ struct WeeklyLeagueIntroView: View {
                         Text("YOU")
                             .font(BKFont.caption(11))
                             .tracking(1.0)
-                            .foregroundStyle(BKTheme.background)
+                            .foregroundStyle(BKTheme.onAccent)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(BKTheme.accent)
@@ -328,7 +328,7 @@ struct WeeklyLeagueIntroView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(isYou ? BKTheme.cardElevated : Color.clear)
+                .background(isYou ? BKTheme.card : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -346,7 +346,7 @@ struct WeeklyLeagueIntroView: View {
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 8)
-        .background(Color(hex: "121212"))
+        .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 

@@ -112,7 +112,7 @@ struct HomeView: View {
                             Task { await viewModel.load(context: modelContext) }
                         }
                         .font(BKFont.headline(14))
-                        .foregroundStyle(BKTheme.background)
+                        .foregroundStyle(BKTheme.onAccent)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 10)
                         .background(BKTheme.accent)
@@ -509,7 +509,7 @@ struct NotificationsView: View {
             .background(BKTheme.background)
             .navigationTitle("Activity")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -680,73 +680,8 @@ struct DailySection: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background { hubBackground }
-    }
-
-    private var hubBackground: some View {
-        ZStack {
-            Color(hex: "141414")
-
-            hubHeroImage
-
-            hubTextScrim
-
-            BKGlass.roundedRect(cornerRadius: 20)
-        }
+        .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        // Decorative art can paint outside the card bounds; never let it steal taps
-        // from the header (notifications bell sits just above this hub).
-        .allowsHitTesting(false)
-    }
-
-    private var hubHeroImage: some View {
-        GeometryReader { geo in
-            GameModeBundleImage(name: "hero")
-                .scaledToFill()
-                .frame(width: geo.size.width * 1.45, height: geo.size.height * 1.35)
-                .position(x: geo.size.width * 0.76, y: geo.size.height * 0.34)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .mask {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .clear, location: 0.3),
-                            .init(color: .white.opacity(0.25), location: 0.42),
-                            .init(color: .white.opacity(0.65), location: 0.55),
-                            .init(color: .white, location: 0.7),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                }
-        }
-        .allowsHitTesting(false)
-    }
-
-    private var hubTextScrim: some View {
-        GeometryReader { geo in
-            ZStack {
-                LinearGradient(
-                    stops: [
-                        .init(color: Color(hex: "141414").opacity(0.55), location: 0),
-                        .init(color: Color(hex: "141414").opacity(0.18), location: 0.38),
-                        .init(color: .clear, location: 0.62),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    LinearGradient(
-                        colors: [.clear, Color(hex: "141414").opacity(0.3)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: geo.size.height * 0.35)
-                }
-            }
-        }
     }
 
     private var progressBar: some View {
@@ -754,12 +689,9 @@ struct DailySection: View {
             ForEach(0..<totalCount, id: \.self) { i in
                 Capsule()
                     .fill(i < completedCount
-                          ? AnyShapeStyle(LinearGradient(colors: [BKTheme.accent, BKTheme.accentMuted],
-                                                         startPoint: .leading, endPoint: .trailing))
-                          : AnyShapeStyle(Color.white.opacity(0.22)))
+                          ? AnyShapeStyle(BKTheme.accent)
+                          : AnyShapeStyle(BKTheme.hairline))
                     .frame(height: 6)
-                    .shadow(color: i < completedCount ? BKTheme.accent.opacity(0.55) : .clear,
-                            radius: 4)
             }
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.7), value: completedCount)
@@ -842,7 +774,7 @@ struct DailyGameCard: View {
                                 .foregroundStyle(BKTheme.textSecondary)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 4)
-                                .background(Color.white.opacity(0.07))
+                                .background(BKTheme.cardElevated)
                                 .clipShape(Capsule())
                         }
                     }
@@ -861,7 +793,7 @@ struct DailyGameCard: View {
 
             if showsDivider {
                 Rectangle()
-                    .fill(Color(hex: "141414"))
+                    .fill(BKTheme.hairline)
                     .frame(height: 1)
                     .padding(.leading, iconSize + rowContentSpacing)
             }
@@ -893,7 +825,7 @@ struct DailyGameCard: View {
                     .frame(minWidth: 58)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(BKTheme.cardElevated)
+                    .background(playBackground)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -919,6 +851,13 @@ struct DailyGameCard: View {
     private var playForeground: Color {
         switch state {
         case .completed, .unavailable: return BKTheme.textMuted
+        case .inProgress, .available: return BKTheme.onAccent
+        }
+    }
+
+    private var playBackground: Color {
+        switch state {
+        case .completed, .unavailable: return BKTheme.cardElevated
         case .inProgress, .available: return BKTheme.accent
         }
     }
@@ -1205,7 +1144,7 @@ private struct DailyUnavailablePlaceholder: View {
                 .foregroundStyle(BKTheme.textSecondary)
             Button("Close", action: onClose)
                 .font(BKFont.headline())
-                .foregroundStyle(BKTheme.background)
+                .foregroundStyle(BKTheme.onAccent)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
                 .background(BKTheme.accent)

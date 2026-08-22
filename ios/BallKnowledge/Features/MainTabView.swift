@@ -682,7 +682,7 @@ struct ExpandablePlayerStandingRow: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(isCurrentUser ? BKTheme.cardElevated : BKTheme.card)
+        .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
@@ -999,7 +999,7 @@ private struct TeamFanRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(isCurrentUser ? BKTheme.cardElevated : BKTheme.background.opacity(0.55))
+        .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
@@ -1495,7 +1495,7 @@ struct ProfileTabView: View {
             .overlay {
                 Image(systemName: systemName)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(BKTheme.background)
+                    .foregroundStyle(BKTheme.onAccent)
             }
             .overlay(Circle().stroke(BKTheme.background, lineWidth: 3))
     }

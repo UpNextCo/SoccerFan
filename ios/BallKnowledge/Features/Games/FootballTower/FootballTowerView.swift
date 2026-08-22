@@ -623,7 +623,7 @@ private struct FootballTowerSearchSection: View {
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                 )
                 .textFieldStyle(.plain)
-                .foregroundStyle(BKTheme.background)
+                .foregroundStyle(BKTheme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .focused(isSearchFocused)
@@ -732,7 +732,7 @@ private struct FootballTowerResultView: View {
     private func primaryButton(_ title: String) -> some View {
         Text(title)
             .font(BKFont.headline(14))
-            .foregroundStyle(BKTheme.background)
+            .foregroundStyle(BKTheme.onAccent)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(BKTheme.accent)
@@ -844,7 +844,7 @@ private struct FootballTowerShareSheet: View {
                 ShareLink(item: FootballTowerSeed.shareText(summary: summary, mode: mode)) {
                     Text("SHARE")
                         .font(BKFont.headline(14))
-                        .foregroundStyle(BKTheme.background)
+                        .foregroundStyle(BKTheme.onAccent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(BKTheme.accent)

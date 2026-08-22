@@ -325,7 +325,7 @@ private struct FootballBingoPlayerPanel: View {
                         Button(action: onWildcard) {
                             Text("WILDCARD")
                                 .font(.system(size: 11, weight: .heavy, design: .rounded))
-                                .foregroundStyle(BKTheme.background)
+                                .foregroundStyle(BKTheme.onAccent)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
                                 .background(BKTheme.streak)
@@ -335,7 +335,7 @@ private struct FootballBingoPlayerPanel: View {
                     Button(action: onSkip) {
                         Text("SKIP")
                             .font(.system(size: 11, weight: .heavy, design: .rounded))
-                            .foregroundStyle(BKTheme.background)
+                            .foregroundStyle(BKTheme.onAccent)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(BKTheme.accent)
@@ -366,7 +366,7 @@ private struct FootballBingoPlayerPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(BKTheme.hairline, lineWidth: 1))
     }
 
     private static func initials(_ name: String) -> String {
@@ -486,7 +486,7 @@ private struct FootballBingoBoardView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(BKTheme.hairline, lineWidth: 1))
     }
 }
 
@@ -523,7 +523,7 @@ private struct FootballBingoTileView: View {
                     FootballBingoCategoryIcon(category: category, size: 40, isCompleted: isCompleted)
                     Text(BingoTileLabel.short(for: category))
                         .font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundStyle(isCompleted ? Color.black : BKTheme.textPrimary)
+                        .foregroundStyle(isCompleted ? BKTheme.onAccent : BKTheme.textPrimary)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .minimumScaleFactor(0.6)
@@ -535,7 +535,7 @@ private struct FootballBingoTileView: View {
                         HStack {
                             Spacer()
                             Ph.checkCircle.fill
-                                .color(.black)
+                                .color(BKTheme.onAccent)
                                 .frame(width: 14, height: 14)
                         }
                         Spacer()
@@ -668,7 +668,7 @@ private struct FootballBingoCategoryIcon: View {
         } else if category.type == .statThreshold || category.type == .position {
             Text(category.iconValue)
                 .font(.system(size: size * 0.42, weight: .black, design: .rounded))
-                .foregroundStyle(isCompleted ? Color.black : BKTheme.accent)
+                .foregroundStyle(isCompleted ? BKTheme.onAccent : BKTheme.accent)
         } else {
             Ph.sealQuestion.fill
                 .color(BKTheme.textMuted)

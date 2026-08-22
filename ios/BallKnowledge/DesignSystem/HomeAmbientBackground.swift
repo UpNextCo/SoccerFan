@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Soft green atmosphere for the home hero — static gradients (no TimelineView / blur stacks).
+/// Soft blue atmosphere for the home hero — static gradients (no TimelineView / blur stacks).
 struct HomeAmbientBackground: View {
     var body: some View {
         GeometryReader { geo in
@@ -30,7 +30,7 @@ struct HomeAmbientBackground: View {
     }
 }
 
-/// Green glow layer for in-game stadium backdrops (no animation).
+/// Blue glow layer for in-game stadium backdrops (no animation).
 struct AmbientGlowOverlay: View {
     var intensity: Double = 1.0
 
@@ -56,8 +56,8 @@ private struct StaticAmbientGlowLayer: View {
             if includeSpotlight {
                 RadialGradient(
                     colors: [
-                        Color(hex: "0C2218").opacity(0.58),
-                        BKTheme.background.opacity(0.26),
+                        Color(hex: "E8EEF8").opacity(0.95),
+                        BKTheme.background.opacity(0.4),
                         BKTheme.background,
                     ],
                     center: UnitPoint(x: 0.5, y: 0.06),
@@ -72,13 +72,13 @@ private struct StaticAmbientGlowLayer: View {
                 size: size,
                 center: CGPoint(x: size.width * 0.12, y: size.height * 0.02),
                 diameter: 300,
-                core: BKTheme.accent.opacity(0.11 * intensity)
+                core: BKTheme.accent.opacity(0.07 * intensity)
             )
             staticGlowOrb(
                 size: size,
                 center: CGPoint(x: size.width * 0.88, y: size.height * 0.08),
                 diameter: 240,
-                core: Color(hex: "00AA55").opacity(0.075 * intensity)
+                core: BKTheme.accent.opacity(0.06 * intensity)
             )
             staticGlowOrb(
                 size: size,
@@ -96,7 +96,7 @@ private func staticRotatingWash(size: CGSize, intensity: Double) -> some View {
             .init(color: .clear, location: 0),
             .init(color: BKTheme.accent.opacity(0.028 * intensity), location: 0.22),
             .init(color: .clear, location: 0.45),
-            .init(color: Color(hex: "006633").opacity(0.02 * intensity), location: 0.68),
+            .init(color: BKTheme.accentMuted.opacity(0.025 * intensity), location: 0.68),
             .init(color: .clear, location: 1),
         ],
         center: .center,
@@ -123,7 +123,7 @@ private func staticGlowOrb(size: CGSize, center: CGPoint, diameter: CGFloat, cor
 
 // MARK: - Game stadium backdrop
 
-/// Shared in-game atmosphere: faint floodlit stadium photo fading to page-black, plus static green glow.
+/// Shared in-game atmosphere: faint floodlit stadium photo fading to the page, plus static blue glow.
 struct StadiumBackground: View {
     var glowIntensity: Double = 0.45
 

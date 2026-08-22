@@ -616,9 +616,9 @@ private struct BattleCategoryOverlay: View {
                 Button(action: onStart) {
                     HStack(spacing: 8) {
                         Text("BUILD YOUR XI").font(BKFont.headline(15))
-                        Ph.arrowRight.bold.color(BKTheme.background).frame(width: 14, height: 14)
+                        Ph.arrowRight.bold.color(BKTheme.onAccent).frame(width: 14, height: 14)
                     }
-                    .foregroundStyle(BKTheme.background)
+                    .foregroundStyle(BKTheme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                     .background(BKTheme.accent).clipShape(Capsule())
                 }
@@ -885,8 +885,8 @@ struct BattlePitchSlot: View {
 
     @State private var targeted = false
 
-    /// Soft whitish-green for empty slot rings + the plus.
-    private static let ringColor = Color(red: 0.80, green: 0.93, blue: 0.84).opacity(0.85)
+    /// Soft blue for empty slot rings + the plus.
+    private static let ringColor = Color(red: 0.75, green: 0.84, blue: 0.98).opacity(0.9)
 
     private var shownPick: BattlePick? { pick ?? pendingPick }
     private var isPending: Bool { pick == nil && pendingPick != nil }
@@ -902,7 +902,7 @@ struct BattlePitchSlot: View {
         VStack(spacing: 2 * scale) {
             ZStack {
                 Circle()
-                    // Darker-grey fill so slots sit clearly on the grass; thin whitish-green ring.
+                    // Darker-grey fill so slots sit clearly on the grass; thin blue ring.
                     .fill(shownPick != nil ? Color.black.opacity(0.30) : Color(white: 0.14).opacity(0.72))
                     .frame(width: ring, height: ring)
                     .overlay {
@@ -1209,7 +1209,7 @@ struct BattleSearchSheet: View {
                                     ConstraintIcon(constraint: constraint, size: 22)
                                     Text(constraint.label.uppercased())
                                         .font(.system(size: 10, weight: .bold, design: .rounded))
-                                        .foregroundStyle(selected ? BKTheme.background : BKTheme.textSecondary)
+                                        .foregroundStyle(selected ? BKTheme.onAccent : BKTheme.textSecondary)
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 8)
                                 .background(selected ? BKTheme.accent : BKTheme.card)
@@ -1227,7 +1227,7 @@ struct BattleSearchSheet: View {
                                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                         )
                         .textFieldStyle(.plain)
-                        .foregroundStyle(BKTheme.background)
+                        .foregroundStyle(BKTheme.textPrimary)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .focused($focused)
@@ -1483,7 +1483,7 @@ private struct BattleShareSheet: View {
 
                 ShareLink(item: BattleSeed.shareText(challenge: challenge, result: result)) {
                     Text("SHARE").font(BKFont.headline(14))
-                        .foregroundStyle(BKTheme.background)
+                        .foregroundStyle(BKTheme.onAccent)
                         .frame(maxWidth: .infinity).padding(.vertical, 14)
                         .background(BKTheme.accent).clipShape(Capsule())
                 }

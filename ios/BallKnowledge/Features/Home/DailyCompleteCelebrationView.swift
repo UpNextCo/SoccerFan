@@ -130,7 +130,7 @@ struct StreakToastBanner: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 18)
         .padding(.bottom, 16)
-        .background(Color(hex: "121212"))
+        .background(BKTheme.cardElevated)
         .clipShape(cardShape)
         .overlay {
             cardShape

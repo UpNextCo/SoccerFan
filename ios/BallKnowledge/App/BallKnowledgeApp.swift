@@ -9,7 +9,7 @@ struct BallKnowledgeApp: App {
         WindowGroup {
             RootView()
                 .environment(auth)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(.light)
         }
         .modelContainer(for: [
             CachedDailyBundle.self,

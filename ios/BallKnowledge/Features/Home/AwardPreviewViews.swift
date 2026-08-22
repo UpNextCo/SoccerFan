@@ -676,7 +676,7 @@ struct TrophyCabinetView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
         .task { await loadLeagueProgress() }
         .fullScreenCover(item: $unlock) { payload in
             TrophyUnlockView(payload: payload) {
@@ -1277,13 +1277,13 @@ struct FeaturedTrophyPicker: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
     }
 }
 
 #Preview("Unlock — LMS perfect") {
     TrophyUnlockView(payload: .lmsPerfect, onDismiss: {})
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
 }
 
 #Preview("Cabinet") {

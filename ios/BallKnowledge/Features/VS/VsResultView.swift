@@ -112,7 +112,7 @@ struct VsResultView: View {
                     Button(action: onBackToVs) {
                         Text("BACK TO VS")
                             .font(BKFont.headline(16))
-                            .foregroundStyle(BKTheme.background)
+                            .foregroundStyle(BKTheme.onAccent)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(BKTheme.accent)

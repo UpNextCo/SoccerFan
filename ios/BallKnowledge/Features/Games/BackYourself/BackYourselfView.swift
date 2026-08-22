@@ -342,7 +342,7 @@ struct BackYourselfView: View {
                     .font(BKFont.headline(16))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .foregroundStyle(BKTheme.background)
+                    .foregroundStyle(BKTheme.onAccent)
                     .background(BKTheme.accent)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
@@ -451,7 +451,7 @@ struct BackYourselfView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                    .strokeBorder(BKTheme.hairline, lineWidth: 1)
             )
 
             if !viewModel.searchResults.isEmpty {

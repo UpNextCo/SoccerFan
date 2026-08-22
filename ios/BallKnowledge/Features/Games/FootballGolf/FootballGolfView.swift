@@ -3,7 +3,7 @@ import SwiftUI
 import Pow
 #endif
 
-// Single success accent — reuse the app green. No second neon.
+// Single success accent — reuse the app blue. No second neon.
 private let golfGreen = BKTheme.accent
 private let golfGold = Color(hex: "F5C451")
 
@@ -311,7 +311,7 @@ struct FootballGolfView: View {
                 .foregroundStyle(BKTheme.textMuted)
             Button("CLOSE") { dismiss() }
                 .font(BKFont.headline())
-                .foregroundStyle(BKTheme.background)
+                .foregroundStyle(BKTheme.onAccent)
                 .padding(.horizontal, 28).padding(.vertical, 12)
                 .background(golfGreen).clipShape(Capsule())
                 .padding(.top, 8)
@@ -399,7 +399,7 @@ struct FootballGolfView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .lineSpacing(3)
 
-            Divider().overlay(Color.white.opacity(0.08))
+            Divider().overlay(BKTheme.hairline)
 
             FootballGolfHoleStatus(
                 target: hole.target,
@@ -411,7 +411,7 @@ struct FootballGolfView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(BKTheme.hairline, lineWidth: 1))
     }
 
     // MARK: matched answers — chips appear as you score them
@@ -472,12 +472,12 @@ struct FootballGolfView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        if r.id != vm.searchResults.last?.id { Divider().background(Color.white.opacity(0.06)) }
+                        if r.id != vm.searchResults.last?.id { Divider().background(BKTheme.hairline) }
                     }
                 }
                 .background(BKTheme.cardElevated)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(BKTheme.hairline, lineWidth: 1))
                 // Once a guess is being resolved, stop the (now-clearing) list from taking more taps.
                 .allowsHitTesting(!vm.isResolving)
             }
@@ -549,7 +549,7 @@ private struct FootballGolfAnswerChip: View {
                 Circle().fill(rarityColor)
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .black))
-                    .foregroundStyle(BKTheme.background)
+                    .foregroundStyle(BKTheme.onAccent)
                     .symbolEffect(.bounce, value: appeared)
             }
             .frame(width: 22, height: 22)
@@ -570,7 +570,7 @@ private struct FootballGolfAnswerChip: View {
         .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12)
-            .strokeBorder(answer.rarity.isStandout ? rarityColor.opacity(0.45) : Color.white.opacity(0.05), lineWidth: 1))
+            .strokeBorder(answer.rarity.isStandout ? rarityColor.opacity(0.45) : BKTheme.hairline, lineWidth: 1))
         .scaleEffect(appeared ? 1 : (justRevealed ? 0.85 : 1))
         .modifier(GolfRarityReward(rarity: answer.rarity, trigger: appeared))
         .onAppear { withAnimation(GolfMotion.pop) { appeared = true } }
@@ -698,7 +698,7 @@ private struct FootballGolfHoleResultOverlay: View {
                 }
 
                 Button(action: onNext) {
-                    Text("NEXT HOLE").font(BKFont.headline()).foregroundStyle(BKTheme.background)
+                    Text("NEXT HOLE").font(BKFont.headline()).foregroundStyle(BKTheme.onAccent)
                         .frame(maxWidth: .infinity).padding(.vertical, 14)
                         .background(golfGreen).clipShape(RoundedRectangle(cornerRadius: 14))
                 }

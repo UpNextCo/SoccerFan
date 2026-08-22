@@ -262,7 +262,7 @@ struct WorldCupXIView: View {
                 Text(viewModel.state.allAnswered ? "SEE RESULTS" : "FINISH")
                     .font(BKFont.headline(16))
                     .tracking(1)
-                    .foregroundStyle(BKTheme.background)
+                    .foregroundStyle(viewModel.state.answeredCount > 0 ? BKTheme.onAccent : BKTheme.textMuted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(viewModel.state.answeredCount > 0 ? BKTheme.accent : BKTheme.cardElevated)
@@ -416,8 +416,8 @@ private struct WorldCupXIPitchSlot: View {
     let revealAnswer: Bool
     var onTap: () -> Void
 
-    /// Soft whitish-green for empty slot rings + the position label (matches Battle Mode).
-    private static let ringColor = Color(red: 0.80, green: 0.93, blue: 0.84).opacity(0.85)
+    /// Soft blue for empty slot rings + the position label (matches Battle Mode).
+    private static let ringColor = Color(red: 0.75, green: 0.84, blue: 0.98).opacity(0.9)
 
     private var ring: Color {
         if let fill { return fill.isCorrect ? BKTheme.accent : BKTheme.wrong }

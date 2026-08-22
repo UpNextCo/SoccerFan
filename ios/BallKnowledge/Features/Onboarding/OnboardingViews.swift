@@ -58,7 +58,7 @@ private struct OnboardingProgressHeader: View {
         HStack(spacing: 6) {
             ForEach(0..<pageCount, id: \.self) { index in
                 Capsule()
-                    .fill(index <= page ? BKTheme.accent : Color.white.opacity(0.1))
+                    .fill(index <= page ? BKTheme.accent : BKTheme.hairline)
                     .frame(height: 3)
             }
         }
@@ -81,7 +81,7 @@ private struct OnboardingPrimaryButton: View {
                     .font(.system(size: 14, weight: .black))
             }
             .font(BKFont.headline(15))
-            .foregroundStyle(enabled ? BKTheme.background : BKTheme.textMuted)
+            .foregroundStyle(enabled ? BKTheme.onAccent : BKTheme.textMuted)
             .frame(maxWidth: .infinity)
             .frame(height: 56)
             .background(enabled ? BKTheme.accent : BKTheme.cardElevated)
@@ -164,7 +164,7 @@ struct WelcomeOnboardingPage: View {
                     .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 40, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                            .strokeBorder(BKTheme.hairline, lineWidth: 1)
                     )
                     .shadow(color: BKTheme.accent.opacity(0.24), radius: 30, y: 14)
                     .scaleEffect(appeared ? 1 : 0.78)
@@ -242,7 +242,7 @@ private struct OnboardingFloatingChip: View {
         .padding(.vertical, 9)
         .background(.ultraThinMaterial)
         .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
+        .overlay(Capsule().stroke(BKTheme.hairline, lineWidth: 1))
     }
 }
 
@@ -324,20 +324,10 @@ private struct DailyChallengeHeroCard: View {
                     Capsule()
                         .fill(
                             index < filledSegments
-                                ? AnyShapeStyle(
-                                    LinearGradient(
-                                        colors: [BKTheme.accent, BKTheme.accentMuted],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                : AnyShapeStyle(Color.white.opacity(0.22))
+                                ? AnyShapeStyle(BKTheme.accent)
+                                : AnyShapeStyle(BKTheme.hairline)
                         )
                         .frame(height: 7)
-                        .shadow(
-                            color: index < filledSegments ? BKTheme.accent.opacity(0.55) : .clear,
-                            radius: 4
-                        )
                         .animation(
                             .spring(response: 0.58, dampingFraction: 0.78)
                                 .delay(Double(index) * 0.18),
@@ -371,8 +361,9 @@ private struct DailyChallengeHeroCard: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background { dailyHubBackground }
-        .shadow(color: .black.opacity(0.25), radius: 20, y: 12)
+        .background(BKTheme.cardElevated)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.08), radius: 16, y: 8)
         .modifier(
             OnboardingFloatMotion(
                 amplitude: 2,
@@ -385,65 +376,6 @@ private struct DailyChallengeHeroCard: View {
             filledSegments = 0
             withAnimation {
                 filledSegments = 7
-            }
-        }
-    }
-
-    private var dailyHubBackground: some View {
-        ZStack {
-            Color(hex: "141414")
-            dailyHubHeroImage
-            dailyHubTextScrim
-            BKGlass.roundedRect(cornerRadius: 20)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-
-    private var dailyHubHeroImage: some View {
-        GeometryReader { geo in
-            GameModeBundleImage(name: "hero")
-                .scaledToFill()
-                .frame(width: geo.size.width * 1.45, height: geo.size.height * 1.35)
-                .position(x: geo.size.width * 0.76, y: geo.size.height * 0.34)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .mask {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .clear, location: 0.3),
-                            .init(color: .white.opacity(0.25), location: 0.42),
-                            .init(color: .white.opacity(0.65), location: 0.55),
-                            .init(color: .white, location: 0.7),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                }
-        }
-    }
-
-    private var dailyHubTextScrim: some View {
-        GeometryReader { geo in
-            ZStack {
-                LinearGradient(
-                    stops: [
-                        .init(color: Color(hex: "141414").opacity(0.55), location: 0),
-                        .init(color: Color(hex: "141414").opacity(0.18), location: 0.38),
-                        .init(color: .clear, location: 0.62),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    LinearGradient(
-                        colors: [.clear, Color(hex: "141414").opacity(0.3)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: geo.size.height * 0.35)
-                }
             }
         }
     }
@@ -493,9 +425,9 @@ struct GameModesPreview: View {
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                                .strokeBorder(BKTheme.hairline, lineWidth: 1)
                         )
-                        .shadow(color: .black.opacity(0.5), radius: 10, y: 7)
+                        .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
                         .rotationEffect(.degrees(Double(slot - 3) * 4.2))
                         .offset(
                             x: CGFloat(slot - 3) * 41,
@@ -723,7 +655,7 @@ private struct OnboardingLeagueRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(isYou ? BKTheme.cardElevated : BKTheme.card)
+        .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -815,6 +747,7 @@ struct TeamPickerView: View {
                     .font(BKFont.caption())
                     .foregroundStyle(BKTheme.textMuted)
             }
+            .padding(.horizontal, 64)
             .padding(.bottom, 24)
         }
         .task(id: query) { await runSearch() }
@@ -892,7 +825,7 @@ struct TeamPickerView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(isSelected ? BKTheme.cardElevated : BKTheme.card)
+        .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -960,9 +893,9 @@ struct ProfileSetupStep: View {
                         .overlay {
                             Image(systemName: "camera.fill")
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(BKTheme.background)
+                                .foregroundStyle(BKTheme.onAccent)
                         }
-                        .overlay(Circle().stroke(BKTheme.background, lineWidth: 3))
+                        .overlay(Circle().stroke(BKTheme.card, lineWidth: 3))
                 }
             }
             .buttonStyle(.plain)

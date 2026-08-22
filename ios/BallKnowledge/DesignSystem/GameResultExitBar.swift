@@ -10,7 +10,7 @@ struct GameResultExitBar: View {
         Button(action: action) {
             Text(title)
                 .font(BKFont.headline(16))
-                .foregroundStyle(BKTheme.background)
+                .foregroundStyle(BKTheme.onAccent)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
                 .background(BKTheme.accent)

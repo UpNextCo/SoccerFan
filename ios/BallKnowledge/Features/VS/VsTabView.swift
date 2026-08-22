@@ -479,12 +479,12 @@ struct VsTabView: View {
                     } label: {
                         HStack {
                             if viewModel.isBusy {
-                                ProgressView().tint(BKTheme.background)
+                                ProgressView().tint(BKTheme.onAccent)
                             }
                             Text("CREATE CHALLENGE")
                                 .font(BKFont.headline(14))
                         }
-                        .foregroundStyle(BKTheme.background)
+                        .foregroundStyle(BKTheme.onAccent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(BKTheme.accent)
@@ -668,12 +668,12 @@ struct VsTabView: View {
                     } label: {
                         HStack {
                             if viewModel.isBusy {
-                                ProgressView().tint(BKTheme.background)
+                                ProgressView().tint(BKTheme.onAccent)
                             }
                             Text("START GAME")
                                 .font(BKFont.headline(14))
                         }
-                        .foregroundStyle(BKTheme.background)
+                        .foregroundStyle(BKTheme.onAccent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(BKTheme.accent)
@@ -691,7 +691,7 @@ struct VsTabView: View {
                              ? "REJOIN \(challenge.modeTitle)"
                              : "PLAY \(challenge.modeTitle)")
                             .font(BKFont.headline(14))
-                            .foregroundStyle(BKTheme.background)
+                            .foregroundStyle(BKTheme.onAccent)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(BKTheme.accent)
@@ -732,7 +732,7 @@ struct VsTabView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 22)
-        .background(Color(hex: "121212"))
+        .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
@@ -771,7 +771,7 @@ struct VsTabView: View {
             }
         }
         .padding(16)
-        .background(Color(hex: "161616"))
+        .background(BKTheme.cardElevated)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
@@ -805,7 +805,7 @@ struct VsTabView: View {
                             .frame(width: 16, height: 16)
                         Image(systemName: "checkmark")
                             .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(Color.black)
+                            .foregroundStyle(BKTheme.onAccent)
                     }
                 }
             } else {

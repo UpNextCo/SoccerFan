@@ -407,7 +407,7 @@ private struct TargetManChallengeCard: View {
         .frame(maxWidth: .infinity)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(BKTheme.hairline, lineWidth: 1))
     }
 }
 
@@ -489,7 +489,7 @@ private struct TargetManFilledSlotRow: View {
         HStack(spacing: 12) {
             Text("\(index)")
                 .font(.system(size: 12, weight: .heavy, design: .rounded))
-                .foregroundStyle(BKTheme.background)
+                .foregroundStyle(BKTheme.onAccent)
                 .frame(width: 24, height: 24)
                 .background(selection.isPoolMiss ? BKTheme.wrong : BKTheme.accent)
                 .clipShape(Circle())
@@ -513,10 +513,10 @@ private struct TargetManFilledSlotRow: View {
                         .transition(.opacity.combined(with: .move(edge: .leading)))
                 } else {
                     HStack(spacing: 4) {
-                        Ph.checkCircle.fill.color(BKTheme.background).frame(width: 10, height: 10)
+                        Ph.checkCircle.fill.color(BKTheme.onAccent).frame(width: 10, height: 10)
                         Text("SELECTED")
                             .font(.system(size: 9, weight: .heavy, design: .rounded))
-                            .foregroundStyle(BKTheme.background)
+                            .foregroundStyle(BKTheme.onAccent)
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -630,13 +630,13 @@ private struct TargetManLockButton: View {
             Group {
                 if isLoading {
                     ProgressView()
-                        .tint(BKTheme.background)
+                        .tint(BKTheme.onAccent)
                 } else {
                     Text("LOCK ANSWERS")
                         .font(BKFont.headline())
                 }
             }
-            .foregroundStyle(BKTheme.background)
+            .foregroundStyle(BKTheme.onAccent)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(BKTheme.accent.opacity(isLoading ? 0.75 : 1))
@@ -1019,7 +1019,7 @@ private struct TargetManResultPlayerRow: View {
         HStack(spacing: 12) {
                 Text("\(index)")
                 .font(.system(size: 11, weight: .heavy, design: .rounded))
-                .foregroundStyle(BKTheme.background)
+                .foregroundStyle(BKTheme.onAccent)
                 .frame(width: 22, height: 22)
                 .background((selection.isPoolMiss ? BKTheme.wrong : BKTheme.accent).opacity(0.85))
                 .clipShape(Circle())

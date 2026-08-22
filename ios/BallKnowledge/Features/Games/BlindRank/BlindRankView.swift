@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Match Football Golf's restraint: green (the app accent) is reserved for genuine success
+// Match Football Golf's restraint: blue (the app accent) is reserved for genuine success
 // signals — correct placements, a strong score, the primary action, +XP. Everything neutral
 // (labels, counters, ranks, stat values) stays white/grey so the screen reads calm, not busy.
 private let blindGreen = BKTheme.accent
@@ -385,7 +385,7 @@ private struct BlindRankCategoryBanner: View {
         .frame(maxWidth: .infinity)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(BKTheme.hairline, lineWidth: 1))
     }
 }
 
@@ -781,7 +781,7 @@ private struct BlindRankAdjustBar: View {
             Button(action: onSubmit) {
                 Text(selecting ? "TAP ANOTHER TO SWAP" : "LOCK IN RANKING")
                     .font(BKFont.headline(15))
-                    .foregroundStyle(selecting ? BKTheme.textMuted : BKTheme.background)
+                    .foregroundStyle(selecting ? BKTheme.textMuted : BKTheme.onAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(selecting ? BKTheme.cardElevated : BKTheme.accent)
@@ -793,7 +793,7 @@ private struct BlindRankAdjustBar: View {
         .padding(14)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(BKTheme.hairline, lineWidth: 1))
     }
 }
 
@@ -843,7 +843,7 @@ private struct BlindRankCurrentPlayerCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay {
             RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                .strokeBorder(BKTheme.hairline, lineWidth: 1)
         }
         .draggable(player.id)
     }

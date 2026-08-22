@@ -279,7 +279,7 @@ struct GameIntroView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                            .stroke(BKTheme.hairline, lineWidth: 1)
                     )
 
                     VStack(spacing: 8) {
@@ -298,7 +298,7 @@ struct GameIntroView: View {
                             HStack(alignment: .top, spacing: 12) {
                                 Text("\(index + 1)")
                                     .font(BKFont.caption(12))
-                                    .foregroundStyle(BKTheme.background)
+                                    .foregroundStyle(BKTheme.onAccent)
                                     .frame(width: 22, height: 22)
                                     .background(BKTheme.accent)
                                     .clipShape(Circle())
@@ -324,7 +324,7 @@ struct GameIntroView: View {
                 Button(action: onPlay) {
                     Text("PLAY")
                         .font(BKFont.headline(16))
-                        .foregroundStyle(BKTheme.background)
+                        .foregroundStyle(BKTheme.onAccent)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(BKTheme.accent)

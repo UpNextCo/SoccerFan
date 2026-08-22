@@ -37,7 +37,7 @@ struct SignInWithAppleButtonView: View {
                 onError(error.localizedDescription)
             }
         }
-        .signInWithAppleButtonStyle(.white)
+        .signInWithAppleButtonStyle(.black)
         .frame(height: 54)
         .clipShape(Capsule())
     }

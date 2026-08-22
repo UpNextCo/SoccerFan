@@ -429,7 +429,7 @@ private struct OneMorePromptCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(BKTheme.hairline, lineWidth: 1))
     }
 }
 
@@ -762,7 +762,7 @@ private struct OneMorePickHistory: View {
                     Circle().fill(BKTheme.accent).frame(width: 28, height: 28)
                     Image(systemName: "checkmark")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(BKTheme.background)
+                        .foregroundStyle(BKTheme.onAccent)
                 }
                 Text(shortName(pick.name))
                     .font(BKFont.caption(10))

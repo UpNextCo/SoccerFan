@@ -367,7 +367,7 @@ struct GuessWhoView: View {
                 viewModel.showShare = true
             }
             .font(BKFont.headline())
-            .foregroundStyle(BKTheme.background)
+            .foregroundStyle(BKTheme.onAccent)
             .padding(.horizontal, 28)
             .padding(.vertical, 14)
             .background(BKTheme.accent)
@@ -963,7 +963,7 @@ struct ShareResultSheet: View {
             ShareLink(item: shareCard.fullText) {
                 Text("Share")
                     .font(BKFont.headline())
-                    .foregroundStyle(BKTheme.background)
+                    .foregroundStyle(BKTheme.onAccent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(BKTheme.accent)

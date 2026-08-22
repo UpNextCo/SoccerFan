@@ -5,10 +5,9 @@ import SwiftUI
 enum LMSVisualStyle {
     static let cardRadius: CGFloat = 18
     static let optionRadius: CGFloat = 16
-    static let hairlineOpacity: Double = 0.055
 
     static func cardStroke<S: InsettableShape>(_ shape: S) -> some View {
-        shape.strokeBorder(Color.white.opacity(hairlineOpacity), lineWidth: 0.5)
+        shape.strokeBorder(BKTheme.hairline, lineWidth: 0.5)
     }
 }
 

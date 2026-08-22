@@ -2,29 +2,32 @@ import SwiftUI
 import UIKit
 
 enum BKTheme {
-    static let background = Color(hex: "0A0A0A")
-    static let card = Color(hex: "1A1A1A")
-    static let cardElevated = Color(hex: "242424")
-    /// Backdrop behind game tile art — lifts icons whose PNGs use #141414.
-    static let tileIconBackdrop = Color(hex: "181818")
+    static let background = Color(hex: "FCFCFB")
+    static let card = Color.white
+    /// Mid grey used for progress cards, league rows, and inset controls.
+    static let cardElevated = Color(hex: "D6D6D1")
+    /// Backdrop behind game tile art.
+    static let tileIconBackdrop = Color(hex: "E4E4DF")
     static let tileIconBrightness: CGFloat = 0.02
     static let tileIconScale: CGFloat = 1.1
-    static let accent = Color(hex: "00FF66")
-    static let accentMuted = Color(hex: "00CC52")
-    static let textPrimary = Color.white
-    static let textSecondary = Color(hex: "AAAAAA")
-    static let textMuted = Color(hex: "666666")
+    static let accent = Color(hex: "2563EB")
+    static let accentMuted = Color(hex: "1D4ED8")
+    static let onAccent = Color.white
+    static let textPrimary = Color.black
+    static let textSecondary = Color(hex: "555555")
+    static let textMuted = Color(hex: "8A8A8A")
     static let avatarPlaceholder = Color(hex: "888888")
-    static let wrong = Color(hex: "FF4444")
-    static let partial = Color(hex: "FFAA00")
-    static let correct = Color(hex: "00FF66")
-    static let streak = Color(hex: "FF6B00")
-    static let inProgress = Color(hex: "FFB020")
+    static let wrong = Color(hex: "DC2626")
+    static let partial = Color(hex: "D97706")
+    static let correct = Color(hex: "2563EB")
+    static let streak = Color(hex: "EA580C")
+    static let inProgress = Color(hex: "2563EB")
+    /// Hairlines and empty track fills on the light canvas.
+    static let hairline = Color.black.opacity(0.08)
 
-    // Guess Who feedback badges (Who Are Ya style)
-    static let guessCorrect = Color(hex: "00E055")
-    static let guessWrong = Color(hex: "3D3D3D")
-    static let guessPartial = Color(hex: "5C5C5C")
+    static let guessCorrect = Color(hex: "2563EB")
+    static let guessWrong = Color(hex: "E5E5E0")
+    static let guessPartial = Color(hex: "D0D0CA")
 }
 
 extension Color {

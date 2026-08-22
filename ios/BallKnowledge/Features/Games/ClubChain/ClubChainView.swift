@@ -278,7 +278,7 @@ struct ClubChainView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(BKTheme.card)
         .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(BKTheme.hairline, lineWidth: 1))
     }
 
     private var statsHero: some View {
@@ -311,7 +311,7 @@ struct ClubChainView: View {
         .frame(maxWidth: .infinity)
         .background(BKTheme.card.opacity(0.55))
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(BKTheme.hairline, lineWidth: 1))
     }
 
     // MARK: Chain
@@ -359,7 +359,7 @@ struct ClubChainView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                    .strokeBorder(BKTheme.hairline, lineWidth: 1)
             )
             .onChange(of: viewModel.searchQuery) { _, _ in
                 Task { await viewModel.search() }
@@ -502,7 +502,7 @@ private struct ClubChainPlayerCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                .strokeBorder(BKTheme.hairline, lineWidth: 0.5)
         )
     }
 }

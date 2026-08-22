@@ -315,7 +315,7 @@ struct VsDarts501LiveView: View {
                             Text("ACCEPT DRAW")
                                 .font(BKFont.caption(11))
                                 .tracking(0.6)
-                                .foregroundStyle(BKTheme.background)
+                                .foregroundStyle(BKTheme.onAccent)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .background(BKTheme.accent)
