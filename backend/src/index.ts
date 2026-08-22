@@ -94,8 +94,8 @@ app.use((_req, res) => {
   res.status(404).json({ success: false, error: { message: 'Not found' } });
 });
 
-const server = app.listen(port, () => {
-  console.log(`Ball Knowledge API listening on port ${port}`);
+const server = app.listen(port, '0.0.0.0', () => {
+  console.log(`SoccerFan API listening on 0.0.0.0:${port}`);
   startMonthGenerationWorker();
   bootstrapDatabase()
     .then(() => {

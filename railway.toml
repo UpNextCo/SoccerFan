@@ -5,7 +5,7 @@ builder = "NIXPACKS"
 buildCommand = "npm --prefix backend ci --include=dev && npm --prefix admin ci && npm --prefix admin run build && npm --prefix backend run build:api"
 
 [deploy]
-startCommand = "npm --prefix backend start"
+startCommand = "cd backend && node dist/db/migrate.js && node dist/index.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
