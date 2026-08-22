@@ -1,4 +1,6 @@
 -- Fine positions a player can fill in Draft XI / World Cup XI (primary sub_position + alternates).
+ALTER TABLE "players" ADD COLUMN IF NOT EXISTS "sub_position" text;
+--> statement-breakpoint
 ALTER TABLE "players" ADD COLUMN IF NOT EXISTS "sub_positions" text[] DEFAULT '{}'::text[] NOT NULL;
 
 -- Backfill from existing primary fine position.
