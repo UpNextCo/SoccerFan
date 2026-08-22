@@ -1,0 +1,12 @@
+[build]
+builder = "NIXPACKS"
+# Build from the repo root so both backend/ and admin/ are in the image.
+# Do not set Railway Root Directory to "backend" — that drops admin and this file is ignored.
+buildCommand = "npm --prefix backend ci --include=dev && npm --prefix admin ci && npm --prefix admin run build && npm --prefix backend run build:api"
+
+[deploy]
+startCommand = "npm --prefix backend start"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

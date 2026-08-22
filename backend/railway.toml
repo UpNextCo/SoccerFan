@@ -1,7 +1,8 @@
 [build]
 builder = "NIXPACKS"
-# Repo checkout includes ../admin; build emits SPA into public/admin then compiles API.
-buildCommand = "npm install && npm run build"
+# Prefer the repo-root railway.toml (Root Directory blank). This file is only used
+# if Root Directory is "backend", which excludes ../admin and breaks build:admin.
+buildCommand = "npm ci --include=dev && npm run build"
 
 [deploy]
 startCommand = "npm run db:migrate && npm start"
