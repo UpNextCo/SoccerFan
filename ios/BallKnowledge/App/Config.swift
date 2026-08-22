@@ -1,10 +1,12 @@
 import Foundation
 
 enum AppConfig {
-    static let productionAPIURL = "https://ballknowledge-production.up.railway.app"
+    /// SoccerFan Railway public domain (Node service → Settings → Networking).
+    /// Do not point this at ballknowledge-production.
+    static let productionAPIURL = "https://soccerfan-production.up.railway.app"
 
     #if DEBUG
-    // Use production API while local backend isn't running. Switch to http://127.0.0.1:3000 for local dev.
+    // Use SoccerFan production while local backend isn't running. Switch to http://127.0.0.1:3000 for local dev.
     static let apiBaseURL = URL(string: productionAPIURL)!
     #else
     static let apiBaseURL = URL(string: productionAPIURL)!

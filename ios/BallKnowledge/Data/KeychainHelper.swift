@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 enum KeychainHelper {
-    private static let service = "com.psounds.ballknowledge"
+    private static let service = "com.psounds.soccerfan"
     private static let tokenKey = "authToken"
 
     static func saveToken(_ token: String) {
