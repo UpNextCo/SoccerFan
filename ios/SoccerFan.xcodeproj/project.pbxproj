@@ -187,7 +187,7 @@
 		B19529DDD217D25A59212833 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1BB3157AC49BC20958B6C74 /* win1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = win1.png; sourceTree = "<group>"; };
 		B22FEEDB4C5D6E7F8091A2B3 /* Feedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Feedback.swift; sourceTree = "<group>"; };
-		B36B0A9729829ABDE08B911C /* BallKnowledge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BallKnowledge.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B36B0A9729829ABDE08B911C /* SoccerFan.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SoccerFan.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5237449777A4A7CE0FE9EDE /* OnboardingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViews.swift; sourceTree = "<group>"; };
 		B6A9E509577D15428C9E65AC /* FootballTowerSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FootballTowerSeed.swift; sourceTree = "<group>"; };
 		B7D3E52F8C7E5F1B02A4D6E9 /* VsHotseatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VsHotseatView.swift; sourceTree = "<group>"; };
@@ -476,7 +476,7 @@
 		C04E79529F8D8052BD1DC7A4 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B36B0A9729829ABDE08B911C /* BallKnowledge.app */,
+				B36B0A9729829ABDE08B911C /* SoccerFan.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -576,9 +576,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		9608E09CD83F57BFB3D46AE3 /* BallKnowledge */ = {
+		9608E09CD83F57BFB3D46AE3 /* SoccerFan */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 07B82F01505FF49B3DBCDEE2 /* Build configuration list for PBXNativeTarget "BallKnowledge" */;
+			buildConfigurationList = 07B82F01505FF49B3DBCDEE2 /* Build configuration list for PBXNativeTarget "SoccerFan" */;
 			buildPhases = (
 				2EEC794CCA91532AB4917755 /* Sources */,
 				EC9E062A6E58521A5A8356F0 /* Resources */,
@@ -588,12 +588,12 @@
 			);
 			dependencies = (
 			);
-			name = BallKnowledge;
+			name = SoccerFan;
 			packageProductDependencies = (
 				C1107BDAF780440EBD5E7D89 /* Lottie */,
 			);
 			productName = BallKnowledge;
-			productReference = B36B0A9729829ABDE08B911C /* BallKnowledge.app */;
+			productReference = B36B0A9729829ABDE08B911C /* SoccerFan.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -627,7 +627,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				9608E09CD83F57BFB3D46AE3 /* BallKnowledge */,
+				9608E09CD83F57BFB3D46AE3 /* SoccerFan */,
 			);
 		};
 /* End PBXProject section */
@@ -844,6 +844,7 @@
 				);
 				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.psounds.soccerfan;
+				PRODUCT_NAME = SoccerFan;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -931,6 +932,7 @@
 				);
 				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.psounds.soccerfan;
+				PRODUCT_NAME = SoccerFan;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -939,7 +941,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		07B82F01505FF49B3DBCDEE2 /* Build configuration list for PBXNativeTarget "BallKnowledge" */ = {
+		07B82F01505FF49B3DBCDEE2 /* Build configuration list for PBXNativeTarget "SoccerFan" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				03ABF00B9ACCDC21BAC9A940 /* Debug */,
