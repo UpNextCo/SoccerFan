@@ -45,6 +45,55 @@
       "breakpoints": true
     },
     {
+      "idx": 25,
+      "version": "7",
+      "when": 1782841000000,
+      "tag": "0002_player_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1782842000000,
+      "tag": "0006_player_birth_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1782843000000,
+      "tag": "0007_tower_prompt_bank",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1782844000000,
+      "tag": "0008_manager_tenures",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1782845000000,
+      "tag": "0009_final_appearances",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1782846000000,
+      "tag": "0010_player_awards",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1782846500000,
+      "tag": "0030_fresh_db_catalog_tables",
+      "breakpoints": true
+    },
+    {
       "idx": 7,
       "version": "7",
       "when": 1782847000000,
