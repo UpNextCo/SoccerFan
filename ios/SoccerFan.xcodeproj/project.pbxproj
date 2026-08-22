@@ -610,7 +610,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 476ECE76F82A3F53BBD7EB91 /* Build configuration list for PBXProject "BallKnowledge" */;
+			buildConfigurationList = 476ECE76F82A3F53BBD7EB91 /* Build configuration list for PBXProject "SoccerFan" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -948,7 +948,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		476ECE76F82A3F53BBD7EB91 /* Build configuration list for PBXProject "BallKnowledge" */ = {
+		476ECE76F82A3F53BBD7EB91 /* Build configuration list for PBXProject "SoccerFan" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				01F3D2F7A8398442F33791DA /* Debug */,
