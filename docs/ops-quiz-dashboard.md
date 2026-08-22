@@ -4,7 +4,7 @@ Internal tool for pre-generating, editing, approving, and locking a full month o
 
 ## Setup
 
-1. Set env on the API host:
+1. Set env on the API hosty:
 
 ```bash
 ADMIN_PASSWORD=choose-a-strong-shared-password
